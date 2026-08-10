@@ -132,6 +132,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reloadAll() }
         }
+        // Whoop sign-in happens in Safari and returns through this scheme.
+        .onOpenURL { url in
+            whoop.handleCallback(url)
+        }
     }
 
     private func selectBodyDate(_ date: Date) {

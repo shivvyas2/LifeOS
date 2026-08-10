@@ -1,6 +1,6 @@
 import Foundation
 import SwiftData
-import AuthenticationServices
+import UIKit
 import OSLog
 import Integrations
 import Persistence
@@ -12,7 +12,7 @@ private let whoopLog = Logger(subsystem: "shivvyas.LIfeOS", category: "whoop")
 
 /// Owns the Whoop connection: the OAuth round trip, token storage, and sync.
 @MainActor @Observable
-final class WhoopConnectionViewModel: NSObject {
+final class WhoopConnectionViewModel {
     enum State: Equatable {
         case unconfigured           // no client id or no function endpoint yet
         case disconnected
@@ -25,12 +25,9 @@ final class WhoopConnectionViewModel: NSObject {
 
     private let tokens: any WhoopTokenStoring
     private var context: ModelContext?
-    private var pendingSession: WhoopOAuth.Session?
-    private var webSession: ASWebAuthenticationSession?
 
     init(tokens: any WhoopTokenStoring = KeychainWhoopTokenStore()) {
         self.tokens = tokens
-        super.init()
     }
 
     func attach(_ context: ModelContext) {
@@ -57,47 +54,55 @@ final class WhoopConnectionViewModel: NSObject {
 
     // MARK: - OAuth
 
+    /// Opens sign-in in Safari rather than an in-app web session.
+    ///
+    /// Whoop's login sits behind a Cloudflare bot challenge that will not clear
+    /// inside `ASWebAuthenticationSession` — it hangs on a blank page, on
+    /// device as well as in the simulator. The same URL completes immediately
+    /// in Safari, so the app hands off and is returned to by the lifeos://
+    /// redirect. The cost is leaving the app briefly; the benefit is a flow
+    /// that works at all.
     func connect() {
-        // The callback scheme is the app's own, not the redirect's: the redirect
-        // is an https bridge and only its final hop returns to lifeos://.
         guard let clientID = AppConfig.whoopClientID,
-              let redirect = AppConfig.whoopRedirectURI,
-              let callbackScheme = AppConfig.appURLScheme else {
+              let redirect = AppConfig.whoopRedirectURI else {
             state = .unconfigured
             return
         }
 
         let session = WhoopOAuth.session(clientID: clientID, redirectURI: redirect)
-        pendingSession = session
-        state = .connecting
-
-        let web = ASWebAuthenticationSession(
-            url: session.url,
-            callbackURLScheme: callbackScheme
-        ) { [weak self] callbackURL, error in
-            guard let self else { return }
-            Task { @MainActor in
-                if let error {
-                    // A user-initiated cancel is not a failure worth shouting about.
-                    let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                    self.state = cancelled ? .disconnected : .failed("Sign-in failed")
-                    return
-                }
-                guard let callbackURL else { self.state = .disconnected; return }
-                await self.finish(callbackURL: callbackURL)
-            }
+        do {
+            // Persisted, not held in memory: Safari backgrounds the app and iOS
+            // may terminate it before the redirect returns.
+            try tokens.savePending(WhoopPendingAuth(verifier: session.verifier, state: session.state))
+        } catch {
+            whoopLog.error("could not persist pending auth: \(String(describing: error), privacy: .public)")
+            state = .failed("Couldn't start sign-in")
+            return
         }
-        web.presentationContextProvider = self
-        web.prefersEphemeralWebBrowserSession = false
-        webSession = web
-        web.start()
+
+        state = .connecting
+        whoopLog.info("opening Whoop authorization in Safari")
+        UIApplication.shared.open(session.url)
+    }
+
+    /// Entry point for the lifeos:// redirect.
+    func handleCallback(_ url: URL) {
+        guard url.scheme == AppConfig.appURLScheme else { return }
+        Task { await finish(callbackURL: url) }
     }
 
     private func finish(callbackURL: URL) async {
-        guard let pending = pendingSession,
+        guard let pending = tokens.loadPending(),
               let endpoint = AppConfig.whoopTokenEndpoint,
               let redirect = AppConfig.whoopRedirectURI else {
             state = .failed("Missing configuration")
+            return
+        }
+        // A redirect arriving long after the attempt was abandoned is not ours
+        // to trust.
+        guard pending.isFresh() else {
+            tokens.clearPending()
+            state = .failed("Sign-in timed out — try again")
             return
         }
 
@@ -109,10 +114,11 @@ final class WhoopConnectionViewModel: NSObject {
                 code: code, verifier: pending.verifier, redirectURI: redirect
             )
             try tokens.save(newTokens)
-            pendingSession = nil
+            tokens.clearPending()
             state = .connected(lastSyncedDays: nil)
             await sync()
         } catch WhoopAuthError.denied {
+            tokens.clearPending()
             state = .disconnected
         } catch {
             whoopLog.error("token exchange failed: \(String(describing: error), privacy: .public)")
@@ -132,6 +138,7 @@ final class WhoopConnectionViewModel: NSObject {
 
     func disconnect() {
         tokens.clear()
+        tokens.clearPending()
         state = .disconnected
     }
 
@@ -161,17 +168,6 @@ final class WhoopConnectionViewModel: NSObject {
         } catch {
             whoopLog.error("sync failed: \(String(describing: error), privacy: .public)")
             state = .failed("Sync failed: \(error.localizedDescription)")
-        }
-    }
-}
-
-extension WhoopConnectionViewModel: ASWebAuthenticationPresentationContextProviding {
-    nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        MainActor.assumeIsolated {
-            let scene = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first { $0.activationState == .foregroundActive }
-            return scene?.keyWindow ?? ASPresentationAnchor()
         }
     }
 }
