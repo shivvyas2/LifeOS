@@ -5,12 +5,15 @@ import SwiftUI
 struct AddPlanEntrySheet: View {
     let prompt: String
     let allowsTarget: Bool
-    let onSave: (String, String?, Double?) -> Void
+    /// Content is scheduled, so it gets a date; nothing else does.
+    let allowsDueDate: Bool
+    let onSave: (String, String?, Double?, Date?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var detail = ""
     @State private var target = ""
+    @State private var dueDate = Date()
 
     var body: some View {
         NavigationStack {
@@ -25,6 +28,11 @@ struct AddPlanEntrySheet: View {
                             .keyboardType(.decimalPad)
                     }
                 }
+                if allowsDueDate {
+                    Section("Scheduled for") {
+                        DatePicker("Date", selection: $dueDate, displayedComponents: .date)
+                    }
+                }
             }
             .navigationTitle(prompt)
             .toolbar {
@@ -33,7 +41,8 @@ struct AddPlanEntrySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(title, detail.isEmpty ? nil : detail, Double(target))
+                        onSave(title, detail.isEmpty ? nil : detail, Double(target),
+                               allowsDueDate ? dueDate : nil)
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)

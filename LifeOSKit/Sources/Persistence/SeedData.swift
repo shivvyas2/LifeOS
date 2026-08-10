@@ -15,7 +15,12 @@ public enum SeedData {
             let offset = calendar.dateComponents([.day], from: date, to: today).day ?? 0
 
             // Deterministic pseudo-variation — no randomness, so previews are stable.
-            let wobble = Double((offset * 37) % 100) / 100.0
+            //
+            // The +61 phase offset matters: without it `offset * 37 % 100` is 0
+            // on day 0, which seeded today as the minimum of every metric. Today
+            // then always evaluated as a miss and the streak always read zero, so
+            // a working app looked broken on first launch.
+            let wobble = Double((offset * 37 + 61) % 100) / 100.0
             let slowLoss = Double(offset) * 0.02
 
             row.weightKg = 77.9 + slowLoss + (wobble - 0.5) * 0.6

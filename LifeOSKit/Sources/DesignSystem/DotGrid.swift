@@ -30,8 +30,19 @@ public struct DotGrid: View {
         let shape = Circle()
             .fill(fill(for: cell.state))
             .overlay {
-                if cell.state == .noData {
+                switch cell.state {
+                case .missed:
+                    // Hollow, per the spec: a missed day must read differently
+                    // from a day that has not happened yet. Two greys of
+                    // slightly different value did not carry that.
+                    Circle().strokeBorder(
+                        LifeOSTokens.primaryText.resolve(scheme).opacity(0.38),
+                        lineWidth: max(1, dotSize.map { $0 / 14 } ?? 1.6)
+                    )
+                case .noData:
                     Circle().strokeBorder(LifeOSTokens.dotOutline.resolve(scheme), lineWidth: 1)
+                default:
+                    EmptyView()
                 }
             }
 
@@ -45,7 +56,7 @@ public struct DotGrid: View {
     private func fill(for state: DotState) -> Color {
         switch state {
         case .onTarget: LifeOSTokens.primaryText.resolve(scheme)
-        case .missed:   LifeOSTokens.dotMissed.resolve(scheme)
+        case .missed:   .clear
         case .today:    LifeOSTokens.accent
         case .future:   LifeOSTokens.dotFuture.resolve(scheme)
         case .noData:   .clear

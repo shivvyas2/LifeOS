@@ -25,6 +25,15 @@ struct PlanScreen: View {
 
                     if items.isEmpty {
                         empty
+                    } else if section == .content {
+                        // Content is a schedule, not a list — it gets the month
+                        // view its reference calls for.
+                        ContentCalendar(
+                            items: items,
+                            month: .now,
+                            onAdvance: onAdvance,
+                            onDelete: onDelete
+                        )
                     } else {
                         ForEach(items) { item in
                             SolidCard {

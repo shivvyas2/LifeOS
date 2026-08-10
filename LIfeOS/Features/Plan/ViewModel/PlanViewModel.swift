@@ -45,14 +45,15 @@ final class PlanViewModel {
         }
     }
 
-    func add(title: String, detail: String?, target: Double?) {
+    func add(title: String, detail: String?, target: Double?, dueDate: Date? = nil) {
         guard let context, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         do {
             try PlanStore(context: context, calendar: calendar).add(
                 kind: section.kind,
                 title: title,
                 detail: detail?.isEmpty == true ? nil : detail,
-                status: section == .content ? .scheduled : .todo,
+                status: .todo,
+                dueDate: dueDate,
                 progressValue: target != nil ? 0 : nil,
                 progressTarget: target
             )

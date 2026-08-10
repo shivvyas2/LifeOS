@@ -101,9 +101,10 @@ struct RootView: View {
         .sheet(isPresented: $showAddPlan) {
             AddPlanEntrySheet(
                 prompt: plan.section.addPrompt,
-                allowsTarget: plan.section == .goals
-            ) { title, detail, target in
-                plan.add(title: title, detail: detail, target: target)
+                allowsTarget: plan.section == .goals,
+                allowsDueDate: plan.section == .content
+            ) { title, detail, target, dueDate in
+                plan.add(title: title, detail: detail, target: target, dueDate: dueDate)
             }
         }
         .sheet(isPresented: $showAddMoney) {
