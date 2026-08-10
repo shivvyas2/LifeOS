@@ -2,31 +2,43 @@ import SwiftUI
 
 public struct DotGrid: View {
     private let cells: [DotCell]
-    private let dotSize: CGFloat
+    /// `nil` lets each dot expand to fill its column, which is how the month
+    /// view reads as a dense block. A fixed size is for inline uses that must
+    /// not grow, like a streak strip inside a card.
+    private let dotSize: CGFloat?
     /// Built once in `init` rather than per `body`. The grid redraws on scroll,
     /// and rebuilding the column array each pass is pure allocation churn.
     private let columns: [GridItem]
     @Environment(\.colorScheme) private var scheme
 
-    public init(cells: [DotCell], dotSize: CGFloat = 22) {
+    public init(cells: [DotCell], dotSize: CGFloat? = 22, spacing: CGFloat = 8) {
         self.cells = cells
         self.dotSize = dotSize
-        self.columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
+        self.columns = Array(repeating: GridItem(.flexible(), spacing: spacing), count: 7)
     }
 
     public var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(cells) { cell in
-                Circle()
-                    .fill(fill(for: cell.state))
-                    .overlay {
-                        if cell.state == .noData {
-                            Circle().strokeBorder(LifeOSTokens.dotOutline.resolve(scheme), lineWidth: 1)
-                        }
-                    }
-                    .frame(width: dotSize, height: dotSize)
-                    .opacity(cell.state == .blank ? 0 : 1)
+                dot(for: cell)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func dot(for cell: DotCell) -> some View {
+        let shape = Circle()
+            .fill(fill(for: cell.state))
+            .overlay {
+                if cell.state == .noData {
+                    Circle().strokeBorder(LifeOSTokens.dotOutline.resolve(scheme), lineWidth: 1)
+                }
+            }
+
+        if let dotSize {
+            shape.frame(width: dotSize, height: dotSize)
+        } else {
+            shape.aspectRatio(1, contentMode: .fit)
         }
     }
 
@@ -37,7 +49,7 @@ public struct DotGrid: View {
         case .today:    LifeOSTokens.accent
         case .future:   LifeOSTokens.dotFuture.resolve(scheme)
         case .noData:   .clear
-        case .blank:    .clear
+        case .blank:    LifeOSTokens.dotPadding.resolve(scheme)
         }
     }
 }

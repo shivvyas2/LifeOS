@@ -87,4 +87,9 @@ public enum LifeOSTokens {
     public static let dotMissed = AdaptiveColor(light: Color(white: 0.86), dark: Color(white: 0.28))
     public static let dotFuture = AdaptiveColor(light: Color(white: 0.93), dark: Color(white: 0.18))
     public static let dotOutline = AdaptiveColor(light: Color(white: 0.85), dark: Color(white: 0.30))
+
+    /// Leading and trailing cells that belong to no day. Faint rather than
+    /// invisible so the month reads as one solid block of dots — the grid is
+    /// the app's central visual claim and a ragged edge weakens it.
+    public static let dotPadding = AdaptiveColor(light: Color(white: 0.965), dark: Color(white: 0.11))
 }
