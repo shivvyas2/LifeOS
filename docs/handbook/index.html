@@ -1,0 +1,1703 @@
+<title>Life OS — Engineering Handbook</title>
+
+<style>
+  :root {
+    --ground:      #EFEDE8;
+    --surface:     #FBFAF7;
+    --surface-2:   #E7E4DD;
+    --ink:         #16150F;
+    --ink-2:       #4A4740;
+    --ink-3:       #7C776C;
+    --rule:        #D6D2C8;
+    --accent:      #F0572E;
+    --accent-soft: #FBE4DB;
+
+    --hue-body:      #0E8C87;
+    --hue-activity:  #C99512;
+    --hue-recovery:  #3B7FEE;
+    --hue-nutrition: #7D5CEA;
+    --hue-money:     #2E9E5B;
+    --hue-habits:    #F0572E;
+
+    --ok:      #2E7D52;
+    --warn:    #B27A08;
+    --danger:  #C2412A;
+
+    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+    --body:    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --mono:    ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+    --sidebar: 260px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #12110E;
+      --surface:     #1A1915;
+      --surface-2:   #24221D;
+      --ink:         #F2F0EA;
+      --ink-2:       #B8B3A8;
+      --ink-3:       #857F73;
+      --rule:        #33302A;
+      --accent:      #FF7551;
+      --accent-soft: #3A231A;
+
+      --hue-body:      #2CC0B8;
+      --hue-activity:  #E9B740;
+      --hue-recovery:  #6BA5FF;
+      --hue-nutrition: #A98CFF;
+      --hue-money:     #4FC77E;
+      --hue-habits:    #FF7551;
+
+      --ok:     #5FC98D;
+      --warn:   #E0B14A;
+      --danger: #FF7A62;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #12110E;
+    --surface:     #1A1915;
+    --surface-2:   #24221D;
+    --ink:         #F2F0EA;
+    --ink-2:       #B8B3A8;
+    --ink-3:       #857F73;
+    --rule:        #33302A;
+    --accent:      #FF7551;
+    --accent-soft: #3A231A;
+
+    --hue-body:      #2CC0B8;
+    --hue-activity:  #E9B740;
+    --hue-recovery:  #6BA5FF;
+    --hue-nutrition: #A98CFF;
+    --hue-money:     #4FC77E;
+    --hue-habits:    #FF7551;
+
+    --ok:     #5FC98D;
+    --warn:   #E0B14A;
+    --danger: #FF7A62;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+    gap: 0;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* ---------- Index rail ---------- */
+
+  .index {
+    border-right: 1px solid var(--rule);
+    padding: 40px 28px 80px 24px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    font-size: 13.5px;
+  }
+
+  .index-mark {
+    font-family: var(--display);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 17px;
+    margin: 0 0 4px;
+  }
+
+  .index-sub {
+    color: var(--ink-3);
+    font-size: 12px;
+    margin: 0 0 28px;
+  }
+
+  .index nav ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+  .index nav ol ol { gap: 3px; margin-top: 7px; }
+
+  .index-part {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-3);
+    font-weight: 600;
+  }
+
+  .index a {
+    color: var(--ink-2);
+    text-decoration: none;
+    display: block;
+    padding: 2px 0 2px 10px;
+    border-left: 2px solid transparent;
+    line-height: 1.4;
+  }
+
+  .index a:hover { color: var(--ink); border-left-color: var(--rule); }
+  .index a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  /* ---------- Main column ---------- */
+
+  main { padding: 40px 56px 160px; min-width: 0; }
+
+  .masthead { padding: 24px 0 44px; border-bottom: 1px solid var(--rule); margin-bottom: 56px; }
+
+  .dotrow { display: flex; gap: 6px; margin-bottom: 30px; }
+  .dotrow span { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2); }
+  .dotrow span.on  { background: var(--ink); }
+  .dotrow span.now { background: var(--accent); }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(40px, 6vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-size: 18px;
+    color: var(--ink-2);
+    max-width: var(--measure);
+    margin: 0 0 26px;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 30px;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    margin: 76px 0 6px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: -0.015em;
+    font-weight: 650;
+    margin: 42px 0 10px;
+    text-wrap: balance;
+  }
+
+  h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-3);
+    font-weight: 700;
+    margin: 30px 0 8px;
+  }
+
+  .part-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 76px 0 0;
+    padding-top: 18px;
+    border-top: 2px solid var(--accent);
+  }
+  .part-label + h2 { border-top: none; margin-top: 10px; padding-top: 0; }
+
+  p, ul, ol { max-width: var(--measure); }
+  p { margin: 0 0 16px; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--ink-3); }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  /* ---------- Module-hue rails ---------- */
+
+  .rail {
+    border-left: 3px solid var(--hue);
+    padding-left: 20px;
+    margin: 34px 0;
+  }
+  .rail[data-hue="body"]      { --hue: var(--hue-body); }
+  .rail[data-hue="activity"]  { --hue: var(--hue-activity); }
+  .rail[data-hue="recovery"]  { --hue: var(--hue-recovery); }
+  .rail[data-hue="nutrition"] { --hue: var(--hue-nutrition); }
+  .rail[data-hue="money"]     { --hue: var(--hue-money); }
+  .rail[data-hue="habits"]    { --hue: var(--hue-habits); }
+  .rail > h3:first-child { margin-top: 0; }
+
+  /* ---------- PR/FAQ blocks ---------- */
+
+  .prfaq {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 26px 28px;
+    margin: 26px 0;
+  }
+  .prfaq-kicker {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+  .prfaq h3 { margin-top: 0; }
+  .prfaq .release {
+    font-size: 17px;
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: 16px;
+    margin: 0 0 22px;
+    max-width: var(--measure);
+  }
+  .faq-q {
+    font-weight: 650;
+    margin: 18px 0 4px;
+    max-width: var(--measure);
+  }
+  .faq-a { color: var(--ink-2); margin: 0; max-width: var(--measure); }
+
+  /* ---------- Tables ---------- */
+
+  .tablewrap { overflow-x: auto; margin: 0 0 22px; border: 1px solid var(--rule); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    font-weight: 700;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 12px; white-space: nowrap; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- Callouts ---------- */
+
+  .note {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 0 0 22px;
+    max-width: var(--measure);
+    font-size: 14.5px;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .note b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .note.blocked  { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+  .note.blocked b { color: var(--danger); }
+  .note.caution  { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+  .note.caution b { color: var(--warn); }
+  .note.good     { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 9%, var(--surface)); }
+  .note.good b { color: var(--ok); }
+
+  /* ---------- Figures / diagrams ---------- */
+
+  figure { margin: 30px 0; max-width: 100%; }
+  figure svg { max-width: 100%; height: auto; display: block; color: var(--ink); }
+  figcaption {
+    font-size: 13px;
+    color: var(--ink-3);
+    margin-top: 12px;
+    max-width: var(--measure);
+  }
+
+  .diagram .box { fill: var(--surface); stroke: currentColor; stroke-width: 1.25; }
+  .diagram .box-alt { fill: var(--surface-2); stroke: currentColor; stroke-width: 1.25; }
+  .diagram .box-hot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .diagram .lbl { fill: currentColor; font-family: var(--body); font-size: 12px; }
+  .diagram .lbl-sm { fill: var(--ink-3); font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .diagram .lbl-hot { fill: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .diagram .flow { stroke: currentColor; stroke-width: 1.25; fill: none; }
+  .diagram .flow-hot { stroke: var(--accent); stroke-width: 1.75; fill: none; }
+  .diagram .flow-dash { stroke: var(--ink-3); stroke-width: 1.25; fill: none; stroke-dasharray: 5 4; }
+  .diagram .wall { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 7 5; }
+  .diagram .head { fill: currentColor; }
+  .diagram .head-hot { fill: var(--accent); }
+
+  /* ---------- Misc ---------- */
+
+  .decision-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  .lede {
+    font-size: 17px;
+    color: var(--ink-2);
+    max-width: var(--measure);
+    margin: 0 0 24px;
+  }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 44px 0; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .index { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--rule); }
+    main { padding: 32px 22px 100px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+<aside class="index">
+  <p class="index-mark">Life OS</p>
+  <p class="index-sub">Engineering Handbook · Rev A</p>
+  <nav aria-label="Contents">
+    <ol>
+      <li>
+        <span class="index-part">I · Product</span>
+        <ol>
+          <li><a href="#thesis">The thesis</a></li>
+          <li><a href="#prfaq-product">PR/FAQ — Life OS</a></li>
+          <li><a href="#prfaq-today">PR/FAQ — Today</a></li>
+          <li><a href="#prfaq-body">PR/FAQ — Body</a></li>
+          <li><a href="#prfaq-activity">PR/FAQ — Activity</a></li>
+          <li><a href="#prfaq-recovery">PR/FAQ — Recovery</a></li>
+          <li><a href="#prfaq-coach">PR/FAQ — The Coach</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+        </ol>
+      </li>
+      <li>
+        <span class="index-part">II · Architecture</span>
+        <ol>
+          <li><a href="#context">System context</a></li>
+          <li><a href="#modules">Module map</a></li>
+          <li><a href="#spine">The DailyMetrics spine</a></li>
+          <li><a href="#localfirst">Local-first topology</a></li>
+          <li><a href="#conflict">Conflict resolution</a></li>
+        </ol>
+      </li>
+      <li>
+        <span class="index-part">III · Integrations</span>
+        <ol>
+          <li><a href="#healthkit">Apple HealthKit</a></li>
+          <li><a href="#whoop">Whoop</a></li>
+          <li><a href="#supabase">Supabase</a></li>
+          <li><a href="#ai">Foundation Models</a></li>
+          <li><a href="#screentime">Screen Time</a></li>
+        </ol>
+      </li>
+      <li>
+        <span class="index-part">IV · Reference</span>
+        <ol>
+          <li><a href="#model-daily">DailyMetrics</a></li>
+          <li><a href="#model-goals">UserGoals</a></li>
+          <li><a href="#model-source">Source records</a></li>
+          <li><a href="#api-eval">Goal evaluation</a></li>
+          <li><a href="#api-store">MetricsStore</a></li>
+        </ol>
+      </li>
+      <li>
+        <span class="index-part">V · Production</span>
+        <ol>
+          <li><a href="#edge-time">Time &amp; calendars</a></li>
+          <li><a href="#edge-health">HealthKit failures</a></li>
+          <li><a href="#edge-whoop">Whoop failures</a></li>
+          <li><a href="#edge-sync">Sync failures</a></li>
+          <li><a href="#edge-ui">UI &amp; data display</a></li>
+          <li><a href="#edge-ai">AI failures</a></li>
+        </ol>
+      </li>
+      <li>
+        <span class="index-part">VI · Operations</span>
+        <ol>
+          <li><a href="#setup">Setup runbook</a></li>
+          <li><a href="#secrets">Secrets</a></li>
+          <li><a href="#testing">Testing strategy</a></li>
+          <li><a href="#decisions">Decision log</a></li>
+        </ol>
+      </li>
+    </ol>
+  </nav>
+</aside>
+
+<main>
+
+<header class="masthead">
+  <div class="dotrow" aria-hidden="true">
+    <span class="on"></span><span class="on"></span><span class="on"></span>
+    <span class="now"></span><span></span><span></span><span></span>
+  </div>
+  <h1>Life OS Engineering Handbook</h1>
+  <p class="standfirst">
+    A personal iOS app that unifies every signal from the devices you already wear and carry —
+    Apple Watch, iPhone, Whoop, Renpho — and reasons over all of it to say what's working and what isn't.
+  </p>
+  <div class="meta">
+    <span>Rev A · 10 Aug 2026</span>
+    <span>iOS 26 · Swift 6</span>
+    <span>Status: V1 in build</span>
+    <span>Audience: personal</span>
+  </div>
+</header>
+
+<p class="lede">
+  This handbook is the single reference for how Life OS is built, why it is built that way, and
+  what it does when things go wrong. It documents a system that is designed but not yet finished —
+  V1 is in active implementation. Where the code and this document disagree, the code is right and
+  this document is a bug.
+</p>
+
+<!-- ============================================================ -->
+<p class="part-label">Part I</p>
+<h2 id="thesis">Product</h2>
+
+<h3>The thesis</h3>
+
+<p>
+  Every health app you already have is a silo. Whoop knows your recovery but not that you skipped
+  breakfast. Apple Health knows your steps but not that you blew the grocery budget and slept badly
+  because of it. Each one gives advice that is correct in isolation and useless in context.
+</p>
+
+<p>
+  Life OS is built on a single bet: <strong>the value is in the join, not the collection.</strong>
+  A coach that can see you missed meditation, logged 5 hours of sleep, journalled "low focus," and
+  went 900 calories over can say something no single-purpose app can. That is the entire reason to
+  build one app instead of using five.
+</p>
+
+<p>
+  Everything in the architecture follows from that bet. There is one table keyed by date that every
+  source writes into and every reader reads from. Cheap manual modules ship early precisely
+  <em>because</em> they make the coach smarter, not despite being simple.
+</p>
+
+<div class="prfaq" id="prfaq-product">
+  <p class="prfaq-kicker">Working backwards · Product</p>
+  <h3>Life OS</h3>
+  <p class="release">
+    Life OS is a personal dashboard that pulls together everything your devices already know about
+    you — weight from your scale, recovery from your strap, movement from your watch, and what you
+    ate from a photo — and answers one question every morning: <em>am I on track?</em> Open it and
+    a grid of dots shows the month at a glance. Filled means a good day. The app knows what a good
+    day means because you told it.
+  </p>
+
+  <p class="faq-q">Who is this for?</p>
+  <p class="faq-a">
+    One person. This is a personal app, sideloaded on the author's own devices. There are no
+    accounts, no other users, and no App Store distribution. That constraint removes an enormous
+    amount of architecture and is load-bearing throughout this document.
+  </p>
+
+  <p class="faq-q">Why not just use Apple Health?</p>
+  <p class="faq-a">
+    Apple Health is an excellent store and a poor interpreter. It will show you a chart of anything
+    and tell you the meaning of nothing. Life OS reads from it, then adds the layer Health
+    deliberately doesn't: a definition of a good day, a streak that survives days you forgot to
+    log, and eventually a coach that reads across domains.
+  </p>
+
+  <p class="faq-q">What is explicitly <em>not</em> in this product?</p>
+  <p class="faq-a">
+    Screen time analysis. It was requested and it cannot be built — see
+    <a href="#screentime">Screen Time</a> for the technical reason. Rather than ship a hollow
+    version, it is cut.
+  </p>
+
+  <p class="faq-q">What's the hardest part?</p>
+  <p class="faq-a">
+    Not the integrations. It's friction: any app that requires daily manual logging dies in about
+    eleven days. Every product decision here is subordinate to keeping the daily cost near zero —
+    which is why food logging is a photo, not a form.
+  </p>
+</div>
+
+<div class="rail" data-hue="habits" id="prfaq-today">
+  <div class="prfaq">
+    <p class="prfaq-kicker">Working backwards · V1 feature</p>
+    <h3>Today</h3>
+    <p class="release">
+      Today is the hub. It opens with the date at the size of a poster, a strip of the current week,
+      and a grid of dots — one per day this month. Filled dots are days you hit your targets, hollow
+      dots are days you didn't, and today is orange. Underneath, four tiles: steps, sleep, weight,
+      recovery. You can read the whole month in about a second without processing a single number.
+    </p>
+
+    <p class="faq-q">What makes a dot fill?</p>
+    <p class="faq-a">
+      Meeting <strong>3 of 4</strong> daily goals: steps ≥ 8,000, sleep ≥ 7h, exercise ≥ 30 min,
+      water ≥ 2,500 ml. All five values — the four goals and the required count — are editable in
+      Settings. The rule is deliberately explicit; a vague definition makes the entire grid
+      meaningless.
+    </p>
+
+    <p class="faq-q">What happens on a day with no data at all?</p>
+    <p class="faq-a">
+      It renders as no-data, not as a miss, and it is <strong>excluded from streak arithmetic
+      entirely</strong>. Leaving your watch on the charger is not a moral failure, and a system that
+      punishes it teaches you to distrust the streak.
+    </p>
+
+    <p class="faq-q">And a day with <em>some</em> data?</p>
+    <p class="faq-a">
+      Judged on what it has. If steps are logged at 500 and nothing else was recorded, that's a
+      miss. The alternative — treating partial days as blank — would let forgetting to log water
+      silently launder a bad day into a neutral one.
+    </p>
+
+    <p class="faq-q">If I change a goal, does history change?</p>
+    <p class="faq-a">
+      Yes. Status is computed on read, never stored, so past dots re-evaluate against the new target
+      immediately. This is intentional: the grid answers "how am I doing against my current
+      standard," not "how did I do against a standard I've since abandoned."
+    </p>
+  </div>
+</div>
+
+<div class="rail" data-hue="body" id="prfaq-body">
+  <div class="prfaq">
+    <p class="prfaq-kicker">Working backwards · V1 feature</p>
+    <h3>Body</h3>
+    <p class="release">
+      Body is a teal screen with your weight at 96 points and nothing competing with it. Below,
+      the week's change with direction, and a fourteen-day bar chart where each bar is a weigh-in.
+      Days you didn't step on the scale are visibly gaps, not interpolations.
+    </p>
+
+    <p class="faq-q">Where does weight come from?</p>
+    <p class="faq-a">
+      Your Renpho scale, via Apple Health. Renpho already syncs there, so Life OS never talks to
+      Renpho directly — one less integration, one less thing to break, and no third-party
+      credentials to store.
+    </p>
+
+    <p class="faq-q">Why show a weekly delta instead of a trend line?</p>
+    <p class="faq-a">
+      Daily bodyweight is mostly water and noise. A seven-day delta is the shortest window where the
+      signal beats the noise, and it's the number that actually changes behaviour.
+    </p>
+
+    <p class="faq-q">What if I weigh myself twice in one day?</p>
+    <p class="faq-a">
+      The row for that day holds one weight; the most recent write wins. This is a deliberate
+      simplification — for a daily-granularity app, the second weigh-in is the better one anyway.
+    </p>
+  </div>
+</div>
+
+<div class="rail" data-hue="activity" id="prfaq-activity">
+  <div class="prfaq">
+    <p class="prfaq-kicker">Working backwards · V1 feature</p>
+    <h3>Activity</h3>
+    <p class="release">
+      Activity is amber, with today's step count as the hero and three tiles beneath it: active
+      minutes, energy burned, and resting heart rate. It answers "did I move today" before you've
+      finished unlocking the phone.
+    </p>
+
+    <p class="faq-q">Both my iPhone and Watch count steps. Does that double?</p>
+    <p class="faq-a">
+      No. Life OS uses <code>HKStatisticsCollectionQuery</code>, which de-duplicates overlapping
+      samples across sources. Summing raw samples client-side — the obvious naive approach — would
+      roughly double every step count on days you carried both devices.
+    </p>
+
+    <p class="faq-q">Why is resting heart rate on the Activity screen and not Recovery?</p>
+    <p class="faq-a">
+      Because it comes from HealthKit and is available in V1, while Recovery's other metrics depend
+      on the Whoop integration landing. It moves to Recovery once that ships.
+    </p>
+  </div>
+</div>
+
+<div class="rail" data-hue="recovery" id="prfaq-recovery">
+  <div class="prfaq">
+    <p class="prfaq-kicker">Working backwards · V1 feature</p>
+    <h3>Recovery</h3>
+    <p class="release">
+      Recovery is blue, and leads with Whoop's recovery percentage — the number you'd otherwise open
+      the Whoop app to see — with HRV, day strain, and sleep performance beneath it.
+    </p>
+
+    <p class="faq-q">Whoop syncs to Apple Health. Why build an OAuth integration at all?</p>
+    <p class="faq-a">
+      Whoop writes sleep, workouts, and heart rate to Health, but <strong>not Recovery % or Day
+      Strain</strong> — those are proprietary and exist only through Whoop's own API. They are also
+      the two numbers most people wear the strap for. Hence the integration.
+    </p>
+
+    <p class="faq-q">What does this screen show before Whoop is connected?</p>
+    <p class="faq-a">
+      A designed empty state — an em dash and "Connect Whoop in Settings" — never <code>0%</code>.
+      A zero recovery score is a medically alarming number to display to someone who simply hasn't
+      logged in yet.
+    </p>
+
+    <p class="faq-q">What if I didn't wear the strap last night?</p>
+    <p class="faq-a">
+      Whoop returns no recovery record for that cycle, the field stays <code>nil</code>, and the
+      screen shows the same empty state. No interpolation, no carry-forward from yesterday.
+    </p>
+  </div>
+</div>
+
+<div class="rail" data-hue="nutrition" id="prfaq-coach">
+  <div class="prfaq">
+    <p class="prfaq-kicker">Working backwards · V2 feature</p>
+    <h3>The Coach</h3>
+    <p class="release">
+      Every morning, one card: what you did well yesterday, what slipped, and one thing to fix
+      today. Built from your actual weight, sleep, recovery, steps, calories, and water. Ask it
+      anything — "why is my recovery tanking?" — and it queries your real records to answer rather
+      than guessing.
+    </p>
+
+    <p class="faq-q">Does my health data go to a server?</p>
+    <p class="faq-a">
+      For the coach, no. It runs on Apple's on-device Foundation Models — free, private, offline,
+      no API key. Only food photos leave the device, because the on-device model is text-only and
+      cannot see an image.
+    </p>
+
+    <p class="faq-q">How does it avoid making numbers up?</p>
+    <p class="faq-a">
+      Tool calling. The model doesn't receive your data in a prompt; it calls Swift functions that
+      query <code>DailyMetrics</code> and returns what they hand back. A number it had to look up is
+      a number it cannot hallucinate — and the context stays small enough for a 3B on-device model
+      to handle.
+    </p>
+
+    <p class="faq-q">What if the on-device model isn't available?</p>
+    <p class="faq-a">
+      <code>SystemLanguageModel.availability</code> is checked at runtime. On a device without Apple
+      Intelligence, or while the model is still downloading, the coach degrades to unavailable
+      rather than silently shipping health data to a cloud provider without asking.
+    </p>
+  </div>
+</div>
+
+<h3 id="roadmap">Roadmap</h3>
+
+<p>
+  V1 is the only slice specified in detail. Each subsequent slice gets its own spec and plan.
+</p>
+
+<div class="tablewrap">
+<table>
+  <thead>
+    <tr><th>Slice</th><th>Contents</th><th>Why here</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>V1</strong></td><td>Design system, local data layer, Supabase sync, HealthKit, Whoop, five screens</td><td>De-risks the hard integrations before adding breadth</td></tr>
+    <tr><td>V2</td><td>AI coach — daily brief + chat, on-device with tool calling</td><td>Needs the data layer to exist first</td></tr>
+    <tr><td>V3</td><td>Nutrition — photo → Claude vision → macros; water logging</td><td>The only source that needs a network model</td></tr>
+    <tr><td>V4</td><td>Habits + streaks, Goals + progress bars</td><td>Cheap by construction; makes the coach smarter</td></tr>
+    <tr><td>V5</td><td>Journal, Notes</td><td>Mood and focus are strong coach signals</td></tr>
+    <tr><td>V6</td><td>Money — manual income, expenses, net worth, savings rate</td><td>Manual entry; no bank integration</td></tr>
+    <tr><td>V7</td><td>Content planner calendar</td><td>Independent of everything else</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note good">
+  <b>Why the cheap modules aren't an afterthought</b>
+  V4–V7 are each one SwiftData model, one hue token, and one screen assembled from existing
+  components. They are cheap <em>because</em> V1 builds the design system and the daily spine
+  properly. They also carry disproportionate value: every domain added to the join makes the coach
+  materially better at its job.
+</div>
+
+<!-- ============================================================ -->
+<p class="part-label">Part II</p>
+<h2 id="context">Architecture</h2>
+
+<h3>System context</h3>
+
+<p>
+  Four devices produce data, two of them reach the app through Apple Health, one through a REST
+  API, and one — your MacBook — cannot reach it at all. Everything converges on a single local
+  store before anything renders.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 400" role="img" aria-label="Apple Watch, iPhone and Renpho scale write into Apple Health, which the app reads via HealthKit; Whoop reaches the app through its REST API; MacBook has no path; all sources converge on local SwiftData which syncs to Supabase.">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head-hot" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <text class="lbl-sm" x="20" y="24">SOURCES</text>
+  <text class="lbl-sm" x="250" y="24">SYSTEM STORE</text>
+  <text class="lbl-sm" x="470" y="24">DEVICE</text>
+  <text class="lbl-sm" x="700" y="24">CLOUD</text>
+
+  <rect class="box" x="20" y="44" width="150" height="40" rx="8"/>
+  <text class="lbl" x="95" y="69" text-anchor="middle">Apple Watch</text>
+
+  <rect class="box" x="20" y="96" width="150" height="40" rx="8"/>
+  <text class="lbl" x="95" y="121" text-anchor="middle">iPhone</text>
+
+  <rect class="box" x="20" y="148" width="150" height="40" rx="8"/>
+  <text class="lbl" x="95" y="173" text-anchor="middle">Renpho scale</text>
+
+  <rect class="box" x="20" y="228" width="150" height="40" rx="8"/>
+  <text class="lbl" x="95" y="253" text-anchor="middle">Whoop strap</text>
+
+  <rect class="box-alt" x="20" y="312" width="150" height="40" rx="8"/>
+  <text class="lbl" x="95" y="337" text-anchor="middle">MacBook</text>
+
+  <rect class="box" x="250" y="96" width="140" height="40" rx="8"/>
+  <text class="lbl" x="320" y="121" text-anchor="middle">Apple Health</text>
+
+  <rect class="box" x="250" y="228" width="140" height="40" rx="8"/>
+  <text class="lbl" x="320" y="253" text-anchor="middle">Whoop API</text>
+
+  <rect class="box-hot" x="470" y="150" width="160" height="66" rx="10"/>
+  <text class="lbl" x="550" y="176" text-anchor="middle">SwiftData</text>
+  <text class="lbl-hot" x="550" y="196" text-anchor="middle">DailyMetrics</text>
+
+  <rect class="box" x="700" y="150" width="140" height="66" rx="10"/>
+  <text class="lbl" x="770" y="176" text-anchor="middle">Supabase</text>
+  <text class="lbl-sm" x="770" y="196" text-anchor="middle">backup · jobs</text>
+
+  <path class="flow" d="M170 64 L 210 64 L 210 112 L 244 112" marker-end="url(#a1)"/>
+  <path class="flow" d="M170 116 L 244 116" marker-end="url(#a1)"/>
+  <path class="flow" d="M170 168 L 210 168 L 210 122 L 244 122" marker-end="url(#a1)"/>
+  <path class="flow" d="M170 248 L 244 248" marker-end="url(#a1)"/>
+
+  <path class="flow-hot" d="M390 116 L 430 116 L 430 172 L 464 172" marker-end="url(#a2)"/>
+  <text class="lbl-sm" x="398" y="107">HealthKit read</text>
+
+  <path class="flow-hot" d="M390 248 L 430 248 L 430 196 L 464 196" marker-end="url(#a2)"/>
+  <text class="lbl-sm" x="398" y="266">OAuth 2.0</text>
+
+  <path class="flow" d="M630 172 L 694 172" marker-end="url(#a1)"/>
+  <text class="lbl-sm" x="636" y="164">push</text>
+  <path class="flow" d="M694 200 L 630 200" marker-end="url(#a1)"/>
+  <text class="lbl-sm" x="636" y="216">pull</text>
+
+  <line class="wall" x1="196" y1="300" x2="196" y2="364"/>
+  <text class="lbl-sm" x="206" y="330" fill="#C2412A">no API exists</text>
+  <text class="lbl-sm" x="206" y="346" fill="#C2412A">manual entry only</text>
+</svg>
+<figcaption>
+  Every automatic source converges on one local table before anything renders. The MacBook has no
+  programmatic path at any privilege level — that is a platform fact, not a missing feature.
+</figcaption>
+</figure>
+
+<h3 id="modules">Module map</h3>
+
+<p>
+  <code>LifeOSKit</code> is a local Swift package providing compile-time boundaries. The app target
+  contains only screens and wiring. The dependency rules are enforced by the compiler, not by
+  convention.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 760 330" role="img" aria-label="DesignSystem and Persistence have no dependencies; HealthData, WhoopKit, SyncKit and Insights each depend only on Persistence; the app target depends on DesignSystem and Persistence.">
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <rect class="box-hot" x="290" y="20" width="180" height="46" rx="9"/>
+  <text class="lbl" x="380" y="41" text-anchor="middle">App target</text>
+  <text class="lbl-hot" x="380" y="58" text-anchor="middle">screens · wiring only</text>
+
+  <rect class="box" x="60" y="130" width="150" height="46" rx="9"/>
+  <text class="lbl" x="135" y="151" text-anchor="middle">DesignSystem</text>
+  <text class="lbl-sm" x="135" y="167" text-anchor="middle">no dependencies</text>
+
+  <rect class="box" x="290" y="130" width="180" height="46" rx="9"/>
+  <text class="lbl" x="380" y="151" text-anchor="middle">Persistence</text>
+  <text class="lbl-sm" x="380" y="167" text-anchor="middle">no dependencies</text>
+
+  <rect class="box" x="40" y="250" width="140" height="44" rx="9"/>
+  <text class="lbl" x="110" y="277" text-anchor="middle">HealthData</text>
+
+  <rect class="box" x="200" y="250" width="140" height="44" rx="9"/>
+  <text class="lbl" x="270" y="277" text-anchor="middle">WhoopKit</text>
+
+  <rect class="box" x="360" y="250" width="140" height="44" rx="9"/>
+  <text class="lbl" x="430" y="277" text-anchor="middle">SyncKit</text>
+
+  <rect class="box" x="520" y="250" width="140" height="44" rx="9"/>
+  <text class="lbl" x="590" y="277" text-anchor="middle">Insights</text>
+  <text class="lbl-sm" x="590" y="240" text-anchor="middle">V2</text>
+
+  <path class="flow" d="M330 66 L 200 124" marker-end="url(#a3)"/>
+  <path class="flow" d="M380 66 L 380 124" marker-end="url(#a3)"/>
+
+  <path class="flow" d="M130 250 L 320 180" marker-end="url(#a3)"/>
+  <path class="flow" d="M280 250 L 350 180" marker-end="url(#a3)"/>
+  <path class="flow" d="M420 250 L 400 180" marker-end="url(#a3)"/>
+  <path class="flow" d="M570 250 L 440 180" marker-end="url(#a3)"/>
+
+  <text class="lbl-sm" x="40" y="318">Arrows read "depends on". No arrow between siblings — that is the point.</text>
+</svg>
+<figcaption>
+  The four integration modules are siblings that cannot see each other. Rewriting the Whoop client
+  cannot touch a view, and <code>Insights</code> reads only from <code>Persistence</code> — it never
+  calls HealthKit or Whoop directly.
+</figcaption>
+</figure>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Rule</th><th>Enforced how</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Nothing outside <code>HealthData</code> imports HealthKit</td><td>Package dependency graph</td><td>HealthKit types never leak into views; the module is swappable and testable</td></tr>
+    <tr><td>Nothing outside <code>WhoopKit</code> knows Whoop exists</td><td>Package dependency graph</td><td>A vendor change is contained to one target</td></tr>
+    <tr><td>Nothing outside <code>SyncKit</code> imports the Supabase SDK</td><td>Package dependency graph</td><td>The app works identically with sync disabled</td></tr>
+    <tr><td><code>Insights</code> reads <code>Persistence</code> only</td><td>Package dependency graph</td><td>The coach cannot make network calls mid-conversation</td></tr>
+    <tr><td><code>DesignSystem</code> depends on nothing</td><td>Package dependency graph</td><td>Components stay previewable and reusable across every module</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="spine">The DailyMetrics spine</h3>
+
+<p>
+  This is the single most consequential decision in the system. <strong>One row per calendar
+  day.</strong> Every source writes into it; every reader reads from it.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 780 340" role="img" aria-label="HealthKit and Whoop write into a single DailyMetrics row keyed by date; workout and sleep records roll up into it; screens and the coach read from it only.">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head-hot" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <text class="lbl-sm" x="20" y="22">WRITERS</text>
+  <text class="lbl-sm" x="300" y="22">THE JOIN</text>
+  <text class="lbl-sm" x="600" y="22">READERS</text>
+
+  <rect class="box" x="20" y="40" width="150" height="38" rx="8"/>
+  <text class="lbl" x="95" y="64" text-anchor="middle">HealthData</text>
+
+  <rect class="box" x="20" y="90" width="150" height="38" rx="8"/>
+  <text class="lbl" x="95" y="114" text-anchor="middle">WhoopKit</text>
+
+  <rect class="box" x="20" y="140" width="150" height="38" rx="8"/>
+  <text class="lbl" x="95" y="164" text-anchor="middle">Quick log (you)</text>
+
+  <rect class="box" x="20" y="190" width="150" height="38" rx="8"/>
+  <text class="lbl" x="95" y="214" text-anchor="middle">SyncKit pull</text>
+
+  <rect class="box-hot" x="290" y="70" width="190" height="130" rx="12"/>
+  <text class="lbl" x="385" y="96" text-anchor="middle">DailyMetrics</text>
+  <text class="lbl-hot" x="385" y="116" text-anchor="middle">#Unique([\.date])</text>
+  <text class="lbl-sm" x="385" y="142" text-anchor="middle">weight · steps · sleep</text>
+  <text class="lbl-sm" x="385" y="158" text-anchor="middle">water · HRV · recovery</text>
+  <text class="lbl-sm" x="385" y="174" text-anchor="middle">every field optional</text>
+
+  <rect class="box-alt" x="290" y="250" width="190" height="52" rx="10"/>
+  <text class="lbl" x="385" y="272" text-anchor="middle">WorkoutRecord</text>
+  <text class="lbl" x="385" y="292" text-anchor="middle">SleepRecord</text>
+
+  <rect class="box" x="600" y="70" width="160" height="38" rx="8"/>
+  <text class="lbl" x="680" y="94" text-anchor="middle">Five screens</text>
+
+  <rect class="box" x="600" y="120" width="160" height="38" rx="8"/>
+  <text class="lbl" x="680" y="144" text-anchor="middle">Coach (V2)</text>
+
+  <rect class="box" x="600" y="170" width="160" height="38" rx="8"/>
+  <text class="lbl" x="680" y="194" text-anchor="middle">SyncKit push</text>
+
+  <path class="flow-hot" d="M170 59 L 230 59 L 230 110 L 284 110" marker-end="url(#a5)"/>
+  <path class="flow-hot" d="M170 109 L 284 118" marker-end="url(#a5)"/>
+  <path class="flow-hot" d="M170 159 L 230 159 L 230 130 L 284 130" marker-end="url(#a5)"/>
+  <path class="flow-hot" d="M170 209 L 230 209 L 230 145 L 284 145" marker-end="url(#a5)"/>
+  <text class="lbl-hot" x="196" y="240">upsert · merge, never replace</text>
+
+  <path class="flow" d="M480 100 L 594 89" marker-end="url(#a4)"/>
+  <path class="flow" d="M480 130 L 594 139" marker-end="url(#a4)"/>
+  <path class="flow" d="M480 160 L 540 160 L 540 189 L 594 189" marker-end="url(#a4)"/>
+  <text class="lbl-sm" x="496" y="220">read only</text>
+
+  <path class="flow-dash" d="M385 250 L 385 206" marker-end="url(#a4)"/>
+  <text class="lbl-sm" x="396" y="232">rolls up — always recomputable</text>
+</svg>
+<figcaption>
+  Sources merge into the row rather than replacing it, so HealthKit and Whoop writing the same day
+  never clobber each other. <code>DailyMetrics</code> is derived state: it can always be rebuilt
+  from the source records beneath it.
+</figcaption>
+</figure>
+
+<h4>What the single-table choice buys</h4>
+<ul>
+  <li><strong>Trends become a sort</strong>, not a multi-source asynchronous join.</li>
+  <li><strong>The coach queries one table</strong> instead of orchestrating two network APIs mid-conversation — which is what makes a 3B on-device model viable.</li>
+  <li><strong>Offline works by default</strong>, because nothing renders from a live network call.</li>
+  <li><strong>Adding a source later</strong> means writing into the same row, not building a new pipeline.</li>
+</ul>
+
+<h3 id="localfirst">Local-first topology</h3>
+
+<p>
+  SwiftData on-device is the source of truth for the UI. Supabase is backup, sync, and a place to
+  run jobs that a sleeping phone cannot.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 780 300" role="img" aria-label="Read and write paths both terminate at local SwiftData and never wait on the network; a background sync pushes to and pulls from Supabase independently, and failures there never block the UI.">
+  <defs>
+    <marker id="a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+    <marker id="a7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head-hot" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <rect class="box" x="30" y="60" width="130" height="44" rx="9"/>
+  <text class="lbl" x="95" y="87" text-anchor="middle">Screen renders</text>
+
+  <rect class="box" x="30" y="150" width="130" height="44" rx="9"/>
+  <text class="lbl" x="95" y="177" text-anchor="middle">You log water</text>
+
+  <rect class="box-hot" x="260" y="100" width="170" height="60" rx="11"/>
+  <text class="lbl" x="345" y="125" text-anchor="middle">SwiftData</text>
+  <text class="lbl-hot" x="345" y="145" text-anchor="middle">source of truth</text>
+
+  <rect class="box" x="540" y="100" width="170" height="60" rx="11"/>
+  <text class="lbl" x="625" y="125" text-anchor="middle">Supabase</text>
+  <text class="lbl-sm" x="625" y="145" text-anchor="middle">Postgres · Edge Functions</text>
+
+  <path class="flow-hot" d="M254 118 L 166 88" marker-end="url(#a7)"/>
+  <text class="lbl-hot" x="172" y="112">instant, always</text>
+
+  <path class="flow-hot" d="M160 172 L 254 148" marker-end="url(#a7)"/>
+  <text class="lbl-hot" x="172" y="192">never blocks</text>
+
+  <path class="flow-dash" d="M430 118 L 534 118" marker-end="url(#a6)"/>
+  <text class="lbl-sm" x="440" y="110">push, background</text>
+
+  <path class="flow-dash" d="M534 148 L 430 148" marker-end="url(#a6)"/>
+  <text class="lbl-sm" x="440" y="166">pull nightly Whoop job</text>
+
+  <line class="wall" x1="485" y1="40" x2="485" y2="230"/>
+  <text class="lbl-sm" x="440" y="34" fill="#C2412A">network boundary</text>
+  <text class="lbl-sm" x="300" y="255">Everything left of the boundary works on a plane.</text>
+  <text class="lbl-sm" x="300" y="271">A sync failure surfaces in Settings as a stale timestamp — never as a blocking error.</text>
+</svg>
+<figcaption>
+  Reads and writes both terminate locally. The dashed sync paths are the only network-dependent
+  edges in the entire app, and neither is on a user-facing critical path.
+</figcaption>
+</figure>
+
+<h3 id="conflict">Conflict resolution</h3>
+
+<p>
+  <strong>Field-level last-write-wins, using <code>updatedAt</code>.</strong> Not row-level.
+</p>
+
+<p>
+  Row-level LWW would be a bug here. The nightly Whoop job writes recovery fields at 04:00; if you
+  logged water at 23:00 the night before, a row-level overwrite silently discards it. Field-level
+  merge means each writer touches only its own columns.
+</p>
+
+<p>
+  This is defensible only because there is exactly one human user and the writers rarely contest the
+  same field: HealthKit owns the health columns, the Whoop job owns the Whoop columns, and you own
+  the manual ones. If this app ever became multi-user, this strategy would need replacing outright.
+</p>
+
+<div class="note caution">
+  <b>Known limitation</b>
+  LWW depends on clock agreement between the device and the Edge Function. Device clock skew of
+  more than a few minutes can cause a stale write to win. Accepted for a single-user personal app;
+  documented so it isn't rediscovered as a mystery bug.
+</div>
+
+<!-- ============================================================ -->
+<p class="part-label">Part III</p>
+<h2 id="healthkit">Integrations</h2>
+
+<div class="rail" data-hue="body">
+<h3>Apple HealthKit</h3>
+
+<p>
+  The primary source. Read-only in V1 — the app requests no write permissions, which keeps the
+  authorization surface minimal and means Life OS can never corrupt your Health data.
+</p>
+
+<h4>Types read</h4>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Metric</th><th>Identifier</th><th>Query</th></tr></thead>
+  <tbody>
+    <tr><td>Weight</td><td><code>bodyMass</code></td><td>Anchored</td></tr>
+    <tr><td>Steps</td><td><code>stepCount</code></td><td>Statistics collection</td></tr>
+    <tr><td>Active energy</td><td><code>activeEnergyBurned</code></td><td>Statistics collection</td></tr>
+    <tr><td>Exercise minutes</td><td><code>appleExerciseTime</code></td><td>Statistics collection</td></tr>
+    <tr><td>Resting HR</td><td><code>restingHeartRate</code></td><td>Anchored</td></tr>
+    <tr><td>HRV</td><td><code>heartRateVariabilitySDNN</code></td><td>Anchored</td></tr>
+    <tr><td>Water</td><td><code>dietaryWater</code></td><td>Statistics collection</td></tr>
+    <tr><td>Sleep</td><td><code>sleepAnalysis</code> (category)</td><td>Anchored</td></tr>
+    <tr><td>Workouts</td><td><code>HKWorkoutType</code></td><td>Anchored</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h4>Freshness</h4>
+<ul>
+  <li><code>HKAnchoredObjectQuery</code> with a <strong>persisted anchor per type</strong>, so each sync fetches only what changed since last time.</li>
+  <li><code>enableBackgroundDelivery</code> so iOS wakes the app when new samples land.</li>
+  <li><code>HKStatisticsCollectionQuery</code> for daily aggregates — this de-duplicates across sources. Summing raw samples yourself double-counts steps on any day you carried both an iPhone and a Watch.</li>
+</ul>
+
+<div class="note blocked">
+  <b>The authorization trap</b>
+  HealthKit read authorization is <strong>deliberately opaque</strong>. The API will not tell you
+  whether the user denied a type — only whether you have asked. Branching on read authorization
+  status is therefore always a bug. Query anyway, and treat an empty result as "no data," rendering
+  an explicit empty state. Apple designed it this way so apps cannot detect that you are hiding a
+  condition from them.
+</div>
+</div>
+
+<div class="rail" data-hue="recovery" id="whoop">
+<h3>Whoop</h3>
+
+<p>
+  Base URL <code>https://api.prod.whoop.com</code>, API <strong>v2</strong>. v1 is deprecated. Note
+  that v2 identifies sleep by UUID rather than integer ID, and recovery webhooks reference the
+  associated <em>sleep</em> UUID, not the cycle ID — a migration footgun worth knowing before you
+  read the payloads.
+</p>
+
+<h4>Scopes</h4>
+<pre><code>offline
+read:cycles
+read:sleep
+read:recovery
+read:workout
+read:body_measurement
+read:profile</code></pre>
+<p><code>offline</code> is required to receive a refresh token. Without it, the integration breaks
+the first time the access token expires.</p>
+
+<h4>OAuth — and why the secret never ships</h4>
+
+<p>
+  Whoop's token exchange requires a client secret. Embedding it in the app binary would make it
+  extractable with <code>strings</code>. Supabase Edge Functions solve this cleanly: the app does
+  PKCE and obtains a <em>code</em>; the function exchanges it.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 800 300" role="img" aria-label="The app generates a PKCE challenge and receives an authorization code from Whoop, then posts the code to a Supabase Edge Function which holds the client secret and performs the token exchange; the secret never crosses onto the device.">
+  <defs>
+    <marker id="a8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+    <marker id="a9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head-hot" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <text class="lbl-sm" x="34" y="24">DEVICE</text>
+  <text class="lbl-sm" x="330" y="24">WHOOP</text>
+  <text class="lbl-sm" x="600" y="24">EDGE FUNCTION</text>
+
+  <line class="flow" x1="90" y1="34" x2="90" y2="270"/>
+  <line class="flow" x1="380" y1="34" x2="380" y2="270"/>
+  <line class="flow" x1="680" y1="34" x2="680" y2="270"/>
+
+  <path class="flow" d="M90 66 L 374 66" marker-end="url(#a8)"/>
+  <text class="lbl-sm" x="100" y="58">1 · authorize + code_challenge</text>
+
+  <path class="flow" d="M380 104 L 96 104" marker-end="url(#a8)"/>
+  <text class="lbl-sm" x="100" y="96">2 · authorization code → lifeos://whoop/callback</text>
+
+  <path class="flow-hot" d="M90 148 L 674 148" marker-end="url(#a9)"/>
+  <text class="lbl-hot" x="100" y="140">3 · POST { code, code_verifier }</text>
+
+  <path class="flow-hot" d="M680 190 L 386 190" marker-end="url(#a9)"/>
+  <text class="lbl-hot" x="396" y="182">4 · exchange using CLIENT_SECRET</text>
+
+  <path class="flow-hot" d="M380 224 L 96 224" marker-end="url(#a9)"/>
+  <text class="lbl-hot" x="100" y="216">5 · access + refresh token → Keychain</text>
+
+  <line class="wall" x1="530" y1="40" x2="530" y2="264"/>
+  <text class="lbl-sm" x="404" y="256" fill="#C2412A">secret lives only right of this line</text>
+</svg>
+<figcaption>
+  Steps 3–5 are the whole point: the client secret is used at step 4, on the server, and never
+  crosses back onto the device. Without this, the integration would be unshippable to anyone but its
+  author.
+</figcaption>
+</figure>
+
+<h4>Nightly job and webhooks</h4>
+<ul>
+  <li>A scheduled Edge Function (pg_cron) pulls the previous day's cycle, recovery, and sleep overnight, so morning data exists before you open the app.</li>
+  <li>A <code>whoop-webhook</code> function receives push updates. Signature verified against <code>WHOOP_WEBHOOK_SECRET</code>; unverified requests are rejected outright.</li>
+  <li>Webhooks are only possible because a public HTTPS endpoint now exists. A phone alone cannot receive them.</li>
+</ul>
+</div>
+
+<div class="rail" data-hue="money" id="supabase">
+<h3>Supabase</h3>
+
+<h4>Schema</h4>
+<p>
+  Mirrors the local SwiftData models: <code>daily_metrics</code>, <code>workout_records</code>,
+  <code>sleep_records</code>, <code>whoop_raw</code>, and <code>sync_state</code>.
+</p>
+
+<p>
+  <code>whoop_raw</code> stores unprocessed API payloads. This is deliberate: when Whoop's response
+  shape differs from the documentation — and it will — you can re-derive every downstream value
+  without re-fetching a month of history against a rate limit.
+</p>
+
+<h4>Row Level Security</h4>
+
+<div class="note caution">
+  <b>RLS is enabled on every table, without exception</b>
+  Policies scope all access to <code>auth.uid()</code>. This is precisely what makes shipping the
+  anon key inside the app safe. An RLS misconfiguration does not throw — it returns an
+  <em>empty result set</em>, which looks exactly like "no data yet." Verify policies with a real
+  query before trusting an empty screen.
+</div>
+
+<h4>Edge Functions</h4>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Function</th><th>Purpose</th><th>Secrets used</th></tr></thead>
+  <tbody>
+    <tr><td><code>whoop-token-exchange</code></td><td>Exchange auth code / refresh token</td><td><code>WHOOP_CLIENT_SECRET</code></td></tr>
+    <tr><td><code>whoop-sync</code></td><td>Scheduled nightly pull</td><td><code>WHOOP_CLIENT_SECRET</code>, <code>SERVICE_ROLE_KEY</code></td></tr>
+    <tr><td><code>whoop-webhook</code></td><td>Receive Whoop push events</td><td><code>WHOOP_WEBHOOK_SECRET</code>, <code>SERVICE_ROLE_KEY</code></td></tr>
+    <tr><td><code>analyze-meal</code> <span class="decision-id">V3</span></td><td>Food photo → macros via Claude vision</td><td><code>ANTHROPIC_API_KEY</code></td></tr>
+  </tbody>
+</table>
+</div>
+</div>
+
+<div class="rail" data-hue="nutrition" id="ai">
+<h3>Foundation Models</h3>
+
+<p>
+  The coach runs on Apple's on-device model by default. All three tiers sit behind the same
+  <code>LanguageModelSession</code> API, so routing is configuration rather than a rewrite.
+</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tier</th><th>Used for</th><th>Context</th><th>Cost</th><th>Available</th></tr></thead>
+  <tbody>
+    <tr><td><code>SystemLanguageModel</code></td><td>Daily brief, chat, trend commentary</td><td>Small</td><td>Free, private, offline</td><td>iOS 26</td></tr>
+    <tr><td><code>PrivateCloudComputeLanguageModel</code></td><td>Monthly / quarterly deep analysis</td><td class="num">32K</td><td>Free, private</td><td>iOS 27</td></tr>
+    <tr><td>Claude API</td><td>Food photo → macros (needs vision)</td><td>Large</td><td>~cents per photo</td><td>Any</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  iOS 27 additionally introduces public <code>LanguageModel</code> and
+  <code>LanguageModelExecutor</code> protocols, letting third-party providers implement the same
+  interface. <strong>Do not hand-roll a provider abstraction</strong> — Apple ships one, and a
+  bespoke layer would have to be torn out.
+</p>
+
+<div class="note good">
+  <b>Tool calling is the anti-hallucination mechanism</b>
+  The model is not handed your data in a prompt. It calls Swift functions that query
+  <code>DailyMetrics</code>. Two consequences: a number it had to look up is a number it cannot
+  invent, and the context stays small enough for an on-device model to handle a month of history.
+</div>
+</div>
+
+<div class="rail" data-hue="habits" id="screentime">
+<h3>Screen Time — why it is cut</h3>
+
+<p>
+  Screen time was an explicit product requirement. It cannot be built as specified, and the reason
+  is worth documenting precisely so it is not re-attempted.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 760 260" role="img" aria-label="Device activity data can only be rendered inside a DeviceActivityReport extension; the host app, its storage, any server, and the AI coach all sit behind a hard boundary that the data cannot cross.">
+  <defs>
+    <marker id="a10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <polygon class="head" points="0,0 10,5 0,10"/>
+    </marker>
+  </defs>
+
+  <rect class="box" x="30" y="80" width="170" height="70" rx="10"/>
+  <text class="lbl" x="115" y="108" text-anchor="middle">DeviceActivity</text>
+  <text class="lbl" x="115" y="126" text-anchor="middle">Report extension</text>
+  <text class="lbl-sm" x="115" y="143" text-anchor="middle">can render only</text>
+
+  <rect class="box-alt" x="420" y="30" width="150" height="42" rx="9"/>
+  <text class="lbl" x="495" y="56" text-anchor="middle">Host app memory</text>
+
+  <rect class="box-alt" x="420" y="88" width="150" height="42" rx="9"/>
+  <text class="lbl" x="495" y="114" text-anchor="middle">SwiftData</text>
+
+  <rect class="box-alt" x="420" y="146" width="150" height="42" rx="9"/>
+  <text class="lbl" x="495" y="172" text-anchor="middle">Supabase</text>
+
+  <rect class="box-alt" x="420" y="204" width="150" height="42" rx="9"/>
+  <text class="lbl" x="495" y="230" text-anchor="middle">AI coach</text>
+
+  <line class="wall" x1="310" y1="20" x2="310" y2="250"/>
+  <text class="lbl-sm" x="222" y="16" fill="#C2412A">OS-enforced boundary</text>
+
+  <path class="flow-dash" d="M200 100 L 300 60"/>
+  <path class="flow-dash" d="M200 110 L 300 110"/>
+  <path class="flow-dash" d="M200 120 L 300 165"/>
+  <path class="flow-dash" d="M200 130 L 300 220"/>
+
+  <text class="lbl-sm" x="324" y="60" fill="#C2412A">✕</text>
+  <text class="lbl-sm" x="324" y="112" fill="#C2412A">✕</text>
+  <text class="lbl-sm" x="324" y="167" fill="#C2412A">✕</text>
+  <text class="lbl-sm" x="324" y="222" fill="#C2412A">✕</text>
+</svg>
+<figcaption>
+  Usage figures can be displayed inside the report extension and nowhere else. The host app cannot
+  read them into memory, persist them, transmit them, or pass them to the coach.
+</figcaption>
+</figure>
+
+<ul>
+  <li><strong>iPhone / iPad:</strong> a screen-time <em>view</em> is possible; screen-time <em>analysis alongside health data</em> is not. It would also require Apple to grant the Family Controls distribution entitlement.</li>
+  <li><strong>MacBook:</strong> no API exists at any privilege level. Manual entry only, if ever.</li>
+</ul>
+
+<p>
+  Since the entire product thesis is the join across domains, a signal that provably cannot enter
+  the join has no home here. Cut rather than half-built.
+</p>
+</div>
+
+<!-- ============================================================ -->
+<p class="part-label">Part IV</p>
+<h2 id="model-daily">Reference</h2>
+
+<h3><code>DailyMetrics</code></h3>
+<p class="lede">One row per calendar day. The join key for the entire application.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Property</th><th>Type</th><th>Written by</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>date</code></td><td><code>Date</code></td><td>—</td><td>Always <code>startOfDay</code>. Unique. Never a timestamp.</td></tr>
+    <tr><td><code>weightKg</code></td><td><code>Double?</code></td><td>HealthKit, Quick log</td><td>Renpho → Health → here</td></tr>
+    <tr><td><code>steps</code></td><td><code>Int?</code></td><td>HealthKit</td><td>De-duplicated across sources</td></tr>
+    <tr><td><code>activeEnergyKcal</code></td><td><code>Double?</code></td><td>HealthKit</td><td></td></tr>
+    <tr><td><code>exerciseMinutes</code></td><td><code>Int?</code></td><td>HealthKit</td><td></td></tr>
+    <tr><td><code>sleepMinutes</code></td><td><code>Int?</code></td><td>HealthKit</td><td>Attributed to the wake day</td></tr>
+    <tr><td><code>waterML</code></td><td><code>Double?</code></td><td>Quick log</td><td>No automatic source exists</td></tr>
+    <tr><td><code>restingHR</code></td><td><code>Double?</code></td><td>HealthKit</td><td></td></tr>
+    <tr><td><code>hrvMs</code></td><td><code>Double?</code></td><td>HealthKit</td><td>SDNN</td></tr>
+    <tr><td><code>whoopRecoveryPct</code></td><td><code>Double?</code></td><td>WhoopKit</td><td>Exists nowhere else</td></tr>
+    <tr><td><code>whoopDayStrain</code></td><td><code>Double?</code></td><td>WhoopKit</td><td>Exists nowhere else</td></tr>
+    <tr><td><code>whoopSleepPerformancePct</code></td><td><code>Double?</code></td><td>WhoopKit</td><td></td></tr>
+    <tr><td><code>updatedAt</code></td><td><code>Date</code></td><td>MetricsStore</td><td>Drives field-level LWW</td></tr>
+    <tr><td><code>syncedAt</code></td><td><code>Date?</code></td><td>SyncKit</td><td><code>nil</code> = never synced</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note blocked">
+  <b>Every metric is optional, and that is not negotiable</b>
+  A missing value and a zero must never be representable as the same thing. Zero steps means you
+  didn't move; <code>nil</code> steps means the watch was on the charger. In a health app a false
+  zero is worse than a blank — it is a wrong number presented with total confidence.
+</div>
+
+<h3 id="model-goals"><code>UserGoals</code></h3>
+<p>Singleton by convention — exactly one row, created with defaults on first access.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Property</th><th>Type</th><th>Default</th><th>Range in Settings</th></tr></thead>
+  <tbody>
+    <tr><td><code>stepsGoal</code></td><td><code>Int</code></td><td class="num">8,000</td><td class="num">1,000 – 30,000</td></tr>
+    <tr><td><code>sleepMinutesGoal</code></td><td><code>Int</code></td><td class="num">420 (7h)</td><td class="num">240 – 660</td></tr>
+    <tr><td><code>exerciseMinutesGoal</code></td><td><code>Int</code></td><td class="num">30</td><td class="num">5 – 180</td></tr>
+    <tr><td><code>waterMLGoal</code></td><td><code>Double</code></td><td class="num">2,500</td><td class="num">500 – 6,000</td></tr>
+    <tr><td><code>requiredCount</code></td><td><code>Int</code></td><td class="num">3</td><td class="num">1 – 4</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="model-source">Source records</h3>
+<p>
+  <code>WorkoutRecord</code> and <code>SleepRecord</code> hold data that is genuinely not daily.
+  They roll <em>up</em> into <code>DailyMetrics</code>, which means the daily row is always safe to
+  recompute and never the only copy of anything.
+</p>
+
+<h3 id="api-eval">Goal evaluation</h3>
+
+<pre><code>public func evaluate(_ reading: DayReading,
+                     against targets: GoalTargets) -> DayStatus</code></pre>
+
+<p>Returns <code>.onTarget</code>, <code>.missed</code>, or <code>.noData</code>.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Input</th><th>Result</th><th>Rationale</th></tr></thead>
+  <tbody>
+    <tr><td>No metrics present at all</td><td><code>.noData</code></td><td>Not a failure; excluded from streaks</td></tr>
+    <tr><td>≥ <code>requiredCount</code> goals met</td><td><code>.onTarget</code></td><td>Default 3 of 4</td></tr>
+    <tr><td>Some data, below required count</td><td><code>.missed</code></td><td>An unlogged metric cannot launder a bad day</td></tr>
+    <tr><td>Exactly at a goal value</td><td>Counts as met</td><td><code>&gt;=</code>, not <code>&gt;</code></td></tr>
+  </tbody>
+</table>
+</div>
+
+<pre><code>public func currentStreak(statuses: [DayStatus]) -> Int</code></pre>
+<p>
+  Expects most-recent-first ordering. <code>.noData</code> days are transparent — they neither
+  extend nor break a streak. <code>.missed</code> terminates immediately.
+</p>
+
+<h3 id="api-store"><code>MetricsStore</code></h3>
+
+<p>The only path by which anything writes to <code>DailyMetrics</code>. It enforces the
+one-row-per-day invariant so callers cannot get it wrong.</p>
+
+<pre><code>@discardableResult
+func upsert(date: Date, apply: (DailyMetrics) -&gt; Void) throws -&gt; DailyMetrics
+func metrics(from: Date, to: Date) throws -&gt; [DailyMetrics]   // most-recent-first
+func goals() throws -&gt; UserGoals                              // creates defaults on first access</code></pre>
+
+<p>
+  <code>upsert</code> normalises any timestamp to <code>startOfDay</code> and <strong>merges</strong>
+  — fields the closure doesn't touch are preserved. That is what lets HealthKit and Whoop write the
+  same row safely.
+</p>
+
+<!-- ============================================================ -->
+<p class="part-label">Part V</p>
+<h2 id="edge-time">Production edge cases</h2>
+
+<p class="lede">
+  The register below is the difference between a demo and something you can rely on. Each row is a
+  condition that will occur in normal use, not a theoretical one.
+</p>
+
+<h3>Time and calendars</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Sleep spans midnight</td><td>Attributed to the <em>wake</em> day via <code>SleepRecord.attributedDate</code></td><td>Designed</td></tr>
+    <tr><td>Travel across time zones</td><td>"Today" follows the device's current zone; a day can be shortened or lengthened</td><td>Accepted</td></tr>
+    <tr><td>DST transition (23h or 25h day)</td><td><code>Calendar.startOfDay</code> handles it; never compute days by adding 86,400 seconds</td><td>Designed</td></tr>
+    <tr><td>Month grid at month boundaries</td><td>Leading blanks computed from <code>firstWeekday</code>; padded to whole rows</td><td>Tested</td></tr>
+    <tr><td>Data arrives for a past day</td><td><code>upsert</code> merges into the existing row; dot grid re-evaluates on next read</td><td>Designed</td></tr>
+    <tr><td>Future-dated day</td><td>Rendered <code>.future</code> by position, never evaluated against goals</td><td>Tested</td></tr>
+    <tr><td>Device clock skew vs server</td><td>Can cause a stale LWW win</td><td>Known limitation</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="edge-health">HealthKit failures</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>User denies read access</td><td><strong>Undetectable by design.</strong> Query anyway; empty result renders an empty state, and Settings links to Health's permission screen</td></tr>
+    <tr><td>Permission revoked mid-use</td><td>Same path — data simply stops arriving; the last-synced timestamp in Settings goes stale</td></tr>
+    <tr><td>iPhone and Watch both counting steps</td><td>De-duplicated by <code>HKStatisticsCollectionQuery</code>. Never sum raw samples</td></tr>
+    <tr><td>Background delivery doesn't fire</td><td>iOS throttles aggressively. Also sync on foreground; never depend solely on background wake</td></tr>
+    <tr><td>Anchor invalidated (restore from backup)</td><td>Anchor reset triggers a full re-read; <code>upsert</code> merge makes this idempotent</td></tr>
+    <tr><td>Weight recorded in pounds</td><td>Read through <code>HKUnit</code> conversion, stored canonically in kg</td></tr>
+    <tr><td>Watch not worn all day</td><td>Fields stay <code>nil</code>. Day is <code>.noData</code>, streak survives</td></tr>
+    <tr><td>Simulator has no health data</td><td>Expected. Seeded data covers development; integration is device-only</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="edge-whoop">Whoop failures</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Access token expires mid-request</td><td>Refresh via Edge Function, retry once, then surface reconnect</td></tr>
+    <tr><td>Refresh token rotated</td><td>Whoop rotates on use — persist the <em>new</em> refresh token atomically. Reusing an old one invalidates the whole chain</td></tr>
+    <tr><td>Refresh fails with auth error</td><td>Clear Keychain, show "reconnect Whoop" in Settings. <strong>No silent retry loop</strong></td></tr>
+    <tr><td>Rate limited (429)</td><td>Respect <code>Retry-After</code>; exponential backoff in the nightly job</td></tr>
+    <tr><td>Webhook delivered twice</td><td>Idempotent by record UUID — reprocessing is a no-op</td></tr>
+    <tr><td>Webhook signature invalid</td><td>Rejected before parsing. Never trust an unverified payload</td></tr>
+    <tr><td>Strap not worn</td><td>No recovery record; fields stay <code>nil</code>; screen shows its empty state</td></tr>
+    <tr><td>Whoop cycle boundary ≠ calendar day</td><td>Cycles are attributed to the day the cycle <em>starts</em>; documented so the mismatch isn't read as a bug</td></tr>
+    <tr><td>Payload shape differs from docs</td><td>Raw payloads retained in <code>whoop_raw</code>; re-derive without re-fetching</td></tr>
+    <tr><td>User revokes access in Whoop's app</td><td>Next refresh 401s → same reconnect path</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="edge-sync">Sync failures</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>No network</td><td>Every screen reads local. Failure surfaces only as a stale timestamp in Settings</td></tr>
+    <tr><td>Write while offline</td><td>Committed locally, <code>syncedAt</code> stays <code>nil</code>, pushed on next successful sync</td></tr>
+    <tr><td>Partial batch failure</td><td>Per-row <code>syncedAt</code> means only unsynced rows retry. No all-or-nothing batches</td></tr>
+    <tr><td>Same row edited locally and by the nightly job</td><td>Field-level LWW — the job's Whoop columns and your water column both survive</td></tr>
+    <tr><td>Supabase session expires</td><td>Refresh silently; on hard failure, sync pauses and Settings shows it. The app keeps working</td></tr>
+    <tr><td>RLS policy misconfigured</td><td><strong>Returns empty, does not throw.</strong> Indistinguishable from "no data" — verify policies explicitly</td></tr>
+    <tr><td>Schema drift SwiftData ↔ Postgres</td><td>Decoding failures logged per-row and skipped; one bad row never halts a sync</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="edge-ui">UI and data display</h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>First launch, no data</td><td>Seeded 60 days in development; in production every hero shows its designed empty state</td></tr>
+    <tr><td>Metric missing</td><td>Em dash at 35% opacity — <strong>never <code>0</code></strong></td></tr>
+    <tr><td>Goal changed retroactively</td><td>All history re-evaluates. Intentional: the grid measures against your current standard</td></tr>
+    <tr><td>Streak across a no-data gap</td><td>Gap is transparent; streak continues</td></tr>
+    <tr><td>Progress bar with goal of zero</td><td>Ratio clamped to 0…1; goal ranges in Settings exclude zero</td></tr>
+    <tr><td>Weight delta with &lt; 7 days history</td><td>Delta suppressed entirely rather than computed from a short window</td></tr>
+    <tr><td>Very large numbers</td><td><code>minimumScaleFactor(0.5)</code> and <code>lineLimit(1)</code> on hero numerals</td></tr>
+    <tr><td>Dark mode</td><td>Every hue has a dark variant; neutral tokens resolve per scheme. No color defined only inside a scheme branch</td></tr>
+    <tr><td>Dynamic Type at accessibility sizes</td><td>Hero numerals scale down; tiles reflow. Verify at XXL before shipping</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="edge-ai">AI failures <span class="decision-id">V2</span></h3>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Device lacks Apple Intelligence</td><td><code>SystemLanguageModel.availability</code> checked; coach degrades to unavailable rather than silently uploading health data</td></tr>
+    <tr><td>Model still downloading</td><td>Reported as unavailable with the reason surfaced, not a spinner</td></tr>
+    <tr><td>Context window exceeded</td><td>Tool calling keeps context small by construction; deep analysis routes to the 32K PCC tier</td></tr>
+    <tr><td>Guardrail refusal</td><td>Surfaced plainly. Never retried with a reworded prompt to evade it</td></tr>
+    <tr><td>Tool returns no rows</td><td>Model is told "no data for that range" explicitly, so it says so instead of inventing a trend</td></tr>
+    <tr><td>User asks about a future date</td><td>Tool returns empty; no speculation</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<p class="part-label">Part VI</p>
+<h2 id="setup">Operations</h2>
+
+<h3>Setup runbook</h3>
+
+<h4>1 · Local build</h4>
+<pre><code>git clone https://github.com/shivvyas2/LifeOS.git
+cd LifeOS
+cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+swift test --package-path LifeOSKit      # no simulator needed
+open LIfeOS.xcodeproj</code></pre>
+<p>
+  In Xcode: Swift Language Version → 6, Minimum Deployments → iOS 26.0, and add
+  <code>LifeOSKit</code> via <em>Add Package Dependencies → Add Local</em>.
+</p>
+
+<h4>2 · Supabase</h4>
+<pre><code>supabase init
+supabase link --project-ref &lt;ref&gt;
+supabase db push                          # schema + RLS policies
+supabase secrets set WHOOP_CLIENT_SECRET=... \
+                     WHOOP_WEBHOOK_SECRET=...
+supabase functions deploy whoop-token-exchange
+supabase functions deploy whoop-sync
+supabase functions deploy whoop-webhook</code></pre>
+<p>Then put the project URL and <strong>anon</strong> key into <code>Config/Secrets.xcconfig</code>.</p>
+
+<h4>3 · Whoop developer app</h4>
+<ol>
+  <li>Register at <code>developer.whoop.com</code> (requires an active Whoop membership).</li>
+  <li>Redirect URI: <code>lifeos://whoop/callback</code></li>
+  <li>Request all seven scopes listed in <a href="#whoop">Whoop</a>, including <code>offline</code>.</li>
+  <li>Client ID → <code>Config/Secrets.xcconfig</code>. Client secret → <code>supabase secrets set</code>, <strong>never the xcconfig</strong>.</li>
+  <li>Webhook URL → the deployed <code>whoop-webhook</code> function URL.</li>
+</ol>
+
+<h4>4 · Device</h4>
+<p>
+  HealthKit background delivery and the Whoop OAuth round trip cannot be verified in the simulator.
+  Both require a physical device with a signing team configured.
+</p>
+
+<h3 id="secrets">Secrets</h3>
+
+<p>
+  There is no runtime <code>.env</code> on iOS. The app is a signed bundle; anything shipped inside
+  it is extractable. The governing rule is therefore: <strong>what must never leak, must live
+  server-side.</strong>
+</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Tier</th><th>Location</th><th>Contents</th><th>In git?</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1 · Build config</td>
+      <td><code>Config/Secrets.xcconfig</code></td>
+      <td>Supabase URL, <strong>anon</strong> key, Whoop client ID</td>
+      <td>Gitignored. Template committed</td>
+    </tr>
+    <tr>
+      <td>2 · Runtime</td>
+      <td>Keychain</td>
+      <td>Whoop access + refresh tokens, Supabase session</td>
+      <td>Never</td>
+    </tr>
+    <tr>
+      <td>3 · Server</td>
+      <td>Edge Function env</td>
+      <td><code>WHOOP_CLIENT_SECRET</code>, <code>WHOOP_WEBHOOK_SECRET</code>, <code>ANTHROPIC_API_KEY</code>, <code>SERVICE_ROLE_KEY</code></td>
+      <td>Never. Never on device either</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  Nothing in Tier 1 is truly secret. The Supabase anon key is <em>designed</em> to ship in clients —
+  it is safe precisely because RLS gates every row — and the Whoop client ID is public by OAuth
+  design. Tier 1 is gitignored for hygiene, not because a leak would be catastrophic.
+</p>
+
+<div class="note blocked">
+  <b>service_role is the one that matters</b>
+  It bypasses RLS entirely. It belongs only in an Edge Function environment — never in an xcconfig,
+  never in the app target, never in git. Every other secret in this system is recoverable by
+  rotation; this one grants total read and write access to everything.
+</div>
+
+<h3 id="testing">Testing strategy</h3>
+
+<p>
+  Logic that can be tested without a simulator lives in the package and is developed test-first.
+  SwiftUI view bodies are verified by previews and a build — asserting on view structure is
+  ceremony that breaks on every layout change without catching real defects.
+</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Target</th><th>What is tested</th><th>How</th></tr></thead>
+  <tbody>
+    <tr><td><code>Persistence</code></td><td>Goal evaluation, streak arithmetic, upsert invariants, rollup derivation</td><td>Swift Testing, in-memory <code>ModelContainer</code></td></tr>
+    <tr><td><code>DesignSystem</code></td><td>Month grid calendar maths, hue completeness</td><td>Swift Testing, fixed UTC calendar</td></tr>
+    <tr><td><code>HealthData</code></td><td>Aggregation and anchor handling</td><td>Protocol-wrapped store, fixtures</td></tr>
+    <tr><td><code>WhoopKit</code></td><td>v2 payload decoding, token refresh state machine</td><td>Recorded payload fixtures</td></tr>
+    <tr><td><code>SyncKit</code></td><td>Field-level conflict resolution</td><td>Constructed clock skew</td></tr>
+    <tr><td>Views</td><td>Both themes, every hue, empty states</td><td>SwiftUI previews</td></tr>
+    <tr><td>Integrations</td><td>Background delivery, OAuth round trip</td><td>Manual, physical device</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The package declares a macOS platform alongside iOS purely so
+  <code>swift test --package-path LifeOSKit</code> runs from the terminal without booting a
+  simulator. Integration modules guard platform-specific imports with
+  <code>#if canImport(HealthKit)</code> to preserve this.
+</p>
+
+<h3 id="decisions">Decision log</h3>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead>
+  <tbody>
+    <tr><td>Audience</td><td>Personal only</td><td>Removes accounts, App Store review, multi-user architecture</td></tr>
+    <tr><td>Weight source</td><td>HealthKit via Renpho's sync</td><td>No Renpho API integration needed at all</td></tr>
+    <tr><td>Whoop</td><td>Direct API in V1</td><td>Recovery % and Strain exist nowhere else</td></tr>
+    <tr><td>Whoop client secret</td><td>Edge Function only</td><td>Would otherwise be extractable from the binary</td></tr>
+    <tr><td>Food logging</td><td>Photo → AI estimate</td><td>Lowest friction; friction is what kills these apps</td></tr>
+    <tr><td>AI coach</td><td>On-device Foundation Models, tool calling</td><td>Free, private, offline; can't hallucinate looked-up numbers</td></tr>
+    <tr><td>Provider abstraction</td><td>Use Apple's, don't build one</td><td>iOS 27 ships <code>LanguageModel</code> protocols</td></tr>
+    <tr><td>Data topology</td><td>Local-first, Supabase syncs</td><td>A health app that waits on the network is one you stop opening</td></tr>
+    <tr><td>Conflict resolution</td><td>Field-level LWW</td><td>Row-level would let the nightly job discard your manual entries</td></tr>
+    <tr><td>Screen time</td><td>Cut</td><td>Apple's API forbids reading the values into the app</td></tr>
+    <tr><td>Every metric optional</td><td>Yes</td><td>A false zero is worse than a blank in a health app</td></tr>
+    <tr><td>Dot grid rule</td><td>3 of 4, configurable</td><td>A vague rule makes the whole grid meaningless</td></tr>
+    <tr><td>No-data days</td><td>Excluded from streaks</td><td>Punishing a charging night teaches distrust of the streak</td></tr>
+    <tr><td>V1 scope</td><td>Foundation + health</td><td>De-risks the hard integrations before adding breadth</td></tr>
+  </tbody>
+</table>
+</div>
+
+<hr>
+
+<p style="color: var(--ink-3); font-size: 14px;">
+  Life OS Engineering Handbook · Rev A · 10 August 2026 ·
+  Source of record: <code>docs/superpowers/specs/2026-08-10-life-os-design.md</code>
+</p>
+
+</main>
+</div>
