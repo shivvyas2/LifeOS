@@ -88,18 +88,22 @@ let package = Package(
     targets: [
         .target(name: "DesignSystem"),
         .target(name: "Persistence"),
-        .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"]),
     ]
 )
 ```
 
+`DesignSystemTests` is deliberately **not** declared yet. SwiftPM fails if a
+declared target's directory is missing, and declaring it now would force an
+assertion-free placeholder test into the suite. Task 2 adds the target and its
+first real test together.
+
 `macOS` is declared **only so `swift test` runs from the terminal without a simulator.** The app itself ships iOS-only. Plans 2 and 3 will guard HealthKit code with `#if canImport(HealthKit)` to preserve this.
 
-- [ ] **Step 2: Create placeholder sources for every declared target**
+- [ ] **Step 2: Create the DesignSystem source directory**
 
 SwiftPM fails with "Source files for target X should be located under…" if a
-declared target's directory does not exist. Create these *before* running any
+declared target's directory does not exist. Create this *before* running any
 test, or the failure in Step 4 will be the wrong failure.
 
 `LifeOSKit/Sources/DesignSystem/Tokens.swift`:
@@ -110,21 +114,6 @@ import SwiftUI
 /// Namespace for Life OS design tokens. Populated in Task 2.
 public enum LifeOSTokens {}
 ```
-
-`LifeOSKit/Tests/DesignSystemTests/PlaceholderTests.swift`:
-
-```swift
-import Testing
-@testable import DesignSystem
-
-@Suite struct PlaceholderTests {
-    @Test func moduleImports() {
-        #expect(true)
-    }
-}
-```
-
-This placeholder is replaced by `TokensTests` in Task 2.
 
 - [ ] **Step 3: Write the failing test**
 
@@ -186,7 +175,7 @@ public struct GoalTargets: Sendable, Equatable {
 - [ ] **Step 6: Run the test and confirm it passes**
 
 Run: `swift test --package-path LifeOSKit`
-Expected: PASS, 2 tests (the goal-targets test and the placeholder).
+Expected: PASS, 1 test.
 
 - [ ] **Step 7: Migrate the Xcode project**
 
@@ -250,16 +239,18 @@ git commit -m "chore: migrate to Swift 6 / iOS 26 and add LifeOSKit package"
 
 **Files:**
 - Modify: `LifeOSKit/Sources/DesignSystem/Tokens.swift`
+- Modify: `LifeOSKit/Package.swift` (declare the `DesignSystemTests` target)
 - Create: `LifeOSKit/Tests/DesignSystemTests/TokensTests.swift`
-- Delete: `LifeOSKit/Tests/DesignSystemTests/PlaceholderTests.swift`
 
 **Interfaces:**
 - Produces: `ModuleHue` (enum, `CaseIterable`, `Sendable`) with `.top`/`.bottom`/`.darkTop`/`.darkBottom`; `AdaptiveColor`; `LifeOSTokens.accent`, `.canvas`, `.cardSurface`, `.primaryText`, `.secondaryText`, `.dotMissed`, `.dotFuture`, `.dotOutline`.
 
-- [ ] **Step 1: Delete the placeholder test and write the failing test**
+- [ ] **Step 1: Declare the test target and write the failing test**
 
-```bash
-rm LifeOSKit/Tests/DesignSystemTests/PlaceholderTests.swift
+Add to the `targets:` array in `LifeOSKit/Package.swift`:
+
+```swift
+        .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
 ```
 
 `LifeOSKit/Tests/DesignSystemTests/TokensTests.swift`:
