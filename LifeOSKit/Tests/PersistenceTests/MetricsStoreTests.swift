@@ -62,6 +62,22 @@ import SwiftData
         #expect(rows.map(\.steps) == [2, 1])
     }
 
+    /// The batch path must honour the same one-row-per-day invariant as the
+    /// single upsert, including when a day already exists.
+    @Test func upsertBatchWritesEveryDayAndStillMergesExistingRows() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) { $0.weightKg = 80 }
+
+        let dates = (0..<3).map { Calendar.current.date(byAdding: .day, value: -$0, to: day)! }
+        try store.upsertBatch(dates: dates) { _, row in row.steps = 1000 }
+
+        let rows = try store.metrics(from: dates.last!, to: day)
+        #expect(rows.count == 3)
+        #expect(rows.allSatisfy { $0.steps == 1000 })
+        // The pre-existing row was merged into, not duplicated or clobbered.
+        #expect(rows[0].weightKg == 80)
+    }
+
     @Test func goalsCreatesDefaultsOnFirstAccessAndReusesThemAfter() throws {
         let store = try makeStore()
         let first = try store.goals()

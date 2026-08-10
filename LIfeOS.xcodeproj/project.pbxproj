@@ -103,10 +103,10 @@
 			);
 			mainGroup = A985C669302A34E0002272C5;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			packageReferences = (
 				A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */,
 			);
+			preferredProjectObjectVersion = 77;
 			productRefGroup = A985C673302A34E0002272C5 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
