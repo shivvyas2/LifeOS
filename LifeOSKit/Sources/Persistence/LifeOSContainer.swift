@@ -7,6 +7,10 @@ public enum LifeOSContainer {
         UserGoals.self,
         WorkoutRecord.self,
         SleepRecord.self,
+        PlanEntry.self,
+        HabitTick.self,
+        MoneyEntry.self,
+        MoneyAccount.self,
     ])
 
     public static func make(inMemory: Bool = false) throws -> ModelContainer {

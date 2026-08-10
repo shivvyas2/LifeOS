@@ -1,0 +1,94 @@
+import SwiftUI
+
+/// Add sheet for a plan entry. `target` is offered only where a numeric goal
+/// makes sense, so a habit never grows a meaningless milestone count.
+struct AddPlanEntrySheet: View {
+    let prompt: String
+    let allowsTarget: Bool
+    let onSave: (String, String?, Double?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var detail = ""
+    @State private var target = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Title", text: $title)
+                    TextField("Detail (optional)", text: $detail)
+                }
+                if allowsTarget {
+                    Section("Target") {
+                        TextField("e.g. 4 milestones, or 10000", text: $target)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+            }
+            .navigationTitle(prompt)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(title, detail.isEmpty ? nil : detail, Double(target))
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+/// Manual money entry. Direction is an explicit choice rather than a signed
+/// number, so nobody has to remember which way the sign points.
+struct AddMoneySheet: View {
+    let onSave: (String, Double, Bool, String?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var merchant = ""
+    @State private var amount = ""
+    @State private var category = ""
+    @State private var isIncome = false
+
+    private var parsedAmount: Double? {
+        guard let value = Double(amount), value > 0 else { return nil }
+        return value
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Picker("Direction", selection: $isIncome) {
+                    Text("Expense").tag(false)
+                    Text("Income").tag(true)
+                }
+                .pickerStyle(.segmented)
+
+                Section {
+                    TextField(isIncome ? "Source" : "Merchant", text: $merchant)
+                    TextField("Amount", text: $amount).keyboardType(.decimalPad)
+                    TextField("Category (optional)", text: $category)
+                }
+            }
+            .navigationTitle("Add transaction")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if let parsedAmount {
+                            onSave(merchant, parsedAmount, isIncome, category.isEmpty ? nil : category)
+                        }
+                        dismiss()
+                    }
+                    .disabled(parsedAmount == nil || merchant.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+}

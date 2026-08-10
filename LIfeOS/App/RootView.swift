@@ -19,6 +19,8 @@ struct RootView: View {
     @State private var activity = ActivityViewModel()
     @State private var recovery = RecoveryViewModel()
     @State private var wellness = WellnessViewModel()
+    @State private var money = MoneyViewModel()
+    @State private var plan = PlanViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
 
@@ -26,6 +28,8 @@ struct RootView: View {
     @State private var bodyDate = Date()
     @State private var showQuickLog = false
     @State private var showSettings = false
+    @State private var showAddPlan = false
+    @State private var showAddMoney = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -60,10 +64,17 @@ struct RootView: View {
                     )
                 }
                 Tab("Money", systemImage: "dollarsign.circle.fill") {
-                    MoneyScreen()
+                    MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }
                 }
                 Tab("Plan", systemImage: "checklist") {
-                    PlanScreen()
+                    PlanScreen(
+                        snapshot: plan.snapshot,
+                        section: Binding(get: { plan.section }, set: { plan.section = $0 }),
+                        onAdd: { showAddPlan = true },
+                        onAdvance: { plan.advance(id: $0) },
+                        onToggleHabit: { plan.toggleHabit(id: $0) },
+                        onDelete: { plan.delete(id: $0) }
+                    )
                 }
             }
 
@@ -86,6 +97,19 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsScreen(model: settings)
+        }
+        .sheet(isPresented: $showAddPlan) {
+            AddPlanEntrySheet(
+                prompt: plan.section.addPrompt,
+                allowsTarget: plan.section == .goals
+            ) { title, detail, target in
+                plan.add(title: title, detail: detail, target: target)
+            }
+        }
+        .sheet(isPresented: $showAddMoney) {
+            AddMoneySheet { merchant, amount, isIncome, category in
+                money.add(merchant: merchant, amount: amount, isIncome: isIncome, category: category)
+            }
         }
         .task {
             attachAll()
@@ -116,6 +140,8 @@ struct RootView: View {
         activity.attach(context)
         recovery.attach(context)
         wellness.attach(context)
+        money.attach(context)
+        plan.attach(context)
         settings.attach(context)
         quickLog.attach(context)
     }
@@ -126,6 +152,8 @@ struct RootView: View {
         activity.load()
         recovery.load()
         wellness.load()
+        money.load()
+        plan.load()
         settings.load()
     }
 }
