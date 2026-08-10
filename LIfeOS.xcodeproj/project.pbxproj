@@ -9,10 +9,12 @@
 /* Begin PBXBuildFile section */
 		A985C690302A34E0002272C5 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A985C692302A34E0002272C5 /* DesignSystem */; };
 		A985C691302A34E0002272C5 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = A985C693302A34E0002272C5 /* Persistence */; };
+		A985C6A1302A34E0002272C5 /* Integrations in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6A2302A34E0002272C5 /* Integrations */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A985C672302A34E0002272C5 /* LIfeOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LIfeOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A985C6A0302A34E0002272C5 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Secrets.xcconfig; path = Config/Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -30,6 +32,7 @@
 			files = (
 				A985C690302A34E0002272C5 /* DesignSystem in Frameworks */,
 				A985C691302A34E0002272C5 /* Persistence in Frameworks */,
+				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -41,6 +44,7 @@
 			children = (
 				A985C674302A34E0002272C5 /* LIfeOS */,
 				A985C673302A34E0002272C5 /* Products */,
+				A9980193302A797700C9696D /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -50,6 +54,14 @@
 				A985C672302A34E0002272C5 /* LIfeOS.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A9980193302A797700C9696D /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				A985C6A0302A34E0002272C5 /* Secrets.xcconfig */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -74,6 +86,7 @@
 			packageProductDependencies = (
 				A985C692302A34E0002272C5 /* DesignSystem */,
 				A985C693302A34E0002272C5 /* Persistence */,
+				A985C6A2302A34E0002272C5 /* Integrations */,
 			);
 			productName = LIfeOS;
 			productReference = A985C672302A34E0002272C5 /* LIfeOS.app */;
@@ -261,6 +274,7 @@
 		};
 		A985C67E302A34E1002272C5 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A985C6A0302A34E0002272C5 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -273,6 +287,7 @@
 					"*.md",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -293,6 +308,7 @@
 		};
 		A985C67F302A34E1002272C5 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A985C6A0302A34E0002272C5 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -305,6 +321,7 @@
 					"*.md",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -361,6 +378,10 @@
 		A985C693302A34E0002272C5 /* Persistence */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Persistence;
+		};
+		A985C6A2302A34E0002272C5 /* Integrations */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Integrations;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

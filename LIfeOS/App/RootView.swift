@@ -22,6 +22,7 @@ struct RootView: View {
     @State private var money = MoneyViewModel()
     @State private var plan = PlanViewModel()
     @State private var settings = SettingsViewModel()
+    @State private var whoop = WhoopConnectionViewModel()
     @State private var quickLog = QuickLogViewModel()
 
     @State private var bodySection = BodySection.activity
@@ -96,7 +97,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsScreen(model: settings)
+            SettingsScreen(model: settings, whoop: whoop)
         }
         .sheet(isPresented: $showAddPlan) {
             AddPlanEntrySheet(
@@ -144,6 +145,7 @@ struct RootView: View {
         money.attach(context)
         plan.attach(context)
         settings.attach(context)
+        whoop.attach(context)
         quickLog.attach(context)
     }
 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Values come from Config/Secrets.xcconfig at build time. Neither is a
+	     secret: an OAuth client ID is public by design, and the Supabase URL is
+	     a public endpoint. The Whoop client secret is never here — it lives
+	     only in the Edge Function environment. -->
+	<key>WHOOPClientID</key>
+	<string>$(WHOOP_CLIENT_ID)</string>
+	<key>SupabaseURL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>WhoopRedirectURI</key>
+	<string>$(WHOOP_REDIRECT_URI)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>shivvyas.LIfeOS.whoop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lifeos</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
