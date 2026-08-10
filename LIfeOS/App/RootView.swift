@@ -5,37 +5,65 @@ import DesignSystem
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
 /// Views below this point never touch SwiftData.
+///
+/// Four tabs, not six. Body absorbs activity, weight, recovery and wellness so
+/// the bar stays free for the other life domains, and Settings sits behind a
+/// gear on Today rather than spending a slot.
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var today = TodayViewModel()
-    @State private var body_ = BodyViewModel()
+    @State private var weight = BodyViewModel()
     @State private var activity = ActivityViewModel()
     @State private var recovery = RecoveryViewModel()
+    @State private var wellness = WellnessViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
 
+    @State private var bodySection = BodySection.activity
+    @State private var bodyDate = Date()
     @State private var showQuickLog = false
+    @State private var showSettings = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             TabView {
                 Tab("Today", systemImage: "circle.grid.3x3.fill") {
-                    TodayScreen(snapshot: today.snapshot)
+                    NavigationStack {
+                        TodayScreen(snapshot: today.snapshot)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button {
+                                        showSettings = true
+                                    } label: {
+                                        Image(systemName: "gearshape.fill")
+                                    }
+                                    .tint(LifeOSTokens.primaryText.resolve(scheme))
+                                    .accessibilityLabel("Settings")
+                                }
+                            }
+                    }
                 }
                 Tab("Body", systemImage: "figure") {
-                    BodyScreen(snapshot: body_.snapshot)
+                    BodyHubScreen(
+                        activity: activity.snapshot,
+                        weight: weight.snapshot,
+                        recovery: recovery.snapshot,
+                        wellness: wellness.snapshot,
+                        section: $bodySection,
+                        selectedDate: Binding(
+                            get: { bodyDate },
+                            set: { bodyDate = $0; selectBodyDate($0) }
+                        )
+                    )
                 }
-                Tab("Activity", systemImage: "flame.fill") {
-                    ActivityScreen(snapshot: activity.snapshot)
+                Tab("Money", systemImage: "dollarsign.circle.fill") {
+                    MoneyScreen()
                 }
-                Tab("Recovery", systemImage: "bolt.heart.fill") {
-                    RecoveryScreen(snapshot: recovery.snapshot)
-                }
-                Tab("Settings", systemImage: "gearshape.fill") {
-                    SettingsScreen(model: settings)
+                Tab("Plan", systemImage: "checklist") {
+                    PlanScreen()
                 }
             }
 
@@ -56,6 +84,9 @@ struct RootView: View {
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
         }
+        .sheet(isPresented: $showSettings) {
+            SettingsScreen(model: settings)
+        }
         .task {
             attachAll()
             reloadAll()
@@ -72,20 +103,29 @@ struct RootView: View {
         }
     }
 
+    private func selectBodyDate(_ date: Date) {
+        activity.select(date)
+        weight.select(date)
+        recovery.select(date)
+        wellness.select(date)
+    }
+
     private func attachAll() {
         today.attach(context)
-        body_.attach(context)
+        weight.attach(context)
         activity.attach(context)
         recovery.attach(context)
+        wellness.attach(context)
         settings.attach(context)
         quickLog.attach(context)
     }
 
     private func reloadAll() {
         today.load()
-        body_.load()
+        weight.load()
         activity.load()
         recovery.load()
+        wellness.load()
         settings.load()
     }
 }

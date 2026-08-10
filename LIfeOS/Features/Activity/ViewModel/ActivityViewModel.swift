@@ -5,6 +5,7 @@ import Persistence
 @MainActor @Observable
 final class ActivityViewModel {
     private(set) var snapshot = ActivitySnapshot()
+    var selectedDate: Date = .now
 
     private var context: ModelContext?
     private let calendar: Calendar
@@ -17,13 +18,18 @@ final class ActivityViewModel {
         self.context = context
     }
 
+    func select(_ date: Date) {
+        selectedDate = date
+        load()
+    }
+
     func load() {
         guard let context else { return }
         let store = MetricsStore(context: context, calendar: calendar)
 
         do {
-            // Today only — this screen shows no history.
-            let today = try store.metrics(from: .now, to: .now).first
+            // One day only — this section shows no history.
+            let today = try store.metrics(from: selectedDate, to: selectedDate).first
             snapshot = ActivitySnapshot(
                 steps: today?.steps,
                 exerciseMinutes: today?.exerciseMinutes,

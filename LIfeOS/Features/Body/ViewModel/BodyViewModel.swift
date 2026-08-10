@@ -5,6 +5,7 @@ import Persistence
 @MainActor @Observable
 final class BodyViewModel {
     private(set) var snapshot = BodySnapshot()
+    var selectedDate: Date = .now
 
     private var context: ModelContext?
     private let calendar: Calendar
@@ -17,13 +18,18 @@ final class BodyViewModel {
         self.context = context
     }
 
+    func select(_ date: Date) {
+        selectedDate = date
+        load()
+    }
+
     func load() {
         guard let context else { return }
         let store = MetricsStore(context: context, calendar: calendar)
 
         do {
-            let start = calendar.date(byAdding: .day, value: -60, to: .now) ?? .distantPast
-            let rows = try store.metrics(from: start, to: .now)   // most-recent-first
+            let start = calendar.date(byAdding: .day, value: -60, to: selectedDate) ?? .distantPast
+            let rows = try store.metrics(from: start, to: selectedDate)   // most-recent-first
 
             let weighed = rows.compactMap { row in row.weightKg.map { (date: row.date, kg: $0) } }
             var delta: Double?

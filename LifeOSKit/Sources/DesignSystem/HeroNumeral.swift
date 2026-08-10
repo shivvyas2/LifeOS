@@ -14,17 +14,17 @@ public struct HeroNumeral: View {
 
     public var body: some View {
         VStack(spacing: 2) {
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
+            HStack(alignment: .lastTextBaseline, spacing: 5) {
                 Text(value)
-                    .font(.system(size: 96, weight: .semibold, design: .default))
-                    .tracking(-3)
+                    .font(.system(size: 84, weight: .regular, design: .default))
+                    .tracking(-2)
                 if let unit {
-                    Text(unit).font(.system(size: 28, weight: .medium))
+                    Text(unit).font(.system(size: 26, weight: .regular)).opacity(0.85)
                 }
             }
             Text(label)
                 .font(.system(size: 15, weight: .medium))
-                .opacity(0.7)
+                .opacity(0.75)
         }
         .minimumScaleFactor(0.5)
         .lineLimit(1)

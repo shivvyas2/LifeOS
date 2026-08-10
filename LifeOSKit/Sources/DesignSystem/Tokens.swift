@@ -88,6 +88,20 @@ public enum LifeOSTokens {
     public static let dotFuture = AdaptiveColor(light: Color(white: 0.93), dark: Color(white: 0.18))
     public static let dotOutline = AdaptiveColor(light: Color(white: 0.85), dark: Color(white: 0.30))
 
+    /// Tile surface for cards sitting on a saturated gradient.
+    ///
+    /// Light and opaque enough to carry dark text: white-on-translucent over a
+    /// mid-saturation hue is the low-contrast failure the reference designs
+    /// avoid by keeping the tile light and the text dark.
+    public static let tileSurface = AdaptiveColor(
+        light: Color.white.opacity(0.58),
+        dark: Color.white.opacity(0.14)
+    )
+
+    /// Text sitting directly on a gradient, where the backdrop is saturated in
+    /// light mode and near-black in dark mode — white reads in both.
+    public static let onGradient = Color.white
+
     /// Leading and trailing cells that belong to no day. Faint rather than
     /// invisible so the month reads as one solid block of dots — the grid is
     /// the app's central visual claim and a ragged edge weakens it.

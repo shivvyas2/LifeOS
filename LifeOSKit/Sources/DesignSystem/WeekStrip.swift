@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// The day selector across the top of a domain screen: weekday above the day
+/// number, the selected day emphasised, days either side falling away.
+///
+/// Colours are inherited rather than hard-coded, so the caller sets
+/// `.foregroundStyle(LifeOSTokens.onGradient)` on a gradient or a text token on
+/// the neutral canvas, and this only modulates opacity and weight.
 public struct WeekStrip: View {
     @Binding private var selection: Date
     private let calendar: Calendar
@@ -17,8 +23,8 @@ public struct WeekStrip: View {
     }
 
     public var body: some View {
-        // Hoisted out of the loop: this is invariant across all seven days, and
-        // `startOfDay` is not free enough to repeat once per column.
+        // Invariant across all seven columns — `startOfDay` is not free enough
+        // to repeat once per column.
         let startOfToday = calendar.startOfDay(for: today)
 
         HStack(spacing: 0) {
@@ -26,21 +32,36 @@ public struct WeekStrip: View {
                 let isSelected = calendar.isDate(day, inSameDayAs: selection)
                 let isFuture = calendar.startOfDay(for: day) > startOfToday
 
-                VStack(spacing: 6) {
-                    Text(day.formatted(.dateTime.weekday(.narrow)))
-                        .font(.system(size: 11, weight: .semibold))
-                        .opacity(0.5)
+                VStack(spacing: 3) {
+                    Text(day.formatted(.dateTime.weekday(.abbreviated)))
+                        .font(.system(size: 12, weight: .medium))
                     Text(day.formatted(.dateTime.day()))
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(isSelected ? LifeOSTokens.accent : .clear))
-                        .foregroundStyle(isSelected ? .white : .primary)
+                        .font(.system(size: isSelected ? 19 : 16,
+                                      weight: isSelected ? .bold : .medium))
                 }
-                .opacity(isFuture ? 0.35 : 1)
+                .opacity(isSelected ? 1 : (isFuture ? 0.3 : 0.6))
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background {
+                    if isSelected {
+                        Capsule().fill(LifeOSTokens.onGradient.opacity(0.16))
+                    }
+                }
                 .contentShape(.rect)
                 .onTapGesture { if !isFuture { selection = day } }
             }
         }
     }
+}
+
+#Preview {
+    @Previewable @State var selection = Date()
+    ZStack {
+        LinearGradient(colors: [ModuleHue.activity.top, ModuleHue.activity.bottom],
+                       startPoint: .top, endPoint: .bottom)
+        WeekStrip(selection: $selection)
+            .foregroundStyle(LifeOSTokens.onGradient)
+            .padding()
+    }
+    .ignoresSafeArea()
 }

@@ -1,46 +1,41 @@
 import SwiftUI
 import DesignSystem
 
-struct BodyScreen: View {
+/// Bodyweight for the selected day, plus its recent trend.
+struct WeightSection: View {
     let snapshot: BodySnapshot
 
     var body: some View {
-        GradientCanvas(hue: .body) {
-            ScrollView {
-                VStack(spacing: 28) {
-                    if let weight = snapshot.weightKg {
-                        HeroNumeral(value: String(format: "%.1f", weight), unit: "kg", label: "Bodyweight")
-                            .foregroundStyle(.white)
-                            .padding(.top, 40)
-                    } else {
-                        HeroEmptyState(label: "Bodyweight", reason: "No weigh-in recorded")
-                            .foregroundStyle(.white)
-                            .padding(.top, 40)
-                    }
+        VStack(spacing: 24) {
+            if let weight = snapshot.weightKg {
+                HeroNumeral(value: String(format: "%.1f", weight), unit: "kg", label: "Bodyweight")
+                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .padding(.top, 18)
+            } else {
+                HeroEmptyState(label: "Bodyweight", reason: "No weigh-in recorded")
+                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .padding(.top, 18)
+            }
 
-                    if let delta = snapshot.weeklyDeltaKg {
-                        GlassCard {
-                            HStack {
-                                Text("This week").font(.system(size: 14, weight: .medium))
-                                Spacer()
-                                Text("\(delta >= 0 ? "+" : "")\(String(format: "%.1f", delta)) kg")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(LifeOSTokens.accent)
-                            }
-                        }
-                        .foregroundStyle(.white)
-                    }
+            HStack(spacing: 10) {
+                MetricTile(
+                    label: "This week",
+                    value: snapshot.weeklyDeltaKg.map { "\($0 >= 0 ? "+" : "")\(String(format: "%.1f", $0))" },
+                    unit: "kg"
+                )
+                MetricTile(
+                    label: "Logged",
+                    value: "\(snapshot.recentWeights.count { $0.weightKg != nil })",
+                    unit: "of 14"
+                )
+            }
 
-                    SolidCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("LAST 14 DAYS")
-                                .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
-                            WeightBars(points: snapshot.recentWeights)
-                        }
-                    }
+            SolidCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("LAST 14 DAYS")
+                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                    WeightBars(points: snapshot.recentWeights)
                 }
-                .padding(20)
-                .padding(.bottom, 120)
             }
         }
     }
@@ -81,9 +76,15 @@ private func previewWeights() -> [WeightPoint] {
 }
 
 #Preview {
-    BodyScreen(snapshot: BodySnapshot(
-        weightKg: 77.4,
-        weeklyDeltaKg: -0.6,
-        recentWeights: previewWeights()
-    ))
+    ZStack {
+        LinearGradient(colors: [ModuleHue.body.top, ModuleHue.body.bottom],
+                       startPoint: .top, endPoint: .bottom)
+        ScrollView {
+            WeightSection(snapshot: BodySnapshot(
+                weightKg: 77.4, weeklyDeltaKg: -0.6, recentWeights: previewWeights()
+            ))
+            .padding()
+        }
+    }
+    .ignoresSafeArea()
 }
