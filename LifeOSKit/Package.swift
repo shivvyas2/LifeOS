@@ -7,11 +7,14 @@ let package = Package(
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "Persistence", targets: ["Persistence"]),
+        .library(name: "Integrations", targets: ["Integrations"]),
     ],
     targets: [
         .target(name: "DesignSystem"),
         .target(name: "Persistence"),
+        .target(name: "Integrations", dependencies: ["Persistence"]),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"]),
+        .testTarget(name: "IntegrationsTests", dependencies: ["Integrations"]),
     ]
 )
