@@ -22,6 +22,40 @@
 - **`DesignSystem` depends on nothing.** `Persistence` depends on nothing. If a task seems to require otherwise, the task is wrong — stop and flag it.
 - Tests run from the terminal: `swift test --package-path LifeOSKit`. No simulator required for any test in this plan.
 
+### Performance constraints
+
+These are binding on every remaining task. They are cheap to honour while building
+and expensive to retrofit, which is the only reason they are stated up front —
+none of them licence speculative micro-optimisation. Measure before tuning
+anything not listed here.
+
+- **Derive once, not per render.** Grid cells, streak counts and goal evaluation
+  are pure functions over a day's data. Compute them when the data changes and
+  store the result; never recompute inside a `body`. A `body` that calls
+  `MonthGridLayout.cells` directly is a defect.
+- **Views get values, not model objects.** `DesignSystem` views take plain
+  `Sendable` value types. This keeps them off the SwiftData object graph, so
+  rendering cannot trigger a fault or a fetch.
+- **Identity over position.** Every `ForEach` keys on a stable `Identifiable` id,
+  never on array index, so SwiftUI diffs instead of rebuilding.
+- **Expensive effects are chrome, never cell content.** Material and shadow each
+  cost an offscreen pass, so they are allowed only on per-screen furniture, where
+  there are a handful per screen: `GlassCard`'s material and `SolidCard`'s shadow
+  are both deliberate and stay. What is banned is putting them inside a repeated
+  cell — the 42 dots stay flat fills with no shadow, material or blur, and no
+  view nests one card treatment inside the other. `GradientCanvas` stays a plain
+  static `LinearGradient`: never animated, never blurred.
+- **Persistence is not main-actor work.** `MetricsStore` operations take a
+  `ModelContext` and must not assume the main one. Batch writes into a single
+  `save()`; a `save()` per row in a seed or sync loop is a defect.
+- **Bounded fetches.** Every SwiftData fetch carries a `#Predicate` and a date
+  bound. No unbounded `FetchDescriptor` over `DailyMetrics` — that table grows
+  without limit.
+- **No polling.** No `Timer`, no run loop that ticks when nothing changed.
+  Refresh on data change or on foreground, never on a schedule. (Binding on
+  Plans 2 and 3, where HealthKit background delivery and Whoop sync land —
+  those are the app's real battery budget, not anything in this plan.)
+
 ---
 
 ## File Structure
