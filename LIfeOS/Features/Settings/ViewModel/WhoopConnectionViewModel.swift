@@ -52,9 +52,11 @@ final class WhoopConnectionViewModel: NSObject {
     // MARK: - OAuth
 
     func connect() {
+        // The callback scheme is the app's own, not the redirect's: the redirect
+        // is an https bridge and only its final hop returns to lifeos://.
         guard let clientID = AppConfig.whoopClientID,
               let redirect = AppConfig.whoopRedirectURI,
-              let callbackScheme = URL(string: redirect)?.scheme else {
+              let callbackScheme = AppConfig.appURLScheme else {
             state = .unconfigured
             return
         }
