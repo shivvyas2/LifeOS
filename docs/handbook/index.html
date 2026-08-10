@@ -431,11 +431,18 @@
       border-right: none; padding: 0; font-size: 10.5pt;
       break-after: page;
     }
-    .index nav ol { gap: 14px; }
-    .index a { color: var(--ink-2); }
+    /* Two columns so the whole contents lands on one page, as a book's should. */
+    .index nav ol { display: block; columns: 2; column-gap: 30px; }
+    .index nav > ol > li { break-inside: avoid; margin-bottom: 16px; }
+    .index nav ol ol { columns: 1; margin-top: 4px; }
+    .index nav ol ol li { margin-bottom: 0; }
+    .index a { color: var(--ink-2); padding: 1px 0 1px 10px; }
+    .index-sub { margin-bottom: 18px; }
 
     main { padding: 0; }
-    .masthead { break-after: page; padding-top: 0; }
+    /* No page break after the masthead — it strands the opening paragraph
+       on a near-empty page. Parts break; the cover does not. */
+    .masthead { padding-top: 0; margin-bottom: 28px; }
 
     h1 { font-size: 30pt; }
     h2 { font-size: 18pt; break-before: page; break-after: avoid; }
