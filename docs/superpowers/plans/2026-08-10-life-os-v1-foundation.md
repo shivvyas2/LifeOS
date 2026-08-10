@@ -505,16 +505,33 @@ import Foundation
         calendar.date(from: DateComponents(year: y, month: m, day: d))!
     }
 
-    @Test func augustTwentyTwentySixStartsWithSixBlankCells() {
-        // 1 Aug 2026 is a Saturday. Monday-first ⇒ six leading blanks.
+    @Test func augustTwentyTwentySixStartsWithFiveBlankCells() {
+        // 1 Aug 2026 is a Saturday. Monday-first columns run M T W T F S S,
+        // so Saturday is index 5 ⇒ five leading blanks.
         let cells = MonthGridLayout.cells(
             monthContaining: date(2026, 8, 10),
             calendar: calendar,
             today: date(2026, 8, 10),
             status: { _ in .noData }
         )
+        #expect(cells.prefix(5).allSatisfy { $0.state == .blank })
+        #expect(cells[5].date == date(2026, 8, 1))
+    }
+
+    /// 1 Feb 2026 is a Sunday — the worst case for a Monday-first grid, and the
+    /// only month start that needs a full six blanks. Guards the `% 7` wraparound
+    /// in the leading-blank maths, which an August-only test cannot distinguish.
+    @Test func monthStartingOnSundayTakesSixBlankCells() {
+        let cells = MonthGridLayout.cells(
+            monthContaining: date(2026, 2, 15),
+            calendar: calendar,
+            today: date(2026, 2, 15),
+            status: { _ in .noData }
+        )
         #expect(cells.prefix(6).allSatisfy { $0.state == .blank })
-        #expect(cells[6].date == date(2026, 8, 1))
+        #expect(cells[6].date == date(2026, 2, 1))
+        // 6 blanks + 28 days = 34, padded to 35.
+        #expect(cells.count == 35)
     }
 
     @Test func cellCountCoversWholeMonthPlusPadding() {
@@ -524,7 +541,7 @@ import Foundation
             today: date(2026, 8, 10),
             status: { _ in .noData }
         )
-        // 6 blanks + 31 days = 37, padded to a whole number of 7-day rows.
+        // 5 blanks + 31 days = 36, padded to a whole number of 7-day rows.
         #expect(cells.count == 42)
         #expect(cells.filter { $0.date != nil }.count == 31)
     }
@@ -633,7 +650,7 @@ public enum MonthGridLayout {
 - [ ] **Step 4: Run the tests and confirm they pass**
 
 Run: `swift test --package-path LifeOSKit --filter MonthGridLayoutTests`
-Expected: PASS, 4 tests.
+Expected: PASS, 5 tests.
 
 - [ ] **Step 5: Commit**
 
