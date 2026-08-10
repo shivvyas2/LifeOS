@@ -1,8 +1,14 @@
 import Foundation
 import SwiftData
 import AuthenticationServices
+import OSLog
 import Integrations
 import Persistence
+
+/// Whoop failures used to collapse into the string "Sync failed", which made
+/// the one thing that could not be verified without a live token — the wire
+/// format — undiagnosable. Errors are now logged in full and surfaced.
+private let whoopLog = Logger(subsystem: "shivvyas.LIfeOS", category: "whoop")
 
 /// Owns the Whoop connection: the OAuth round trip, token storage, and sync.
 @MainActor @Observable
@@ -109,7 +115,18 @@ final class WhoopConnectionViewModel: NSObject {
         } catch WhoopAuthError.denied {
             state = .disconnected
         } catch {
-            state = .failed("Couldn't complete sign-in")
+            whoopLog.error("token exchange failed: \(String(describing: error), privacy: .public)")
+            state = .failed("Sign-in failed: \(error.localizedDescription)")
+        }
+    }
+
+    static func describe(_ error: WhoopAPIError) -> String {
+        switch error {
+        case .transport:            "Network error"
+        case .unauthorized:         "Whoop rejected the token"
+        case .rateLimited:          "Rate limited by Whoop"
+        case .status(let code):     "Whoop returned \(code)"
+        case .decoding(let detail): "Unexpected data format — \(detail.prefix(120))"
         }
     }
 
@@ -134,9 +151,16 @@ final class WhoopConnectionViewModel: NSObject {
             let days = try await sync.sync()
             state = .connected(lastSyncedDays: days)
         } catch WhoopSyncError.reauthenticationRequired {
+            whoopLog.error("sync: token rejected, reauthentication required")
             state = .failed("Whoop sign-in expired")
+        } catch let error as WhoopAPIError {
+            // Surfaced rather than flattened: decoding vs transport vs status
+            // are three different problems with three different fixes.
+            whoopLog.error("sync failed: \(String(describing: error), privacy: .public)")
+            state = .failed(Self.describe(error))
         } catch {
-            state = .failed("Sync failed")
+            whoopLog.error("sync failed: \(String(describing: error), privacy: .public)")
+            state = .failed("Sync failed: \(error.localizedDescription)")
         }
     }
 }
