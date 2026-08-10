@@ -1,6 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Life OS — Engineering Handbook</title>
 
 <style>
+  /* Minimal reset — the artifact host supplies one; a local file must not assume it. */
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, h4, p, ul, ol, figure, pre { margin: 0; }
+  ul, ol { padding: 0; }
+  img, svg { display: block; max-width: 100%; }
+  table { border-collapse: collapse; }
+
   :root {
     --ground:      #EFEDE8;
     --surface:     #FBFAF7;
@@ -393,7 +406,54 @@
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; }
   }
+
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+
+  @media print {
+    /* Force the light palette regardless of the rendering machine's theme. */
+    :root {
+      --ground: #FFFFFF; --surface: #FBFAF7; --surface-2: #F0EDE6;
+      --ink: #16150F; --ink-2: #46433C; --ink-3: #6E6960; --rule: #CFCABF;
+      --accent: #D8431C;
+      --hue-body: #0E7C78; --hue-activity: #A87C0C; --hue-recovery: #2E68D8;
+      --hue-nutrition: #6B4CD6; --hue-money: #24824A; --hue-habits: #D8431C;
+      color-scheme: light;
+    }
+
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    body { background: #fff; font-size: 10.5pt; line-height: 1.5; }
+
+    /* The index becomes a proper contents page rather than a dropped sidebar. */
+    .shell { display: block; max-width: none; }
+    .index {
+      position: static; height: auto; overflow: visible;
+      border-right: none; padding: 0; font-size: 10.5pt;
+      break-after: page;
+    }
+    .index nav ol { gap: 14px; }
+    .index a { color: var(--ink-2); }
+
+    main { padding: 0; }
+    .masthead { break-after: page; padding-top: 0; }
+
+    h1 { font-size: 30pt; }
+    h2 { font-size: 18pt; break-before: page; break-after: avoid; }
+    .part-label { break-before: page; }
+    .part-label + h2 { break-before: avoid; }
+    h3, h4 { break-after: avoid; }
+
+    p, ul, ol, .lede, .standfirst, .faq-a, figcaption { max-width: none; }
+
+    .tablewrap, figure, .prfaq, .note, pre { break-inside: avoid; }
+    table { font-size: 9pt; }
+    th, td { padding: 6px 9px; }
+
+    a { color: var(--ink); text-decoration: none; }
+  }
 </style>
+</head>
+<body>
 
 <div class="shell">
 
@@ -1701,3 +1761,6 @@ supabase functions deploy whoop-webhook</code></pre>
 
 </main>
 </div>
+
+</body>
+</html>
