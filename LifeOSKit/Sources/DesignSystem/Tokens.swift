@@ -1,4 +1,90 @@
 import SwiftUI
 
-/// Namespace for Life OS design tokens. Populated in Task 2.
-public enum LifeOSTokens {}
+/// A module's identity colour. Each screen owns exactly one.
+/// Nutrition, money and habits are declared now but unused until later slices —
+/// declaring them proves the gradient primitive generalises.
+public enum ModuleHue: String, CaseIterable, Sendable {
+    case body, activity, recovery, nutrition, money, habits
+
+    /// Saturated colour at the top of the canvas.
+    public var top: Color {
+        switch self {
+        case .body:      Color(red: 0.06, green: 0.55, blue: 0.53)
+        case .activity:  Color(red: 0.92, green: 0.68, blue: 0.16)
+        case .recovery:  Color(red: 0.23, green: 0.51, blue: 0.93)
+        case .nutrition: Color(red: 0.49, green: 0.36, blue: 0.92)
+        case .money:     Color(red: 0.18, green: 0.62, blue: 0.36)
+        case .habits:    Color(red: 0.94, green: 0.42, blue: 0.20)
+        }
+    }
+
+    /// Near-white bottom of the canvas in light mode.
+    public var bottom: Color { Color(white: 0.98) }
+
+    /// Deep top / near-black bottom for dark mode. Defined now because
+    /// retrofitting a gradient system to dark mode later is miserable.
+    public var darkTop: Color {
+        switch self {
+        case .body:      Color(red: 0.02, green: 0.22, blue: 0.21)
+        case .activity:  Color(red: 0.35, green: 0.25, blue: 0.04)
+        case .recovery:  Color(red: 0.07, green: 0.17, blue: 0.35)
+        case .nutrition: Color(red: 0.18, green: 0.13, blue: 0.36)
+        case .money:     Color(red: 0.05, green: 0.23, blue: 0.13)
+        case .habits:    Color(red: 0.36, green: 0.15, blue: 0.06)
+        }
+    }
+
+    public var darkBottom: Color { Color(white: 0.06) }
+}
+
+/// A light/dark colour pair, resolved explicitly by the consuming view.
+///
+/// UIKit's dynamic colours (`Color(.systemGroupedBackground)`) would be simpler
+/// but are iOS-only, and this package also builds for macOS so that tests run
+/// from the terminal without a simulator. Explicit resolution is the price of
+/// keeping `swift test` fast.
+public struct AdaptiveColor: Sendable {
+    public let light: Color
+    public let dark: Color
+
+    public init(light: Color, dark: Color) {
+        self.light = light
+        self.dark = dark
+    }
+
+    public func resolve(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? dark : light
+    }
+}
+
+public enum LifeOSTokens {
+    /// The single accent. Means "today" and "act". Never varies by module,
+    /// and is identical in both schemes so it reads the same everywhere.
+    public static let accent = Color(red: 0.94, green: 0.34, blue: 0.18)
+
+    /// Warm off-white canvas for the neutral hub.
+    public static let canvas = AdaptiveColor(
+        light: Color(red: 0.949, green: 0.945, blue: 0.933),
+        dark: Color(white: 0.07)
+    )
+
+    public static let cardSurface = AdaptiveColor(
+        light: .white,
+        dark: Color(white: 0.13)
+    )
+
+    public static let primaryText = AdaptiveColor(
+        light: Color(white: 0.08),
+        dark: Color(white: 0.95)
+    )
+
+    public static let secondaryText = AdaptiveColor(
+        light: Color(white: 0.45),
+        dark: Color(white: 0.62)
+    )
+
+    /// Dot grid fills for days that were logged but missed, and days not yet reached.
+    public static let dotMissed = AdaptiveColor(light: Color(white: 0.86), dark: Color(white: 0.28))
+    public static let dotFuture = AdaptiveColor(light: Color(white: 0.93), dark: Color(white: 0.18))
+    public static let dotOutline = AdaptiveColor(light: Color(white: 0.85), dark: Color(white: 0.30))
+}
