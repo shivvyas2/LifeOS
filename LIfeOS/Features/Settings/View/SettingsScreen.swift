@@ -54,7 +54,12 @@ private struct WhoopConnectionRow: View {
                 Text("Add SUPABASE_URL and deploy whoop-token to enable.")
                     .font(.footnote).foregroundStyle(.secondary)
             case .disconnected, .failed:
+                // Tinted explicitly: the section applies a muted foreground for
+                // the static rows, which made this read as disabled text.
                 Button("Connect Whoop") { model.connect() }
+                    .font(.system(size: 15, weight: .semibold))
+                    .tint(LifeOSTokens.accent)
+                    .foregroundStyle(LifeOSTokens.accent)
             case .connecting:
                 ProgressView()
             case .connected:

@@ -9,6 +9,7 @@ struct BodyHubScreen: View {
     let weight: BodySnapshot
     let recovery: RecoverySnapshot
     let wellness: WellnessSnapshot
+    var onAddJournal: () -> Void = {}
 
     @Binding var section: BodySection
     @Binding var selectedDate: Date
@@ -30,7 +31,7 @@ struct BodyHubScreen: View {
                     case .activity: ActivitySection(snapshot: activity)
                     case .weight:   WeightSection(snapshot: weight)
                     case .recovery: RecoverySection(snapshot: recovery)
-                    case .wellness: WellnessSection(snapshot: wellness)
+                    case .wellness: WellnessSection(snapshot: wellness, onAddJournal: onAddJournal)
                     }
                 }
                 .padding(.horizontal, 20)

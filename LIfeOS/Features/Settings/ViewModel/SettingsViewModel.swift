@@ -7,11 +7,19 @@ final class SettingsViewModel {
     /// Bound directly by the form's steppers. Writes are committed by `save()`.
     var draft = GoalsDraft()
 
-    let connections: [ConnectionStatus] = [
-        ConnectionStatus(id: "health", name: "Apple Health", detail: "Not connected"),
-        ConnectionStatus(id: "whoop", name: "Whoop", detail: "Not connected"),
-        ConnectionStatus(id: "supabase", name: "Supabase", detail: "Not configured"),
-    ]
+    /// Derived, not hardcoded: the Supabase row previously always read
+    /// "Not configured", which became a lie the moment the project was linked.
+    var connections: [ConnectionStatus] {
+        [
+            ConnectionStatus(id: "health", name: "Apple Health", detail: "Not connected"),
+            ConnectionStatus(id: "whoop", name: "Whoop", detail: "Not connected"),
+            ConnectionStatus(
+                id: "supabase",
+                name: "Supabase",
+                detail: AppConfig.supabaseURL == nil ? "Not configured" : "Connected"
+            ),
+        ]
+    }
 
     private var context: ModelContext?
 

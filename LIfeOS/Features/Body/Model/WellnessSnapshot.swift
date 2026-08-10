@@ -11,4 +11,15 @@ struct WellnessSnapshot: Equatable {
     /// Plain-language verdicts, so the view never re-derives judgement.
     var sleepVerdict: String?
     var trainingVerdict: String?
+
+    /// Journal lives in Body because it is a wellness signal, not a task —
+    /// how the day felt, next to how the body performed.
+    var journal: [JournalEntry] = []
+    var hasEntryToday = false
+}
+
+struct JournalEntry: Equatable, Identifiable {
+    let id: UUID
+    let text: String
+    let date: Date
 }

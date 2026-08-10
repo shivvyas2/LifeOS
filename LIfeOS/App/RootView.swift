@@ -31,6 +31,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showAddPlan = false
     @State private var showAddMoney = false
+    @State private var showJournal = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -57,6 +58,7 @@ struct RootView: View {
                         weight: weight.snapshot,
                         recovery: recovery.snapshot,
                         wellness: wellness.snapshot,
+                        onAddJournal: { showJournal = true },
                         section: $bodySection,
                         selectedDate: Binding(
                             get: { bodyDate },
@@ -107,6 +109,9 @@ struct RootView: View {
             ) { title, detail, target, dueDate in
                 plan.add(title: title, detail: detail, target: target, dueDate: dueDate)
             }
+        }
+        .sheet(isPresented: $showJournal) {
+            JournalEntrySheet { text in wellness.addJournal(text) }
         }
         .sheet(isPresented: $showAddMoney) {
             AddMoneySheet { merchant, amount, isIncome, category in

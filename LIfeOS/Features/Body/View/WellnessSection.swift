@@ -6,6 +6,7 @@ import DesignSystem
 /// renders judgement rather than making it.
 struct WellnessSection: View {
     let snapshot: WellnessSnapshot
+    var onAddJournal: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 24) {
@@ -38,6 +39,43 @@ struct WellnessSection: View {
                         Text("\(snapshot.workoutDays)/\(snapshot.workoutTarget) days")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(LifeOSTokens.accent)
+                    }
+                }
+            }
+
+            journalCard
+        }
+    }
+
+    private var journalCard: some View {
+        SolidCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("JOURNAL")
+                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                    Spacer()
+                    Button(snapshot.hasEntryToday ? "Add another" : "Write today") {
+                        onAddJournal()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .tint(LifeOSTokens.accent)
+                }
+
+                if snapshot.journal.isEmpty {
+                    Text("Nothing written yet. How did today feel?")
+                        .font(.system(size: 14))
+                        .opacity(0.5)
+                } else {
+                    ForEach(snapshot.journal.prefix(4)) { entry in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(entry.text)
+                                .font(.system(size: 15))
+                                .lineLimit(3)
+                            Text(entry.date.formatted(.dateTime.weekday(.abbreviated).month().day()))
+                                .font(.system(size: 12))
+                                .opacity(0.45)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }

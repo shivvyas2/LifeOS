@@ -6,7 +6,7 @@ import SwiftData
 /// they use, not in shape. This is what makes the set block-ready — a renderer
 /// can lay out any entry without knowing which feature produced it.
 public enum PlanKind: String, Codable, Sendable, CaseIterable {
-    case goal, habit, note, content
+    case goal, habit, note, content, journal
 }
 
 public enum PlanStatus: String, Codable, Sendable, CaseIterable {
