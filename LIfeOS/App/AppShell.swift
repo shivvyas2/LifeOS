@@ -28,6 +28,13 @@ struct AppShell: View {
             // rather than making them prove themselves again on every launch.
             if onboarding.isSignedIn { hasFinishedOnboarding = true }
         }
-        .onOpenURL { url in whoop.handleCallback(url) }
+        .onOpenURL { url in
+            // Two callbacks share the scheme; the host decides which owns it.
+            if url.host == "auth-callback" {
+                onboarding.handleAuthCallback(url)
+            } else {
+                whoop.handleCallback(url)
+            }
+        }
     }
 }

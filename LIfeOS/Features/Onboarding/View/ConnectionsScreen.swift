@@ -131,6 +131,7 @@ struct OnboardingFlow: View {
             case .intro:       IntroScreen { model.beginSignup() }
             case .identity:    IdentityScreen(model: model)
             case .code:        CodeScreen(model: model)
+            case .linkSent:    LinkSentScreen(model: model)
             case .profile:     ProfileScreen(model: model)
             case .connections: ConnectionsScreen(model: model, whoop: whoop, onFinish: onFinish)
             }

@@ -149,7 +149,10 @@ enabled = true
 # in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# The magic link must be able to hand back to the app. Supabase only redirects
+# to allow-listed URLs, so an unlisted scheme silently drops the user on a
+# Supabase page with no way back.
+additional_redirect_urls = ["https://127.0.0.1:3000", "lifeos://auth-callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to the local API URL (http://127.0.0.1:<port>/auth/v1).
@@ -202,11 +205,13 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# Kept true to match the project: pushing false would have quietly removed
+# email confirmation as a side effect of enabling test OTPs.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "1m0s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
@@ -222,6 +227,22 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Supabase's stock templates send a magic LINK. A link cannot be typed into an
+# app, so signup dead-ended at "confirm your email address" with no code to
+# enter. Including {{ .Token }} is what makes Supabase send a six-digit OTP
+# instead.
+# Parked: template editing needs custom SMTP or a paid plan. The templates in
+# supabase/templates/ deliver a six-digit code and can be re-enabled the moment
+# SMTP is configured — at which point the app can switch back from magic links
+# to OTP by flipping emailUsesMagicLink.
+# [auth.email.template.magic_link]
+# subject = "Your Life OS code"
+# content_path = "./supabase/templates/magic_link.html"
+#
+# [auth.email.template.confirmation]
+# subject = "Confirm your email"
+# content_path = "./supabase/templates/confirmation.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
@@ -235,7 +256,7 @@ otp_expiry = 3600
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
@@ -244,8 +265,11 @@ template = "Your code is {{ .Code }}"
 max_frequency = "5s"
 
 # Use pre-defined map of phone number to OTP for testing.
-# [auth.sms.test_otp]
-# 4152127777 = "123456"
+# Test numbers never send an SMS, so phone signup can be exercised without an
+# SMS provider. The key is E.164 without the leading "+", which is what the
+# app's country picker plus digits produces.
+[auth.sms.test_otp]
+11234567890 = "123123"
 
 # Configure logged in session timeouts.
 # [auth.sessions]

@@ -67,9 +67,7 @@ struct IdentityScreen: View {
     var body: some View {
         SignupScaffold(
             title: "Create your account",
-            subtitle: model.draft.channel == .phone
-                ? "We'll text you a six-digit code."
-                : "We'll email you a six-digit code.",
+            subtitle: model.identitySubtitle,
             onBack: { model.back() }
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
@@ -129,7 +127,7 @@ struct IdentityScreen: View {
                 }
             }
         } action: {
-            PrimaryButton("Send code", isLoading: model.isBusy) {
+            PrimaryButton(model.sendButtonTitle, isLoading: model.isBusy) {
                 Task { await model.sendCode() }
             }
             .disabled(!model.draft.canSendCode || !model.isConfigured)
@@ -294,6 +292,60 @@ struct CountryPicker: View {
             .searchable(text: $search)
             .navigationTitle("Country")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+/// Shown after a magic link is sent. There is nothing to type, so the screen's
+/// only job is to say what happens next and offer a way out if it does not.
+struct LinkSentScreen: View {
+    @Bindable var model: OnboardingViewModel
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        SignupScaffold(
+            title: "Check your email",
+            subtitle: "We sent a sign-in link to \(model.destinationLabel). Open it on this device and you'll come straight back here.",
+            onBack: { model.back() }
+        ) {
+            VStack(alignment: .leading, spacing: Space.x2) {
+                HStack(spacing: Space.x2) {
+                    Image(systemName: "envelope.fill")
+                        .font(.system(size: 20))
+                        .frame(width: Space.x6, height: Space.x6)
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                                .fill(LifeOSTokens.canvas.resolve(scheme))
+                        )
+                        .foregroundStyle(LifeOSTokens.accent)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Waiting for you to tap the link")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("It expires shortly.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    }
+                }
+                .padding(Space.x2)
+                .background(
+                    RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                        .fill(LifeOSTokens.cardSurface.resolve(scheme))
+                )
+
+                if let error = model.errorMessage {
+                    Text(error).font(.system(size: 13)).foregroundStyle(.red)
+                }
+
+                Button(model.resendIn > 0 ? "Resend in \(model.resendIn)s" : "Send another link") {
+                    Task { await model.sendCode() }
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(LifeOSTokens.accent)
+                .disabled(model.resendIn > 0)
+            }
+        } action: {
+            SecondaryButton("Use a different address") { model.back() }
         }
     }
 }

@@ -54,6 +54,19 @@ public struct SupabaseAuth: Sendable {
         _ = try await post("otp", body: body)
     }
 
+    /// Sends a magic link that returns to `redirectTo`.
+    ///
+    /// Used for email because the free tier will not let the template be
+    /// changed to include a six-digit token — the stock template only ever
+    /// sends a link. Swap back to `sendCode` once custom SMTP is configured.
+    public func sendMagicLink(to email: String, redirectTo: String) async throws {
+        _ = try await post("otp", body: [
+            "email": email,
+            "create_user": true,
+            "email_redirect_to": redirectTo,
+        ])
+    }
+
     /// Exchanges the code for a session.
     public func verify(code: String, destination: String, channel: Channel) async throws -> AuthSession {
         var body: [String: Any] = ["token": code, "type": channel == .phone ? "sms" : "email"]
@@ -153,6 +166,52 @@ public struct AuthSession: Codable, Sendable, Equatable {
 
     public func isExpired(now: Date = .now) -> Bool {
         expiresAt.addingTimeInterval(-60) <= now
+    }
+}
+
+public extension AuthSession {
+    /// Builds a session from a magic-link redirect.
+    ///
+    /// Supabase returns the tokens in the URL *fragment* rather than the query,
+    /// so `URLComponents.queryItems` finds nothing and the callback looks empty
+    /// until the fragment is parsed by hand.
+    init?(callback url: URL) {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var pairs: [String: String] = [:]
+
+        for source in [components?.fragment, components?.query].compactMap({ $0 }) {
+            for part in source.split(separator: "&") {
+                let bits = part.split(separator: "=", maxSplits: 1)
+                guard bits.count == 2 else { continue }
+                pairs[String(bits[0])] = String(bits[1])
+                    .replacingOccurrences(of: "+", with: " ")
+                    .removingPercentEncoding ?? String(bits[1])
+            }
+        }
+
+        guard let access = pairs["access_token"], !access.isEmpty else { return nil }
+        let seconds = pairs["expires_in"].flatMap(Double.init) ?? 3_600
+        self.init(
+            accessToken: access,
+            refreshToken: pairs["refresh_token"],
+            expiresAt: .now.addingTimeInterval(seconds),
+            userID: "",
+            phone: nil,
+            email: nil
+        )
+    }
+
+    /// Supabase reports a failed link the same way — in the fragment.
+    static func errorDescription(in url: URL) -> String? {
+        guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment
+        else { return nil }
+        for part in fragment.split(separator: "&") {
+            let bits = part.split(separator: "=", maxSplits: 1)
+            if bits.count == 2, bits[0] == "error_description" {
+                return String(bits[1]).replacingOccurrences(of: "+", with: " ").removingPercentEncoding
+            }
+        }
+        return nil
     }
 }
 
