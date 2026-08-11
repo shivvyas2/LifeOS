@@ -25,6 +25,26 @@ public struct SupabaseAuth: Sendable {
         self.session = session
     }
 
+    /// Which channels the project can actually deliver on.
+    ///
+    /// Worth one call at startup: SMS requires a provider (Twilio and friends)
+    /// that is off by default, and a phone-first signup screen that cannot send
+    /// anything is a dead end the user cannot diagnose.
+    public func availableChannels() async -> Set<Channel> {
+        var request = URLRequest(url: baseURL.appendingPathComponent("auth/v1/settings"))
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        guard let (data, response) = try? await session.data(for: request),
+              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let external = json["external"] as? [String: Any]
+        else { return [.email] }   // email is the safe assumption
+
+        var channels: Set<Channel> = []
+        if external["email"] as? Bool == true { channels.insert(.email) }
+        if external["phone"] as? Bool == true { channels.insert(.phone) }
+        return channels.isEmpty ? [.email] : channels
+    }
+
     /// Sends a one-time code. `shouldCreateUser` is true because this is the
     /// signup path — Supabase treats OTP as sign-in-or-create.
     public func sendCode(to destination: String, channel: Channel) async throws {

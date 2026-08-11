@@ -15,6 +15,9 @@ final class OnboardingViewModel {
     private(set) var errorMessage: String?
     /// Seconds until the code can be requested again; 0 means it can be now.
     private(set) var resendIn = 0
+    /// Empty until checked; the identity screen waits rather than offering a
+    /// channel that cannot deliver.
+    private(set) var availableChannels: Set<SupabaseAuthChannel> = []
 
     private let store: any AuthSessionStoring
     private var auth: SupabaseAuth?
@@ -28,6 +31,22 @@ final class OnboardingViewModel {
     }
 
     var isSignedIn: Bool { store.load() != nil }
+
+    /// Picks a channel the project can actually deliver on. Phone stays the
+    /// default when SMS is configured, and quietly falls back when it is not.
+    func loadChannels() async {
+        guard let auth else { return }
+        let channels = await auth.availableChannels()
+        availableChannels = channels
+        if !channels.contains(.phone), channels.contains(.email) {
+            draft.channel = .email
+        }
+    }
+
+    var phoneUnavailableNote: String? {
+        guard !availableChannels.isEmpty, !availableChannels.contains(.phone) else { return nil }
+        return "SMS isn't enabled on this project yet — use email for now."
+    }
 
     /// Auth cannot work without the anon key; saying so beats a signup screen
     /// whose button silently fails.

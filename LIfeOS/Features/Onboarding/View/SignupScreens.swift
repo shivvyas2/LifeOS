@@ -119,6 +119,9 @@ struct IdentityScreen: View {
                 if let error = model.errorMessage {
                     Text(error).font(.system(size: 13)).foregroundStyle(.red)
                 }
+                if let note = model.phoneUnavailableNote {
+                    Text(note).font(.system(size: 13)).foregroundStyle(.orange)
+                }
                 if !model.isConfigured {
                     Text("Sign-in isn't configured yet — SUPABASE_ANON_KEY is missing.")
                         .font(.system(size: 13))
@@ -131,6 +134,7 @@ struct IdentityScreen: View {
             }
             .disabled(!model.draft.canSendCode || !model.isConfigured)
         }
+        .task { await model.loadChannels() }
         .sheet(isPresented: $showCountries) {
             CountryPicker(selection: $model.draft.country, dial: $model.draft.dialCode)
         }
