@@ -10,16 +10,23 @@ struct AppShell: View {
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
     @State private var hasFinishedOnboarding = false
+    /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
+    /// relaunch returns to signup and the bypass cannot quietly become the
+    /// default state of the app.
+    @State private var isGuest = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
         Group {
-            if onboarding.isSignedIn && hasFinishedOnboarding {
+            if (onboarding.isSignedIn && hasFinishedOnboarding) || isGuest {
                 RootView(whoop: whoop)
             } else {
-                OnboardingFlow(model: onboarding, whoop: whoop) {
-                    withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true }
-                }
+                OnboardingFlow(
+                    model: onboarding,
+                    whoop: whoop,
+                    onFinish: { withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true } },
+                    onSkipAuth: { withAnimation(.easeInOut(duration: 0.35)) { isGuest = true } }
+                )
             }
         }
         .task {

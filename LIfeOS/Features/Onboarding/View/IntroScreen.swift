@@ -6,6 +6,7 @@ import Integrations
 /// rest of the app uses — so the product explains itself by looking like itself.
 struct IntroScreen: View {
     let onStart: () -> Void
+    var onSkipAuth: (() -> Void)?
     @State private var page = 0
 
     var body: some View {
@@ -32,10 +33,17 @@ struct IntroScreen: View {
                             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { page += 1 }
                         }
                     }
-                    Button("Skip") { onStart() }
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
-                        .frame(height: Space.x5)
+                    if let onSkipAuth {
+                        Button("Skip for now") { onSkipAuth() }
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
+                            .frame(height: Space.x5)
+                    } else {
+                        Button("Skip") { onStart() }
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
+                            .frame(height: Space.x5)
+                    }
                 }
                 .padding(.horizontal, Space.x3)
                 .padding(.bottom, Space.x4)

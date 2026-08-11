@@ -124,12 +124,17 @@ struct OnboardingFlow: View {
     @Bindable var model: OnboardingViewModel
     @Bindable var whoop: WhoopConnectionViewModel
     let onFinish: () -> Void
+    /// TEMPORARY: enters the app without an account so the rest of it can be
+    /// tested while email delivery is still being sorted out. Signup is meant
+    /// to be required — remove this and the buttons that call it before
+    /// shipping, or the requirement is theatre.
+    var onSkipAuth: (() -> Void)?
 
     var body: some View {
         Group {
             switch model.step {
-            case .intro:       IntroScreen { model.beginSignup() }
-            case .identity:    IdentityScreen(model: model)
+            case .intro:       IntroScreen(onStart: { model.beginSignup() }, onSkipAuth: onSkipAuth)
+            case .identity:    IdentityScreen(model: model, onSkipAuth: onSkipAuth)
             case .code:        CodeScreen(model: model)
             case .linkSent:    LinkSentScreen(model: model)
             case .profile:     ProfileScreen(model: model)

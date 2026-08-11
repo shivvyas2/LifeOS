@@ -61,6 +61,7 @@ struct SignupScaffold<Content: View, Action: View>: View {
 /// identity most people can recall and keep.
 struct IdentityScreen: View {
     @Bindable var model: OnboardingViewModel
+    var onSkipAuth: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
     @State private var showCountries = false
 
@@ -127,10 +128,16 @@ struct IdentityScreen: View {
                 }
             }
         } action: {
-            PrimaryButton(model.sendButtonTitle, isLoading: model.isBusy) {
-                Task { await model.sendCode() }
+            VStack(spacing: Space.half) {
+                PrimaryButton(model.sendButtonTitle, isLoading: model.isBusy) {
+                    Task { await model.sendCode() }
+                }
+                .disabled(!model.draft.canSendCode || !model.isConfigured)
+
+                if let onSkipAuth {
+                    SecondaryButton("Continue without an account") { onSkipAuth() }
+                }
             }
-            .disabled(!model.draft.canSendCode || !model.isConfigured)
         }
         .task { await model.loadChannels() }
         .sheet(isPresented: $showCountries) {
