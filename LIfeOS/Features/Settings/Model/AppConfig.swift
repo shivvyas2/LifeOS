@@ -11,6 +11,9 @@ enum AppConfig {
     static var whoopRedirectURI: String? { string("WhoopRedirectURI") }
     static var supabaseURL: URL? { string("SupabaseURL").flatMap(URL.init(string:)) }
 
+    /// Public by design — Row Level Security protects rows, not this key.
+    static var supabaseAnonKey: String? { string("SupabaseAnonKey") }
+
     /// The function that performs the confidential-client token exchange.
     static var whoopTokenEndpoint: URL? {
         supabaseURL?.appendingPathComponent("functions/v1/whoop-token")

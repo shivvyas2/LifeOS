@@ -10,6 +10,8 @@
 	<string>$(WHOOP_CLIENT_ID)</string>
 	<key>SupabaseURL</key>
 	<string>$(SUPABASE_URL)</string>
+	<key>SupabaseAnonKey</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>WhoopRedirectURI</key>
 	<string>$(WHOOP_REDIRECT_URI)</string>
 	<key>CFBundleURLTypes</key>

@@ -10,6 +10,8 @@ import DesignSystem
 /// the bar stays free for the other life domains, and Settings sits behind a
 /// gear on Today rather than spending a slot.
 struct RootView: View {
+    @Bindable var whoop: WhoopConnectionViewModel
+
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -22,7 +24,6 @@ struct RootView: View {
     @State private var money = MoneyViewModel()
     @State private var plan = PlanViewModel()
     @State private var settings = SettingsViewModel()
-    @State private var whoop = WhoopConnectionViewModel()
     @State private var quickLog = QuickLogViewModel()
 
     @State private var bodySection = BodySection.activity
@@ -132,10 +133,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { reloadAll() }
         }
-        // Whoop sign-in happens in Safari and returns through this scheme.
-        .onOpenURL { url in
-            whoop.handleCallback(url)
-        }
+
     }
 
     private func selectBodyDate(_ date: Date) {
@@ -154,7 +152,6 @@ struct RootView: View {
         money.attach(context)
         plan.attach(context)
         settings.attach(context)
-        whoop.attach(context)
         quickLog.attach(context)
     }
 

@@ -25,7 +25,7 @@ struct LIfeOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppShell()
                 .task { await seedIfEmpty() }
         }
         .modelContainer(container)
