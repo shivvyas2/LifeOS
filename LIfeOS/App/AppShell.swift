@@ -1,5 +1,8 @@
 import SwiftUI
 import DesignSystem
+import OSLog
+
+private let shellLog = Logger(subsystem: "shivvyas.LIfeOS", category: "shell")
 
 /// Decides between onboarding and the app.
 ///
@@ -37,6 +40,9 @@ struct AppShell: View {
         }
         .onOpenURL { url in
             // Two callbacks share the scheme; the host decides which owns it.
+            // Logged at the door: if nothing appears here, the redirect never
+            // reached the app at all and the problem is upstream of our code.
+            shellLog.info("opened url host=\(url.host ?? "?", privacy: .public)")
             if url.host == "auth-callback" {
                 onboarding.handleAuthCallback(url)
             } else {

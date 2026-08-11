@@ -150,7 +150,14 @@ final class WhoopConnectionViewModel {
 
     /// Entry point for the lifeos:// redirect.
     func handleCallback(_ url: URL) {
-        guard url.scheme == AppConfig.appURLScheme else { return }
+        // Logged on arrival so "the redirect never came back" is distinguishable
+        // from "it came back and the exchange failed". Without this the two look
+        // identical: silence either way.
+        whoopLog.info("callback received: \(url.host ?? "?", privacy: .public)")
+        guard url.scheme == AppConfig.appURLScheme else {
+            whoopLog.error("callback ignored, unexpected scheme: \(url.scheme ?? "nil", privacy: .public)")
+            return
+        }
         Task { await finish(callbackURL: url) }
     }
 
@@ -178,6 +185,7 @@ final class WhoopConnectionViewModel {
             )
             try tokens.save(newTokens)
             tokens.clearPending()
+            whoopLog.info("whoop connected, starting first sync")
             state = .connected(lastSyncedDays: nil)
             await sync()
         } catch WhoopAuthError.denied {
