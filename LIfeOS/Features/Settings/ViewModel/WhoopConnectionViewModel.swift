@@ -123,7 +123,8 @@ final class WhoopConnectionViewModel {
     func submitManualCode() async {
         let code = manualCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty,
-              let pending = tokens.loadPending(),
+              // The manual flow has exactly one attempt in flight — the newest.
+              let pending = tokens.pendingAuths().first,
               let endpoint = AppConfig.whoopTokenEndpoint,
               let redirect = AppConfig.whoopRedirectURI else { return }
 
@@ -162,17 +163,22 @@ final class WhoopConnectionViewModel {
     }
 
     private func finish(callbackURL: URL) async {
-        guard let pending = tokens.loadPending(),
-              let endpoint = AppConfig.whoopTokenEndpoint,
+        guard let endpoint = AppConfig.whoopTokenEndpoint,
               let redirect = AppConfig.whoopRedirectURI else {
             state = .failed("Missing configuration")
             return
         }
-        // A redirect arriving long after the attempt was abandoned is not ours
-        // to trust.
-        guard pending.isFresh() else {
-            tokens.clearPending()
-            state = .failed("Sign-in timed out — try again")
+
+        // Match the redirect to the attempt that started it. Tapping Connect
+        // more than once starts several valid authorizations, and the one that
+        // returns is not necessarily the newest.
+        let attempts = tokens.pendingAuths()
+        guard let returned = WhoopOAuth.state(in: callbackURL),
+              let pending = attempts.first(where: { $0.state == returned }) else {
+            whoopLog.error("no pending attempt matches the returned state (\(attempts.count, privacy: .public) in flight)")
+            state = .failed(attempts.isEmpty
+                            ? "Sign-in expired — tap Connect again"
+                            : "Couldn't match that sign-in — tap Connect again")
             return
         }
 

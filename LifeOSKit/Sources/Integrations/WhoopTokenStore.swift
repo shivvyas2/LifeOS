@@ -52,7 +52,13 @@ public protocol WhoopTokenStoring: Sendable {
     func save(_ tokens: WhoopTokens) throws
     func clear()
 
-    func loadPending() -> WhoopPendingAuth?
+    /// All in-flight attempts, newest first.
+    ///
+    /// A list rather than one slot: tapping Connect twice starts two valid
+    /// authorizations, and whichever redirect returns must be matched by its
+    /// own `state`. Keeping only the newest made an earlier attempt's redirect
+    /// fail as a state mismatch — which looks exactly like an attack.
+    func pendingAuths() -> [WhoopPendingAuth]
     func savePending(_ pending: WhoopPendingAuth) throws
     func clearPending()
 }
@@ -110,12 +116,18 @@ public struct KeychainWhoopTokenStore: WhoopTokenStoring {
         SecItemDelete(baseQuery as CFDictionary)
     }
 
-    public func loadPending() -> WhoopPendingAuth? {
-        read(pendingQuery).flatMap { try? JSONDecoder().decode(WhoopPendingAuth.self, from: $0) }
+    public func pendingAuths() -> [WhoopPendingAuth] {
+        guard let data = read(pendingQuery),
+              let all = try? JSONDecoder().decode([WhoopPendingAuth].self, from: data)
+        else { return [] }
+        return all.filter { $0.isFresh() }
     }
 
     public func savePending(_ pending: WhoopPendingAuth) throws {
-        try write(try JSONEncoder().encode(pending), to: pendingQuery)
+        // Cap the list: a user who taps repeatedly should not accumulate
+        // credentials indefinitely, and anything stale is dropped anyway.
+        let kept = ([pending] + pendingAuths()).prefix(5)
+        try write(try JSONEncoder().encode(Array(kept)), to: pendingQuery)
     }
 
     public func clearPending() {
@@ -152,7 +164,7 @@ public struct KeychainWhoopTokenStore: WhoopTokenStoring {
 public final class InMemoryWhoopTokenStore: WhoopTokenStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var tokens: WhoopTokens?
-    private var pending: WhoopPendingAuth?
+    private var pending: [WhoopPendingAuth] = []
 
     public init(tokens: WhoopTokens? = nil) { self.tokens = tokens }
 
@@ -171,19 +183,19 @@ public final class InMemoryWhoopTokenStore: WhoopTokenStoring, @unchecked Sendab
         tokens = nil
     }
 
-    public func loadPending() -> WhoopPendingAuth? {
+    public func pendingAuths() -> [WhoopPendingAuth] {
         lock.lock(); defer { lock.unlock() }
-        return pending
+        return pending.filter { $0.isFresh() }
     }
 
     public func savePending(_ pending: WhoopPendingAuth) throws {
         lock.lock(); defer { lock.unlock() }
-        self.pending = pending
+        self.pending = Array(([pending] + self.pending).prefix(5))
     }
 
     public func clearPending() {
         lock.lock(); defer { lock.unlock() }
-        pending = nil
+        pending = []
     }
 }
 

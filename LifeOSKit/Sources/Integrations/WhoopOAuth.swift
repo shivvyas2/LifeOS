@@ -78,6 +78,13 @@ public enum WhoopOAuth {
         return code
     }
 
+    /// The `state` a redirect carries, so the matching attempt can be found
+    /// before its verifier is needed.
+    public static func state(in url: URL) -> String? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "state" }?.value
+    }
+
     static func challenge(for verifier: String) -> String {
         let digest = SHA256.hash(data: Data(verifier.utf8))
         return Data(digest).base64URLEncodedString()

@@ -59,6 +59,18 @@ import SwiftData
         #expect(first.verifier != second.verifier)
         #expect(first.state != second.state)
     }
+
+    /// Read before the verifier is needed, so a redirect can be matched to the
+    /// attempt that started it when several are in flight.
+    @Test func stateIsReadableFromARedirectOnItsOwn() {
+        let url = URL(string: "\(redirect)?code=abc123&state=ours")!
+        #expect(WhoopOAuth.state(in: url) == "ours")
+    }
+
+    @Test func aRedirectWithoutStateHasNoneToMatch() {
+        let url = URL(string: "\(redirect)?code=abc123")!
+        #expect(WhoopOAuth.state(in: url) == nil)
+    }
 }
 
 @Suite @MainActor struct WhoopIngestionTests {
