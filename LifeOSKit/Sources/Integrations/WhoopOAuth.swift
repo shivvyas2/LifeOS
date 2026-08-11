@@ -37,8 +37,13 @@ public enum WhoopOAuth {
         redirectURI: String,
         scopes: [String] = defaultScopes,
         verifier: String = randomURLSafeString(),
-        state: String = randomURLSafeString()
+        state: String = randomURLSafeString(),
+        /// Marks a sign-in completed in a desktop browser, which cannot hand
+        /// back to a custom scheme. The bridge renders the code instead of
+        /// redirecting when it sees this.
+        manual: Bool = false
     ) -> Session {
+        let state = manual ? "manual-" + state : state
         var components = URLComponents(url: authorizeEndpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [
             URLQueryItem(name: "client_id", value: clientID),

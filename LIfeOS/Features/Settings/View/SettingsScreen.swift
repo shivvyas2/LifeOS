@@ -60,8 +60,16 @@ private struct WhoopConnectionRow: View {
                     .font(.system(size: 15, weight: .semibold))
                     .tint(LifeOSTokens.accent)
                     .foregroundStyle(LifeOSTokens.accent)
+                Button("Sign in on another device") { model.beginManual() }
+                    .font(.system(size: 14))
+                    .tint(LifeOSTokens.accent)
+                    .foregroundStyle(LifeOSTokens.accent)
             case .connecting:
-                ProgressView()
+                if let url = model.manualURL {
+                    manualSteps(url: url)
+                } else {
+                    ProgressView()
+                }
             case .connected:
                 HStack(spacing: 16) {
                     Button("Sync now") { Task { await model.sync() } }
@@ -69,6 +77,45 @@ private struct WhoopConnectionRow: View {
                 }
             }
         }
+    }
+}
+
+private extension WhoopConnectionRow {
+    /// Shown when Whoop's login will not complete in this device's browser.
+    /// The code is transcribed from another device; the PKCE verifier stays
+    /// here, so a code alone is not enough to connect.
+    @ViewBuilder
+    func manualSteps(url: URL) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("1. Open this link on a computer and sign in to Whoop.")
+                .font(.system(size: 13))
+            Button {
+                UIPasteboard.general.string = url.absoluteString
+            } label: {
+                Label("Copy sign-in link", systemImage: "doc.on.doc")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .tint(LifeOSTokens.accent)
+            .foregroundStyle(LifeOSTokens.accent)
+
+            Text("2. Paste the code it shows you:")
+                .font(.system(size: 13))
+            TextField("Code", text: $model.manualCode)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(size: 14, design: .monospaced))
+
+            HStack(spacing: 16) {
+                Button("Connect") { Task { await model.submitManualCode() } }
+                    .font(.system(size: 15, weight: .semibold))
+                    .disabled(model.manualCode.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .tint(LifeOSTokens.accent)
+                Button("Cancel", role: .cancel) { model.cancelManual() }
+                    .font(.system(size: 14))
+            }
+        }
+        .padding(.top, 4)
     }
 }
 

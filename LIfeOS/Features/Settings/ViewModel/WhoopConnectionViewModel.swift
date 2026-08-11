@@ -23,6 +23,11 @@ final class WhoopConnectionViewModel {
 
     private(set) var state: State = .disconnected
 
+    /// Set when the user chooses to sign in on another device; the URL is
+    /// shown for transfer to a desktop browser.
+    private(set) var manualURL: URL?
+    var manualCode = ""
+
     private let tokens: any WhoopTokenStoring
     private var context: ModelContext?
 
@@ -83,6 +88,58 @@ final class WhoopConnectionViewModel {
         state = .connecting
         whoopLog.info("opening Whoop authorization in Safari")
         UIApplication.shared.open(session.url)
+    }
+
+    /// Sign-in on a desktop browser, for when Safari on this device cannot
+    /// complete Whoop's login — a Cloudflare challenge behind a VPN, Private
+    /// Relay or a content blocker will hang indefinitely with no error.
+    func beginManual() {
+        guard let clientID = AppConfig.whoopClientID,
+              let redirect = AppConfig.whoopRedirectURI else {
+            state = .unconfigured
+            return
+        }
+        let session = WhoopOAuth.session(clientID: clientID, redirectURI: redirect, manual: true)
+        do {
+            try tokens.savePending(WhoopPendingAuth(verifier: session.verifier, state: session.state))
+            manualURL = session.url
+            manualCode = ""
+            state = .connecting
+        } catch {
+            whoopLog.error("could not persist pending auth: \(String(describing: error), privacy: .public)")
+            state = .failed("Couldn't start sign-in")
+        }
+    }
+
+    func cancelManual() {
+        manualURL = nil
+        manualCode = ""
+        tokens.clearPending()
+        state = tokens.load() != nil ? .connected(lastSyncedDays: nil) : .disconnected
+    }
+
+    /// Exchanges a code transcribed from the other device. The PKCE verifier
+    /// never left this phone, so a code alone is not enough to impersonate it.
+    func submitManualCode() async {
+        let code = manualCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty,
+              let pending = tokens.loadPending(),
+              let endpoint = AppConfig.whoopTokenEndpoint,
+              let redirect = AppConfig.whoopRedirectURI else { return }
+
+        do {
+            let newTokens = try await WhoopTokenExchange(endpoint: endpoint)
+                .exchange(code: code, verifier: pending.verifier, redirectURI: redirect)
+            try tokens.save(newTokens)
+            tokens.clearPending()
+            manualURL = nil
+            manualCode = ""
+            state = .connected(lastSyncedDays: nil)
+            await sync()
+        } catch {
+            whoopLog.error("manual exchange failed: \(String(describing: error), privacy: .public)")
+            state = .failed("That code didn't work — it may have expired")
+        }
     }
 
     /// Entry point for the lifeos:// redirect.
