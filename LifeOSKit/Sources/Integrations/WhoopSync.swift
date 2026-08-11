@@ -29,7 +29,13 @@ public struct WhoopTokenExchange: Sendable {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw WhoopAPIError.status((response as? HTTPURLResponse)?.statusCode ?? -1)
+            // The function reports its own 502 for any upstream failure and puts
+            // Whoop's real status in the body. Without unwrapping that, every
+            // cause looks identical and an expired code is indistinguishable
+            // from a missing server secret.
+            let upstream = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                .flatMap { $0?["status"] as? Int }
+            throw WhoopAPIError.status(upstream ?? (response as? HTTPURLResponse)?.statusCode ?? -1)
         }
 
         struct TokenResponse: Decodable {

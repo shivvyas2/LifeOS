@@ -136,9 +136,15 @@ final class WhoopConnectionViewModel {
             manualCode = ""
             state = .connected(lastSyncedDays: nil)
             await sync()
+        } catch let error as WhoopAPIError {
+            whoopLog.error("manual exchange failed: \(String(describing: error), privacy: .public)")
+            // Named rather than flattened: a 400 from Whoop (expired or reused
+            // code) and a 500 from the function (missing secret) need opposite
+            // fixes, and "didn't work" cannot tell them apart.
+            state = .failed(Self.describeExchange(error))
         } catch {
             whoopLog.error("manual exchange failed: \(String(describing: error), privacy: .public)")
-            state = .failed("That code didn't work — it may have expired")
+            state = .failed("Couldn't connect: \(error.localizedDescription)")
         }
     }
 
@@ -177,9 +183,26 @@ final class WhoopConnectionViewModel {
         } catch WhoopAuthError.denied {
             tokens.clearPending()
             state = .disconnected
+        } catch let error as WhoopAPIError {
+            whoopLog.error("token exchange failed: \(String(describing: error), privacy: .public)")
+            state = .failed(Self.describeExchange(error))
         } catch {
             whoopLog.error("token exchange failed: \(String(describing: error), privacy: .public)")
             state = .failed("Sign-in failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Whoop authorization codes are single-use and expire in about a minute,
+    /// which is easy to exceed when transcribing from another device.
+    static func describeExchange(_ error: WhoopAPIError) -> String {
+        switch error {
+        case .status(400): "Code expired or already used — get a fresh one"
+        case .status(401), .unauthorized: "Whoop rejected the credentials"
+        case .status(500): "Server not configured"
+        case .status(let code): "Exchange failed (\(code))"
+        case .transport: "No connection"
+        case .rateLimited: "Rate limited by Whoop"
+        case .decoding(let detail): "Unexpected response — \(detail.prefix(80))"
         }
     }
 

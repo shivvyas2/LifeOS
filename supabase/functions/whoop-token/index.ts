@@ -60,9 +60,9 @@ Deno.serve(async (req: Request) => {
 
   const text = await response.text();
   if (!response.ok) {
-    // Whoop's error body can echo request parameters, so it is not forwarded
-    // verbatim — only the status is reported.
-    console.error(`whoop token exchange failed: ${response.status}`);
+    // Logged with the body so the cause is visible in function logs, while the
+    // client receives only a status — Whoop's errors can echo request parameters.
+    console.error(`whoop token exchange failed: ${response.status} ${text.slice(0, 300)}`);
     return json({ error: "exchange_failed", status: response.status }, 502);
   }
 
