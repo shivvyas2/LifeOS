@@ -34,7 +34,18 @@ final class ActivityViewModel {
                 steps: today?.steps,
                 exerciseMinutes: today?.exerciseMinutes,
                 activeEnergyKcal: today?.activeEnergyKcal,
-                restingHR: today?.restingHR
+                restingHR: today?.restingHR,
+                workouts: try store.workouts(on: selectedDate).map {
+                    WorkoutSummary(
+                        id: $0.externalID,
+                        sport: $0.activityName,
+                        durationMinutes: $0.durationMinutes,
+                        strain: $0.strain,
+                        averageHR: $0.averageHR,
+                        distanceMeters: $0.distanceMeters,
+                        percentRecorded: $0.percentRecorded
+                    )
+                }
             )
         } catch {
             assertionFailure("Activity load failed: \(error)")

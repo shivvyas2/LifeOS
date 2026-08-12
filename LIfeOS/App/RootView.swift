@@ -62,18 +62,23 @@ struct RootView: View {
                     }
                 }
                 Tab("Body", systemImage: "figure", value: AppTab.body) {
-                    BodyHubScreen(
-                        activity: activity.snapshot,
-                        weight: weight.snapshot,
-                        recovery: recovery.snapshot,
-                        wellness: wellness.snapshot,
-                        onAddJournal: { showJournal = true },
-                        section: $bodySection,
-                        selectedDate: Binding(
-                            get: { bodyDate },
-                            set: { bodyDate = $0; selectBodyDate($0) }
+                    // Body had no stack of its own until Recovery gained a
+                    // detail screen to push. Without one the trends link is
+                    // inert rather than broken, which is worse.
+                    NavigationStack {
+                        BodyHubScreen(
+                            activity: activity.snapshot,
+                            weight: weight.snapshot,
+                            recovery: recovery.snapshot,
+                            wellness: wellness.snapshot,
+                            onAddJournal: { showJournal = true },
+                            section: $bodySection,
+                            selectedDate: Binding(
+                                get: { bodyDate },
+                                set: { bodyDate = $0; selectBodyDate($0) }
+                            )
                         )
-                    )
+                    }
                 }
                 Tab("Money", systemImage: "dollarsign.circle.fill", value: AppTab.money) {
                     MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }

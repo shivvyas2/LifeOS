@@ -87,6 +87,39 @@ public struct MetricsStore {
 
     /// Upsert keyed on the provider's record id, so a re-sync corrects a
     /// workout rather than adding a second copy of the same session.
+    /// A day's sessions, oldest first, which is the order they happened and the
+    /// order a list of them is read.
+    public func workouts(on date: Date) throws -> [WorkoutRecord] {
+        let start = calendar.startOfDay(for: date)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+        return try context.fetch(
+            FetchDescriptor<WorkoutRecord>(
+                predicate: #Predicate { $0.start >= start && $0.start < end },
+                sortBy: [SortDescriptor(\.start)]
+            )
+        )
+    }
+
+    /// Sleep records attributed to days in the window, oldest first.
+    ///
+    /// `includingNaps` defaults to true because the records are stored for their
+    /// own sake. A night-by-night view passes false: a nap is real, but it is
+    /// not a night, and stacking it beside one misreads the week.
+    public func sleepRecords(
+        from: Date, to: Date, includingNaps: Bool = true
+    ) throws -> [SleepRecord] {
+        let start = calendar.startOfDay(for: from)
+        guard let end = calendar.date(byAdding: .day, value: 1,
+                                      to: calendar.startOfDay(for: to)) else { return [] }
+        let records = try context.fetch(
+            FetchDescriptor<SleepRecord>(
+                predicate: #Predicate { $0.attributedDate >= start && $0.attributedDate < end },
+                sortBy: [SortDescriptor(\.attributedDate)]
+            )
+        )
+        return includingNaps ? records : records.filter { $0.isNap != true }
+    }
+
     public func upsertWorkoutRecord(
         externalID: String,
         start: Date,
