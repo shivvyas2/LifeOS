@@ -253,4 +253,17 @@ import Foundation
                                         sportName: "running")
         #expect(sample.durationMinutes == 480)
     }
+
+    private let bodyJSON = """
+    {"height_meter":1.8288,"weight_kilogram":90.7185,"max_heart_rate":200}
+    """
+
+    @Test func bodyMeasurementDecodes() throws {
+        let body = try WhoopClient.decoder.decode(
+            WhoopDTOs.BodyMeasurement.self, from: Data(bodyJSON.utf8)
+        )
+        #expect(body.height_meter == 1.8288)
+        #expect(body.weight_kilogram == 90.7185)
+        #expect(body.max_heart_rate == 200)
+    }
 }

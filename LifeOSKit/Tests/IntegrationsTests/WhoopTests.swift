@@ -389,6 +389,42 @@ import SwiftData
         #expect(row.exerciseMinutes == 60)   // 60 + 0
     }
 
+    @Test func bodyWeightReachesTheDayRow() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+
+        let day = date(2026, 8, 10)
+        try derivation.derive(body: (sample: WhoopBodySample(heightMeters: 1.8288,
+                                                              weightKilograms: 90.7185,
+                                                              maxHeartRate: 200),
+                                     date: day))
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.weightKg == 90.7185)
+    }
+
+    /// Height and max heart rate are constants, not daily readings. A column
+    /// restating the same value on every row is noise, so they are archived and not
+    /// columnised.
+    @Test func bodyHeightIsNotWrittenToTheDayRow() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+
+        let day = date(2026, 8, 10)
+        try derivation.derive(body: (sample: WhoopBodySample(heightMeters: 1.8288,
+                                                              weightKilograms: nil,
+                                                              maxHeartRate: 200),
+                                     date: day))
+
+        // No weight in the sample means no row write at all for weight.
+        let rows = try store.metrics(from: day, to: day)
+        #expect(rows.first?.weightKg == nil)
+    }
+
     /// Re-syncing the same workout must correct it, not add a second copy.
     @Test func resyncingAWorkoutUpdatesRatherThanDuplicating() throws {
         let container = try LifeOSContainer.make(inMemory: true)

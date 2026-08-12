@@ -21,11 +21,16 @@ public struct WhoopDerivation {
         self.calendar = calendar
     }
 
+    /// `body` and its date must always be supplied together: a sample without a
+    /// day to attribute it to, or a day with no sample, is meaningless. Rather
+    /// than two independent optional parameters that could be half-supplied,
+    /// this is one optional pair, so that state cannot happen.
     public func derive(
         recoveries: [WhoopRecoverySample] = [],
         sleeps: [WhoopSleepSample] = [],
         cycles: [WhoopCycleSample] = [],
-        workouts: [WhoopWorkoutSample] = []
+        workouts: [WhoopWorkoutSample] = [],
+        body: (sample: WhoopBodySample, date: Date)? = nil
     ) throws {
         try storeSleepRecords(sleeps)
         try storeWorkoutRecords(workouts)
@@ -51,6 +56,12 @@ public struct WhoopDerivation {
         // A day with only a workout still needs a row of its own.
         for sample in workouts {
             let day = calendar.startOfDay(for: sample.start)
+            if byDay[day] == nil { byDay[day] = (nil, nil, nil) }
+        }
+        // A day with only a body reading still needs a row of its own, the same
+        // as a day with only a workout.
+        if let body {
+            let day = calendar.startOfDay(for: body.date)
             if byDay[day] == nil { byDay[day] = (nil, nil, nil) }
         }
 
@@ -83,6 +94,15 @@ public struct WhoopDerivation {
             let dayWorkouts = workouts.filter { calendar.startOfDay(for: $0.start) == day }
             if !dayWorkouts.isEmpty {
                 row.exerciseMinutes = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
+            }
+
+            // Height and max heart rate are constants, not daily readings: a column
+            // restating the same value on every row would be noise, so only weight
+            // reaches the row. Weight is also the one column HealthKit will
+            // eventually share, so nil never overwrites a value already stored.
+            if let body, calendar.startOfDay(for: body.date) == day,
+               let weight = body.sample.weightKilograms {
+                row.weightKg = weight
             }
 
             row.syncedAt = .now

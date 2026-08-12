@@ -98,6 +98,7 @@ public struct WhoopSync {
             let sleep = try await client.sleepsRaw(accessToken: current.accessToken, since: since, until: now)
             let cycle = try await client.cyclesRaw(accessToken: current.accessToken, since: since, until: now)
             let workout = try await client.workoutsRaw(accessToken: current.accessToken, since: since, until: now)
+            let body = try await client.bodyMeasurement(accessToken: current.accessToken)
 
             // Archive first: a re-derive reads from the archive, and a payload that was
             // never stored cannot be re-derived from.
@@ -106,9 +107,13 @@ public struct WhoopSync {
                 let split = try pages.flatMap { try WhoopRawSplit.records(inPage: $0) }
                 try archive.store(split.map { (kind: kind, externalID: $0.externalID, payload: $0.payload) })
             }
+            // There is exactly one body measurement per user, so a stable external
+            // id is correct and every sync upserts the current reading in place.
+            try archive.store(kind: "body", externalID: "self", payload: body.rawPayload)
 
             try derivation.derive(recoveries: recovery.samples, sleeps: sleep.samples,
-                                  cycles: cycle.samples, workouts: workout.samples)
+                                  cycles: cycle.samples, workouts: workout.samples,
+                                  body: (sample: body.sample, date: now))
             return Set(recovery.samples.map(\.date) + cycle.samples.map(\.date)).count
         } catch WhoopAPIError.unauthorized {
             // The stored token is dead. Clearing it puts the UI back into a

@@ -136,6 +136,22 @@ public struct WhoopWorkoutSample: Sendable, Equatable {
     public var durationMinutes: Int { Int(end.timeIntervalSince(start) / 60) }
 }
 
+/// The one-time body measurement Whoop reports: height, weight and max heart
+/// rate. Unlike every other sample here, this carries no date of its own; it
+/// is a current snapshot, not a per-day reading, so the caller supplies the
+/// day it should be attributed to.
+public struct WhoopBodySample: Sendable, Equatable {
+    public let heightMeters: Double?
+    public let weightKilograms: Double?
+    public let maxHeartRate: Double?
+
+    public init(heightMeters: Double?, weightKilograms: Double?, maxHeartRate: Double?) {
+        self.heightMeters = heightMeters
+        self.weightKilograms = weightKilograms
+        self.maxHeartRate = maxHeartRate
+    }
+}
+
 public enum WhoopAttribution {
     /// A night's sleep belongs to the morning you woke up, not the evening you
     /// went to bed. Without this, anything after midnight lands on the wrong

@@ -109,6 +109,14 @@ enum WhoopDTOs {
             let altitude_change_meter: Double?
         }
     }
+
+    /// `/v2/user/measurement/body` returns one object, not a paged collection:
+    /// there is exactly one of these per user, not one per day.
+    struct BodyMeasurement: Decodable {
+        let height_meter: Double?
+        let weight_kilogram: Double?
+        let max_heart_rate: Double?
+    }
 }
 
 /// One mapping per DTO, shared by the live client and `WhoopDerivation.rederive`.
@@ -249,6 +257,37 @@ public struct WhoopClient: Sendable {
 
     public func workouts(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopWorkoutSample] {
         try await workoutsRaw(accessToken: accessToken, since: since, until: until).samples
+    }
+
+    /// `/v2/user/measurement/body` returns a single object, so it does not go
+    /// through `get`, which pages a collection over a start/end range. This still
+    /// reuses the same status-code handling as every other endpoint.
+    ///
+    /// Returns the raw bytes alongside the sample, the same shape the `...Raw`
+    /// collection methods use, so a sync can archive exactly what arrived
+    /// without a second request.
+    public func bodyMeasurement(accessToken: String) async throws -> (sample: WhoopBodySample, rawPayload: Data) {
+        var request = URLRequest(url: configuration.baseURL.appendingPathComponent("user/measurement/body"))
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw WhoopAPIError.transport }
+        switch http.statusCode {
+        case 200..<300: break
+        case 401: throw WhoopAPIError.unauthorized
+        case 429: throw WhoopAPIError.rateLimited
+        default:  throw WhoopAPIError.status(http.statusCode)
+        }
+
+        do {
+            let body = try WhoopClient.decoder.decode(WhoopDTOs.BodyMeasurement.self, from: data)
+            let sample = WhoopBodySample(heightMeters: body.height_meter,
+                                         weightKilograms: body.weight_kilogram,
+                                         maxHeartRate: body.max_heart_rate)
+            return (sample, data)
+        } catch {
+            throw WhoopAPIError.decoding(String(describing: error))
+        }
     }
 
     /// Returns both the mapped samples and the raw page bytes they came from,
