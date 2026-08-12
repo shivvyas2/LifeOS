@@ -998,9 +998,11 @@ In `DailyMetrics.swift`, add below `whoopSleepPerformancePct`:
     public var whoopDayStrain: Double?
     public var whoopSleepPerformancePct: Double?
 
-    /// The scored daily surface Whoop reports. Height and max heart rate are
-    /// deliberately absent: they are constants, and a column restating the same
-    /// value on every row is noise.
+    /// The scored daily surface Whoop reports. The profile's height and resting
+    /// max heart rate from the body endpoint are deliberately absent: those are
+    /// constants, and a column restating the same value on every row is noise.
+    /// `whoopMaxHR` below is a different thing, the highest rate measured during
+    /// that day's cycle.
     public var spo2Percentage: Double?
     public var skinTempCelsius: Double?
     public var respiratoryRate: Double?
@@ -1322,9 +1324,14 @@ public struct WhoopDerivation {
             if let value = sleep?.performancePercentage { row.whoopSleepPerformancePct = value }
             if let value = sleep?.asleepMinutes { row.sleepMinutes = value }
             if let value = sleep?.respiratoryRate { row.respiratoryRate = value }
+            if let value = sleep?.consistencyPercentage { row.whoopSleepConsistencyPct = value }
+            if let value = sleep?.efficiencyPercentage { row.whoopSleepEfficiencyPct = value }
+            if let value = sleep?.sleepDebtMinutes { row.whoopSleepDebtMinutes = value }
 
             if let value = cycle?.dayStrain { row.whoopDayStrain = value }
             if let value = cycle?.calories { row.whoopCalories = value }
+            if let value = cycle?.averageHR { row.whoopAverageHR = value }
+            if let value = cycle?.maxHR { row.whoopMaxHR = value }
 
             row.syncedAt = .now
         }
