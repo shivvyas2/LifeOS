@@ -100,4 +100,48 @@ import Foundation
         #expect(!WhoopDTOs.isScored("PENDING_SCORE"))
         #expect(!WhoopDTOs.isScored("UNSCORABLE"))
     }
+
+    @Test func recoveryCarriesSpO2AndSkinTemperature() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.RecoveryRecord>.self, from: Data(recoveryJSON.utf8)
+        )
+        let score = try #require(page.records.first?.score)
+        #expect(score.spo2_percentage == 97.2)
+        #expect(score.skin_temp_celsius == 33.1)
+    }
+
+    @Test func sleepCarriesStagesRespirationAndNeed() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.SleepRecord>.self, from: Data(sleepJSON.utf8)
+        )
+        let score = try #require(page.records.first?.score)
+        #expect(score.respiratory_rate == 14.2)
+        #expect(score.sleep_efficiency_percentage == 91)
+        #expect(score.sleep_needed?.baseline_milli == 27_000_000)
+
+        let stages = try #require(score.stage_summary)
+        #expect(stages.total_light_sleep_time_milli == 10)
+        #expect(stages.total_rem_sleep_time_milli == 10)
+        #expect(stages.total_slow_wave_sleep_time_milli == 10)
+        #expect(stages.disturbance_count == 3)
+    }
+
+    @Test func cycleCarriesEnergyAndHeartRates() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.CycleRecord>.self, from: Data(cycleJSON.utf8)
+        )
+        let score = try #require(page.records.first?.score)
+        #expect(score.kilojoule == 9000.5)
+        #expect(score.average_heart_rate == 70)
+        #expect(score.max_heart_rate == 170)
+    }
+
+    /// 9000.5 kJ / 4.184 = 2151.17 kcal. The divisor is exact, not 4.2.
+    @Test func kilojoulesConvertToKilocalories() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.CycleRecord>.self, from: Data(cycleJSON.utf8)
+        )
+        let kilojoule = try #require(page.records.first?.score?.kilojoule)
+        #expect(abs(kilojoule / 4.184 - 2151.17) < 0.01)
+    }
 }

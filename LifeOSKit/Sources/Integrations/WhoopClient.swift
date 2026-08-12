@@ -2,11 +2,10 @@ import Foundation
 
 /// Wire shapes for the Whoop developer API.
 ///
-/// **These field names are the one unverified part of this integration.** They
-/// follow the documented v2 shape, but nothing here has been exercised against
-/// a live token, so treat a decode failure as "the API moved", not "the app is
-/// broken". Everything downstream works on `WhoopRecoverySample` and friends,
-/// so a correction is confined to this file.
+/// Recovery, sleep and cycle are fixture-backed: `WhoopWireFormatTests` holds
+/// payloads captured from a live v2 response, so a decode failure in those three
+/// means the API moved, not that the app was guessed wrong. Workout is the one
+/// collection with no captured fixture yet.
 enum WhoopDTOs {
     struct Page<Record: Decodable>: Decodable {
         let records: [Record]
@@ -29,10 +28,13 @@ enum WhoopDTOs {
             let recovery_score: Double?
             let resting_heart_rate: Double?
             let hrv_rmssd_milli: Double?
+            let spo2_percentage: Double?
+            let skin_temp_celsius: Double?
         }
     }
 
     struct SleepRecord: Decodable {
+        let id: String?
         let start: Date
         let end: Date
         let nap: Bool?
@@ -41,22 +43,38 @@ enum WhoopDTOs {
 
         struct Score: Decodable {
             let sleep_performance_percentage: Double?
+            let sleep_efficiency_percentage: Double?
+            let respiratory_rate: Double?
+            let sleep_needed: Needed?
             let stage_summary: Stages?
+
+            struct Needed: Decodable {
+                let baseline_milli: Double?
+                let need_from_sleep_debt_milli: Double?
+            }
 
             struct Stages: Decodable {
                 let total_in_bed_time_milli: Double?
                 let total_awake_time_milli: Double?
+                let total_light_sleep_time_milli: Double?
+                let total_rem_sleep_time_milli: Double?
+                let total_slow_wave_sleep_time_milli: Double?
+                let disturbance_count: Int?
             }
         }
     }
 
     struct CycleRecord: Decodable {
+        let id: Int?
         let start: Date
         let score_state: String?
         let score: Score?
 
         struct Score: Decodable {
             let strain: Double?
+            let kilojoule: Double?
+            let average_heart_rate: Double?
+            let max_heart_rate: Double?
         }
     }
 }
@@ -111,7 +129,9 @@ public struct WhoopClient: Sendable {
                     date: $0.created_at,
                     recoveryPercentage: $0.score?.recovery_score,
                     restingHeartRate: $0.score?.resting_heart_rate,
-                    hrvMilliseconds: $0.score?.hrv_rmssd_milli
+                    hrvMilliseconds: $0.score?.hrv_rmssd_milli,
+                    spo2Percentage: $0.score?.spo2_percentage,
+                    skinTempCelsius: $0.score?.skin_temp_celsius
                 )
             }
     }
@@ -140,7 +160,16 @@ public struct WhoopClient: Sendable {
             try await get("cycle", accessToken: accessToken, since: since, until: until)
         return page.records
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map { WhoopCycleSample(date: $0.start, dayStrain: $0.score?.strain) }
+            .map {
+                WhoopCycleSample(
+                    date: $0.start,
+                    dayStrain: $0.score?.strain,
+                    // Kilojoules to kilocalories. The divisor is exact.
+                    calories: $0.score?.kilojoule.map { $0 / 4.184 },
+                    averageHR: $0.score?.average_heart_rate,
+                    maxHR: $0.score?.max_heart_rate
+                )
+            }
     }
 
     private func get<T: Decodable>(
