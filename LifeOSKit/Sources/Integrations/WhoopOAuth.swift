@@ -13,13 +13,13 @@ import CryptoKit
 public enum WhoopOAuth {
     public static let authorizeEndpoint = URL(string: "https://api.prod.whoop.com/oauth/oauth2/auth")!
 
-    /// Scopes for the metrics V1 renders: recovery, strain and sleep.
-    public static let defaultScopes = [
-        "read:recovery",
-        "read:sleep",
-        "read:cycles",
-        "offline",
-    ]
+    /// Every collection's scope, plus `offline` for the refresh token.
+    ///
+    /// Derived from `WhoopCollection` rather than listed by hand. A hand-kept
+    /// list is what let the client start calling two endpoints whose scopes were
+    /// never requested, which made Whoop reject a token it had just issued.
+    public static let defaultScopes =
+        WhoopCollection.allCases.map(\.scope) + ["offline"]
 
     /// One authorization attempt. `verifier` and `state` must survive until the
     /// redirect comes back, and `state` must be compared on return.

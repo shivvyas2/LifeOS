@@ -87,8 +87,17 @@ public struct WhoopSync {
         // Refresh proactively rather than waiting for a 401: one round trip
         // instead of a failed request followed by a retry.
         if current.isExpired(now: now), let refresh = current.refreshToken {
-            current = try await exchange.refresh(refreshToken: refresh)
-            try tokens.save(current)
+            do {
+                current = try await exchange.refresh(refreshToken: refresh)
+                try tokens.save(current)
+            } catch let error as WhoopAPIError where error.isUnauthorized {
+                // This is the one rejection that ends the connection: the
+                // refresh token itself was refused, so nothing the app holds
+                // can be used again. Clearing puts the UI back into a "Connect"
+                // state rather than leaving it stuck claiming connection.
+                tokens.clear()
+                throw WhoopSyncError.reauthenticationRequired
+            }
         }
 
         let since = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
@@ -116,10 +125,26 @@ public struct WhoopSync {
                                   body: (sample: body.sample, date: now))
             return Set(recovery.samples.map(\.date) + cycle.samples.map(\.date)).count
         } catch WhoopAPIError.unauthorized {
-            // The stored token is dead. Clearing it puts the UI back into a
-            // "Connect" state rather than leaving it stuck claiming connection.
-            tokens.clear()
-            throw WhoopSyncError.reauthenticationRequired
+            // A live token the API refuses is a permission problem, not a dead
+            // credential: most often the authorization predates a scope the app
+            // has since started needing. This used to clear the tokens, which
+            // deleted a credential the user had granted seconds earlier and
+            // made the connect-then-sync loop unbreakable, because reconnecting
+            // produced the same rejection every time. The connection is left
+            // intact deliberately.
+            throw WhoopSyncError.accessDenied
+        }
+    }
+}
+
+extension WhoopAPIError {
+    /// The token endpoint reports a refused credential as `.status(401)`, since
+    /// the Edge Function forwards Whoop's status, while the collection
+    /// endpoints report it as `.unauthorized`. Both mean the same thing.
+    var isUnauthorized: Bool {
+        switch self {
+        case .unauthorized, .status(401): true
+        default: false
         }
     }
 }
@@ -127,4 +152,8 @@ public struct WhoopSync {
 public enum WhoopSyncError: Error, Equatable {
     case notConnected
     case reauthenticationRequired
+    /// Whoop refused a live token for a collection. The credential is still
+    /// good; it just lacks permission, so reconnecting to grant the newer
+    /// scopes is the fix, not treating the connection as lost.
+    case accessDenied
 }

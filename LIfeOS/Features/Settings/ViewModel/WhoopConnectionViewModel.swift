@@ -256,8 +256,16 @@ final class WhoopConnectionViewModel {
             let days = try await sync.sync()
             state = .connected(lastSyncedDays: days)
         } catch WhoopSyncError.reauthenticationRequired {
-            whoopLog.error("sync: token rejected, reauthentication required")
+            whoopLog.error("sync: refresh token rejected, reauthentication required")
             state = .failed("Whoop sign-in expired")
+        } catch WhoopSyncError.accessDenied {
+            // Distinct from an expired sign-in, and the distinction matters:
+            // the token is fine, it simply lacks a scope. Saying "expired" sent
+            // the user around the reconnect loop with no idea why it kept
+            // failing. Disconnecting first is what forces Whoop to re-ask for
+            // the full scope list.
+            whoopLog.error("sync: whoop refused a live token, scopes are probably stale")
+            state = .failed("Whoop needs new permissions. Disconnect, then connect again")
         } catch let error as WhoopAPIError {
             // Surfaced rather than flattened: decoding vs transport vs status
             // are three different problems with three different fixes.
