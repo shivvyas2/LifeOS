@@ -140,17 +140,28 @@ public struct WhoopClient: Sendable {
         let page: WhoopDTOs.Page<WhoopDTOs.SleepRecord> =
             try await get("activity/sleep", accessToken: accessToken, since: since, until: until)
         return page.records
-            // Naps are not the night's sleep and must not overwrite it.
-            .filter { $0.nap != true && WhoopDTOs.isScored($0.score_state) }
+            .filter { WhoopDTOs.isScored($0.score_state) }
             .map { record in
-                let inBed = record.score?.stage_summary?.total_in_bed_time_milli ?? 0
-                let awake = record.score?.stage_summary?.total_awake_time_milli ?? 0
-                let asleep = max(inBed - awake, 0)
+                let stages = record.score?.stage_summary
+                let need = record.score?.sleep_needed
                 return WhoopSleepSample(
+                    externalID: record.id,
                     start: record.start,
                     end: record.end,
+                    // Naps are returned rather than filtered out. The derivation
+                    // layer decides what a nap may write; dropping them here meant
+                    // a real record vanished with no trace.
+                    isNap: record.nap == true,
                     performancePercentage: record.score?.sleep_performance_percentage,
-                    asleepMinutes: asleep > 0 ? Int(asleep / 60_000) : nil
+                    efficiencyPercentage: record.score?.sleep_efficiency_percentage,
+                    respiratoryRate: record.score?.respiratory_rate,
+                    sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
+                    asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
+                    lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
+                    remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
+                    swsMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_slow_wave_sleep_time_milli),
+                    awakeMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_awake_time_milli),
+                    disturbanceCount: stages?.disturbance_count
                 )
             }
     }

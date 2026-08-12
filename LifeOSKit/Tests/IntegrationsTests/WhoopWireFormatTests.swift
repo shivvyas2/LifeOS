@@ -76,14 +76,41 @@ import Foundation
         #expect(score.hrv_rmssd_milli == 74.5)
     }
 
-    @Test func sleepAsleepTimeIsInBedMinusAwake() throws {
+    /// light + SWS + REM is the direct measure. The fixture's stages are 10ms each,
+    /// so the sum is 30ms, which floors to 0 minutes, while in_bed - awake would
+    /// give 400. The two disagreeing is the whole point of the change.
+    @Test func asleepTimeSumsTheStagesWhenTheyArePresent() throws {
         let page = try WhoopClient.decoder.decode(
             WhoopDTOs.Page<WhoopDTOs.SleepRecord>.self, from: Data(sleepJSON.utf8)
         )
-        let stages = try #require(page.records.first?.score?.stage_summary)
-        let asleepMinutes = Int(((stages.total_in_bed_time_milli ?? 0)
-                               - (stages.total_awake_time_milli ?? 0)) / 60_000)
-        #expect(asleepMinutes == 400)   // 25_200_000 - 1_200_000 ms = 6h 40m
+        let record = try #require(page.records.first)
+        #expect(WhoopSleepMath.asleepMinutes(from: record.score?.stage_summary) == 0)
+    }
+
+    @Test func asleepTimeFallsBackToInBedMinusAwakeWhenStagesAreMissing() {
+        let stages = WhoopDTOs.SleepRecord.Score.Stages(
+            total_in_bed_time_milli: 25_200_000,
+            total_awake_time_milli: 1_200_000,
+            total_light_sleep_time_milli: nil,
+            total_rem_sleep_time_milli: nil,
+            total_slow_wave_sleep_time_milli: nil,
+            disturbance_count: nil
+        )
+        #expect(WhoopSleepMath.asleepMinutes(from: stages) == 400)
+    }
+
+    @Test func asleepTimeIsNilWhenThereIsNothingToComputeFrom() {
+        #expect(WhoopSleepMath.asleepMinutes(from: nil) == nil)
+    }
+
+    /// A nap is not the night's sleep and must not overwrite it, but it is still a
+    /// real record and is no longer thrown away.
+    @Test func napsAreReturnedAndFlagged() throws {
+        let json = #"{"records":[{"id":"nap-1","start":"2026-08-10T14:00:00Z","end":"2026-08-10T14:30:00Z","nap":true,"score_state":"SCORED","score":null}],"next_token":null}"#
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.SleepRecord>.self, from: Data(json.utf8)
+        )
+        #expect(page.records.first?.nap == true)
     }
 
     @Test func cycleStrainDecodes() throws {
