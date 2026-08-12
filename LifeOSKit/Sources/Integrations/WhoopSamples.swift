@@ -98,6 +98,44 @@ public struct WhoopCycleSample: Sendable, Equatable {
     }
 }
 
+public struct WhoopWorkoutSample: Sendable, Equatable {
+    public let externalID: String
+    public let start: Date
+    public let end: Date
+    public let sportName: String
+    public let sportID: Int?
+    public let strain: Double?
+    public let energyKcal: Double?
+    public let averageHR: Double?
+    public let maxHR: Double?
+    public let percentRecorded: Double?
+    public let distanceMeters: Double?
+    public let altitudeGainMeters: Double?
+    public let altitudeChangeMeters: Double?
+
+    public init(externalID: String, start: Date, end: Date, sportName: String,
+                sportID: Int? = nil, strain: Double? = nil, energyKcal: Double? = nil,
+                averageHR: Double? = nil, maxHR: Double? = nil,
+                percentRecorded: Double? = nil, distanceMeters: Double? = nil,
+                altitudeGainMeters: Double? = nil, altitudeChangeMeters: Double? = nil) {
+        self.externalID = externalID
+        self.start = start
+        self.end = end
+        self.sportName = sportName
+        self.sportID = sportID
+        self.strain = strain
+        self.energyKcal = energyKcal
+        self.averageHR = averageHR
+        self.maxHR = maxHR
+        self.percentRecorded = percentRecorded
+        self.distanceMeters = distanceMeters
+        self.altitudeGainMeters = altitudeGainMeters
+        self.altitudeChangeMeters = altitudeChangeMeters
+    }
+
+    public var durationMinutes: Int { Int(end.timeIntervalSince(start) / 60) }
+}
+
 public enum WhoopAttribution {
     /// A night's sleep belongs to the morning you woke up, not the evening you
     /// went to bed. Without this, anything after midnight lands on the wrong

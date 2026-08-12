@@ -84,6 +84,31 @@ enum WhoopDTOs {
             let max_heart_rate: Double?
         }
     }
+
+    struct WorkoutRecord: Decodable {
+        let id: String?
+        let start: Date
+        let end: Date
+        let sport_name: String?
+        let sport_id: Int?
+        let score_state: String?
+        let score: Score?
+
+        // `zone_durations` is deliberately not decoded. The published sample shows
+        // it as an empty object with no documented member names, so there is
+        // nothing to decode into. It is still captured in the raw archive, which
+        // is exactly the case the archive exists for.
+        struct Score: Decodable {
+            let strain: Double?
+            let kilojoule: Double?
+            let average_heart_rate: Double?
+            let max_heart_rate: Double?
+            let percent_recorded: Double?
+            let distance_meter: Double?
+            let altitude_gain_meter: Double?
+            let altitude_change_meter: Double?
+        }
+    }
 }
 
 /// One mapping per DTO, shared by the live client and `WhoopDerivation.rederive`.
@@ -143,6 +168,29 @@ extension WhoopDTOs.CycleRecord {
             calories: score?.kilojoule.map { $0 / 4.184 },
             averageHR: score?.average_heart_rate,
             maxHR: score?.max_heart_rate
+        )
+    }
+}
+
+extension WhoopDTOs.WorkoutRecord {
+    var sample: WhoopWorkoutSample? {
+        // A workout with no id cannot be upserted, and inserting it anyway would
+        // add a duplicate on every sync.
+        guard let id else { return nil }
+        return WhoopWorkoutSample(
+            externalID: id,
+            start: start,
+            end: end,
+            sportName: sport_name ?? "Workout",
+            sportID: sport_id,
+            strain: score?.strain,
+            energyKcal: score?.kilojoule.map { $0 / 4.184 },
+            averageHR: score?.average_heart_rate,
+            maxHR: score?.max_heart_rate,
+            percentRecorded: score?.percent_recorded,
+            distanceMeters: score?.distance_meter,
+            altitudeGainMeters: score?.altitude_gain_meter,
+            altitudeChangeMeters: score?.altitude_change_meter
         )
     }
 }
@@ -209,6 +257,12 @@ public struct WhoopClient: Sendable {
         return records
             .filter { WhoopDTOs.isScored($0.score_state) }
             .map(\.sample)
+    }
+
+    public func workouts(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopWorkoutSample] {
+        let records: [WhoopDTOs.WorkoutRecord] =
+            try await get("activity/workout", accessToken: accessToken, since: since, until: until)
+        return records.filter { WhoopDTOs.isScored($0.score_state) }.compactMap(\.sample)
     }
 
     /// Whoop returns at most `limit` records per page and a `next_token` for the

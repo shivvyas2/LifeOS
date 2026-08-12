@@ -24,9 +24,11 @@ public struct WhoopDerivation {
     public func derive(
         recoveries: [WhoopRecoverySample] = [],
         sleeps: [WhoopSleepSample] = [],
-        cycles: [WhoopCycleSample] = []
+        cycles: [WhoopCycleSample] = [],
+        workouts: [WhoopWorkoutSample] = []
     ) throws {
         try storeSleepRecords(sleeps)
+        try storeWorkoutRecords(workouts)
 
         // Index by day first so one day touched by all three sources is written
         // once, not three times. Naps are excluded here and here only: they are
@@ -45,6 +47,11 @@ public struct WhoopDerivation {
         for sample in cycles {
             let day = calendar.startOfDay(for: sample.date)
             byDay[day, default: (nil, nil, nil)].2 = sample
+        }
+        // A day with only a workout still needs a row of its own.
+        for sample in workouts {
+            let day = calendar.startOfDay(for: sample.start)
+            if byDay[day] == nil { byDay[day] = (nil, nil, nil) }
         }
 
         guard !byDay.isEmpty else { return }
@@ -72,6 +79,11 @@ public struct WhoopDerivation {
             if let value = cycle?.calories { row.whoopCalories = value }
             if let value = cycle?.averageHR { row.whoopAverageHR = value }
             if let value = cycle?.maxHR { row.whoopMaxHR = value }
+
+            let dayWorkouts = workouts.filter { calendar.startOfDay(for: $0.start) == day }
+            if !dayWorkouts.isEmpty {
+                row.exerciseMinutes = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
+            }
 
             row.syncedAt = .now
         }
@@ -142,6 +154,29 @@ public struct WhoopDerivation {
                 if let value = sample.sleepDebtMinutes { record.sleepDebtMinutes = value }
                 if let value = sample.disturbanceCount { record.disturbanceCount = value }
                 record.isNap = sample.isNap
+            }
+        }
+    }
+
+    private func storeWorkoutRecords(_ workouts: [WhoopWorkoutSample]) throws {
+        for sample in workouts {
+            try store.upsertWorkoutRecord(
+                externalID: sample.externalID,
+                start: sample.start,
+                durationMinutes: sample.durationMinutes,
+                activityName: sample.sportName
+            ) { record in
+                // Nil never overwrites a stored value, matching the sleep and day
+                // rows above.
+                if let value = sample.energyKcal { record.energyKcal = value }
+                if let value = sample.strain { record.strain = value }
+                if let value = sample.averageHR { record.averageHR = value }
+                if let value = sample.maxHR { record.maxHR = value }
+                if let value = sample.percentRecorded { record.percentRecorded = value }
+                if let value = sample.distanceMeters { record.distanceMeters = value }
+                if let value = sample.altitudeGainMeters { record.altitudeGainMeters = value }
+                if let value = sample.altitudeChangeMeters { record.altitudeChangeMeters = value }
+                if let value = sample.sportID { record.sportID = value }
             }
         }
     }

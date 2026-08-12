@@ -85,6 +85,31 @@ public struct MetricsStore {
         try context.save()
     }
 
+    /// Upsert keyed on the provider's record id, so a re-sync corrects a
+    /// workout rather than adding a second copy of the same session.
+    public func upsertWorkoutRecord(
+        externalID: String,
+        start: Date,
+        durationMinutes: Int,
+        activityName: String,
+        apply: (WorkoutRecord) -> Void
+    ) throws {
+        let existing = try context.fetch(
+            FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == externalID })
+        ).first
+
+        let record = existing ?? WorkoutRecord(
+            externalID: externalID, start: start,
+            durationMinutes: durationMinutes, activityName: activityName
+        )
+        if existing == nil { context.insert(record) }
+        record.start = start
+        record.durationMinutes = durationMinutes
+        record.activityName = activityName
+        apply(record)
+        try context.save()
+    }
+
     /// There is exactly one goals row. Created with spec defaults on first access.
     public func goals() throws -> UserGoals {
         if let existing = try context.fetch(FetchDescriptor<UserGoals>()).first {

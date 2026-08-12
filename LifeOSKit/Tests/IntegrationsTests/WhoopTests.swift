@@ -323,4 +323,41 @@ import SwiftData
         #expect(row.whoopRecoveryPct == 66)
         #expect(row.whoopSleepConsistencyPct == 74)
     }
+
+    @Test func aWorkoutIsStoredAndItsMinutesReachTheDayRow() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context), calendar: calendar)
+
+        let day = date(2026, 8, 10)
+        try derivation.derive(workouts: [
+            WhoopWorkoutSample(externalID: "w-1", start: date(2026, 8, 10, 6),
+                               end: date(2026, 8, 10, 7), sportName: "running",
+                               strain: 8.2, energyKcal: 375, averageHR: 123, maxHR: 146)
+        ])
+
+        let stored = try #require(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+        #expect(stored.activityName == "running")
+        #expect(stored.strain == 8.2)
+        #expect(stored.averageHR == 123)
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.exerciseMinutes == 60)
+    }
+
+    /// Re-syncing the same workout must correct it, not add a second copy.
+    @Test func resyncingAWorkoutUpdatesRatherThanDuplicating() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let derivation = WhoopDerivation(store: MetricsStore(context: context),
+                                         archive: WhoopArchive(context: context), calendar: calendar)
+
+        let sample = WhoopWorkoutSample(externalID: "w-1", start: date(2026, 8, 10, 6),
+                                        end: date(2026, 8, 10, 7), sportName: "running", strain: 8.2)
+        try derivation.derive(workouts: [sample])
+        try derivation.derive(workouts: [sample])
+
+        #expect(try context.fetch(FetchDescriptor<WorkoutRecord>()).count == 1)
+    }
 }

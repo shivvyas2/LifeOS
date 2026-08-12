@@ -204,4 +204,53 @@ import Foundation
         #expect(sample.sleepDebtMinutes == 12)
         #expect(sample.sleepCycleCount == 5)
     }
+
+    /// Derived from Whoop's published v2 response sample, NOT captured from a live
+    /// call like the three fixtures above. A decode failure here means the
+    /// published sample was idealised, not that the app guessed.
+    private let workoutJSON = """
+    {"records":[{"id":"ecfc6a15-4661-442f-a9a4-f160dd7afae8","v1_id":1043,"user_id":9012,
+      "created_at":"2022-04-24T11:25:44.774Z","updated_at":"2022-04-24T14:25:44.774Z",
+      "start":"2022-04-24T02:25:44.774Z","end":"2022-04-24T10:25:44.774Z",
+      "timezone_offset":"-05:00","sport_name":"running","score_state":"SCORED",
+      "score":{"strain":8.2463,"average_heart_rate":123,"max_heart_rate":146,
+               "kilojoule":1569.34033203125,"percent_recorded":100,
+               "distance_meter":1772.77035916,"altitude_gain_meter":46.64384460449,
+               "altitude_change_meter":-0.781372010707855,"zone_durations":{}},
+      "sport_id":1}],
+     "next_token":null}
+    """
+
+    @Test func workoutFieldsDecode() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
+        )
+        let record = try #require(page.records.first)
+        #expect(record.id == "ecfc6a15-4661-442f-a9a4-f160dd7afae8")
+        #expect(record.sport_name == "running")
+        #expect(record.sport_id == 1)
+        #expect(record.score?.strain == 8.2463)
+        #expect(record.score?.average_heart_rate == 123)
+        #expect(record.score?.distance_meter == 1772.77035916)
+        #expect(record.score?.altitude_gain_meter == 46.64384460449)
+        #expect(record.score?.percent_recorded == 100)
+    }
+
+    /// 1569.34033203125 kJ / 4.184 = 375.08 kcal.
+    @Test func workoutEnergyConvertsToKilocalories() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
+        )
+        let kilojoule = try #require(page.records.first?.score?.kilojoule)
+        #expect(abs(kilojoule / 4.184 - 375.08) < 0.01)
+    }
+
+    /// The sample spans 02:25 to 10:25, which is 8 hours.
+    @Test func workoutDurationComesFromItsInterval() {
+        let start = Date(timeIntervalSince1970: 0)
+        let sample = WhoopWorkoutSample(externalID: "w", start: start,
+                                        end: start.addingTimeInterval(8 * 3600),
+                                        sportName: "running")
+        #expect(sample.durationMinutes == 480)
+    }
 }
