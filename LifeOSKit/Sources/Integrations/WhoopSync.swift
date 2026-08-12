@@ -59,17 +59,20 @@ public struct WhoopSync {
     private let exchange: WhoopTokenExchange
     private let tokens: WhoopTokenStoring
     private let derivation: WhoopDerivation
+    private let archive: WhoopArchive
 
     public init(
         client: WhoopClient = .init(),
         exchange: WhoopTokenExchange,
         tokens: WhoopTokenStoring,
-        derivation: WhoopDerivation
+        derivation: WhoopDerivation,
+        archive: WhoopArchive
     ) {
         self.client = client
         self.exchange = exchange
         self.tokens = tokens
         self.derivation = derivation
+        self.archive = archive
     }
 
     public var isConnected: Bool { tokens.load() != nil }
@@ -91,12 +94,22 @@ public struct WhoopSync {
         let since = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
 
         do {
-            let recoveries = try await client.recoveries(accessToken: current.accessToken, since: since, until: now)
-            let sleeps = try await client.sleeps(accessToken: current.accessToken, since: since, until: now)
-            let cycles = try await client.cycles(accessToken: current.accessToken, since: since, until: now)
+            let recovery = try await client.recoveriesRaw(accessToken: current.accessToken, since: since, until: now)
+            let sleep = try await client.sleepsRaw(accessToken: current.accessToken, since: since, until: now)
+            let cycle = try await client.cyclesRaw(accessToken: current.accessToken, since: since, until: now)
+            let workout = try await client.workoutsRaw(accessToken: current.accessToken, since: since, until: now)
 
-            try derivation.derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles)
-            return Set(recoveries.map(\.date) + cycles.map(\.date)).count
+            // Archive first: a re-derive reads from the archive, and a payload that was
+            // never stored cannot be re-derived from.
+            for (kind, pages) in [("recovery", recovery.rawPages), ("sleep", sleep.rawPages),
+                                  ("cycle", cycle.rawPages), ("workout", workout.rawPages)] {
+                let split = try pages.flatMap { try WhoopRawSplit.records(inPage: $0) }
+                try archive.store(split.map { (kind: kind, externalID: $0.externalID, payload: $0.payload) })
+            }
+
+            try derivation.derive(recoveries: recovery.samples, sleeps: sleep.samples,
+                                  cycles: cycle.samples, workouts: workout.samples)
+            return Set(recovery.samples.map(\.date) + cycle.samples.map(\.date)).count
         } catch WhoopAPIError.unauthorized {
             // The stored token is dead. Clearing it puts the UI back into a
             // "Connect" state rather than leaving it stuck claiming connection.

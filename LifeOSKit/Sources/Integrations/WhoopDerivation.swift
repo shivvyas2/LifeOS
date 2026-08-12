@@ -110,7 +110,11 @@ public struct WhoopDerivation {
             .filter { WhoopDTOs.isScored($0.score_state) }
             .map(\.sample)
 
-        try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles)
+        let workouts = try decode(kind: "workout", as: WhoopDTOs.WorkoutRecord.self)
+            .filter { WhoopDTOs.isScored($0.score_state) }
+            .compactMap(\.sample)
+
+        try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles, workouts: workouts)
 
         var days = Set<Date>()
         for sample in recoveries { days.insert(calendar.startOfDay(for: sample.date)) }
@@ -118,6 +122,7 @@ public struct WhoopDerivation {
         for sample in sleeps where !sample.isNap {
             days.insert(WhoopAttribution.day(forSleepEndingAt: sample.end, calendar: calendar))
         }
+        for sample in workouts { days.insert(calendar.startOfDay(for: sample.start)) }
         return days.count
     }
 

@@ -236,33 +236,63 @@ public struct WhoopClient: Sendable {
     }()
 
     public func recoveries(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopRecoverySample] {
-        let records: [WhoopDTOs.RecoveryRecord] =
-            try await get("recovery", accessToken: accessToken, since: since, until: until)
-        return records
-            .filter { WhoopDTOs.isScored($0.score_state) }
-            .map(\.sample)
+        try await recoveriesRaw(accessToken: accessToken, since: since, until: until).samples
     }
 
     public func sleeps(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopSleepSample] {
-        let records: [WhoopDTOs.SleepRecord] =
-            try await get("activity/sleep", accessToken: accessToken, since: since, until: until)
-        return records
-            .filter { WhoopDTOs.isScored($0.score_state) }
-            .map(\.sample)
+        try await sleepsRaw(accessToken: accessToken, since: since, until: until).samples
     }
 
     public func cycles(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopCycleSample] {
-        let records: [WhoopDTOs.CycleRecord] =
-            try await get("cycle", accessToken: accessToken, since: since, until: until)
-        return records
-            .filter { WhoopDTOs.isScored($0.score_state) }
-            .map(\.sample)
+        try await cyclesRaw(accessToken: accessToken, since: since, until: until).samples
     }
 
     public func workouts(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopWorkoutSample] {
-        let records: [WhoopDTOs.WorkoutRecord] =
+        try await workoutsRaw(accessToken: accessToken, since: since, until: until).samples
+    }
+
+    /// Returns both the mapped samples and the raw page bytes they came from,
+    /// so a sync can archive exactly what arrived at no extra request cost.
+    /// Reuses the same `sample` computed property as the plain method above:
+    /// there is exactly one DTO-to-sample mapping, not a second copy here.
+    public func recoveriesRaw(accessToken: String, since: Date, until: Date = .now)
+        async throws -> (samples: [WhoopRecoverySample], rawPages: [Data]) {
+        let fetched: Fetched<WhoopDTOs.RecoveryRecord> =
+            try await get("recovery", accessToken: accessToken, since: since, until: until)
+        let samples = fetched.records
+            .filter { WhoopDTOs.isScored($0.score_state) }
+            .map(\.sample)
+        return (samples, fetched.rawPages)
+    }
+
+    public func sleepsRaw(accessToken: String, since: Date, until: Date = .now)
+        async throws -> (samples: [WhoopSleepSample], rawPages: [Data]) {
+        let fetched: Fetched<WhoopDTOs.SleepRecord> =
+            try await get("activity/sleep", accessToken: accessToken, since: since, until: until)
+        let samples = fetched.records
+            .filter { WhoopDTOs.isScored($0.score_state) }
+            .map(\.sample)
+        return (samples, fetched.rawPages)
+    }
+
+    public func cyclesRaw(accessToken: String, since: Date, until: Date = .now)
+        async throws -> (samples: [WhoopCycleSample], rawPages: [Data]) {
+        let fetched: Fetched<WhoopDTOs.CycleRecord> =
+            try await get("cycle", accessToken: accessToken, since: since, until: until)
+        let samples = fetched.records
+            .filter { WhoopDTOs.isScored($0.score_state) }
+            .map(\.sample)
+        return (samples, fetched.rawPages)
+    }
+
+    public func workoutsRaw(accessToken: String, since: Date, until: Date = .now)
+        async throws -> (samples: [WhoopWorkoutSample], rawPages: [Data]) {
+        let fetched: Fetched<WhoopDTOs.WorkoutRecord> =
             try await get("activity/workout", accessToken: accessToken, since: since, until: until)
-        return records.filter { WhoopDTOs.isScored($0.score_state) }.compactMap(\.sample)
+        let samples = fetched.records
+            .filter { WhoopDTOs.isScored($0.score_state) }
+            .compactMap(\.sample)
+        return (samples, fetched.rawPages)
     }
 
     /// Whoop returns at most `limit` records per page and a `next_token` for the
@@ -277,8 +307,9 @@ public struct WhoopClient: Sendable {
 
     private func get<Record: Decodable>(
         _ path: String, accessToken: String, since: Date, until: Date
-    ) async throws -> [Record] {
+    ) async throws -> Fetched<Record> {
         var all: [Record] = []
+        var rawPages: [Data] = []
         var nextToken: String?
         var pages = 0
 
@@ -319,6 +350,7 @@ public struct WhoopClient: Sendable {
             }
 
             all.append(contentsOf: page.records)
+            rawPages.append(data)
             nextToken = page.next_token
             pages += 1
 
@@ -330,8 +362,13 @@ public struct WhoopClient: Sendable {
             }
         } while nextToken != nil
 
-        return all
+        return Fetched(records: all, rawPages: rawPages)
     }
+}
+
+private struct Fetched<Record: Decodable> {
+    let records: [Record]
+    let rawPages: [Data]
 }
 
 public enum WhoopAPIError: Error, Equatable {

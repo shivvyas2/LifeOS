@@ -248,7 +248,8 @@ final class WhoopConnectionViewModel {
             derivation: WhoopDerivation(
                 store: MetricsStore(context: context),
                 archive: WhoopArchive(context: context)
-            )
+            ),
+            archive: WhoopArchive(context: context)
         )
 
         do {

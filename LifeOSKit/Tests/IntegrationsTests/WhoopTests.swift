@@ -346,6 +346,49 @@ import SwiftData
         #expect(row.exerciseMinutes == 60)
     }
 
+    /// The archive's whole promise is that a rebuild reproduces what a sync
+    /// produced. A collection the rebuild cannot decode breaks that silently.
+    @Test func rederiveRebuildsWorkoutsToo() throws {
+        let context = try makeContext()
+        let store = MetricsStore(context: context)
+        let archive = WhoopArchive(context: context)
+        let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
+
+        try archive.store(kind: "workout", externalID: "w-1", payload: Data("""
+        {"id":"w-1","start":"2026-08-10T06:00:00.000Z","end":"2026-08-10T07:00:00.000Z",
+         "sport_name":"running","sport_id":1,"score_state":"SCORED",
+         "score":{"strain":8.2,"kilojoule":1569.34,"average_heart_rate":123,
+                  "max_heart_rate":146,"distance_meter":1772.77}}
+        """.utf8))
+
+        _ = try derivation.rederive()
+
+        let stored = try #require(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+        #expect(stored.activityName == "running")
+        #expect(stored.strain == 8.2)
+
+        let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+        #expect(row.exerciseMinutes == 60)
+    }
+
+    /// A review noted the minute rollup is only exercised with a single
+    /// workout, so the `reduce` is correct by inspection but untested.
+    @Test func twoWorkoutsOnOneDaySumTheirMinutes() throws {
+        let context = try makeContext()
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context), calendar: calendar)
+
+        try derivation.derive(workouts: [
+            WhoopWorkoutSample(externalID: "a", start: date(2026, 8, 10, 6),
+                               end: date(2026, 8, 10, 7), sportName: "running"),
+            WhoopWorkoutSample(externalID: "b", start: date(2026, 8, 10, 18),
+                               end: date(2026, 8, 10, 18), sportName: "lifting"),
+        ])
+
+        let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+        #expect(row.exerciseMinutes == 60)   // 60 + 0
+    }
+
     /// Re-syncing the same workout must correct it, not add a second copy.
     @Test func resyncingAWorkoutUpdatesRatherThanDuplicating() throws {
         let container = try LifeOSContainer.make(inMemory: true)

@@ -86,3 +86,39 @@ final class StubURLProtocol: URLProtocol {
         #expect(samples.count == 20)
     }
 }
+
+// Add to the existing WhoopPaginationTests file. Do NOT declare a second stub
+// with the same shared-statics pattern: `.serialized` scopes to one suite, so
+// two suites sharing statics race again even with the trait on both.
+@Suite struct WhoopRawSplitTests {
+    @Test func eachRecordBecomesItsOwnPayloadKeyedByID() throws {
+        let page = #"{"records":[{"id":"a","v":1},{"id":"b","v":2}],"next_token":null}"#
+        let split = try WhoopRawSplit.records(inPage: Data(page.utf8))
+        #expect(split.map(\.externalID) == ["a", "b"])
+        #expect(String(decoding: split[0].payload, as: UTF8.self).contains("\"v\":1"))
+    }
+
+    /// Recovery records have no id of their own; they are keyed by the cycle
+    /// they score. Without this they would all collide on one archive row.
+    @Test func recoveryIsKeyedByItsCycle() throws {
+        let page = #"{"records":[{"cycle_id":123,"score_state":"SCORED"}],"next_token":null}"#
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).map(\.externalID) == ["123"])
+    }
+
+    @Test func numericIDsBecomeStrings() throws {
+        let page = #"{"records":[{"id":99}],"next_token":null}"#
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).map(\.externalID) == ["99"])
+    }
+
+    /// A record with no usable identity is skipped rather than archived under a
+    /// made-up key that a later sync could never match.
+    @Test func recordsWithNoIdentityAreSkipped() throws {
+        let page = #"{"records":[{"noise":1},{"id":"ok"}],"next_token":null}"#
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).map(\.externalID) == ["ok"])
+    }
+
+    @Test func anEmptyPageSplitsToNothing() throws {
+        let page = #"{"records":[],"next_token":null}"#
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).isEmpty)
+    }
+}
