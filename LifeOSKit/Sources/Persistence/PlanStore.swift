@@ -84,6 +84,17 @@ public struct PlanStore {
         }
     }
 
+    /// Every habit ticked on `date`, in one fetch. `recentTicks` answers the
+    /// same question per entry, so assembling a whole day through it would cost
+    /// one query per habit.
+    public func tickedHabitIDs(on date: Date) throws -> Set<UUID> {
+        let day = calendar.startOfDay(for: date)
+        let ticks = try context.fetch(
+            FetchDescriptor<HabitTick>(predicate: #Predicate { $0.date == day })
+        )
+        return Set(ticks.map(\.entryID))
+    }
+
     /// Consecutive completed days ending at `end`. An unticked day today does
     /// not break the streak, because the day is not over yet.
     public func streak(for entry: PlanEntry, endingOn end: Date = .now) throws -> Int {
