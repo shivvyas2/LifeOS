@@ -45,4 +45,47 @@ import SwiftData
         let archive = try makeArchive()
         #expect(try archive.payloads(kind: "workout").isEmpty)
     }
+
+    @Test func batchStoresDistinctRecordsAsSeparateRows() throws {
+        let archive = try makeArchive()
+        try archive.store([
+            (kind: "recovery", externalID: "r-1", payload: Data("r1".utf8)),
+            (kind: "recovery", externalID: "r-2", payload: Data("r2".utf8)),
+        ])
+
+        #expect(try archive.count() == 2)
+        let payloads = try archive.payloads(kind: "recovery").map { String(decoding: $0, as: UTF8.self) }
+        #expect(Set(payloads) == Set(["r1", "r2"]))
+    }
+
+    /// A page concatenated with a prior page can contain the same key twice in
+    /// one call. Only one `save()` happens for the whole batch, so the second
+    /// occurrence must be recognized against the first's still-unsaved insert
+    /// rather than becoming a duplicate the unique constraint then rejects.
+    @Test func batchWithADuplicateKeyWithinItselfKeepsOneRowWithTheLastPayload() throws {
+        let archive = try makeArchive()
+        try archive.store([
+            (kind: "recovery", externalID: "r-1", payload: Data("first".utf8)),
+            (kind: "recovery", externalID: "r-1", payload: Data("second".utf8)),
+        ])
+
+        #expect(try archive.count() == 1)
+        let payloads = try archive.payloads(kind: "recovery")
+        #expect(payloads.count == 1)
+        #expect(String(decoding: payloads[0], as: UTF8.self) == "second")
+    }
+
+    @Test func batchUpdatesAKeyThatAlreadyExistsInTheStoreRatherThanInserting() throws {
+        let archive = try makeArchive()
+        try archive.store(kind: "recovery", externalID: "r-1", payload: Data("original".utf8))
+
+        try archive.store([
+            (kind: "recovery", externalID: "r-1", payload: Data("updated".utf8)),
+        ])
+
+        #expect(try archive.count() == 1)
+        let payloads = try archive.payloads(kind: "recovery")
+        #expect(payloads.count == 1)
+        #expect(String(decoding: payloads[0], as: UTF8.self) == "updated")
+    }
 }
