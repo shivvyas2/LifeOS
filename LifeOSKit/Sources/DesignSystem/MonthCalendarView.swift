@@ -44,7 +44,7 @@ public struct WeekdayHeader: View {
 
 /// The oversized date headline: day numeral, month and year stacked beneath it,
 /// weekday trailing. The numeral is the largest thing on the screen by a wide
-/// margin — the date is the anchor the whole hub reads from.
+/// margin: the date is the anchor the whole hub reads from.
 public struct DateHeadline: View {
     private let date: Date
     private let calendar: Calendar
@@ -88,7 +88,7 @@ public struct DateHeadline: View {
 }
 
 /// The hub's month view: date headline, weekday headings, and the month's dots.
-/// Cells are passed in already computed — deriving them inside a `body` would
+/// Cells are passed in already computed. Deriving them inside a `body` would
 /// re-run the calendar maths on every render.
 public struct MonthCalendarView: View {
     private let date: Date

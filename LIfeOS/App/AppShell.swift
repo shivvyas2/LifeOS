@@ -8,7 +8,7 @@ private let shellLog = Logger(subsystem: "shivvyas.LIfeOS", category: "shell")
 ///
 /// Signup is required, so this is the only entry point. It is a separate view
 /// from `RootView` so the tab hierarchy is never constructed for a signed-out
-/// user — a half-built RootView reading an empty store was the alternative.
+/// user. A half-built RootView reading an empty store was the alternative.
 struct AppShell: View {
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()

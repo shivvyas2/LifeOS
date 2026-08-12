@@ -6,7 +6,7 @@ import CryptoKit
 /// **This type never sees the client secret.** Whoop's token endpoint is a
 /// confidential-client exchange, so it runs in an Edge Function with the secret
 /// held in the server environment. A secret compiled into an iOS binary is
-/// public — an `.ipa` is a zip, and `strings` finds it in seconds.
+/// public: an `.ipa` is a zip, and `strings` finds it in seconds.
 ///
 /// The app therefore does the half that is safe: build the authorize URL, hold
 /// the PKCE verifier, and hand the returned `code` to the server.

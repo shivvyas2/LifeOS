@@ -77,7 +77,7 @@ public struct WhoopClient: Sendable {
         self.session = session
     }
 
-    /// Whoop timestamps carry milliseconds — `2026-08-10T06:16:16.180Z`.
+    /// Whoop timestamps carry milliseconds, as in `2026-08-10T06:16:16.180Z`.
     /// `JSONDecoder.DateDecodingStrategy.iso8601` rejects fractional seconds
     /// outright, so it failed on every record: the sync error was a date parse,
     /// not a missing field. Both forms are accepted because the fractional part

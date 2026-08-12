@@ -4,7 +4,7 @@
 <dict>
 	<!-- Values come from Config/Secrets.xcconfig at build time. Neither is a
 	     secret: an OAuth client ID is public by design, and the Supabase URL is
-	     a public endpoint. The Whoop client secret is never here — it lives
+	     a public endpoint. The Whoop client secret is never here. It lives
 	     only in the Edge Function environment. -->
 	<key>WHOOPClientID</key>
 	<string>$(WHOOP_CLIENT_ID)</string>

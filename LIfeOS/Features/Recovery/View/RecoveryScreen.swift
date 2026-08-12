@@ -25,7 +25,7 @@ struct RecoverySection: View {
     }
 }
 
-#Preview("Empty — the real first run") {
+#Preview("Empty: the real first run") {
     ZStack {
         LinearGradient(colors: [ModuleHue.recovery.top, ModuleHue.recovery.bottom],
                        startPoint: .top, endPoint: .bottom)

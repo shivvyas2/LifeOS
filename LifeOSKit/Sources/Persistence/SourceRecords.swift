@@ -25,7 +25,7 @@ public final class SleepRecord {
     public var externalID: String
     public var start: Date
     public var end: Date
-    /// The day this sleep is attributed to — the morning you woke up.
+    /// The day this sleep is attributed to: the morning you woke up.
     public var attributedDate: Date
 
     public init(externalID: String, start: Date, end: Date, attributedDate: Date) {

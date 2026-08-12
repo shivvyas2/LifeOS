@@ -57,7 +57,7 @@ public protocol WhoopTokenStoring: Sendable {
     /// A list rather than one slot: tapping Connect twice starts two valid
     /// authorizations, and whichever redirect returns must be matched by its
     /// own `state`. Keeping only the newest made an earlier attempt's redirect
-    /// fail as a state mismatch — which looks exactly like an attack.
+    /// fail as a state mismatch, which looks exactly like an attack.
     func pendingAuths() -> [WhoopPendingAuth]
     func savePending(_ pending: WhoopPendingAuth) throws
     func clearPending()

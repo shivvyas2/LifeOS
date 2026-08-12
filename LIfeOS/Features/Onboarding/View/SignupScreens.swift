@@ -57,8 +57,8 @@ struct SignupScaffold<Content: View, Action: View>: View {
     }
 }
 
-/// Step 1. Phone first, email as the alternative — a phone number is the
-/// identity most people can recall and keep.
+/// Step 1. Phone first, email as the alternative, because a phone number is
+/// the identity most people can recall and keep.
 struct IdentityScreen: View {
     @Bindable var model: OnboardingViewModel
     var onSkipAuth: (() -> Void)?
@@ -122,7 +122,7 @@ struct IdentityScreen: View {
                     Text(note).font(.system(size: 13)).foregroundStyle(.orange)
                 }
                 if !model.isConfigured {
-                    Text("Sign-in isn't configured yet — SUPABASE_ANON_KEY is missing.")
+                    Text("Sign-in isn't configured yet. SUPABASE_ANON_KEY is missing.")
                         .font(.system(size: 13))
                         .foregroundStyle(.orange)
                 }

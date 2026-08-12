@@ -40,7 +40,7 @@ import Foundation
         #expect(cells.filter { $0.date != nil }.count == 31)
     }
 
-    /// 1 Feb 2026 is a Sunday — the worst case for a Monday-first grid, and the
+    /// 1 Feb 2026 is a Sunday, the worst case for a Monday-first grid, and the
     /// only month start that needs a full six blanks. Guards the `% 7` wraparound
     /// in the leading-blank maths, which an August-only test cannot distinguish.
     @Test func monthStartingOnSundayTakesSixBlankCells() {

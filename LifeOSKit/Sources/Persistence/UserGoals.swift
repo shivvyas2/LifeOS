@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Singleton by convention — exactly one row. Editable in Settings.
+/// Singleton by convention: exactly one row. Editable in Settings.
 @Model
 public final class UserGoals {
     public var stepsGoal: Int

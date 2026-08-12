@@ -40,7 +40,7 @@ import Foundation
     }
 
     /// Tapping Connect twice starts two valid authorizations. Whichever redirect
-    /// comes back must find its own attempt — keeping only the newest made the
+    /// comes back must find its own attempt. Keeping only the newest made the
     /// first one fail as a state mismatch, which is indistinguishable from an
     /// attack.
     @Test func anEarlierAttemptSurvivesALaterOneAndIsStillMatchable() throws {

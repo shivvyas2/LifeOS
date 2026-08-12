@@ -3,7 +3,7 @@ import DesignSystem
 
 /// The Body tab. Movement, weight, recovery and wellness sit behind one tab
 /// with a segmented switcher, which keeps the tab bar free for the other life
-/// domains — Life OS is not a fitness app.
+/// domains. Life OS is not a fitness app.
 struct BodyHubScreen: View {
     let activity: ActivitySnapshot
     let weight: BodySnapshot

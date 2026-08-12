@@ -26,8 +26,8 @@ struct PlanScreen: View {
                     if items.isEmpty {
                         empty
                     } else if section == .content {
-                        // Content is a schedule, not a list — it gets the month
-                        // view its reference calls for.
+                        // Content is a schedule, not a list, so it gets the
+                        // month view its reference calls for.
                         ContentCalendar(
                             items: items,
                             month: .now,
@@ -91,7 +91,7 @@ struct PlanScreen: View {
 
             case .habits:
                 HStack(spacing: 10) {
-                    // Same dot vocabulary as the Today grid — a habit's history
+                    // Same dot vocabulary as the Today grid: a habit's history
                     // reads exactly like a month of days on target.
                     DotGrid(cells: habitCells(item), dotSize: 12, spacing: 4)
                         .frame(maxWidth: 220)

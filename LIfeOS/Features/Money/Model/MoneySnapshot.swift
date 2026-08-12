@@ -4,7 +4,7 @@ struct MoneySnapshot: Equatable {
     var income: Double = 0
     var expenses: Double = 0
     var net: Double = 0
-    /// Nil when there is no income — undefined, not zero.
+    /// Nil when there is no income: undefined, not zero.
     var savingsRate: Double?
     var netWorth: Double?
     var recent: [MoneyRow] = []

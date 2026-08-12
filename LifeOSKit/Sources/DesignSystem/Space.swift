@@ -3,7 +3,7 @@ import SwiftUI
 /// The 8-point grid. Every margin, gap and inset in the app comes from here.
 ///
 /// Named by multiples rather than by role (`small`/`medium`) because roles
-/// drift — someone always needs a "medium-large" — while multiples cannot.
+/// drift (someone always needs a "medium-large") while multiples cannot.
 public enum Space {
     /// 4pt. The only sub-grid value, for optical adjustments inside a control.
     public static let half: CGFloat = 4

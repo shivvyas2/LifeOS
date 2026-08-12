@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// One row per calendar day — the join key for the entire app.
+/// One row per calendar day, the join key for the entire app.
 /// HealthKit and Whoop are both writers; the UI and the coach are readers.
 ///
 /// Every metric is optional. A missing value and a zero must never be the

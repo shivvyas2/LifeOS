@@ -14,7 +14,7 @@ public enum SeedData {
         try store.upsertBatch(dates: dates) { date, row in
             let offset = calendar.dateComponents([.day], from: date, to: today).day ?? 0
 
-            // Deterministic pseudo-variation — no randomness, so previews are stable.
+            // Deterministic pseudo-variation with no randomness, so previews are stable.
             //
             // The +61 phase offset matters: without it `offset * 37 % 100` is 0
             // on day 0, which seeded today as the minimum of every metric. Today
@@ -35,7 +35,7 @@ public enum SeedData {
             // is exercised rather than theoretical.
             row.waterML = offset % 3 == 0 ? nil : 1_400 + wobble * 1_600
 
-            // Whoop stays empty until Plan 3 — Recovery must render its
+            // Whoop stays empty until Plan 3: Recovery must render its
             // empty state convincingly before the integration exists.
             row.whoopRecoveryPct = nil
             row.whoopDayStrain = nil

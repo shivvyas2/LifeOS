@@ -20,7 +20,7 @@ final class OnboardingViewModel {
     private(set) var availableChannels: Set<SupabaseAuthChannel> = []
 
     /// Email uses a magic link because the free tier cannot send a six-digit
-    /// code — its template is fixed to a link. Flip this once custom SMTP is
+    /// code, whose template is fixed to a link. Flip this once custom SMTP is
     /// configured and the OTP screen comes back with no other changes.
     let emailUsesMagicLink = true
 
@@ -50,7 +50,7 @@ final class OnboardingViewModel {
 
     var phoneUnavailableNote: String? {
         guard !availableChannels.isEmpty, !availableChannels.contains(.phone) else { return nil }
-        return "SMS isn't enabled on this project yet — use email for now."
+        return "SMS isn't enabled on this project yet. Use email for now."
     }
 
     /// Auth cannot work without the anon key; saying so beats a signup screen
@@ -179,7 +179,7 @@ final class OnboardingViewModel {
             return
         }
         guard let session = AuthSession(callback: url) else {
-            errorMessage = "That link didn't work — request a new one"
+            errorMessage = "That link didn't work. Request a new one"
             step = .identity
             return
         }

@@ -7,8 +7,8 @@
 #      numbers into the contents page of index.html,
 #   3. render again so the printed contents shows the real numbers.
 #
-# The contents geometry does not change between passes — the page-number
-# column is fixed width — so two passes are enough to reach a fixed point.
+# The contents geometry does not change between passes (the page-number
+# column is fixed width) so two passes are enough to reach a fixed point.
 #
 # Uses Puppeteer's own Chromium rather than a locally installed browser:
 # Brave's headless mode hangs indefinitely on this machine (v151), including
@@ -43,7 +43,7 @@ async function render() {
     margin: { top: '16mm', bottom: '18mm', left: '15mm', right: '15mm' },
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;font-family:Roboto,-apple-system,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Life OS — Engineering Handbook · Rev B</span><span class="pageNumber"></span></div>',
+    footerTemplate: '<div style="width:100%;font-family:Roboto,-apple-system,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Life OS Engineering Handbook · Rev B</span><span class="pageNumber"></span></div>',
   });
   await browser.close();
 }
@@ -73,7 +73,7 @@ async function pageIndex() {
 }
 
 (async () => {
-  console.log('Pass 1 — rendering…');
+  console.log('Pass 1: rendering…');
   await render();
 
   const pages = await pageIndex();
@@ -95,7 +95,7 @@ async function pageIndex() {
   console.log('Located ' + (entries.length - missing.length) + '/' + entries.length + ' headings across ' + pages.length + ' pages.');
   if (missing.length) console.warn('NOT FOUND: ' + missing.join(', '));
 
-  console.log('Pass 2 — rendering with contents page numbers…');
+  console.log('Pass 2: rendering with contents page numbers…');
   await render();
   console.log('PDF written: ' + PDF);
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });

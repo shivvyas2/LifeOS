@@ -1,4 +1,4 @@
--- Life OS — initial schema.
+-- Life OS initial schema.
 --
 -- Mirrors the SwiftData models in LifeOSKit/Sources/Persistence. The local
 -- store is the source of truth for the UI; this is the sync target, so every
@@ -7,7 +7,7 @@
 -- Two rules govern this file:
 --
 --   1. Every metric column is nullable. A missing value and a zero must never
---      be representable as the same thing — in a health app a false zero is
+--      be representable as the same thing: in a health app a false zero is
 --      worse than a blank. Only keys, ownership and timestamps are NOT NULL.
 --
 --   2. RLS is enabled on every table, without exception, and every policy
@@ -29,7 +29,7 @@ end;
 $$;
 
 
--- One row per calendar day — the join key for the entire app. HealthKit and
+-- One row per calendar day, the join key for the entire app. HealthKit and
 -- Whoop are both writers; the UI and the coach are readers.
 create table public.daily_metrics (
   id uuid primary key default gen_random_uuid(),
@@ -86,7 +86,7 @@ create table public.sleep_records (
   started_at timestamptz not null,
   ended_at timestamptz not null,
 
-  -- The day this sleep is attributed to — the morning you woke up. Stored
+  -- The day this sleep is attributed to: the morning you woke up. Stored
   -- rather than derived, because the attribution rule lives in the client and
   -- must not silently change meaning for rows already written.
   attributed_date date not null,
@@ -104,7 +104,7 @@ create table public.whoop_raw (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users on delete cascade,
 
-  -- 'recovery' | 'sleep' | 'workout' | 'cycle' — Whoop's collection name. Not
+  -- 'recovery' | 'sleep' | 'workout' | 'cycle' is Whoop's collection name. Not
   -- an enum: a new collection should land as data, not as a failed insert.
   kind text not null,
   external_id text not null,
@@ -119,7 +119,7 @@ create table public.whoop_raw (
 create table public.sync_state (
   user_id uuid not null default auth.uid() references auth.users on delete cascade,
 
-  -- 'healthkit' | 'whoop' — which ingestion this cursor belongs to.
+  -- 'healthkit' | 'whoop' tells which ingestion this cursor belongs to.
   scope text not null,
 
   last_synced_at timestamptz,

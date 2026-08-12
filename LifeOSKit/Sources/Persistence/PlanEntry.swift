@@ -3,7 +3,7 @@ import SwiftData
 
 /// What a plan entry *is*. One discriminator rather than four near-identical
 /// models: a goal, a habit, a note and a content item differ in which fields
-/// they use, not in shape. This is what makes the set block-ready — a renderer
+/// they use, not in shape. This is what makes the set block-ready: a renderer
 /// can lay out any entry without knowing which feature produced it.
 public enum PlanKind: String, Codable, Sendable, CaseIterable {
     case goal, habit, note, content, journal
@@ -37,7 +37,7 @@ public protocol PlanItem: Sendable {
     var fraction: Double? { get }
 }
 
-/// Detached value form — safe to hand to a view, and the unit a block renderer
+/// Detached value form, safe to hand to a view, and the unit a block renderer
 /// would lay out.
 public struct PlanItemSnapshot: PlanItem, Equatable, Identifiable {
     public let id: UUID
@@ -48,7 +48,7 @@ public struct PlanItemSnapshot: PlanItem, Equatable, Identifiable {
     public let sortOrder: Int
     public let dueDate: Date?
     public let fraction: Double?
-    /// Goal milestones — "3/4 milestones". Nil when the entry has none.
+    /// Goal milestones, as in "3/4 milestones". Nil when the entry has none.
     public let progressValue: Double?
     public let progressTarget: Double?
     /// Recent completion history, most-recent-last. Habits only.
@@ -137,7 +137,7 @@ public final class PlanEntry {
 }
 
 /// One completion of a habit on one day. Separate from `PlanEntry` because a
-/// habit's history is a set of days, not a field — and it lets the existing dot
+/// habit's history is a set of days, not a field, and it lets the existing dot
 /// grid render a habit exactly like the Today grid.
 @Model
 public final class HabitTick {

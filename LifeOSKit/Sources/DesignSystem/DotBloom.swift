@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The onboarding animation: a month of dots filling in, one by one.
 ///
-/// Deliberately the app's own vocabulary rather than decorative motion — the
+/// Deliberately the app's own vocabulary rather than decorative motion. The
 /// first thing a new user sees is the grid they will read every morning, so
 /// the animation teaches the interface instead of just entertaining.
 public struct DotBloom: View {

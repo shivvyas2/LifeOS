@@ -5,7 +5,7 @@ import Persistence
 /// Writes Whoop readings into the daily spine.
 ///
 /// Every write goes through `MetricsStore.upsertBatch`, so a re-sync merges
-/// into the existing row rather than replacing it — HealthKit owns steps and
+/// into the existing row rather than replacing it. HealthKit owns steps and
 /// weight on the same row and must not be clobbered.
 @MainActor
 public struct WhoopIngestion {

@@ -11,7 +11,7 @@ public enum MoneySource: String, Codable, Sendable {
 /// once it settles.
 ///
 /// **Sign convention: positive is money in, negative is money out.**
-/// Plaid is the opposite — its `amount` is positive for outflows. The
+/// Plaid is the opposite: its `amount` is positive for outflows. The
 /// ingestion layer must negate on the way in. This is written down because a
 /// silent sign flip turns income into expenses and every rollup lies.
 @Model
@@ -71,7 +71,7 @@ public final class MoneyEntry {
     public var isIncome: Bool { amount > 0 }
 }
 
-/// A funding account and its balance — what net worth is summed from.
+/// A funding account and its balance. Net worth is summed from these.
 /// Plaid's `/accounts/get` maps onto this directly.
 @Model
 public final class MoneyAccount {
@@ -79,7 +79,7 @@ public final class MoneyAccount {
     /// Plaid `account_id`, or nil for a manually tracked account.
     public var externalID: String?
     public var name: String
-    /// depository, credit, investment, loan — Plaid's `type`.
+    /// Plaid's `type`: depository, credit, investment or loan.
     public var type: String
     public var currentBalance: Double
     public var currencyCode: String
@@ -124,7 +124,7 @@ public struct MoneySummary: Sendable, Equatable {
 
     public var net: Double { income - expenses }
 
-    /// Share of income kept. Nil when there is no income — a savings rate
+    /// Share of income kept. Nil when there is no income. A savings rate
     /// against zero income is not 0%, it is undefined, and this app does not
     /// render an invented number.
     public var savingsRate: Double? {
@@ -133,7 +133,7 @@ public struct MoneySummary: Sendable, Equatable {
     }
 }
 
-/// Rolls entries into a summary. Pure and testable — no store, no context.
+/// Rolls entries into a summary. Pure and testable: no store, no context.
 public func summarise(entries: [MoneyEntry], accounts: [MoneyAccount] = []) -> MoneySummary {
     var income = 0.0
     var expenses = 0.0

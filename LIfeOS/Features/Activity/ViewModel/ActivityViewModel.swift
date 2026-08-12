@@ -28,7 +28,7 @@ final class ActivityViewModel {
         let store = MetricsStore(context: context, calendar: calendar)
 
         do {
-            // One day only — this section shows no history.
+            // One day only. This section shows no history.
             let today = try store.metrics(from: selectedDate, to: selectedDate).first
             snapshot = ActivitySnapshot(
                 steps: today?.steps,

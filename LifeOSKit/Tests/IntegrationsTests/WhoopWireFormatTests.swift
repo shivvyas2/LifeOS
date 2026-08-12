@@ -6,7 +6,7 @@ import Foundation
 /// and the timestamp format are real; the values are scrubbed.
 ///
 /// These exist because the wire format was the one part of this integration
-/// that could not be verified by reasoning — and when it was finally checked
+/// that could not be verified by reasoning, and when it was finally checked
 /// against the live API, the field names were right but the dates were not
 /// parseable. A shape test is the only thing that catches that class of bug
 /// before a user does.

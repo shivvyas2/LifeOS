@@ -2,8 +2,8 @@ import Foundation
 
 /// Supabase Auth over REST.
 ///
-/// No SDK: the three calls needed here — request an OTP, verify it, refresh a
-/// session — are small, and a dependency would pull in far more surface than
+/// No SDK: the three calls needed here (request an OTP, verify it, refresh a
+/// session) are small, and a dependency would pull in far more surface than
 /// that for no benefit.
 ///
 /// The anon key is sent as the API key. It is public by design; Row Level
@@ -46,7 +46,7 @@ public struct SupabaseAuth: Sendable {
     }
 
     /// Sends a one-time code. `shouldCreateUser` is true because this is the
-    /// signup path — Supabase treats OTP as sign-in-or-create.
+    /// signup path: Supabase treats OTP as sign-in-or-create.
     public func sendCode(to destination: String, channel: Channel) async throws {
         let body: [String: Any] = channel == .phone
             ? ["phone": destination, "create_user": true]
@@ -57,7 +57,7 @@ public struct SupabaseAuth: Sendable {
     /// Sends a magic link that returns to `redirectTo`.
     ///
     /// Used for email because the free tier will not let the template be
-    /// changed to include a six-digit token — the stock template only ever
+    /// changed to include a six-digit token. The stock template only ever
     /// sends a link. Swap back to `sendCode` once custom SMTP is configured.
     public func sendMagicLink(to email: String, redirectTo: String) async throws {
         _ = try await post("otp", body: [
@@ -201,7 +201,7 @@ public extension AuthSession {
         )
     }
 
-    /// Supabase reports a failed link the same way — in the fragment.
+    /// Supabase reports a failed link the same way, in the fragment.
     static func errorDescription(in url: URL) -> String? {
         guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment
         else { return nil }
@@ -226,7 +226,7 @@ public enum AuthError: Error, Equatable {
             "No connection"
         case .server(let status, let message):
             if let message, !message.isEmpty { message }
-            else if status == 429 { "Too many attempts — wait a moment" }
+            else if status == 429 { "Too many attempts. Wait a moment" }
             else if status == 403 { "That code didn't match" }
             else { "Something went wrong (\(status))" }
         }

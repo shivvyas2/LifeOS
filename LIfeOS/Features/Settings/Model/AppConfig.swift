@@ -2,7 +2,7 @@ import Foundation
 
 /// Build configuration, read from the bundle.
 ///
-/// Everything here is public by design — an OAuth client ID, a redirect URI and
+/// Everything here is public by design: an OAuth client ID, a redirect URI and
 /// a project URL. The Whoop client secret is deliberately absent: it lives only
 /// in the Edge Function environment, because anything in the app bundle can be
 /// read out of the `.ipa`.
@@ -11,7 +11,7 @@ enum AppConfig {
     static var whoopRedirectURI: String? { string("WhoopRedirectURI") }
     static var supabaseURL: URL? { string("SupabaseURL").flatMap(URL.init(string:)) }
 
-    /// Public by design — Row Level Security protects rows, not this key.
+    /// Public by design. Row Level Security protects rows, not this key.
     static var supabaseAnonKey: String? { string("SupabaseAnonKey") }
 
     /// The function that performs the confidential-client token exchange.
@@ -22,7 +22,7 @@ enum AppConfig {
     /// The scheme `ASWebAuthenticationSession` waits for.
     ///
     /// Deliberately not derived from `whoopRedirectURI`. Whoop requires an
-    /// https redirect, so that value points at the Edge Function bridge — and
+    /// https redirect, so that value points at the Edge Function bridge, and
     /// the browser only returns to the app on the final `lifeos://` hop. Using
     /// the redirect's own scheme would leave the session waiting for https and
     /// the callback would never arrive.

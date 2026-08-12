@@ -1,7 +1,7 @@
 import SwiftUI
 import DesignSystem
 
-/// Wellness reports the week, not the day — sleep and training only mean
+/// Wellness reports the week, not the day. Sleep and training only mean
 /// something as a pattern. The verdicts come from the view model so this view
 /// renders judgement rather than making it.
 struct WellnessSection: View {

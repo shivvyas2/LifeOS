@@ -3,7 +3,7 @@ import DesignSystem
 import Integrations
 
 /// The pitch. Four pages, one per life domain, on the same gradient canvas the
-/// rest of the app uses — so the product explains itself by looking like itself.
+/// rest of the app uses, so the product explains itself by looking like itself.
 struct IntroScreen: View {
     let onStart: () -> Void
     var onSkipAuth: (() -> Void)?

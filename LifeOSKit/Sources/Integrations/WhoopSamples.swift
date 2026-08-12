@@ -4,11 +4,11 @@ import Foundation
 ///
 /// Deliberately separate from the wire DTOs. Whoop's JSON field names are the
 /// one part of this integration that cannot be verified without a live token,
-/// so decoding is isolated to `WhoopDTOs` and everything downstream — mapping,
-/// attribution, tests — works on these plain values. If a field name is wrong,
+/// so decoding is isolated to `WhoopDTOs` and everything downstream (mapping,
+/// attribution, tests) works on these plain values. If a field name is wrong,
 /// exactly one small file changes.
 public struct WhoopRecoverySample: Sendable, Equatable {
-    /// The day this belongs to — the morning the cycle ended.
+    /// The day this belongs to: the morning the cycle ended.
     public let date: Date
     public let recoveryPercentage: Double?
     public let restingHeartRate: Double?

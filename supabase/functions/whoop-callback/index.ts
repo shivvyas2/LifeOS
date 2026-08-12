@@ -6,7 +6,7 @@
 // immediately 302s to lifeos://whoop-callback carrying the same parameters.
 //
 // It holds no secret and makes no decisions. PKCE and the `state` check still
-// happen in the app, so this hop cannot be used to inject a forged code — an
+// happen in the app, so this hop cannot be used to inject a forged code. An
 // attacker who reaches this endpoint only gets a redirect back to an app that
 // will reject a `state` it did not issue.
 
@@ -65,7 +65,7 @@ function page(code: string | null, error: string | null): string {
 
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Life OS — Whoop</title><style>
+<title>Life OS · Whoop</title><style>
 :root{color-scheme:light dark}
 body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
      max-width:34rem;margin:0 auto;padding:3rem 1.5rem}

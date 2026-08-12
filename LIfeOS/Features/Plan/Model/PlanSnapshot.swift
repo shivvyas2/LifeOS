@@ -2,7 +2,7 @@ import Foundation
 import DesignSystem
 import Persistence
 
-/// The Plan tab's sections. Each renders `PlanItemSnapshot` values — the same
+/// The Plan tab's sections. Each renders `PlanItemSnapshot` values, the same
 /// shape a block renderer would consume, which is what keeps a future
 /// customizable dashboard from needing a migration.
 enum PlanSection: String, CaseIterable, Identifiable {

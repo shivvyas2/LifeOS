@@ -10,7 +10,7 @@ public struct DotCell: Sendable, Equatable, Identifiable {
     public let date: Date?
     public let state: DotState
 
-    /// Explicit and public — a struct's memberwise init is internal by default,
+    /// Explicit and public: a struct's memberwise init is internal by default,
     /// which would make this unconstructible from the app target.
     public init(id: Int, date: Date?, state: DotState) {
         self.id = id

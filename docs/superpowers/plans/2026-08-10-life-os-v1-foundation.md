@@ -1,10 +1,10 @@
-# Life OS V1 — Foundation Implementation Plan
+# Life OS V1 Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A running Life OS app with the complete design system, local data layer, and all five V1 screens rendering from seeded data — everything except the HealthKit, Whoop, and Supabase integrations.
+**Goal:** A running Life OS app with the complete design system, local data layer, and all five V1 screens rendering from seeded data, everything except the HealthKit, Whoop, and Supabase integrations.
 
-**Architecture:** A local Swift package `LifeOSKit` provides compile-time module boundaries (`DesignSystem`, `Persistence`). All display logic that can be tested without a simulator lives in the package as pure functions and is developed test-first. SwiftUI views are verified by previews and a build, not by unit tests — testing view bodies is low-value ceremony. The app target contains only screens and wiring.
+**Architecture:** A local Swift package `LifeOSKit` provides compile-time module boundaries (`DesignSystem`, `Persistence`). All display logic that can be tested without a simulator lives in the package as pure functions and is developed test-first. SwiftUI views are verified by previews and a build, not by unit tests, because testing view bodies is low-value ceremony. The app target contains only screens and wiring.
 
 **Tech Stack:** Swift 6 (strict concurrency), SwiftUI, SwiftData, Swift Testing (`import Testing`), SwiftPM local package.
 
@@ -19,14 +19,14 @@
 - **Orange is the only accent colour** and never varies by module. It means *today* and it means *act*, nothing else.
 - **Never render a numeral without its unit label.**
 - **No HealthKit, Whoop, or Supabase code in this plan.** Those are Plans 2 and 3. Do not add the dependencies.
-- **`DesignSystem` depends on nothing.** `Persistence` depends on nothing. If a task seems to require otherwise, the task is wrong — stop and flag it.
+- **`DesignSystem` depends on nothing.** `Persistence` depends on nothing. If a task seems to require otherwise, the task is wrong. Stop and flag it.
 - Tests run from the terminal: `swift test --package-path LifeOSKit`. No simulator required for any test in this plan.
 
 ### Performance constraints
 
 These are binding on every remaining task. They are cheap to honour while building
-and expensive to retrofit, which is the only reason they are stated up front —
-none of them licence speculative micro-optimisation. Measure before tuning
+and expensive to retrofit, which is the only reason they are stated up front.
+None of them licence speculative micro-optimisation. Measure before tuning
 anything not listed here.
 
 - **Derive once, not per render.** Grid cells, streak counts and goal evaluation
@@ -42,19 +42,19 @@ anything not listed here.
   cost an offscreen pass, so they are allowed only on per-screen furniture, where
   there are a handful per screen: `GlassCard`'s material and `SolidCard`'s shadow
   are both deliberate and stay. What is banned is putting them inside a repeated
-  cell — the 42 dots stay flat fills with no shadow, material or blur, and no
+  cell. The 42 dots stay flat fills with no shadow, material or blur, and no
   view nests one card treatment inside the other. `GradientCanvas` stays a plain
   static `LinearGradient`: never animated, never blurred.
 - **Persistence is not main-actor work.** `MetricsStore` operations take a
   `ModelContext` and must not assume the main one. Batch writes into a single
   `save()`; a `save()` per row in a seed or sync loop is a defect.
 - **Bounded fetches.** Every SwiftData fetch carries a `#Predicate` and a date
-  bound. No unbounded `FetchDescriptor` over `DailyMetrics` — that table grows
-  without limit.
+  bound. No unbounded `FetchDescriptor` over `DailyMetrics`, because that table
+  grows without limit.
 - **No polling.** No `Timer`, no run loop that ticks when nothing changed.
   Refresh on data change or on foreground, never on a schedule. (Binding on
-  Plans 2 and 3, where HealthKit background delivery and Whoop sync land —
-  those are the app's real battery budget, not anything in this plan.)
+  Plans 2 and 3, where HealthKit background delivery and Whoop sync land.
+  Those are the app's real battery budget, not anything in this plan.)
 
 ---
 
@@ -172,7 +172,7 @@ import Testing
 - [ ] **Step 4: Run it and confirm it fails**
 
 Run: `swift test --package-path LifeOSKit --filter GoalEvaluationTests`
-Expected: compile failure — `cannot find 'GoalTargets' in scope`.
+Expected: compile failure, `cannot find 'GoalTargets' in scope`.
 
 - [ ] **Step 5: Write the minimal implementation**
 
@@ -225,7 +225,7 @@ Verify from the terminal:
 grep -E "SWIFT_VERSION|IPHONEOS_DEPLOYMENT_TARGET" LIfeOS.xcodeproj/project.pbxproj | sort -u
 ```
 
-Expected: `SWIFT_VERSION = 6.0;` and `IPHONEOS_DEPLOYMENT_TARGET = 26.0;` only. If `5.0` still appears, the setting was applied to one configuration and not the other — fix Debug *and* Release.
+Expected: `SWIFT_VERSION = 6.0;` and `IPHONEOS_DEPLOYMENT_TARGET = 26.0;` only. If `5.0` still appears, the setting was applied to one configuration and not the other, so fix Debug *and* Release.
 
 - [ ] **Step 8: Add gitignore and secrets template**
 
@@ -244,7 +244,7 @@ Config/Secrets.xcconfig
 
 ```
 // Copy to Config/Secrets.xcconfig and fill in. That file is gitignored.
-// None of these are true secrets — the Supabase anon key is designed to ship
+// None of these are true secrets: the Supabase anon key is designed to ship
 // in clients and is safe because Row Level Security gates every row.
 // Real secrets (service_role, Whoop client secret, Anthropic key) live only
 // in Supabase Edge Function environments. Never add them here.
@@ -313,8 +313,8 @@ Expected: `cannot find 'ModuleHue' in scope`.
 import SwiftUI
 
 /// A module's identity colour. Each screen owns exactly one.
-/// Nutrition, money and habits are declared now but unused until later slices —
-/// declaring them proves the gradient primitive generalises.
+/// Nutrition, money and habits are declared now but unused until later slices.
+/// Declaring them proves the gradient primitive generalises.
 public enum ModuleHue: String, CaseIterable, Sendable {
     case body, activity, recovery, nutrition, money, habits
 
@@ -423,7 +423,7 @@ git commit -m "feat(design): add module hues and core tokens"
 
 **Interfaces:**
 - Consumes: `ModuleHue` from Task 2.
-- Produces: `GradientCanvas<Content: View>(hue:content:)` — a full-bleed background wrapper.
+- Produces: `GradientCanvas<Content: View>(hue:content:)`, a full-bleed background wrapper.
 
 - [ ] **Step 1: Implement the primitive**
 
@@ -552,7 +552,7 @@ import Foundation
         #expect(cells[5].date == date(2026, 8, 1))
     }
 
-    /// 1 Feb 2026 is a Sunday — the worst case for a Monday-first grid, and the
+    /// 1 Feb 2026 is a Sunday, the worst case for a Monday-first grid, and the
     /// only month start that needs a full six blanks. Guards the `% 7` wraparound
     /// in the leading-blank maths, which an August-only test cannot distinguish.
     @Test func monthStartingOnSundayTakesSixBlankCells() {
@@ -607,7 +607,7 @@ import Foundation
 - [ ] **Step 2: Run them and confirm they fail**
 
 Run: `swift test --package-path LifeOSKit --filter MonthGridLayoutTests`
-Expected: compile failure — `cannot find 'MonthGridLayout' in scope`.
+Expected: compile failure, `cannot find 'MonthGridLayout' in scope`.
 
 - [ ] **Step 3: Implement**
 
@@ -624,7 +624,7 @@ public struct DotCell: Sendable, Equatable, Identifiable {
     public let date: Date?
     public let state: DotState
 
-    /// Explicit and public — a struct's memberwise init is internal by default,
+    /// Explicit and public: a struct's memberwise init is internal by default,
     /// which would make this unconstructible from the app target.
     public init(id: Int, date: Date?, state: DotState) {
         self.id = id
@@ -697,7 +697,7 @@ git commit -m "feat(design): add month grid layout with tested calendar maths"
 
 ### Task 5: Dot grid, cards, numerals, tiles, week strip
 
-The remaining view components. Grouped into one task because none carries independent logic — a reviewer would accept or reject them together.
+The remaining view components. Grouped into one task because none carries independent logic: a reviewer would accept or reject them together.
 
 **Files:**
 - Create: `LifeOSKit/Sources/DesignSystem/DotGrid.swift`
@@ -987,7 +987,7 @@ The rule that decides what the app tells you about yourself every morning. Pure 
 - Consumes: `GoalTargets` from Task 1.
 - Produces: `DayReading`, `DayStatus` (`.onTarget`/`.missed`/`.noData`), `evaluate(_:against:) -> DayStatus`, `currentStreak(statuses:) -> Int`.
 
-`DayStatus` here is deliberately separate from `DesignSystem.DotState` — `Persistence` must not depend on `DesignSystem`. The app target maps one to the other in Task 9.
+`DayStatus` here is deliberately separate from `DesignSystem.DotState` because `Persistence` must not depend on `DesignSystem`. The app target maps one to the other in Task 9.
 
 - [ ] **Step 1: Write the failing evaluation tests**
 
@@ -1061,7 +1061,7 @@ public enum DayStatus: Sendable, Equatable {
     case onTarget, missed, noData
 }
 
-/// A day with no metrics at all is excluded from judgement — leaving the watch
+/// A day with no metrics at all is excluded from judgement. Leaving the watch
 /// on the charger is not a failure. A day with *some* data is judged on what
 /// it has, so an unlogged metric cannot launder a bad day into a blank one.
 public func evaluate(_ reading: DayReading, against targets: GoalTargets) -> DayStatus {
@@ -1170,7 +1170,7 @@ git commit -m "feat(persistence): add goal evaluation and streak arithmetic"
 import Foundation
 import SwiftData
 
-/// One row per calendar day — the join key for the entire app.
+/// One row per calendar day, the join key for the entire app.
 /// HealthKit and Whoop are both writers; the UI and the coach are readers.
 ///
 /// Every metric is optional. A missing value and a zero must never be the
@@ -1220,7 +1220,7 @@ public final class DailyMetrics {
 import Foundation
 import SwiftData
 
-/// Singleton by convention — exactly one row. Editable in Settings.
+/// Singleton by convention: exactly one row. Editable in Settings.
 @Model
 public final class UserGoals {
     public var stepsGoal: Int
@@ -1285,7 +1285,7 @@ public final class SleepRecord {
     public var externalID: String
     public var start: Date
     public var end: Date
-    /// The day this sleep is attributed to — the morning you woke up.
+    /// The day this sleep is attributed to: the morning you woke up.
     public var attributedDate: Date
 
     public init(externalID: String, start: Date, end: Date, attributedDate: Date) {
@@ -1448,7 +1448,7 @@ public struct MetricsStore {
     }
 
     /// Fetches or creates the row for `date`'s day and applies `apply` to it.
-    /// Fields left untouched by `apply` are preserved — this is a merge, not a
+    /// Fields left untouched by `apply` are preserved: this is a merge, not a
     /// replace, so HealthKit and Whoop can both write the same row safely.
     @discardableResult
     public func upsert(date: Date, apply: (DailyMetrics) -> Void) throws -> DailyMetrics {
@@ -1538,7 +1538,7 @@ public enum SeedData {
 
         for offset in 0..<days {
             let date = calendar.date(byAdding: .day, value: -offset, to: today)!
-            // Deterministic pseudo-variation — no randomness, so previews are stable.
+            // Deterministic pseudo-variation with no randomness, so previews are stable.
             let wobble = Double((offset * 37) % 100) / 100.0
             let slowLoss = Double(offset) * 0.02
 
@@ -1555,7 +1555,7 @@ public enum SeedData {
                 // is exercised rather than theoretical.
                 row.waterML = offset % 3 == 0 ? nil : 1_400 + wobble * 1_600
 
-                // Whoop stays empty until Plan 3 — Recovery must render its
+                // Whoop stays empty until Plan 3: Recovery must render its
                 // empty state convincingly before the integration exists.
                 row.whoopRecoveryPct = nil
                 row.whoopDayStrain = nil
@@ -1661,7 +1661,7 @@ Then remove its file reference in Xcode if the build complains about a missing f
 
 - [ ] **Step 5: Create empty screen stubs so the project compiles**
 
-Six files under `LIfeOS/Screens/`, each replaced with its real implementation in Tasks 10–12.
+Six files under `LIfeOS/Screens/`, each replaced with its real implementation in Tasks 10-12.
 
 `TodayScreen.swift`:
 ```swift
@@ -1857,7 +1857,7 @@ struct TodayScreen: View {
 
 - [ ] **Step 2: Build and inspect**
 
-Run in the simulator. Confirm: an oversized date, a week strip, a month of dots with today in orange, a streak count, and four tiles. Because seed data leaves water unlogged every third day and Whoop empty, confirm the Recovery tile shows an em dash — **not a zero**.
+Run in the simulator. Confirm: an oversized date, a week strip, a month of dots with today in orange, a streak count, and four tiles. Because seed data leaves water unlogged every third day and Whoop empty, confirm the Recovery tile shows an em dash placeholder, **not a zero**.
 
 - [ ] **Step 3: Commit**
 
@@ -1870,7 +1870,7 @@ git commit -m "feat(app): build the Today screen"
 
 ### Task 11: Body, Activity, and Recovery screens
 
-Three domain screens sharing one structure: gradient canvas, hero numeral, tiles. Grouped because they are the same screen three times with different hues and fields — a reviewer accepts or rejects the pattern, not each instance.
+Three domain screens sharing one structure: gradient canvas, hero numeral, tiles. Grouped because they are the same screen three times with different hues and fields, so a reviewer accepts or rejects the pattern, not each instance.
 
 **Files:**
 - Modify: `LIfeOS/Screens/BodyScreen.swift`, `ActivityScreen.swift`, `RecoveryScreen.swift`
@@ -2013,7 +2013,7 @@ struct ActivityScreen: View {
 
 - [ ] **Step 3: Implement `RecoveryScreen`**
 
-Whoop arrives in Plan 3, so this screen ships as a convincing empty state. That is deliberate — the empty state is the one a real user hits before connecting, and building it now means it gets designed rather than bolted on.
+Whoop arrives in Plan 3, so this screen ships as a convincing empty state. That is deliberate: the empty state is the one a real user hits before connecting, and building it now means it gets designed rather than bolted on.
 
 ```swift
 import SwiftUI
@@ -2108,7 +2108,7 @@ struct SettingsScreen: View {
     }
 }
 
-/// Split out so `@Bindable` can take a non-optional model — binding through an
+/// Split out so `@Bindable` can take a non-optional model, because binding through an
 /// optional in a `Form` does not compile cleanly.
 private struct GoalsSection: View {
     @Bindable var goals: UserGoals
@@ -2138,7 +2138,7 @@ import SwiftData
 import DesignSystem
 import Persistence
 
-/// V1 logs only water and weight — the two metrics with no automatic source.
+/// V1 logs only water and weight, the two metrics with no automatic source.
 /// Writes to local `DailyMetrics` only; the app requests no HealthKit write
 /// permissions in V1.
 struct QuickLogSheet: View {
@@ -2230,4 +2230,4 @@ git commit -m "feat(app): add settings goal editing and quick log"
 
 ## Not in this plan
 
-HealthKit (Plan 2). Whoop OAuth, Supabase schema, Edge Functions, sync (Plan 3). The AI coach, nutrition, habits, goals, journal, notes, money, content planner (V2–V7 specs). Screen time (dropped — see spec §2).
+HealthKit (Plan 2). Whoop OAuth, Supabase schema, Edge Functions, sync (Plan 3). The AI coach, nutrition, habits, goals, journal, notes, money, content planner (V2-V7 specs). Screen time (dropped, see spec §2).

@@ -23,7 +23,7 @@ public struct WeekStrip: View {
     }
 
     public var body: some View {
-        // Invariant across all seven columns — `startOfDay` is not free enough
+        // Invariant across all seven columns, and `startOfDay` is not free enough
         // to repeat once per column.
         let startOfToday = calendar.startOfDay(for: today)
 

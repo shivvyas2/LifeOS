@@ -14,7 +14,7 @@ public struct MetricsStore {
     }
 
     /// Fetches or creates the row for `date`'s day and applies `apply` to it.
-    /// Fields left untouched by `apply` are preserved — this is a merge, not a
+    /// Fields left untouched by `apply` are preserved: this is a merge, not a
     /// replace, so HealthKit and Whoop can both write the same row safely.
     @discardableResult
     public func upsert(date: Date, apply: (DailyMetrics) -> Void) throws -> DailyMetrics {
@@ -25,7 +25,7 @@ public struct MetricsStore {
         return row
     }
 
-    /// Many days, one `save()`. Seeding and sync loops go through this — a save
+    /// Many days, one `save()`. Seeding and sync loops go through this, because a save
     /// per row turns 60 days into 60 disk transactions on the main actor.
     public func upsertBatch(dates: [Date], apply: (Date, DailyMetrics) -> Void) throws {
         for date in dates {
@@ -37,7 +37,7 @@ public struct MetricsStore {
     }
 
     /// The existing row for `date`'s day, or a freshly inserted one.
-    /// Unsaved — callers decide when to commit.
+    /// Unsaved. Callers decide when to commit.
     private func row(for date: Date) throws -> DailyMetrics {
         let day = calendar.startOfDay(for: date)
         let descriptor = FetchDescriptor<DailyMetrics>(predicate: #Predicate { $0.date == day })

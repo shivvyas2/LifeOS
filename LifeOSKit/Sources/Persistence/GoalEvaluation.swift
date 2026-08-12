@@ -46,7 +46,7 @@ public enum DayStatus: Sendable, Equatable {
     case onTarget, missed, noData
 }
 
-/// A day with no metrics at all is excluded from judgement — leaving the watch
+/// A day with no metrics at all is excluded from judgement. Leaving the watch
 /// on the charger is not a failure. A day with *some* data is judged on what
 /// it has, so an unlogged metric cannot launder a bad day into a blank one.
 public func evaluate(_ reading: DayReading, against targets: GoalTargets) -> DayStatus {

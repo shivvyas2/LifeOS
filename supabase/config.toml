@@ -233,7 +233,7 @@ otp_expiry = 3600
 # instead.
 # Parked: template editing needs custom SMTP or a paid plan. The templates in
 # supabase/templates/ deliver a six-digit code and can be re-enabled the moment
-# SMTP is configured — at which point the app can switch back from magic links
+# SMTP is configured, at which point the app can switch back from magic links
 # to OTP by flipping emailUsesMagicLink.
 # [auth.email.template.magic_link]
 # subject = "Your Life OS code"
@@ -377,8 +377,8 @@ allow_dynamic_registration = false
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
-# `per_worker` (default) — enables hot reload during local development.
-# `oneshot` — fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
+# `per_worker` (default) enables hot reload during local development.
+# `oneshot` is the fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
 policy = "per_worker"
 # Port to attach the Chrome inspector for debugging edge functions.
 inspector_port = 8083

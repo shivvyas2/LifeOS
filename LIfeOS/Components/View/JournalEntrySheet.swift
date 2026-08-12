@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Free-text entry. A journal has no title and no fields to fill in — asking
+/// Free-text entry. A journal has no title and no fields to fill in. Asking
 /// for either is friction on the one thing that has to stay effortless.
 struct JournalEntrySheet: View {
     let onSave: (String) -> Void

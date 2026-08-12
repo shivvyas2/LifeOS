@@ -81,7 +81,7 @@ what keeps a 4-up grid on a 13" iPad from becoming a 7-up grid of postage
 stamps. Every adaptive grid in the app calls it.
 
 `maxContentWidth` caps prose and single-column content so a 1366pt pane does not
-produce 90-character measures. Grids are exempt and fill the pane — that is why
+produce 90-character measures. Grids are exempt and fill the pane, which is why
 the approved iPad layout has no dead margins.
 
 Exposed as an environment value:
@@ -109,7 +109,7 @@ New `LifeOSKit/Sources/DesignSystem/RecoveryBand.swift`:
 
 ```swift
 public enum RecoveryBand: Sendable, Equatable {
-    case low, moderate, high          // <34 · 34–66 · ≥67
+    case low, moderate, high          // <34 · 34-66 · ≥67
     public static func band(for percentage: Double) -> RecoveryBand
     public var color: Color           // red · amber · green
     public var label: String          // "Low" · "Moderate" · "High"
@@ -140,7 +140,7 @@ public struct TrendSeries: Sendable, Equatable {
 
 Pure over plain values: no SwiftData, no SwiftUI, so it tests on macOS. The
 existing rule that a missing value and a zero are different things (`DailyMetrics`
-header) carries through — a gap renders as a gap in the chart, never a bar of
+header) carries through: a gap renders as a gap in the chart, never a bar of
 height zero.
 
 `RecoveryViewModel` gains a fourteen-day fetch via the existing
@@ -160,8 +160,8 @@ New views under `LIfeOS/Features/Recovery/View/`:
 
 Presentation differs by width, content does not:
 
-- **Compact** — the card is a `NavigationLink` pushing `WhoopDetailScreen`.
-- **Regular** — card and trends render side by side inside the Recovery
+- **Compact**: the card is a `NavigationLink` pushing `WhoopDetailScreen`.
+- **Regular**: card and trends render side by side inside the Recovery
   section, with no push.
 
 `RecoverySection` also renders "Synced 2h ago" from `syncedAt`, so a dead
@@ -174,7 +174,7 @@ iOS 26, and axis handling, gaps and accessibility come free.
 
 In `RootView.swift`:
 
-- `.tabViewStyle(.sidebarAdaptable)` on the `TabView` — sidebar in regular
+- `.tabViewStyle(.sidebarAdaptable)` on the `TabView`: sidebar in regular
   width, tab bar on iPhone.
 - The Body tab gains a `NavigationStack`; it has none today, so the Recovery
   push has nowhere to go without one.
@@ -203,11 +203,11 @@ orientations. The existing iPhone key stays portrait-only.
 
 Unit tests in LifeOSKit, run by `swift test` with no simulator:
 
-- `LayoutMetricsTests` — column count against width and minimum, including the
+- `LayoutMetricsTests`: column count against width and minimum, including the
   maximum cap and a width narrower than one minimum tile; regular metrics differ
   from compact.
-- `RecoveryBandTests` — the 33/34 and 66/67 boundaries, and the 0 and 100 ends.
-- `TrendSeriesTests` — average ignores gaps; an all-gap series has a nil average
+- `RecoveryBandTests`: the 33/34 and 66/67 boundaries, and the 0 and 100 ends.
+- `TrendSeriesTests`: average ignores gaps; an all-gap series has a nil average
   rather than a zero; `deltaFromAverage` sign and nil handling.
 
 Manual verification, because a responsive claim cannot be checked any other way:

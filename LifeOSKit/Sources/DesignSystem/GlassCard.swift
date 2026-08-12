@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Frosted card, for use while over the saturated region of a gradient.
 ///
-/// The material costs an offscreen pass, so this is screen furniture only —
+/// The material costs an offscreen pass, so this is screen furniture only:
 /// never the content of a repeated cell, and never nested inside a `SolidCard`.
 public struct GlassCard<Content: View>: View {
     private let content: Content

@@ -6,7 +6,7 @@ import Persistence
 /// has something scheduled, and the entries listed beneath grouped by status.
 ///
 /// Reuses `MonthGridLayout` for the calendar arithmetic rather than repeating
-/// it — the leading-blank and month-boundary maths is already tested.
+/// it. The leading-blank and month-boundary maths is already tested.
 struct ContentCalendar: View {
     let items: [PlanItemSnapshot]
     let month: Date
@@ -123,7 +123,7 @@ struct ContentCalendar: View {
     }
 
     /// Content statuses read as a pipeline, so they get distinct colours rather
-    /// than the single accent — this is the one place the app shows several.
+    /// than the single accent. This is the one place the app shows several.
     static func color(for status: PlanStatus) -> Color {
         switch status {
         case .todo:       Color(red: 0.23, green: 0.51, blue: 0.93)

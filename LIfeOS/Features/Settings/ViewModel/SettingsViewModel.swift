@@ -44,7 +44,7 @@ final class SettingsViewModel {
     }
 
     /// Writes the draft back to the singleton goals row. Saving here is what
-    /// makes the dot grid re-evaluate — the rule is the user's, not hard-coded.
+    /// makes the dot grid re-evaluate: the rule is the user's, not hard-coded.
     func save() {
         guard let context else { return }
         do {

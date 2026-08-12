@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import Persistence
 
-/// V1 logs only water and weight — the two metrics with no automatic source.
+/// V1 logs only water and weight, the two metrics with no automatic source.
 /// Writes to local `DailyMetrics` only; the app requests no HealthKit write
 /// permissions in V1.
 @MainActor @Observable
@@ -19,7 +19,7 @@ final class QuickLogViewModel {
 
     var canSaveWeight: Bool { Double(weightText) != nil }
 
-    /// Water accumulates across the day rather than replacing — "add 250ml" is
+    /// Water accumulates across the day rather than replacing: "add 250ml" is
     /// the intent, not "today's total is 250ml".
     func addWater() -> Bool {
         perform { store, amount in

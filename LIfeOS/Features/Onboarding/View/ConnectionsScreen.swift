@@ -2,8 +2,8 @@ import SwiftUI
 import DesignSystem
 import Integrations
 
-/// Final step. Every connection is optional and can be made later in Settings —
-/// stated plainly, because a permission wall at signup is the fastest way to
+/// Final step. Every connection is optional and can be made later in Settings.
+/// That is stated plainly, because a permission wall at signup is the fastest way to
 /// lose someone before they have seen the app.
 struct ConnectionsScreen: View {
     @Bindable var model: OnboardingViewModel
@@ -31,7 +31,7 @@ struct ConnectionsScreen: View {
 
                 connectionRow(
                     title: "Apple Health",
-                    detail: "Steps, sleep and weight — arrives in the next release.",
+                    detail: "Steps, sleep and weight. Arrives in the next release.",
                     systemImage: "heart.fill",
                     isConnected: false,
                     isAvailable: false
@@ -39,7 +39,7 @@ struct ConnectionsScreen: View {
 
                 connectionRow(
                     title: "Bank accounts",
-                    detail: "Income and spending via Plaid — arrives in the next release.",
+                    detail: "Income and spending via Plaid. Arrives in the next release.",
                     systemImage: "dollarsign.circle.fill",
                     isConnected: false,
                     isAvailable: false
@@ -70,7 +70,7 @@ struct ConnectionsScreen: View {
     private var whoopDetail: String {
         switch whoop.state {
         case .unconfigured: "Not configured on this build."
-        case .connected:    "Connected — recovery, sleep and strain."
+        case .connected:    "Connected. Recovery, sleep and strain."
         default:            "Recovery, sleep and strain."
         }
     }
@@ -126,7 +126,7 @@ struct OnboardingFlow: View {
     let onFinish: () -> Void
     /// TEMPORARY: enters the app without an account so the rest of it can be
     /// tested while email delivery is still being sorted out. Signup is meant
-    /// to be required — remove this and the buttons that call it before
+    /// to be required, so remove this and the buttons that call it before
     /// shipping, or the requirement is theatre.
     var onSkipAuth: (() -> Void)?
 

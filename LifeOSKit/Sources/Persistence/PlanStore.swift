@@ -45,7 +45,7 @@ public struct PlanStore {
 
     public func delete(_ entry: PlanEntry) throws {
         // Ticks are keyed by id rather than a relationship, so they are cleaned
-        // up explicitly — an orphaned tick would resurrect a deleted habit's
+        // up explicitly, because an orphaned tick would resurrect a deleted habit's
         // streak if the id were ever reused.
         let id = entry.id
         let ticks = try context.fetch(
@@ -85,7 +85,7 @@ public struct PlanStore {
     }
 
     /// Consecutive completed days ending at `end`. An unticked day today does
-    /// not break the streak — the day is not over yet.
+    /// not break the streak, because the day is not over yet.
     public func streak(for entry: PlanEntry, endingOn end: Date = .now) throws -> Int {
         let ticks = try recentTicks(for: entry, days: 365, endingOn: end)
         var count = 0

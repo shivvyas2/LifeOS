@@ -27,7 +27,7 @@ import SwiftData
     }
 
     @Test func savingsRateIsUndefinedWithoutIncome() {
-        // Not 0% — undefined. A savings rate against no income is a number this
+        // Not 0% but undefined. A savings rate against no income is a number this
         // app must not invent.
         let summary = summarise(entries: [MoneyEntry(date: day, amount: -40, merchant: "Coffee")])
         #expect(summary.savingsRate == nil)
@@ -92,7 +92,7 @@ import SwiftData
         #expect(ticks == [true, false, false])
     }
 
-    /// An unticked today must not read as a broken streak — the day is not over.
+    /// An unticked today must not read as a broken streak: the day is not over.
     @Test func anOpenTodayDoesNotBreakTheStreak() throws {
         let store = try makeStore()
         let habit = try store.add(kind: .habit, title: "Walk")

@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// A module's identity colour. Each screen owns exactly one.
-/// Nutrition, money and habits are declared now but unused until later slices —
-/// declaring them proves the gradient primitive generalises.
+/// Nutrition, money and habits are declared now but unused until later slices.
+/// Declaring them proves the gradient primitive generalises.
 public enum ModuleHue: String, CaseIterable, Sendable {
     case body, activity, recovery, nutrition, money, habits
 
@@ -99,11 +99,11 @@ public enum LifeOSTokens {
     )
 
     /// Text sitting directly on a gradient, where the backdrop is saturated in
-    /// light mode and near-black in dark mode — white reads in both.
+    /// light mode and near-black in dark mode, and white reads in both.
     public static let onGradient = Color.white
 
     /// Leading and trailing cells that belong to no day. Faint rather than
-    /// invisible so the month reads as one solid block of dots — the grid is
+    /// invisible so the month reads as one solid block of dots. The grid is
     /// the app's central visual claim and a ragged edge weakens it.
     public static let dotPadding = AdaptiveColor(light: Color(white: 0.965), dark: Color(white: 0.11))
 }

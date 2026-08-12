@@ -10,7 +10,7 @@ enum OnboardingStep: Equatable {
     case code                // OTP (phone)
     case linkSent            // magic link (email)
     case profile             // name, country
-    case connections         // Whoop, Health — all optional
+    case connections         // Whoop and Health, all optional
 }
 
 /// One page of the intro. Kept as data so the pager is a loop, not five
@@ -29,7 +29,7 @@ extension IntroPage {
         IntroPage(
             id: 0, hue: .body,
             headline: "Everything about your life,\nin one place",
-            body: "Health, money, habits and plans — tracked together instead of scattered across six apps."
+            body: "Health, money, habits and plans, tracked together instead of scattered across six apps."
         ),
         IntroPage(
             id: 1, hue: .activity,
@@ -39,7 +39,7 @@ extension IntroPage {
         IntroPage(
             id: 2, hue: .money,
             headline: "Your money,\nhonestly",
-            body: "Income, spending and what you actually keep. No invented numbers — a blank stays blank."
+            body: "Income, spending and what you actually keep. No invented numbers. A blank stays blank."
         ),
         IntroPage(
             id: 3, hue: .habits,

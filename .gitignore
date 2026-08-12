@@ -14,7 +14,7 @@ build/
 .build/
 .swiftpm/
 
-## Secrets — NEVER COMMIT
+## Secrets: NEVER COMMIT
 # Real values live here; Config/Secrets.example.xcconfig is the committed template.
 Config/Secrets.xcconfig
 *.local.xcconfig
@@ -23,7 +23,7 @@ Config/Secrets.xcconfig
 !.env.example
 
 # Service-role keys, Whoop client secret, and the Anthropic key live only in
-# Supabase Edge Function environments (`supabase secrets set`) — never in this repo.
+# Supabase Edge Function environments (`supabase secrets set`), never in this repo.
 
 ## Supabase CLI (Plan 3)
 supabase/.temp/

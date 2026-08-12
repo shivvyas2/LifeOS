@@ -81,7 +81,7 @@ public struct WhoopSync {
     public func sync(days: Int = 14, now: Date = .now) async throws -> Int {
         guard var current = tokens.load() else { throw WhoopSyncError.notConnected }
 
-        // Refresh proactively rather than waiting for a 401 — one round trip
+        // Refresh proactively rather than waiting for a 401: one round trip
         // instead of a failed request followed by a retry.
         if current.isExpired(now: now), let refresh = current.refreshToken {
             current = try await exchange.refresh(refreshToken: refresh)
