@@ -74,13 +74,13 @@ Append to `WhoopWireFormatTests.swift`:
     #expect(score.max_heart_rate == 170)
 }
 
-/// 9000.5 kJ / 4.184 = 2151.6 kcal. The divisor is exact, not 4.2.
+/// 9000.5 kJ / 4.184 = 2151.17 kcal. The divisor is exact, not 4.2.
 @Test func kilojoulesConvertToKilocalories() throws {
     let page = try WhoopClient.decoder.decode(
         WhoopDTOs.Page<WhoopDTOs.CycleRecord>.self, from: Data(cycleJSON.utf8)
     )
     let kilojoule = try #require(page.records.first?.score?.kilojoule)
-    #expect(abs(kilojoule / 4.184 - 2151.65) < 0.1)
+    #expect(abs(kilojoule / 4.184 - 2151.17) < 0.01)
 }
 ```
 
