@@ -82,53 +82,21 @@ public struct WhoopDerivation {
     /// now is fixable without asking Whoop for the data again.
     @discardableResult
     public func rederive() throws -> Int {
+        // Mapping lives once, on the DTOs themselves (`WhoopClient.swift`), so the
+        // live client and this rebuild path cannot drift apart the way they did
+        // before: a field added to one copy and not the other silently degraded
+        // a rebuilt row relative to a synced one.
         let recoveries = try decode(kind: "recovery", as: WhoopDTOs.RecoveryRecord.self)
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map {
-                WhoopRecoverySample(
-                    date: $0.created_at,
-                    recoveryPercentage: $0.score?.recovery_score,
-                    restingHeartRate: $0.score?.resting_heart_rate,
-                    hrvMilliseconds: $0.score?.hrv_rmssd_milli,
-                    spo2Percentage: $0.score?.spo2_percentage,
-                    skinTempCelsius: $0.score?.skin_temp_celsius
-                )
-            }
+            .map(\.sample)
 
         let cycles = try decode(kind: "cycle", as: WhoopDTOs.CycleRecord.self)
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map {
-                WhoopCycleSample(
-                    date: $0.start,
-                    dayStrain: $0.score?.strain,
-                    calories: $0.score?.kilojoule.map { $0 / 4.184 },
-                    averageHR: $0.score?.average_heart_rate,
-                    maxHR: $0.score?.max_heart_rate
-                )
-            }
+            .map(\.sample)
 
         let sleeps = try decode(kind: "sleep", as: WhoopDTOs.SleepRecord.self)
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map { record -> WhoopSleepSample in
-                let stages = record.score?.stage_summary
-                let need = record.score?.sleep_needed
-                return WhoopSleepSample(
-                    externalID: record.id,
-                    start: record.start,
-                    end: record.end,
-                    isNap: record.nap == true,
-                    performancePercentage: record.score?.sleep_performance_percentage,
-                    efficiencyPercentage: record.score?.sleep_efficiency_percentage,
-                    respiratoryRate: record.score?.respiratory_rate,
-                    sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
-                    asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
-                    lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
-                    remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
-                    swsMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_slow_wave_sleep_time_milli),
-                    awakeMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_awake_time_milli),
-                    disturbanceCount: stages?.disturbance_count
-                )
-            }
+            .map(\.sample)
 
         try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles)
 
@@ -157,14 +125,22 @@ public struct WhoopDerivation {
                 end: sample.end,
                 attributedDate: WhoopAttribution.day(forSleepEndingAt: sample.end, calendar: calendar)
             ) { record in
-                record.performancePercentage = sample.performancePercentage
-                record.lightMinutes = sample.lightMinutes
-                record.remMinutes = sample.remMinutes
-                record.swsMinutes = sample.swsMinutes
-                record.awakeMinutes = sample.awakeMinutes
-                record.respiratoryRate = sample.respiratoryRate
-                record.sleepNeedMinutes = sample.sleepNeedMinutes
-                record.disturbanceCount = sample.disturbanceCount
+                // Nil never overwrites a stored value, matching `derive` above: a
+                // re-sync where Whoop omits a sub-field must not wipe a reading a
+                // previous, more complete sync already stored.
+                if let value = sample.performancePercentage { record.performancePercentage = value }
+                if let value = sample.consistencyPercentage { record.consistencyPercentage = value }
+                if let value = sample.efficiencyPercentage { record.efficiencyPercentage = value }
+                if let value = sample.lightMinutes { record.lightMinutes = value }
+                if let value = sample.remMinutes { record.remMinutes = value }
+                if let value = sample.swsMinutes { record.swsMinutes = value }
+                if let value = sample.awakeMinutes { record.awakeMinutes = value }
+                if let value = sample.noDataMinutes { record.noDataMinutes = value }
+                if let value = sample.sleepCycleCount { record.sleepCycleCount = value }
+                if let value = sample.respiratoryRate { record.respiratoryRate = value }
+                if let value = sample.sleepNeedMinutes { record.sleepNeedMinutes = value }
+                if let value = sample.sleepDebtMinutes { record.sleepDebtMinutes = value }
+                if let value = sample.disturbanceCount { record.disturbanceCount = value }
                 record.isNap = sample.isNap
             }
         }

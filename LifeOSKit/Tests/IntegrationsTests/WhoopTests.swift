@@ -204,6 +204,55 @@ import SwiftData
         #expect(row.spo2Percentage == 97.2)
         #expect(row.skinTempCelsius == 33.1)
         #expect(row.whoopCalories == 2151.6)
+        #expect(row.whoopAverageHR == 70)
+        #expect(row.whoopMaxHR == 170)
+    }
+
+    /// Sleep fields beyond performance and total time asleep reach the row too:
+    /// coverage for the columns Task 5 added that `derive` was writing but no
+    /// test was reading.
+    @Test func sleepPerformanceFieldsReachTheRow() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context), calendar: calendar)
+
+        let day = date(2026, 8, 10)
+        try derivation.derive(sleeps: [
+            WhoopSleepSample(externalID: "night", start: date(2026, 8, 9, 23), end: date(2026, 8, 10, 7),
+                             performancePercentage: 88, consistencyPercentage: 74,
+                             efficiencyPercentage: 91, respiratoryRate: 15.2,
+                             sleepDebtMinutes: 40, asleepMinutes: 420)
+        ])
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.respiratoryRate == 15.2)
+        #expect(row.whoopSleepConsistencyPct == 74)
+        #expect(row.whoopSleepEfficiencyPct == 91)
+        #expect(row.whoopSleepDebtMinutes == 40)
+    }
+
+    /// The five `SleepRecord` columns that reached nobody: `storeSleepRecords`
+    /// wrote 9 of the 14 fields Task 5 added and silently dropped the rest.
+    @Test func sleepRecordCarriesThePreviouslyDeadFields() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context), calendar: calendar)
+
+        try derivation.derive(sleeps: [
+            WhoopSleepSample(externalID: "night", start: date(2026, 8, 9, 23), end: date(2026, 8, 10, 7),
+                             performancePercentage: 88, consistencyPercentage: 74,
+                             efficiencyPercentage: 91, sleepDebtMinutes: 40,
+                             asleepMinutes: 420, noDataMinutes: 5, sleepCycleCount: 6)
+        ])
+
+        let record = try #require(try context.fetch(FetchDescriptor<SleepRecord>()).first)
+        #expect(record.consistencyPercentage == 74)
+        #expect(record.efficiencyPercentage == 91)
+        #expect(record.sleepDebtMinutes == 40)
+        #expect(record.noDataMinutes == 5)
+        #expect(record.sleepCycleCount == 6)
     }
 
     /// A nap must not overwrite the night's sleep on the daily row, but it is still
@@ -242,26 +291,36 @@ import SwiftData
     }
 
     /// The whole point of the archive: rebuild the metrics from stored payloads
-    /// with no network call.
+    /// with no network call. Also the regression guard for the mapping drift
+    /// between the live client and this rebuild path: `whoopSleepConsistencyPct`
+    /// can only reach the row if `rederive` decodes through the same
+    /// DTO-to-sample mapping the client uses (`WhoopDTOs.SleepRecord.sample`),
+    /// since it is one of the fields the old, hand-duplicated copy of that
+    /// mapping silently dropped.
     @Test func rederiveRebuildsTheRowsFromTheArchiveAlone() throws {
         let container = try LifeOSContainer.make(inMemory: true)
         let context = ModelContext(container)
         let store = MetricsStore(context: context)
         let archive = WhoopArchive(context: context)
-        let derivation = WhoopDerivation(store: store, archive: archive)
+        let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
 
         try archive.store(kind: "recovery", externalID: "r-1", payload: Data("""
         {"created_at":"2026-08-10T13:37:33.957Z","score_state":"SCORED",
          "score":{"recovery_score":66,"resting_heart_rate":54,"hrv_rmssd_milli":74.5,
                   "spo2_percentage":97.2,"skin_temp_celsius":33.1}}
         """.utf8))
+        try archive.store(kind: "sleep", externalID: "s-1", payload: Data("""
+        {"id":"s-1","start":"2026-08-09T23:00:00.000Z","end":"2026-08-10T07:00:00.000Z",
+         "nap":false,"score_state":"SCORED",
+         "score":{"sleep_performance_percentage":88,"sleep_consistency_percentage":74,
+                  "sleep_efficiency_percentage":91}}
+        """.utf8))
 
         let days = try derivation.rederive()
         #expect(days == 1)
 
-        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_786_282_653))
-        let rows = try store.metrics(from: day.addingTimeInterval(-86_400 * 2),
-                                     to: day.addingTimeInterval(86_400 * 2))
-        #expect(rows.contains { $0.whoopRecoveryPct == 66 })
+        let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+        #expect(row.whoopRecoveryPct == 66)
+        #expect(row.whoopSleepConsistencyPct == 74)
     }
 }

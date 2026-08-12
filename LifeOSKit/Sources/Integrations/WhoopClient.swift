@@ -86,6 +86,67 @@ enum WhoopDTOs {
     }
 }
 
+/// One mapping per DTO, shared by the live client and `WhoopDerivation.rederive`.
+/// Duplicating this by hand in two places is exactly how `rederive` drifted from
+/// `WhoopClient.sleeps()`/`recoveries()` before: fields added to one copy and not
+/// the other silently degraded a rebuilt row relative to a synced one.
+extension WhoopDTOs.RecoveryRecord {
+    var sample: WhoopRecoverySample {
+        WhoopRecoverySample(
+            date: created_at,
+            recoveryPercentage: score?.recovery_score,
+            restingHeartRate: score?.resting_heart_rate,
+            hrvMilliseconds: score?.hrv_rmssd_milli,
+            spo2Percentage: score?.spo2_percentage,
+            skinTempCelsius: score?.skin_temp_celsius,
+            isCalibrating: score?.user_calibrating
+        )
+    }
+}
+
+extension WhoopDTOs.SleepRecord {
+    var sample: WhoopSleepSample {
+        let stages = score?.stage_summary
+        let need = score?.sleep_needed
+        return WhoopSleepSample(
+            externalID: id,
+            start: start,
+            end: end,
+            // Naps are returned rather than filtered out. The derivation
+            // layer decides what a nap may write; dropping them here meant
+            // a real record vanished with no trace.
+            isNap: nap == true,
+            performancePercentage: score?.sleep_performance_percentage,
+            consistencyPercentage: score?.sleep_consistency_percentage,
+            efficiencyPercentage: score?.sleep_efficiency_percentage,
+            respiratoryRate: score?.respiratory_rate,
+            sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
+            sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
+            asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
+            lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
+            remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
+            swsMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_slow_wave_sleep_time_milli),
+            awakeMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_awake_time_milli),
+            noDataMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_no_data_time_milli),
+            sleepCycleCount: stages?.sleep_cycle_count,
+            disturbanceCount: stages?.disturbance_count
+        )
+    }
+}
+
+extension WhoopDTOs.CycleRecord {
+    var sample: WhoopCycleSample {
+        WhoopCycleSample(
+            date: start,
+            dayStrain: score?.strain,
+            // Kilojoules to kilocalories. The divisor is exact.
+            calories: score?.kilojoule.map { $0 / 4.184 },
+            averageHR: score?.average_heart_rate,
+            maxHR: score?.max_heart_rate
+        )
+    }
+}
+
 public struct WhoopClient: Sendable {
     public struct Configuration: Sendable {
         public var baseURL: URL
@@ -131,17 +192,7 @@ public struct WhoopClient: Sendable {
             try await get("recovery", accessToken: accessToken, since: since, until: until)
         return records
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map {
-                WhoopRecoverySample(
-                    date: $0.created_at,
-                    recoveryPercentage: $0.score?.recovery_score,
-                    restingHeartRate: $0.score?.resting_heart_rate,
-                    hrvMilliseconds: $0.score?.hrv_rmssd_milli,
-                    spo2Percentage: $0.score?.spo2_percentage,
-                    skinTempCelsius: $0.score?.skin_temp_celsius,
-                    isCalibrating: $0.score?.user_calibrating
-                )
-            }
+            .map(\.sample)
     }
 
     public func sleeps(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopSleepSample] {
@@ -149,33 +200,7 @@ public struct WhoopClient: Sendable {
             try await get("activity/sleep", accessToken: accessToken, since: since, until: until)
         return records
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map { record in
-                let stages = record.score?.stage_summary
-                let need = record.score?.sleep_needed
-                return WhoopSleepSample(
-                    externalID: record.id,
-                    start: record.start,
-                    end: record.end,
-                    // Naps are returned rather than filtered out. The derivation
-                    // layer decides what a nap may write; dropping them here meant
-                    // a real record vanished with no trace.
-                    isNap: record.nap == true,
-                    performancePercentage: record.score?.sleep_performance_percentage,
-                    consistencyPercentage: record.score?.sleep_consistency_percentage,
-                    efficiencyPercentage: record.score?.sleep_efficiency_percentage,
-                    respiratoryRate: record.score?.respiratory_rate,
-                    sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
-                    sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
-                    asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
-                    lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
-                    remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
-                    swsMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_slow_wave_sleep_time_milli),
-                    awakeMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_awake_time_milli),
-                    noDataMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_no_data_time_milli),
-                    sleepCycleCount: stages?.sleep_cycle_count,
-                    disturbanceCount: stages?.disturbance_count
-                )
-            }
+            .map(\.sample)
     }
 
     public func cycles(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopCycleSample] {
@@ -183,16 +208,7 @@ public struct WhoopClient: Sendable {
             try await get("cycle", accessToken: accessToken, since: since, until: until)
         return records
             .filter { WhoopDTOs.isScored($0.score_state) }
-            .map {
-                WhoopCycleSample(
-                    date: $0.start,
-                    dayStrain: $0.score?.strain,
-                    // Kilojoules to kilocalories. The divisor is exact.
-                    calories: $0.score?.kilojoule.map { $0 / 4.184 },
-                    averageHR: $0.score?.average_heart_rate,
-                    maxHR: $0.score?.max_heart_rate
-                )
-            }
+            .map(\.sample)
     }
 
     /// Whoop returns at most `limit` records per page and a `next_token` for the
