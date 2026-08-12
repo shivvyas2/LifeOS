@@ -157,7 +157,19 @@ The sheet needs "which habits were done on this day" as one question. `recentTic
 
 **Files:**
 - Create: `LifeOSKit/Tests/PersistenceTests/PlanStoreTests.swift`
+- Modify: `LifeOSKit/Tests/PersistenceTests/MoneyTests.swift` — remove the `PlanStoreTests` suite
 - Modify: `LifeOSKit/Sources/Persistence/PlanStore.swift` (add after `recentTicks`, around line 85)
+
+> **Correction applied during execution.** `@Suite @MainActor struct PlanStoreTests`
+> already exists at `MoneyTests.swift:67-131` with 6 tests, so creating a second
+> one is a duplicate type name in the same module. Move that suite verbatim into
+> the new `PlanStoreTests.swift` — tests named for `PlanStore` belong in a file
+> named for `PlanStore` — and add Step 1's tests to it.
+>
+> Keep the moved suite's existing `makeStore()` on `Calendar.current`: its tests
+> use relative dates like "two days ago" and depend on that. Step 1's tests need
+> a fixed timezone for the day-boundary assertion, so rename their helpers to
+> `makeUTCStore()` and `utcCalendar` to sit alongside it.
 
 **Interfaces:**
 - Consumes: existing `PlanStore.add(kind:title:…)`, `PlanStore.toggleTick(for:on:)`, `LifeOSContainer.make(inMemory:)`.
@@ -167,6 +179,8 @@ The sheet needs "which habits were done on this day" as one question. `recentTic
 
 Create `LifeOSKit/Tests/PersistenceTests/PlanStoreTests.swift`:
 
+Per the correction above, these join the suite moved out of `MoneyTests.swift`, alongside its existing `makeStore()`:
+
 ```swift
 import Testing
 import Foundation
@@ -174,28 +188,33 @@ import SwiftData
 @testable import Persistence
 
 @Suite @MainActor struct PlanStoreTests {
-    /// Fixed to UTC so the day-boundary test means the same thing everywhere.
-    private var calendar: Calendar {
+    // ...the 6 tests moved verbatim from MoneyTests.swift, and their
+    // existing `makeStore()` on Calendar.current, sit here...
+
+    /// A second factory, fixed to UTC. The moved tests use relative dates and
+    /// need `Calendar.current`; the day-boundary test below is only meaningful
+    /// against a fixed timezone.
+    private var utcCalendar: Calendar {
         var c = Calendar(identifier: .gregorian)
         c.timeZone = TimeZone(identifier: "UTC")!
         return c
     }
 
-    private func makeStore() throws -> PlanStore {
+    private func makeUTCStore() throws -> PlanStore {
         let container = try LifeOSContainer.make(inMemory: true)
-        return PlanStore(context: ModelContext(container), calendar: calendar)
+        return PlanStore(context: ModelContext(container), calendar: utcCalendar)
     }
 
     private var day: Date {
-        calendar.date(from: DateComponents(year: 2026, month: 8, day: 5))!
+        utcCalendar.date(from: DateComponents(year: 2026, month: 8, day: 5))!
     }
 
     private var nextDay: Date {
-        calendar.date(byAdding: .day, value: 1, to: day)!
+        utcCalendar.date(byAdding: .day, value: 1, to: day)!
     }
 
     @Test func returnsOnlyTheHabitsTickedOnThatDay() throws {
-        let store = try makeStore()
+        let store = try makeUTCStore()
         let read = try store.add(kind: .habit, title: "Read")
         let gym = try store.add(kind: .habit, title: "Gym")
         _ = try store.add(kind: .habit, title: "Water")   // exists, never ticked
@@ -207,7 +226,7 @@ import SwiftData
     }
 
     @Test func isEmptyForADayWithNoTicks() throws {
-        let store = try makeStore()
+        let store = try makeUTCStore()
         let read = try store.add(kind: .habit, title: "Read")
         try store.toggleTick(for: read, on: day)
 
@@ -217,7 +236,7 @@ import SwiftData
     /// The `startOfDay` boundary. A tick logged just before midnight belongs to
     /// the day it was logged on, not to the one starting a minute later.
     @Test func aTickLateInTheEveningBelongsToThatDay() throws {
-        let store = try makeStore()
+        let store = try makeUTCStore()
         let read = try store.add(kind: .habit, title: "Read")
         let lateEvening = day.addingTimeInterval(23 * 3600 + 59 * 60)
 
@@ -229,7 +248,7 @@ import SwiftData
 
     /// Un-ticking must actually remove the id, not just flip a flag somewhere.
     @Test func unTickingRemovesTheHabitFromTheDay() throws {
-        let store = try makeStore()
+        let store = try makeUTCStore()
         let read = try store.add(kind: .habit, title: "Read")
 
         try store.toggleTick(for: read, on: day)
