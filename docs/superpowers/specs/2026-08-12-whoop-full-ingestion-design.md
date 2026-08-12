@@ -30,9 +30,18 @@ Three defects surface alongside the gap:
    sync with no error.
 2. **Asleep time is derived by subtraction.** `in_bed - awake` is a proxy for
    `light + SWS + REM`. It drifts whenever Whoop counts time as neither.
-3. **The wire field names have never been verified.** `WhoopClient.swift:5` says
-   so explicitly. A live token now exists, so this is checkable for the first
-   time.
+3. **One endpoint's field names are unverified, and a stale comment claims all
+   of them are.** `WhoopClient.swift:5` says nothing in the file "has been
+   exercised against a live token". That is no longer true and has not been true
+   since `c1e90dd`: that commit captured real v2 payloads into
+   `WhoopWireFormatTests.swift`, whose header records them as "captured from a
+   live Whoop v2 response on 2026-08-10. Field names and the timestamp format
+   are real". The comment was left behind by the very commit that disproved it.
+
+   So recovery, sleep and cycle are verified, and their fixtures already contain
+   every field this design adds. Only `/v2/activity/workout` is genuinely
+   unknown, because it has never been called. The stale comment is corrected as
+   part of this work.
 
 ## Goals
 
@@ -143,19 +152,26 @@ a lightweight migration into a store that will not open.
 
 ### 7. Verifying the wire format
 
-The field names gate everything downstream, so they are verified before the
-models are finalised.
+Recovery, sleep and cycle need no verification step. Their fixtures in
+`WhoopWireFormatTests.swift` were captured live and already carry every field
+this design reads, so those DTOs are widened test-first against fixtures that
+exist today.
 
-1. A temporary dump path in `WhoopClient.get`, behind a
-   `WHOOP_DUMP_PAYLOADS` environment check, logs each endpoint's raw JSON
-   through `OSLog`.
+Only `/v2/activity/workout` needs capture:
+
+1. A temporary dump path in `WhoopClient.get`, behind a `WHOOP_DUMP_PAYLOADS`
+   environment check, logs the workout endpoint's raw JSON through `OSLog`.
 2. The user runs one sync and provides the output.
-3. The DTOs are written against those real payloads, and a decoding fixture
-   test per endpoint is built from them.
-4. The dump path is deleted in the same change that lands the DTOs.
+3. The workout DTO is written against that real payload, and a fixture is added
+   to `WhoopWireFormatTests` alongside the other three.
+4. The dump path is deleted in the same change that lands the workout DTO.
 
 Step 4 is not optional. A debug path that logs a user's biometrics is not
 something to leave behind a flag.
+
+Because only one endpoint is gated, the rest of the work does not wait on it.
+`WhoopClient.swift:5` is rewritten to say what is actually true: three
+collections are fixture-backed, and a decode failure means the API moved.
 
 ## Testing
 
@@ -174,9 +190,10 @@ Pure and terminal-runnable, matching the existing package convention:
 
 ## Risks
 
-- **The field names may differ from the documented shape.** That is the reason
-  for the verification step, and why the models are finalised after it rather
-  than before.
+- **The workout field names may differ from the documented shape.** That is the
+  reason for the capture step, and why the workout model is finalised after it
+  rather than before. The other three collections carry no such risk: their
+  fixtures are real.
 - **Archive size.** A JSON payload per record per day is small, but unbounded
   over years. Not solved here; noted so it is a deliberate omission rather than
   an oversight.
