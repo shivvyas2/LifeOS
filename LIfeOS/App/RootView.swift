@@ -34,10 +34,18 @@ struct RootView: View {
     @State private var showAddMoney = false
     @State private var showJournal = false
 
+    /// The tab bar's selection, stated rather than inferred from ordering.
+    /// Deliberately not persisted: the requirement is that a cold launch lands
+    /// on Today, and non-persisted `@State` delivers exactly that. Selection
+    /// still survives backgrounding, because the scene stays alive.
+    private enum AppTab: Hashable { case today, body, money, plan }
+
+    @State private var tab: AppTab = .today
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            TabView {
-                Tab("Today", systemImage: "circle.grid.3x3.fill") {
+            TabView(selection: $tab) {
+                Tab("Today", systemImage: "circle.grid.3x3.fill", value: AppTab.today) {
                     NavigationStack {
                         TodayScreen(snapshot: today.snapshot)
                             .toolbar {
@@ -53,7 +61,7 @@ struct RootView: View {
                             }
                     }
                 }
-                Tab("Body", systemImage: "figure") {
+                Tab("Body", systemImage: "figure", value: AppTab.body) {
                     BodyHubScreen(
                         activity: activity.snapshot,
                         weight: weight.snapshot,
@@ -67,10 +75,10 @@ struct RootView: View {
                         )
                     )
                 }
-                Tab("Money", systemImage: "dollarsign.circle.fill") {
+                Tab("Money", systemImage: "dollarsign.circle.fill", value: AppTab.money) {
                     MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }
                 }
-                Tab("Plan", systemImage: "checklist") {
+                Tab("Plan", systemImage: "checklist", value: AppTab.plan) {
                     PlanScreen(
                         snapshot: plan.snapshot,
                         section: Binding(get: { plan.section }, set: { plan.section = $0 }),
