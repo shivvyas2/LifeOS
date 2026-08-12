@@ -3,6 +3,9 @@ import DesignSystem
 
 struct TodayScreen: View {
     let snapshot: TodaySnapshot
+    /// Raised when a dot for a real, non-future day is tapped. The screen stays
+    /// a pure function of its inputs: it does not decide what a day opens.
+    let onSelectDay: (Date) -> Void
 
     @Environment(\.colorScheme) private var scheme
     private let calendar = Calendar.current
@@ -14,7 +17,12 @@ struct TodayScreen: View {
                     date: snapshot.date,
                     cells: snapshot.cells,
                     calendar: calendar,
-                    today: snapshot.date
+                    today: snapshot.date,
+                    onTap: { cell in
+                        // `DotGrid` only calls this for tappable cells, which
+                        // always carry a date. The guard is belt and braces.
+                        if let date = cell.date { onSelectDay(date) }
+                    }
                 )
 
                 streakLine
@@ -74,14 +82,17 @@ struct TodayScreen: View {
 }
 
 #Preview {
-    TodayScreen(snapshot: TodaySnapshot(
-        cells: (0..<35).map { DotCell(id: $0, date: nil, state: $0 < 10 ? .onTarget : ($0 == 10 ? .today : .future)) },
-        streak: 6,
-        steps: 8432,
-        stepsProgress: 1.05,
-        sleepMinutes: 432,
-        sleepProgress: 0.9,
-        weightKg: 77.4,
-        recoveryPct: nil
-    ))
+    TodayScreen(
+        snapshot: TodaySnapshot(
+            cells: (0..<35).map { DotCell(id: $0, date: nil, state: $0 < 10 ? .onTarget : ($0 == 10 ? .today : .future)) },
+            streak: 6,
+            steps: 8432,
+            stepsProgress: 1.05,
+            sleepMinutes: 432,
+            sleepProgress: 0.9,
+            weightKg: 77.4,
+            recoveryPct: nil
+        ),
+        onSelectDay: { _ in }
+    )
 }
