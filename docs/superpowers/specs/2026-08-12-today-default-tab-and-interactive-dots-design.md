@@ -177,10 +177,16 @@ func toggleHabit(id: UUID)     // today only; writes, then reloads
 A day with no metrics row yields nil metric fields and a full habit list — the
 sheet is still worth opening.
 
-`toggleHabit` guards on `detail?.isToday == true`, calls
-`PlanStore.toggleTick`, then re-runs both `load()` and `select(detail.date)`.
-The month grid is unaffected by a habit tick today, since habits do not feed
-`evaluate()`, but `load()` is cheap and keeps one refresh path rather than two.
+`toggleHabit` guards on `detail?.isToday == true` and calls
+`PlanStore.toggleTick`. It refreshes nothing itself: the save it triggers fires
+`ModelContext.didSave`, which `RootView` already listens for, and that calls
+`load()`. `load()` re-derives `detail` whenever a day is selected, so an open
+sheet stays current — including after a write from somewhere else in the app.
+
+That is the one refresh path. An earlier draft of this spec had `toggleHabit`
+call `load()` and `select()` itself and claimed that kept a single path; it did
+the opposite, running the month-grid pass twice per tap while still leaving an
+open sheet stale on any external write.
 
 Read failures follow the existing convention at `TodayViewModel.swift:76`:
 `assertionFailure` and leave the previous value in place, rather than blanking
