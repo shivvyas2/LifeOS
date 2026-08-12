@@ -6,6 +6,8 @@ import Persistence
 @MainActor @Observable
 final class TodayViewModel {
     private(set) var snapshot = TodaySnapshot()
+    /// The day the sheet is showing, or nil when it is closed.
+    private(set) var detail: DayDetailSnapshot?
 
     private var context: ModelContext?
     private let calendar: Calendar
@@ -74,6 +76,67 @@ final class TodayViewModel {
             // A read failure leaves the previous snapshot in place rather than
             // blanking the screen. Nothing here is recoverable by the user.
             assertionFailure("Today load failed: \(error)")
+        }
+    }
+
+    /// Builds the day sheet's contents from both stores.
+    ///
+    /// A day with no metrics row is not an early return: its habits are still
+    /// worth showing, and the metric rows render as blanks.
+    func select(_ date: Date) {
+        guard let context else { return }
+        let metrics = MetricsStore(context: context, calendar: calendar)
+        let plan = PlanStore(context: context, calendar: calendar)
+
+        do {
+            let day = calendar.startOfDay(for: date)
+            let targets = try metrics.goals().targets
+            let row = try metrics.metrics(from: day, to: day).first
+            let ticked = try plan.tickedHabitIDs(on: day)
+
+            detail = DayDetailSnapshot(
+                date: day,
+                isToday: calendar.isDateInToday(day),
+                steps: row?.steps,
+                stepsTarget: targets.steps,
+                sleepMinutes: row?.sleepMinutes,
+                sleepTargetMinutes: targets.sleepMinutes,
+                weightKg: row?.weightKg,
+                recoveryPct: row?.whoopRecoveryPct,
+                habits: try plan.entries(kind: .habit).map { entry in
+                    HabitRow(id: entry.id, title: entry.title, isDone: ticked.contains(entry.id))
+                }
+            )
+        } catch {
+            assertionFailure("Day detail load failed: \(error)")
+        }
+    }
+
+    func clearSelection() {
+        detail = nil
+    }
+
+    /// Only today can be ticked. Past days are history, and the sheet renders
+    /// them without controls, so this guard is the second lock rather than the
+    /// only one.
+    func toggleHabit(id: UUID) {
+        guard let context, let detail, detail.isToday else { return }
+
+        do {
+            let entry = try context.fetch(
+                FetchDescriptor<PlanEntry>(predicate: #Predicate { $0.id == id })
+            ).first
+            guard let entry else { return }
+
+            try PlanStore(context: context, calendar: calendar)
+                .toggleTick(for: entry, on: detail.date)
+
+            // The month grid does not depend on habits, but reloading both
+            // keeps one refresh path instead of two that can drift apart.
+            load()
+            select(detail.date)
+        } catch {
+            assertionFailure("Habit toggle failed: \(error)")
         }
     }
 }
