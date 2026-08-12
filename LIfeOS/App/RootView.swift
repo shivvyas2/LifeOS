@@ -47,7 +47,7 @@ struct RootView: View {
             TabView(selection: $tab) {
                 Tab("Today", systemImage: "circle.grid.3x3.fill", value: AppTab.today) {
                     NavigationStack {
-                        TodayScreen(snapshot: today.snapshot)
+                        TodayScreen(snapshot: today.snapshot, onSelectDay: { today.select($0) })
                             .toolbar {
                                 ToolbarItem(placement: .topBarTrailing) {
                                     Button {
@@ -103,6 +103,14 @@ struct RootView: View {
             .padding(.trailing, 20)
             .padding(.bottom, 72)
             .accessibilityLabel("Quick log")
+        }
+        // `today.detail` is the only source of truth for what the sheet shows;
+        // there is deliberately no parallel `selectedDay` state to keep in step.
+        .sheet(item: Binding(
+            get: { today.detail },
+            set: { if $0 == nil { today.clearSelection() } }
+        )) { detail in
+            DayDetailSheet(snapshot: detail) { today.toggleHabit(id: $0) }
         }
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
