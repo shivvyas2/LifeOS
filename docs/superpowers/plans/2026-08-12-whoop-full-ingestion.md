@@ -703,7 +703,10 @@ final class StubURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-@Suite struct WhoopPaginationTests {
+// Serialized deliberately. StubURLProtocol keeps its canned responses in shared
+// mutable statics, and swift-testing runs a suite's tests in parallel by
+// default, so without this the four tests race each other over `bodies`.
+@Suite(.serialized) struct WhoopPaginationTests {
     private func makeClient() -> WhoopClient {
         StubURLProtocol.bodies = []
         StubURLProtocol.requestedURLs = []
@@ -1837,6 +1840,9 @@ git commit -m "feat(whoop): ingest workouts"
 Append to `WhoopPaginationTests.swift`:
 
 ```swift
+// Add to the existing WhoopPaginationTests file. Do NOT declare a second stub
+// with the same shared-statics pattern: `.serialized` scopes to one suite, so
+// two suites sharing statics race again even with the trait on both.
 @Suite struct WhoopRawSplitTests {
     @Test func eachRecordBecomesItsOwnPayloadKeyedByID() throws {
         let page = #"{"records":[{"id":"a","v":1},{"id":"b","v":2}],"next_token":null}"#
