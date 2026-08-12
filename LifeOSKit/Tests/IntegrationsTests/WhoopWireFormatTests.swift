@@ -94,6 +94,8 @@ import Foundation
             total_light_sleep_time_milli: nil,
             total_rem_sleep_time_milli: nil,
             total_slow_wave_sleep_time_milli: nil,
+            total_no_data_time_milli: nil,
+            sleep_cycle_count: nil,
             disturbance_count: nil
         )
         #expect(WhoopSleepMath.asleepMinutes(from: stages) == 400)
@@ -170,5 +172,36 @@ import Foundation
         )
         let kilojoule = try #require(page.records.first?.score?.kilojoule)
         #expect(abs(kilojoule / 4.184 - 2151.17) < 0.01)
+    }
+
+    @Test func sleepCarriesConsistencyDebtAndCycleCount() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.SleepRecord>.self, from: Data(sleepJSON.utf8)
+        )
+        let score = try #require(page.records.first?.score)
+        #expect(score.sleep_consistency_percentage == 70)
+        #expect(score.sleep_needed?.need_from_sleep_debt_milli == 100)
+        #expect(score.stage_summary?.total_no_data_time_milli == 0)
+        #expect(score.stage_summary?.sleep_cycle_count == 5)
+    }
+
+    /// Whoop reports when a recovery score is still calibrating. That is not a low
+    /// score, and the two must not be collapsed.
+    @Test func recoveryCarriesItsCalibratingFlag() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.RecoveryRecord>.self, from: Data(recoveryJSON.utf8)
+        )
+        #expect(page.records.first?.score?.user_calibrating == false)
+    }
+
+    @Test func sleepSampleCarriesTheNewFieldsThrough() {
+        let sample = WhoopSleepSample(
+            start: .now, end: .now, performancePercentage: 88,
+            consistencyPercentage: 70, sleepDebtMinutes: 12,
+            asleepMinutes: 400, noDataMinutes: 0, sleepCycleCount: 5
+        )
+        #expect(sample.consistencyPercentage == 70)
+        #expect(sample.sleepDebtMinutes == 12)
+        #expect(sample.sleepCycleCount == 5)
     }
 }

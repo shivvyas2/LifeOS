@@ -15,16 +15,18 @@ public struct WhoopRecoverySample: Sendable, Equatable {
     public let hrvMilliseconds: Double?
     public let spo2Percentage: Double?
     public let skinTempCelsius: Double?
+    public let isCalibrating: Bool?
 
     public init(date: Date, recoveryPercentage: Double?, restingHeartRate: Double?,
                 hrvMilliseconds: Double?, spo2Percentage: Double? = nil,
-                skinTempCelsius: Double? = nil) {
+                skinTempCelsius: Double? = nil, isCalibrating: Bool? = nil) {
         self.date = date
         self.recoveryPercentage = recoveryPercentage
         self.restingHeartRate = restingHeartRate
         self.hrvMilliseconds = hrvMilliseconds
         self.spo2Percentage = spo2Percentage
         self.skinTempCelsius = skinTempCelsius
+        self.isCalibrating = isCalibrating
     }
 }
 
@@ -34,36 +36,47 @@ public struct WhoopSleepSample: Sendable, Equatable {
     public let end: Date
     public let isNap: Bool
     public let performancePercentage: Double?
+    public let consistencyPercentage: Double?
     public let efficiencyPercentage: Double?
     public let respiratoryRate: Double?
     public let sleepNeedMinutes: Int?
+    public let sleepDebtMinutes: Int?
     /// Time actually asleep, which is not time in bed.
     public let asleepMinutes: Int?
     public let lightMinutes: Int?
     public let remMinutes: Int?
     public let swsMinutes: Int?
     public let awakeMinutes: Int?
+    public let noDataMinutes: Int?
+    public let sleepCycleCount: Int?
     public let disturbanceCount: Int?
 
     public init(externalID: String? = nil, start: Date, end: Date, isNap: Bool = false,
-                performancePercentage: Double?, efficiencyPercentage: Double? = nil,
+                performancePercentage: Double?, consistencyPercentage: Double? = nil,
+                efficiencyPercentage: Double? = nil,
                 respiratoryRate: Double? = nil, sleepNeedMinutes: Int? = nil,
+                sleepDebtMinutes: Int? = nil,
                 asleepMinutes: Int?, lightMinutes: Int? = nil, remMinutes: Int? = nil,
                 swsMinutes: Int? = nil, awakeMinutes: Int? = nil,
+                noDataMinutes: Int? = nil, sleepCycleCount: Int? = nil,
                 disturbanceCount: Int? = nil) {
         self.externalID = externalID
         self.start = start
         self.end = end
         self.isNap = isNap
         self.performancePercentage = performancePercentage
+        self.consistencyPercentage = consistencyPercentage
         self.efficiencyPercentage = efficiencyPercentage
         self.respiratoryRate = respiratoryRate
         self.sleepNeedMinutes = sleepNeedMinutes
+        self.sleepDebtMinutes = sleepDebtMinutes
         self.asleepMinutes = asleepMinutes
         self.lightMinutes = lightMinutes
         self.remMinutes = remMinutes
         self.swsMinutes = swsMinutes
         self.awakeMinutes = awakeMinutes
+        self.noDataMinutes = noDataMinutes
+        self.sleepCycleCount = sleepCycleCount
         self.disturbanceCount = disturbanceCount
     }
 }

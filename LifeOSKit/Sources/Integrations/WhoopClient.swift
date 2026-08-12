@@ -33,6 +33,7 @@ enum WhoopDTOs {
             let hrv_rmssd_milli: Double?
             let spo2_percentage: Double?
             let skin_temp_celsius: Double?
+            let user_calibrating: Bool?
         }
     }
 
@@ -46,6 +47,7 @@ enum WhoopDTOs {
 
         struct Score: Decodable {
             let sleep_performance_percentage: Double?
+            let sleep_consistency_percentage: Double?
             let sleep_efficiency_percentage: Double?
             let respiratory_rate: Double?
             let sleep_needed: Needed?
@@ -62,6 +64,8 @@ enum WhoopDTOs {
                 let total_light_sleep_time_milli: Double?
                 let total_rem_sleep_time_milli: Double?
                 let total_slow_wave_sleep_time_milli: Double?
+                let total_no_data_time_milli: Double?
+                let sleep_cycle_count: Int?
                 let disturbance_count: Int?
             }
         }
@@ -134,7 +138,8 @@ public struct WhoopClient: Sendable {
                     restingHeartRate: $0.score?.resting_heart_rate,
                     hrvMilliseconds: $0.score?.hrv_rmssd_milli,
                     spo2Percentage: $0.score?.spo2_percentage,
-                    skinTempCelsius: $0.score?.skin_temp_celsius
+                    skinTempCelsius: $0.score?.skin_temp_celsius,
+                    isCalibrating: $0.score?.user_calibrating
                 )
             }
     }
@@ -156,14 +161,18 @@ public struct WhoopClient: Sendable {
                     // a real record vanished with no trace.
                     isNap: record.nap == true,
                     performancePercentage: record.score?.sleep_performance_percentage,
+                    consistencyPercentage: record.score?.sleep_consistency_percentage,
                     efficiencyPercentage: record.score?.sleep_efficiency_percentage,
                     respiratoryRate: record.score?.respiratory_rate,
                     sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
+                    sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
                     asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
                     lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
                     remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
                     swsMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_slow_wave_sleep_time_milli),
                     awakeMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_awake_time_milli),
+                    noDataMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_no_data_time_milli),
+                    sleepCycleCount: stages?.sleep_cycle_count,
                     disturbanceCount: stages?.disturbance_count
                 )
             }
