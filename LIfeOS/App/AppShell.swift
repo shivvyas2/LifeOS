@@ -12,7 +12,10 @@ private let shellLog = Logger(subsystem: "shivvyas.LIfeOS", category: "shell")
 struct AppShell: View {
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
-    @State private var hasFinishedOnboarding = false
+    /// Persisted: finishing onboarding is a fact about the user, not about this
+    /// launch. Without this, any relaunch that cannot restore a Supabase session
+    /// re-runs the intro flow instead of opening Today.
+    @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
     /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
     /// relaunch returns to signup and the bypass cannot quietly become the
     /// default state of the app.
