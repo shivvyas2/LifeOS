@@ -55,8 +55,20 @@ Three defects surface alongside the gap:
   data-sync layer, which does not exist and is not built here.
 - New UI. This makes data available; rendering it is the separate approved
   responsive/UI spec.
-- `/v2/user/measurement/body`. Height and max HR are profile facts, not daily
-  signal, and nothing would read them.
+- `/v2/user/profile/basic`. Name and email are identity, not signal, and the
+  app already has an authenticated user.
+
+**Revised 2026-08-12:** `/v2/user/measurement/body` was originally a non-goal on
+the grounds that height and max HR are profile facts rather than daily signal.
+That was decided before the published schema was to hand. It carries
+`weight_kilogram`, and `DailyMetrics.weightKg` is a column that exists today and
+is never written to, because HealthKit is not connected. Whoop is therefore its
+only available source, so the endpoint is now in scope. Section 8 covers it.
+
+Also revised: every scored field on the four collections is now parsed, not the
+restrained subset section 5 originally chose. The reasoning for restraint still
+holds for anything Whoop adds in future, and the archive still makes a later
+addition free.
 
 ## Design
 
@@ -131,13 +143,23 @@ dropped on the floor.
 
 ### 5. `DailyMetrics` columns
 
-Four new optional columns: `spo2Percentage`, `skinTempCelsius`,
-`respiratoryRate`, `whoopCalories`.
+**Revised 2026-08-12.** The original four columns (`spo2Percentage`,
+`skinTempCelsius`, `respiratoryRate`, `whoopCalories`) are joined by the rest of
+the scored daily surface: `whoopAverageHR`, `whoopMaxHR`,
+`whoopSleepConsistencyPct`, `whoopSleepEfficiencyPct`, `whoopSleepDebtMinutes`.
 
-Restraint is deliberate. Because the raw payload is archived, a column added
-later costs a re-derive and no network traffic at all, so there is no reason to
-add columns nothing renders. Everything else Whoop returns is still captured, in
-the archive, where it is free.
+The original reasoning was that restraint is free because the archive makes a
+later column cost a re-derive and no network traffic. That is still true, and it
+still governs anything Whoop adds in future. It was overruled here by a
+deliberate decision to parse the whole scored surface now rather than in
+instalments.
+
+Two fields stay out of `DailyMetrics` on their merits rather than by restraint.
+Height and max heart rate from the body endpoint are constants: a column
+restating the same value on every daily row is noise. And `sleep_cycle_count`,
+`total_no_data_time_milli` and the workout altitude and zone fields belong to
+their own records, not to the day, so they land on `SleepRecord` and
+`WorkoutRecord`.
 
 ### 6. Migration
 
@@ -152,26 +174,43 @@ a lightweight migration into a store that will not open.
 
 ### 7. Verifying the wire format
 
-Recovery, sleep and cycle need no verification step. Their fixtures in
-`WhoopWireFormatTests.swift` were captured live and already carry every field
-this design reads, so those DTOs are widened test-first against fixtures that
-exist today.
+**Revised 2026-08-12. No capture step is needed, and the debug dump is
+cancelled.**
 
-Only `/v2/activity/workout` needs capture:
+Recovery, sleep and cycle were already fixture-backed from `c1e90dd`. The
+workout schema, the one genuine unknown, was supplied from Whoop's published v2
+documentation with a full response sample, which also confirmed two things the
+design had assumed: `limit` maxes at 25, so the page size is a ceiling rather
+than a choice, and the paging parameter is spelled `nextToken`.
 
-1. A temporary dump path in `WhoopClient.get`, behind a `WHOOP_DUMP_PAYLOADS`
-   environment check, logs the workout endpoint's raw JSON through `OSLog`.
-2. The user runs one sync and provides the output.
-3. The workout DTO is written against that real payload, and a fixture is added
-   to `WhoopWireFormatTests` alongside the other three.
-4. The dump path is deleted in the same change that lands the workout DTO.
+A documented response sample is weaker evidence than a captured payload, so the
+workout fixture is marked as documentation-derived where the other three are
+marked as captured. A decode failure there means the sample was idealised, not
+that the app guessed.
 
-Step 4 is not optional. A debug path that logs a user's biometrics is not
-something to leave behind a flag.
+The `WHOOP_DUMP_PAYLOADS` path is not built. It existed only to obtain what is
+now already in hand, and a debug path that logs a user's biometrics is not worth
+building speculatively.
 
-Because only one endpoint is gated, the rest of the work does not wait on it.
 `WhoopClient.swift:5` is rewritten to say what is actually true: three
-collections are fixture-backed, and a decode failure means the API moved.
+collections are fixture-backed from a live response, workout is
+documentation-derived, and a decode failure means the API moved.
+
+### 8. Body measurement
+
+`/v2/user/measurement/body` returns `height_meter`, `weight_kilogram` and
+`max_heart_rate`. It is a single object, not a paged collection, so it does not
+go through the paging reader.
+
+Only `weight_kilogram` reaches the daily spine, written to the existing
+`DailyMetrics.weightKg` on the sync date. Height and max heart rate are archived
+but not columnised: they are constants, not daily readings, and a column that
+restates the same number on every row is noise.
+
+The write follows the same nil-never-overwrites rule as everything else, which
+matters more here than anywhere: when HealthKit lands it will own weight, and
+the two sources must not fight. That precedence question is not settled by this
+design and is deliberately left to the HealthKit work.
 
 ## Testing
 

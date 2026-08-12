@@ -895,16 +895,21 @@ git commit -m "fix(whoop): follow pagination instead of keeping only the first p
 
 ---
 
-### Task 5: Widen the persistence models
+### Task 5: Widen the persistence models and the remaining wire fields
+
+Scope revised 2026-08-12: the decision to parse the whole scored surface, rather than the restrained subset, landed after Tasks 1 and 2 were already committed. The wire fields those tasks did not add are therefore added here, alongside the model columns that hold them. Steps 1 to 6 cover the models; steps 7 to 10 cover the wire.
 
 **Files:**
 - Modify: `LifeOSKit/Sources/Persistence/DailyMetrics.swift:16-30`
 - Modify: `LifeOSKit/Sources/Persistence/SourceRecords.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopClient.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopSamples.swift`
 - Test: `LifeOSKit/Tests/PersistenceTests/WhoopArchiveTests.swift`
+- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopWireFormatTests.swift`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `DailyMetrics` gains `spo2Percentage: Double?`, `skinTempCelsius: Double?`, `respiratoryRate: Double?`, `whoopCalories: Double?`. `SleepRecord` gains `performancePercentage: Double?`, `lightMinutes: Int?`, `remMinutes: Int?`, `swsMinutes: Int?`, `awakeMinutes: Int?`, `respiratoryRate: Double?`, `sleepNeedMinutes: Int?`, `disturbanceCount: Int?`, `isNap: Bool?`. `WorkoutRecord` gains `strain: Double?`, `averageHR: Double?`, `maxHR: Double?`, `distanceMeters: Double?`.
+- Produces: `DailyMetrics` gains `spo2Percentage: Double?`, `skinTempCelsius: Double?`, `respiratoryRate: Double?`, `whoopCalories: Double?`, `whoopAverageHR: Double?`, `whoopMaxHR: Double?`, `whoopSleepConsistencyPct: Double?`, `whoopSleepEfficiencyPct: Double?`, `whoopSleepDebtMinutes: Int?`. `SleepRecord` gains `performancePercentage: Double?`, `lightMinutes: Int?`, `remMinutes: Int?`, `swsMinutes: Int?`, `awakeMinutes: Int?`, `noDataMinutes: Int?`, `sleepCycleCount: Int?`, `respiratoryRate: Double?`, `sleepNeedMinutes: Int?`, `sleepDebtMinutes: Int?`, `consistencyPercentage: Double?`, `efficiencyPercentage: Double?`, `disturbanceCount: Int?`, `isNap: Bool?`. `WorkoutRecord` gains `strain: Double?`, `averageHR: Double?`, `maxHR: Double?`, `distanceMeters: Double?`, `altitudeGainMeters: Double?`, `altitudeChangeMeters: Double?`, `percentRecorded: Double?`, `sportID: Int?`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -990,13 +995,18 @@ In `DailyMetrics.swift`, add below `whoopSleepPerformancePct`:
     public var whoopDayStrain: Double?
     public var whoopSleepPerformancePct: Double?
 
-    /// Daily scalars worth rendering. Everything else Whoop returns lives in
-    /// the raw archive, where adding a column later costs a re-derive and no
-    /// network traffic at all.
+    /// The scored daily surface Whoop reports. Height and max heart rate are
+    /// deliberately absent: they are constants, and a column restating the same
+    /// value on every row is noise.
     public var spo2Percentage: Double?
     public var skinTempCelsius: Double?
     public var respiratoryRate: Double?
     public var whoopCalories: Double?
+    public var whoopAverageHR: Double?
+    public var whoopMaxHR: Double?
+    public var whoopSleepConsistencyPct: Double?
+    public var whoopSleepEfficiencyPct: Double?
+    public var whoopSleepDebtMinutes: Int?
 ```
 
 - [ ] **Step 4: Widen the source records**
@@ -1008,18 +1018,30 @@ In `SourceRecords.swift`, add these properties inside `WorkoutRecord`, after `en
     public var averageHR: Double?
     public var maxHR: Double?
     public var distanceMeters: Double?
+    public var altitudeGainMeters: Double?
+    public var altitudeChangeMeters: Double?
+    /// Whoop reports how much of the workout it actually captured. A workout at
+    /// 40 percent recorded is not a workout with a low strain, and collapsing
+    /// the two would be the false zero this app refuses.
+    public var percentRecorded: Double?
+    public var sportID: Int?
 ```
 
 And inside `SleepRecord`, after `attributedDate`:
 
 ```swift
     public var performancePercentage: Double?
+    public var consistencyPercentage: Double?
+    public var efficiencyPercentage: Double?
     public var lightMinutes: Int?
     public var remMinutes: Int?
     public var swsMinutes: Int?
     public var awakeMinutes: Int?
+    public var noDataMinutes: Int?
+    public var sleepCycleCount: Int?
     public var respiratoryRate: Double?
     public var sleepNeedMinutes: Int?
+    public var sleepDebtMinutes: Int?
     public var disturbanceCount: Int?
     /// Optional rather than a defaulted Bool, because a non-optional addition
     /// is what turns a lightweight migration into a store that will not open.
@@ -1040,6 +1062,88 @@ git add LifeOSKit/Sources/Persistence/DailyMetrics.swift \
         LifeOSKit/Sources/Persistence/SourceRecords.swift \
         LifeOSKit/Tests/PersistenceTests/WhoopArchiveTests.swift
 git commit -m "feat(whoop): widen the daily spine and source records for the new readings"
+```
+
+- [ ] **Step 7: Write the failing tests for the remaining wire fields**
+
+Append to `WhoopWireFormatTests.swift`. The fixture already contains all four values, so no fixture edit is needed:
+
+```swift
+@Test func sleepCarriesConsistencyDebtAndCycleCount() throws {
+    let page = try WhoopClient.decoder.decode(
+        WhoopDTOs.Page<WhoopDTOs.SleepRecord>.self, from: Data(sleepJSON.utf8)
+    )
+    let score = try #require(page.records.first?.score)
+    #expect(score.sleep_consistency_percentage == 70)
+    #expect(score.sleep_needed?.need_from_sleep_debt_milli == 100)
+    #expect(score.stage_summary?.total_no_data_time_milli == 0)
+    #expect(score.stage_summary?.sleep_cycle_count == 5)
+}
+
+/// Whoop reports when a recovery score is still calibrating. That is not a low
+/// score, and the two must not be collapsed.
+@Test func recoveryCarriesItsCalibratingFlag() throws {
+    let page = try WhoopClient.decoder.decode(
+        WhoopDTOs.Page<WhoopDTOs.RecoveryRecord>.self, from: Data(recoveryJSON.utf8)
+    )
+    #expect(page.records.first?.score?.user_calibrating == false)
+}
+
+@Test func sleepSampleCarriesTheNewFieldsThrough() {
+    let sample = WhoopSleepSample(
+        start: .now, end: .now, performancePercentage: 88,
+        consistencyPercentage: 70, sleepDebtMinutes: 12,
+        asleepMinutes: 400, noDataMinutes: 0, sleepCycleCount: 5
+    )
+    #expect(sample.consistencyPercentage == 70)
+    #expect(sample.sleepDebtMinutes == 12)
+    #expect(sample.sleepCycleCount == 5)
+}
+```
+
+- [ ] **Step 8: Run to verify failure**
+
+Run: `swift test --package-path LifeOSKit --filter WhoopWireFormatTests`
+Expected: FAIL, "has no member 'sleep_consistency_percentage'"
+
+- [ ] **Step 9: Add the fields to the DTOs and samples**
+
+In `WhoopDTOs.RecoveryRecord.Score`, add `let user_calibrating: Bool?`.
+
+In `WhoopDTOs.SleepRecord.Score`, add `let sleep_consistency_percentage: Double?`.
+
+In `WhoopDTOs.SleepRecord.Score.Stages`, add:
+
+```swift
+let total_no_data_time_milli: Double?
+let sleep_cycle_count: Int?
+```
+
+In `WhoopSamples.swift`, add to `WhoopRecoverySample`: `public let isCalibrating: Bool?`. Add to `WhoopSleepSample`: `public let consistencyPercentage: Double?`, `public let sleepDebtMinutes: Int?`, `public let noDataMinutes: Int?`, `public let sleepCycleCount: Int?`. Every one is optional with a `= nil` default in the initialiser, so existing call sites keep compiling.
+
+In `WhoopClient.recoveries`, map `isCalibrating: $0.score?.user_calibrating`.
+
+In `WhoopClient.sleeps`, map:
+
+```swift
+consistencyPercentage: record.score?.sleep_consistency_percentage,
+sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
+noDataMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_no_data_time_milli),
+sleepCycleCount: stages?.sleep_cycle_count,
+```
+
+`need_from_sleep_debt_milli` was decoded in Task 1 and carried nowhere. This is the step that stops it being a dead field.
+
+- [ ] **Step 10: Run the suite and commit**
+
+Run: `swift test --package-path LifeOSKit`
+Expected: PASS
+
+```bash
+git add LifeOSKit/Sources/Integrations/WhoopClient.swift \
+        LifeOSKit/Sources/Integrations/WhoopSamples.swift \
+        LifeOSKit/Tests/IntegrationsTests/WhoopWireFormatTests.swift
+git commit -m "feat(whoop): read the remaining scored sleep and recovery fields"
 ```
 
 ---
@@ -1392,138 +1496,95 @@ git commit -m "feat(whoop): derive from the archive and fill the sleep source re
 
 ---
 
-### Task 7: Archive on sync, and capture a workout payload
+### Task 7: Workouts
 
-This task ends at a gate. The workout DTO cannot be written until a real payload has been seen, because `/v2/activity/workout` has never been called and has no fixture.
-
-**Files:**
-- Modify: `LifeOSKit/Sources/Integrations/WhoopClient.swift`
-- Modify: `LifeOSKit/Sources/Integrations/WhoopSync.swift`
-- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopPaginationTests.swift`
-
-**Interfaces:**
-- Consumes: `WhoopArchive` (Task 3), the paging `get` (Task 4).
-- Produces: `WhoopClient.rawPages(_ path: String, accessToken: String, since: Date, until: Date) async throws -> [Data]`, and `WhoopClient.shouldDumpPayloads(_ environment: [String: String]) -> Bool`.
-
-- [ ] **Step 1: Write the failing test for the dump gate**
-
-Append to `WhoopPaginationTests.swift`:
-
-```swift
-@Suite struct WhoopDumpGateTests {
-    @Test func dumpingIsOffByDefault() {
-        #expect(WhoopClient.shouldDumpPayloads([:]) == false)
-    }
-
-    @Test func dumpingIsOnOnlyForAnExplicitOne() {
-        #expect(WhoopClient.shouldDumpPayloads(["WHOOP_DUMP_PAYLOADS": "1"]) == true)
-        #expect(WhoopClient.shouldDumpPayloads(["WHOOP_DUMP_PAYLOADS": "0"]) == false)
-        #expect(WhoopClient.shouldDumpPayloads(["WHOOP_DUMP_PAYLOADS": "true"]) == false)
-    }
-}
-```
-
-- [ ] **Step 2: Run to verify failure**
-
-Run: `swift test --package-path LifeOSKit --filter WhoopDumpGateTests`
-Expected: FAIL, "type 'WhoopClient' has no member 'shouldDumpPayloads'"
-
-- [ ] **Step 3: Add the gate and the dump**
-
-In `WhoopClient.swift`:
-
-```swift
-/// TEMPORARY. Exists only to capture a real `/v2/activity/workout` payload so
-/// its DTO can be written against fact rather than documentation. Deleted in the
-/// same change that lands the workout DTO. A debug path that logs a user's
-/// biometrics is not something to leave behind a flag.
-static func shouldDumpPayloads(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-    environment["WHOOP_DUMP_PAYLOADS"] == "1"
-}
-```
-
-Inside `get`, immediately after the status-code switch and before decoding:
-
-```swift
-if WhoopClient.shouldDumpPayloads() {
-    whoopClientLog.debug("\(path, privacy: .public) page \(pages, privacy: .public): \(String(decoding: data, as: UTF8.self), privacy: .public)")
-}
-```
-
-Nothing else changes in this task. `WhoopSync` keeps calling the three typed collection methods and `derivation.derive(...)` exactly as Task 6 left them.
-
-Raw archiving is deliberately NOT wired up here. It needs an untyped page reader that extracts each record's provider id, and the shape of a workout's id is one of the things the capture is for. Doing it now would mean writing it twice. It lands in Task 8, alongside the workout endpoint that needs the same reader.
-
-- [ ] **Step 5: Run the suite**
-
-Run: `swift test --package-path LifeOSKit`
-Expected: PASS
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add LifeOSKit/Sources/Integrations/WhoopClient.swift \
-        LifeOSKit/Tests/IntegrationsTests/WhoopPaginationTests.swift
-git commit -m "chore(whoop): add a temporary payload dump for capturing the workout shape"
-```
-
-- [ ] **Step 7: GATE. Capture the workout payload**
-
-Set `WHOOP_DUMP_PAYLOADS=1` in the Xcode scheme's run environment, run the app on a device or simulator with a connected Whoop account, trigger a sync from Settings, and copy the `whoop-client` log lines from Console.
-
-**Stop here.** Task 8 cannot begin until that payload exists. Hand it back before continuing.
-
----
-
-### Task 8: Workouts, raw archiving, and removing the dump
-
-Requires the payload captured in Task 7.
+Revised 2026-08-12: this task previously ended at a human gate to capture a workout payload. Whoop's published v2 documentation supplied the schema with a full response sample, so the gate is cancelled and the `WHOOP_DUMP_PAYLOADS` debug path is not built. Field names below come from that sample.
 
 **Files:**
 - Modify: `LifeOSKit/Sources/Integrations/WhoopClient.swift`
 - Modify: `LifeOSKit/Sources/Integrations/WhoopSamples.swift`
 - Modify: `LifeOSKit/Sources/Integrations/WhoopDerivation.swift`
-- Modify: `LifeOSKit/Sources/Integrations/WhoopSync.swift`
+- Modify: `LifeOSKit/Sources/Persistence/MetricsStore.swift`
 - Test: `LifeOSKit/Tests/IntegrationsTests/WhoopWireFormatTests.swift`
+- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopTests.swift`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1 to 7.
-- Produces: `WhoopWorkoutSample`, `WhoopClient.workouts(accessToken:since:until:)`, raw archiving wired into `WhoopSync.sync`.
+- Consumes: the paging `get` (Task 4), the widened `WorkoutRecord` (Task 5), `WhoopDerivation` (Task 6).
+- Produces: `WhoopWorkoutSample`, `WhoopClient.workouts(accessToken:since:until:)`, `MetricsStore.upsertWorkoutRecord(externalID:start:durationMinutes:activityName:apply:)`, and a `workouts:` parameter on `WhoopDerivation.derive`.
 
-- [ ] **Step 1: Add the captured payload as a fixture**
+- [ ] **Step 1: Add the fixture**
 
-Add the real payload to `WhoopWireFormatTests.swift` as `workoutJSON`, scrubbing the values but keeping every field name and the timestamp format exactly as received, matching the convention the other three fixtures already follow.
-
-- [ ] **Step 2: Write the failing test**
+Append to `WhoopWireFormatTests.swift`. Note the header comment: this fixture is documentation-derived, not captured, and must say so, because the other three are captured and that difference matters when a decode fails.
 
 ```swift
-@Test func workoutFieldsMapToTheSample() throws {
+/// Derived from Whoop's published v2 response sample, NOT captured from a live
+/// call like the three fixtures above. A decode failure here means the
+/// published sample was idealised, not that the app guessed.
+private let workoutJSON = """
+{"records":[{"id":"ecfc6a15-4661-442f-a9a4-f160dd7afae8","v1_id":1043,"user_id":9012,
+  "created_at":"2022-04-24T11:25:44.774Z","updated_at":"2022-04-24T14:25:44.774Z",
+  "start":"2022-04-24T02:25:44.774Z","end":"2022-04-24T10:25:44.774Z",
+  "timezone_offset":"-05:00","sport_name":"running","score_state":"SCORED",
+  "score":{"strain":8.2463,"average_heart_rate":123,"max_heart_rate":146,
+           "kilojoule":1569.34033203125,"percent_recorded":100,
+           "distance_meter":1772.77035916,"altitude_gain_meter":46.64384460449,
+           "altitude_change_meter":-0.781372010707855,"zone_durations":{}},
+  "sport_id":1}],
+ "next_token":null}
+"""
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+```swift
+@Test func workoutFieldsDecode() throws {
     let page = try WhoopClient.decoder.decode(
         WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
     )
     let record = try #require(page.records.first)
-    #expect(record.id != nil)
-    #expect(record.start.timeIntervalSince1970 > 0)
-    #expect(record.score?.strain != nil)
+    #expect(record.id == "ecfc6a15-4661-442f-a9a4-f160dd7afae8")
+    #expect(record.sport_name == "running")
+    #expect(record.sport_id == 1)
+    #expect(record.score?.strain == 8.2463)
+    #expect(record.score?.average_heart_rate == 123)
+    #expect(record.score?.distance_meter == 1772.77035916)
+    #expect(record.score?.altitude_gain_meter == 46.64384460449)
+    #expect(record.score?.percent_recorded == 100)
+}
+
+/// 1569.34033203125 kJ / 4.184 = 375.08 kcal.
+@Test func workoutEnergyConvertsToKilocalories() throws {
+    let page = try WhoopClient.decoder.decode(
+        WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
+    )
+    let kilojoule = try #require(page.records.first?.score?.kilojoule)
+    #expect(abs(kilojoule / 4.184 - 375.08) < 0.01)
+}
+
+/// The sample spans 02:25 to 10:25, which is 8 hours.
+@Test func workoutDurationComesFromItsInterval() {
+    let start = Date(timeIntervalSince1970: 0)
+    let sample = WhoopWorkoutSample(externalID: "w", start: start,
+                                    end: start.addingTimeInterval(8 * 3600),
+                                    sportName: "running")
+    #expect(sample.durationMinutes == 480)
 }
 ```
 
 - [ ] **Step 3: Run to verify failure**
 
 Run: `swift test --package-path LifeOSKit --filter WhoopWireFormatTests`
-Expected: FAIL, "no member 'WorkoutRecord'"
+Expected: FAIL, "type 'WhoopDTOs' has no member 'WorkoutRecord'"
 
-- [ ] **Step 4: Write the DTO, the sample, and the client call**
-
-The `Score` field names below are the ONLY thing taken from the captured payload rather than written in advance. Correct them to match what was actually received; everything else is fixed.
+- [ ] **Step 4: Add the DTO**
 
 ```swift
-// In WhoopDTOs, alongside the other three:
 struct WorkoutRecord: Decodable {
     let id: String?
     let start: Date
     let end: Date
     let sport_name: String?
+    let sport_id: Int?
     let score_state: String?
     let score: Score?
 
@@ -1532,69 +1593,246 @@ struct WorkoutRecord: Decodable {
         let kilojoule: Double?
         let average_heart_rate: Double?
         let max_heart_rate: Double?
+        let percent_recorded: Double?
         let distance_meter: Double?
+        let altitude_gain_meter: Double?
+        let altitude_change_meter: Double?
     }
 }
 ```
 
+`zone_durations` is deliberately not decoded. The published sample shows it as an empty object with no documented member names, so there is nothing to decode into. It is still captured in the raw archive, which is exactly the case the archive exists for.
+
+- [ ] **Step 5: Add the sample**
+
 ```swift
-// In WhoopSamples.swift:
 public struct WhoopWorkoutSample: Sendable, Equatable {
     public let externalID: String
     public let start: Date
     public let end: Date
     public let sportName: String
+    public let sportID: Int?
     public let strain: Double?
     public let energyKcal: Double?
     public let averageHR: Double?
     public let maxHR: Double?
+    public let percentRecorded: Double?
     public let distanceMeters: Double?
+    public let altitudeGainMeters: Double?
+    public let altitudeChangeMeters: Double?
 
     public init(externalID: String, start: Date, end: Date, sportName: String,
-                strain: Double? = nil, energyKcal: Double? = nil, averageHR: Double? = nil,
-                maxHR: Double? = nil, distanceMeters: Double? = nil) {
+                sportID: Int? = nil, strain: Double? = nil, energyKcal: Double? = nil,
+                averageHR: Double? = nil, maxHR: Double? = nil,
+                percentRecorded: Double? = nil, distanceMeters: Double? = nil,
+                altitudeGainMeters: Double? = nil, altitudeChangeMeters: Double? = nil) {
         self.externalID = externalID
         self.start = start
         self.end = end
         self.sportName = sportName
+        self.sportID = sportID
         self.strain = strain
         self.energyKcal = energyKcal
         self.averageHR = averageHR
         self.maxHR = maxHR
+        self.percentRecorded = percentRecorded
         self.distanceMeters = distanceMeters
+        self.altitudeGainMeters = altitudeGainMeters
+        self.altitudeChangeMeters = altitudeChangeMeters
     }
 
     public var durationMinutes: Int { Int(end.timeIntervalSince(start) / 60) }
 }
 ```
 
+- [ ] **Step 6: Add the client call**
+
 ```swift
-// In WhoopClient:
 public func workouts(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopWorkoutSample] {
     let records: [WhoopDTOs.WorkoutRecord] =
         try await get("activity/workout", accessToken: accessToken, since: since, until: until)
     return records
         .filter { WhoopDTOs.isScored($0.score_state) }
         .compactMap { record in
-            // A workout with no id cannot be upserted, and inserting it would
-            // add a duplicate on every sync.
+            // A workout with no id cannot be upserted, and inserting it anyway
+            // would add a duplicate on every sync.
             guard let id = record.id else { return nil }
             return WhoopWorkoutSample(
                 externalID: id,
                 start: record.start,
                 end: record.end,
                 sportName: record.sport_name ?? "Workout",
+                sportID: record.sport_id,
                 strain: record.score?.strain,
                 energyKcal: record.score?.kilojoule.map { $0 / 4.184 },
                 averageHR: record.score?.average_heart_rate,
                 maxHR: record.score?.max_heart_rate,
-                distanceMeters: record.score?.distance_meter
+                percentRecorded: record.score?.percent_recorded,
+                distanceMeters: record.score?.distance_meter,
+                altitudeGainMeters: record.score?.altitude_gain_meter,
+                altitudeChangeMeters: record.score?.altitude_change_meter
             )
         }
 }
 ```
 
-- [ ] **Step 5: Write the failing test for raw splitting**
+- [ ] **Step 7: Write the failing derivation test**
+
+Append to the `WhoopDerivationTests` suite in `WhoopTests.swift`:
+
+```swift
+@Test func aWorkoutIsStoredAndItsMinutesReachTheDayRow() throws {
+    let container = try LifeOSContainer.make(inMemory: true)
+    let context = ModelContext(container)
+    let store = MetricsStore(context: context)
+    let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+
+    let day = date(2026, 8, 10)
+    try derivation.derive(workouts: [
+        WhoopWorkoutSample(externalID: "w-1", start: date(2026, 8, 10, 6),
+                           end: date(2026, 8, 10, 7), sportName: "running",
+                           strain: 8.2, energyKcal: 375, averageHR: 123, maxHR: 146)
+    ])
+
+    let stored = try #require(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+    #expect(stored.activityName == "running")
+    #expect(stored.strain == 8.2)
+    #expect(stored.averageHR == 123)
+
+    let row = try #require(try store.metrics(from: day, to: day).first)
+    #expect(row.exerciseMinutes == 60)
+}
+
+/// Re-syncing the same workout must correct it, not add a second copy.
+@Test func resyncingAWorkoutUpdatesRatherThanDuplicating() throws {
+    let container = try LifeOSContainer.make(inMemory: true)
+    let context = ModelContext(container)
+    let derivation = WhoopDerivation(store: MetricsStore(context: context),
+                                     archive: WhoopArchive(context: context))
+
+    let sample = WhoopWorkoutSample(externalID: "w-1", start: date(2026, 8, 10, 6),
+                                    end: date(2026, 8, 10, 7), sportName: "running", strain: 8.2)
+    try derivation.derive(workouts: [sample])
+    try derivation.derive(workouts: [sample])
+
+    #expect(try context.fetch(FetchDescriptor<WorkoutRecord>()).count == 1)
+}
+```
+
+- [ ] **Step 8: Add the workout upsert to `MetricsStore`**
+
+Mirroring `upsertSleepRecord` from Task 6 exactly:
+
+```swift
+    /// Upsert keyed on the provider's record id, so a re-sync corrects a
+    /// workout rather than adding a second copy of the same session.
+    public func upsertWorkoutRecord(
+        externalID: String,
+        start: Date,
+        durationMinutes: Int,
+        activityName: String,
+        apply: (WorkoutRecord) -> Void
+    ) throws {
+        let existing = try context.fetch(
+            FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == externalID })
+        ).first
+
+        let record = existing ?? WorkoutRecord(
+            externalID: externalID, start: start,
+            durationMinutes: durationMinutes, activityName: activityName
+        )
+        if existing == nil { context.insert(record) }
+        record.start = start
+        record.durationMinutes = durationMinutes
+        record.activityName = activityName
+        apply(record)
+        try context.save()
+    }
+```
+
+- [ ] **Step 9: Store workouts in `WhoopDerivation`**
+
+Add the parameter and the record write:
+
+```swift
+public func derive(
+    recoveries: [WhoopRecoverySample] = [],
+    sleeps: [WhoopSleepSample] = [],
+    cycles: [WhoopCycleSample] = [],
+    workouts: [WhoopWorkoutSample] = []
+) throws {
+    try storeSleepRecords(sleeps)
+    try storeWorkoutRecords(workouts)
+    // ...existing day indexing unchanged, plus the workout day below...
+}
+
+private func storeWorkoutRecords(_ workouts: [WhoopWorkoutSample]) throws {
+    for sample in workouts {
+        try store.upsertWorkoutRecord(
+            externalID: sample.externalID,
+            start: sample.start,
+            durationMinutes: sample.durationMinutes,
+            activityName: sample.sportName
+        ) { record in
+            record.energyKcal = sample.energyKcal
+            record.strain = sample.strain
+            record.averageHR = sample.averageHR
+            record.maxHR = sample.maxHR
+            record.percentRecorded = sample.percentRecorded
+            record.distanceMeters = sample.distanceMeters
+            record.altitudeGainMeters = sample.altitudeGainMeters
+            record.altitudeChangeMeters = sample.altitudeChangeMeters
+            record.sportID = sample.sportID
+        }
+    }
+}
+```
+
+Workout days must join the `byDay` index so a day with only a workout still gets a row. Add before the `guard !byDay.isEmpty`:
+
+```swift
+for sample in workouts {
+    let day = calendar.startOfDay(for: sample.start)
+    if byDay[day] == nil { byDay[day] = (nil, nil, nil) }
+}
+```
+
+And inside the `upsertBatch` closure, after the cycle fields:
+
+```swift
+let dayWorkouts = workouts.filter { calendar.startOfDay(for: $0.start) == day }
+if !dayWorkouts.isEmpty {
+    row.exerciseMinutes = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
+}
+```
+
+- [ ] **Step 10: Run the suite and commit**
+
+Run: `swift test --package-path LifeOSKit`
+Expected: PASS
+
+```bash
+git add LifeOSKit/Sources/Integrations LifeOSKit/Sources/Persistence/MetricsStore.swift \
+        LifeOSKit/Tests/IntegrationsTests
+git commit -m "feat(whoop): ingest workouts"
+```
+
+---
+
+### Task 8: Archive raw payloads on every sync
+
+**Files:**
+- Create: `LifeOSKit/Sources/Integrations/WhoopRawSplit.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopClient.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopSync.swift`
+- Modify: `LIfeOS/Features/Settings/ViewModel/WhoopConnectionViewModel.swift`
+- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopPaginationTests.swift`
+
+**Interfaces:**
+- Consumes: `WhoopArchive` (Task 3), the paging `get` (Task 4), `workouts` (Task 7).
+- Produces: `WhoopRawSplit.records(inPage:)`, four `...Raw` sibling methods on `WhoopClient`, and an `archive:` parameter on `WhoopSync`.
+
+- [ ] **Step 1: Write the failing tests**
 
 Append to `WhoopPaginationTests.swift`:
 
@@ -1611,8 +1849,7 @@ Append to `WhoopPaginationTests.swift`:
     /// they score. Without this they would all collide on one archive row.
     @Test func recoveryIsKeyedByItsCycle() throws {
         let page = #"{"records":[{"cycle_id":123,"score_state":"SCORED"}],"next_token":null}"#
-        let split = try WhoopRawSplit.records(inPage: Data(page.utf8))
-        #expect(split.map(\.externalID) == ["123"])
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).map(\.externalID) == ["123"])
     }
 
     @Test func numericIDsBecomeStrings() throws {
@@ -1626,13 +1863,20 @@ Append to `WhoopPaginationTests.swift`:
         let page = #"{"records":[{"noise":1},{"id":"ok"}],"next_token":null}"#
         #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).map(\.externalID) == ["ok"])
     }
+
+    @Test func anEmptyPageSplitsToNothing() throws {
+        let page = #"{"records":[],"next_token":null}"#
+        #expect(try WhoopRawSplit.records(inPage: Data(page.utf8)).isEmpty)
+    }
 }
 ```
+
+- [ ] **Step 2: Run to verify failure**
 
 Run: `swift test --package-path LifeOSKit --filter WhoopRawSplitTests`
 Expected: FAIL, "cannot find 'WhoopRawSplit' in scope"
 
-- [ ] **Step 6: Implement raw splitting and return raw pages from `get`**
+- [ ] **Step 3: Implement the splitter**
 
 Create `LifeOSKit/Sources/Integrations/WhoopRawSplit.swift`:
 
@@ -1664,98 +1908,29 @@ enum WhoopRawSplit {
 }
 ```
 
-Change `get` to hand back the raw pages alongside the records, so archiving costs no extra requests:
+- [ ] **Step 4: Return raw pages alongside records**
+
+Change `get` to accumulate the raw page bytes and return both, so archiving costs no extra requests:
 
 ```swift
-struct Fetched<Record: Decodable> {
+private struct Fetched<Record: Decodable> {
     let records: [Record]
     let rawPages: [Data]
 }
 ```
 
-`get` accumulates `rawPages.append(data)` inside the existing loop and returns `Fetched`. Each public collection method keeps returning `[Sample]` and additionally stores its raw pages on a `private(set) var lastRawPages: [String: [Data]]`. Simpler and preferred: give each collection method a sibling that returns both, and have `WhoopSync` call the sibling:
+`get` appends `data` to a `rawPages` array inside its existing loop and returns `Fetched`. Each of the four public sample-only methods reads `.records` from it and is otherwise unchanged. Add one sibling per collection that returns both, for the sync to use:
 
 ```swift
 public func recoveriesRaw(accessToken: String, since: Date, until: Date = .now)
     async throws -> (samples: [WhoopRecoverySample], rawPages: [Data])
 ```
 
-Implement one sibling per collection, each reusing the existing mapping. The four public sample-only methods remain for tests and callers that do not archive.
+and the same shape for `sleepsRaw`, `cyclesRaw`, `workoutsRaw`. Each reuses the existing mapping rather than duplicating it: extract the mapping of each collection into a private `static func map(_:)` and call it from both the plain and the raw method. Do not copy the mapping body twice.
 
-- [ ] **Step 7: Store workouts in `WhoopDerivation`**
+- [ ] **Step 5: Wire archiving into the sync**
 
-Add a `workouts` parameter to `derive` and a record upsert, matching the sleep-record pattern from Task 6:
-
-```swift
-public func derive(
-    recoveries: [WhoopRecoverySample] = [],
-    sleeps: [WhoopSleepSample] = [],
-    cycles: [WhoopCycleSample] = [],
-    workouts: [WhoopWorkoutSample] = []
-) throws {
-    try storeSleepRecords(sleeps)
-    try storeWorkoutRecords(workouts)
-    // ...existing day indexing unchanged...
-}
-
-private func storeWorkoutRecords(_ workouts: [WhoopWorkoutSample]) throws {
-    for sample in workouts {
-        try store.upsertWorkoutRecord(
-            externalID: sample.externalID,
-            start: sample.start,
-            durationMinutes: sample.durationMinutes,
-            activityName: sample.sportName
-        ) { record in
-            record.energyKcal = sample.energyKcal
-            record.strain = sample.strain
-            record.averageHR = sample.averageHR
-            record.maxHR = sample.maxHR
-            record.distanceMeters = sample.distanceMeters
-        }
-    }
-}
-```
-
-Add the matching upsert to `MetricsStore`, mirroring `upsertSleepRecord` from Task 6 exactly:
-
-```swift
-public func upsertWorkoutRecord(
-    externalID: String,
-    start: Date,
-    durationMinutes: Int,
-    activityName: String,
-    apply: (WorkoutRecord) -> Void
-) throws {
-    let existing = try context.fetch(
-        FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == externalID })
-    ).first
-
-    let record = existing ?? WorkoutRecord(
-        externalID: externalID, start: start,
-        durationMinutes: durationMinutes, activityName: activityName
-    )
-    if existing == nil { context.insert(record) }
-    record.start = start
-    record.durationMinutes = durationMinutes
-    record.activityName = activityName
-    apply(record)
-    try context.save()
-}
-```
-
-Roll workout minutes into the day row inside the existing `upsertBatch`, on the same nil-never-overwrites rule:
-
-```swift
-// Inside the upsertBatch closure, after the cycle fields:
-let dayWorkouts = workouts.filter { calendar.isDate($0.start, inSameDayAs: day) }
-if !dayWorkouts.isEmpty {
-    row.exerciseMinutes = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
-}
-```
-
-- [ ] **Step 8: Wire archiving and workouts into the sync**
-
-In `WhoopSync.sync`, replace the three fetches with their raw siblings, archive, then derive:
+In `WhoopSync.sync`:
 
 ```swift
 let recovery = try await client.recoveriesRaw(accessToken: current.accessToken, since: since, until: now)
@@ -1763,8 +1938,8 @@ let sleep = try await client.sleepsRaw(accessToken: current.accessToken, since: 
 let cycle = try await client.cyclesRaw(accessToken: current.accessToken, since: since, until: now)
 let workout = try await client.workoutsRaw(accessToken: current.accessToken, since: since, until: now)
 
-// Archive first: derivation reads from the archive on a re-derive, and a
-// payload that was never stored cannot be re-derived from.
+// Archive first: a re-derive reads from the archive, and a payload that was
+// never stored cannot be re-derived from.
 for (kind, pages) in [("recovery", recovery.rawPages), ("sleep", sleep.rawPages),
                       ("cycle", cycle.rawPages), ("workout", workout.rawPages)] {
     let split = try pages.flatMap { try WhoopRawSplit.records(inPage: $0) }
@@ -1776,28 +1951,174 @@ try derivation.derive(recoveries: recovery.samples, sleeps: sleep.samples,
 return Set(recovery.samples.map(\.date) + cycle.samples.map(\.date)).count
 ```
 
-`WhoopSync` gains an `archive: WhoopArchive` stored property and initialiser parameter. Update its construction in `WhoopConnectionViewModel.swift` to pass one, built from the same context as the store.
+`WhoopSync` gains an `archive: WhoopArchive` stored property and initialiser parameter. Update its construction in `WhoopConnectionViewModel.swift` to pass one built from the same context as the store.
 
-- [ ] **Step 9: Remove the dump path**
-
-Delete `shouldDumpPayloads`, its call inside `get`, and the whole `WhoopDumpGateTests` suite. This is not optional: a debug path that logs a user's biometrics is not something to leave behind a flag.
-
-Verify nothing survives:
-
-```bash
-grep -rn "WHOOP_DUMP_PAYLOADS\|shouldDumpPayloads" LifeOSKit LIfeOS
-```
-Expected: no matches.
-
-- [ ] **Step 10: Run the suite and build the app**
+- [ ] **Step 6: Run the suite and build the app**
 
 Run: `swift test --package-path LifeOSKit`
 Run: `xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet build`
 Expected: both pass
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A LifeOSKit LIfeOS
-git commit -m "feat(whoop): ingest workouts and archive raw payloads on every sync"
+git commit -m "feat(whoop): archive raw payloads on every sync"
+```
+
+---
+
+### Task 9: Body measurement
+
+`/v2/user/measurement/body` returns a single object, not a paged collection, so it does not go through the paging reader.
+
+**Files:**
+- Modify: `LifeOSKit/Sources/Integrations/WhoopClient.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopSamples.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopDerivation.swift`
+- Modify: `LifeOSKit/Sources/Integrations/WhoopSync.swift`
+- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopWireFormatTests.swift`
+- Test: `LifeOSKit/Tests/IntegrationsTests/WhoopTests.swift`
+
+**Interfaces:**
+- Consumes: `WhoopDerivation` (Task 6), `WhoopSync` (Task 8).
+- Produces: `WhoopBodySample`, `WhoopClient.bodyMeasurement(accessToken:)`, and a `body:` parameter on `WhoopDerivation.derive`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```swift
+private let bodyJSON = """
+{"height_meter":1.8288,"weight_kilogram":90.7185,"max_heart_rate":200}
+"""
+
+@Test func bodyMeasurementDecodes() throws {
+    let body = try WhoopClient.decoder.decode(
+        WhoopDTOs.BodyMeasurement.self, from: Data(bodyJSON.utf8)
+    )
+    #expect(body.height_meter == 1.8288)
+    #expect(body.weight_kilogram == 90.7185)
+    #expect(body.max_heart_rate == 200)
+}
+```
+
+And in `WhoopDerivationTests`:
+
+```swift
+@Test func bodyWeightReachesTheDayRow() throws {
+    let container = try LifeOSContainer.make(inMemory: true)
+    let context = ModelContext(container)
+    let store = MetricsStore(context: context)
+    let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+
+    let day = date(2026, 8, 10)
+    try derivation.derive(body: WhoopBodySample(heightMeters: 1.8288,
+                                                weightKilograms: 90.7185,
+                                                maxHeartRate: 200), on: day)
+
+    let row = try #require(try store.metrics(from: day, to: day).first)
+    #expect(row.weightKg == 90.7185)
+}
+
+/// Height and max heart rate are constants, not daily readings. A column
+/// restating the same value on every row is noise, so they are archived and not
+/// columnised.
+@Test func bodyHeightIsNotWrittenToTheDayRow() throws {
+    let container = try LifeOSContainer.make(inMemory: true)
+    let context = ModelContext(container)
+    let store = MetricsStore(context: context)
+    let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+
+    let day = date(2026, 8, 10)
+    try derivation.derive(body: WhoopBodySample(heightMeters: 1.8288,
+                                                weightKilograms: nil,
+                                                maxHeartRate: 200), on: day)
+
+    // No weight in the sample means no row write at all for weight.
+    let rows = try store.metrics(from: day, to: day)
+    #expect(rows.first?.weightKg == nil)
+}
+```
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `swift test --package-path LifeOSKit --filter WhoopWireFormatTests`
+Expected: FAIL, "type 'WhoopDTOs' has no member 'BodyMeasurement'"
+
+- [ ] **Step 3: Implement**
+
+```swift
+// In WhoopDTOs:
+struct BodyMeasurement: Decodable {
+    let height_meter: Double?
+    let weight_kilogram: Double?
+    let max_heart_rate: Double?
+}
+```
+
+```swift
+// In WhoopSamples.swift:
+public struct WhoopBodySample: Sendable, Equatable {
+    public let heightMeters: Double?
+    public let weightKilograms: Double?
+    public let maxHeartRate: Double?
+
+    public init(heightMeters: Double?, weightKilograms: Double?, maxHeartRate: Double?) {
+        self.heightMeters = heightMeters
+        self.weightKilograms = weightKilograms
+        self.maxHeartRate = maxHeartRate
+    }
+}
+```
+
+The client call does not use `get`, which is built for paged collections with start and end parameters. Add a separate single-object fetch that reuses the same status-code handling:
+
+```swift
+public func bodyMeasurement(accessToken: String) async throws -> WhoopBodySample {
+    var request = URLRequest(url: configuration.baseURL.appendingPathComponent("user/measurement/body"))
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+    let (data, response) = try await session.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw WhoopAPIError.transport }
+    switch http.statusCode {
+    case 200..<300: break
+    case 401: throw WhoopAPIError.unauthorized
+    case 429: throw WhoopAPIError.rateLimited
+    default:  throw WhoopAPIError.status(http.statusCode)
+    }
+
+    do {
+        let body = try WhoopClient.decoder.decode(WhoopDTOs.BodyMeasurement.self, from: data)
+        return WhoopBodySample(heightMeters: body.height_meter,
+                               weightKilograms: body.weight_kilogram,
+                               maxHeartRate: body.max_heart_rate)
+    } catch {
+        throw WhoopAPIError.decoding(String(describing: error))
+    }
+}
+```
+
+In `WhoopDerivation`, add `body: WhoopBodySample? = nil, on bodyDate: Date? = nil` to `derive`, and inside the `upsertBatch` closure write only the weight, on the body date's day:
+
+```swift
+if let bodyDate, calendar.startOfDay(for: bodyDate) == day,
+   let weight = body?.weightKilograms {
+    row.weightKg = weight
+}
+```
+
+Ensure the body date joins `byDay` the same way workout days do, so a sync with only a body reading still produces a row.
+
+In `WhoopSync.sync`, fetch the body measurement, archive its payload under kind `"body"` with external id `"self"` (there is exactly one per user, so a stable key is correct and an upsert keeps it current), and pass it to `derive` with `on: now`.
+
+- [ ] **Step 4: Run the suite and build the app**
+
+Run: `swift test --package-path LifeOSKit`
+Run: `xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet build`
+Expected: both pass
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A LifeOSKit LIfeOS
+git commit -m "feat(whoop): read body measurement and record weight"
 ```
