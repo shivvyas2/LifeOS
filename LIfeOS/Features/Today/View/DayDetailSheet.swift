@@ -64,18 +64,20 @@ struct DayDetailSheet: View {
 
     private var habits: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // A bare count, never a percentage or a grade. This list includes
-            // habits that may not have existed on an older day, so it must not
-            // read as a verdict on that day.
-            Text("\(snapshot.habits.filter(\.isDone).count) of \(snapshot.habits.count) habits")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-
             if snapshot.habits.isEmpty {
                 Text("No habits yet. Add one on the Plan tab.")
                     .font(.system(size: 15))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             } else {
+                // A bare count, never a percentage or a grade. This list
+                // includes habits that may not have existed on an older day,
+                // so it must not read as a verdict on that day. Suppressed
+                // entirely above when there are no habits — "0 of 0 habits"
+                // is noise above "No habits yet."
+                Text("\(snapshot.habits.filter(\.isDone).count) of \(snapshot.habits.count) \(snapshot.habits.count == 1 ? "habit" : "habits")")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+
                 SolidCard {
                     VStack(spacing: 0) {
                         ForEach(Array(snapshot.habits.enumerated()), id: \.element.id) { index, habit in
@@ -127,11 +129,16 @@ struct DayDetailSheet: View {
 
     /// Today gets the tappable circle vocabulary used on the Plan tab. A past
     /// day gets a plain mark, because there is nothing there to press.
+    ///
+    /// Not-done on a past day is a dash, not an `xmark`. This list includes
+    /// habits that may not have existed on that date (see `DayDetailSnapshot`),
+    /// so a ✗ once per row would read as a verdict the sheet does not have the
+    /// standing to make. A dash says "not done" without asserting failure.
     private func icon(for habit: HabitRow) -> String {
         if snapshot.isToday {
             habit.isDone ? "checkmark.circle.fill" : "circle"
         } else {
-            habit.isDone ? "checkmark" : "xmark"
+            habit.isDone ? "checkmark" : "minus"
         }
     }
 }

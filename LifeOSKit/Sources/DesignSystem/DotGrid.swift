@@ -30,7 +30,12 @@ public struct DotGrid: View {
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(cells) { cell in
                 if let onTap, isTappable(cell) {
-                    Button { onTap(cell) } label: { dot(for: cell) }
+                    // The label is a `Circle`, whose hit region is the filled
+                    // path — corners of the cell fall through without this,
+                    // and `.missed`/`.noData` dots are filled `.clear`, which
+                    // is hit-testable but leaves no visual confirmation the
+                    // whole cell is tappable.
+                    Button { onTap(cell) } label: { dot(for: cell).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .accessibilityLabel(label(for: cell))
                 } else {

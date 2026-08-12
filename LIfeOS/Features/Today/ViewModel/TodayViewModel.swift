@@ -72,6 +72,15 @@ final class TodayViewModel {
                 weightKg: today?.weightKg,
                 recoveryPct: today?.whoopRecoveryPct
             )
+
+            // Keeps an open sheet current on every reload, including the
+            // `didSave`-driven one in `RootView`. Without this, an external
+            // write (a Whoop sync, a tick from `toggleHabit`) updates the grid
+            // behind the sheet but not the sheet itself until the next tick or
+            // a dismiss-and-reopen.
+            if let detail {
+                select(detail.date)
+            }
         } catch {
             // A read failure leaves the previous snapshot in place rather than
             // blanking the screen. Nothing here is recoverable by the user.
@@ -131,10 +140,11 @@ final class TodayViewModel {
             try PlanStore(context: context, calendar: calendar)
                 .toggleTick(for: entry, on: detail.date)
 
-            // The month grid does not depend on habits, but reloading both
-            // keeps one refresh path instead of two that can drift apart.
-            load()
-            select(detail.date)
+            // No refresh here: `toggleTick` saves, `RootView` reloads every
+            // view model on `ModelContext.didSave`, and `load()` above
+            // re-derives `detail` whenever it is open. That is the one
+            // refresh path; calling `load()`/`select()` again here would
+            // just repeat the ~400-day grid pass a second time per tap.
         } catch {
             assertionFailure("Habit toggle failed: \(error)")
         }
