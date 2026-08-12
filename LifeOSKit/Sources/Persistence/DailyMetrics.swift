@@ -26,6 +26,19 @@ public final class DailyMetrics {
     public var whoopDayStrain: Double?
     public var whoopSleepPerformancePct: Double?
 
+    /// The scored daily surface Whoop reports. Height and max heart rate are
+    /// deliberately absent: they are constants, and a column restating the same
+    /// value on every row is noise.
+    public var spo2Percentage: Double?
+    public var skinTempCelsius: Double?
+    public var respiratoryRate: Double?
+    public var whoopCalories: Double?
+    public var whoopAverageHR: Double?
+    public var whoopMaxHR: Double?
+    public var whoopSleepConsistencyPct: Double?
+    public var whoopSleepEfficiencyPct: Double?
+    public var whoopSleepDebtMinutes: Int?
+
     public var updatedAt: Date
     public var syncedAt: Date?
 

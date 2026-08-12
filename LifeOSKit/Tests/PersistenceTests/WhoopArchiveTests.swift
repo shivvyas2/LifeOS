@@ -89,3 +89,67 @@ import SwiftData
         #expect(String(decoding: payloads[0], as: UTF8.self) == "updated")
     }
 }
+
+/// Every added property must be optional. SwiftData's implicit lightweight
+/// migration covers additive-and-optional only, and a non-optional addition
+/// produces a store that will not open on an existing install.
+@Suite @MainActor struct WidenedModelTests {
+    @Test func theContainerStillOpensWithTheWidenedSchema() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        // The `try` above is the real assertion: a non-optional addition makes
+        // the store fail to open. This names the entity so the test also fails
+        // if the model is dropped from the schema rather than merely widened.
+        let names = container.schema.entities.map(\.name)
+        #expect(names.contains("WhoopRawRecord"))
+        #expect(names.contains("DailyMetrics"))
+    }
+
+    @Test func newDailyMetricsFieldsDefaultToNilRatherThanZero() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = MetricsStore(context: ModelContext(container))
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_770_000_000))
+
+        try store.upsert(date: day) { $0.steps = 100 }
+        let row = try #require(try store.metrics(from: day, to: day).first)
+
+        #expect(row.spo2Percentage == nil)
+        #expect(row.skinTempCelsius == nil)
+        #expect(row.respiratoryRate == nil)
+        #expect(row.whoopCalories == nil)
+    }
+
+    @Test func sleepRecordCarriesItsStages() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let record = SleepRecord(externalID: "s-1", start: .now, end: .now.addingTimeInterval(3600),
+                                 attributedDate: Calendar.current.startOfDay(for: .now))
+        record.lightMinutes = 200
+        record.remMinutes = 90
+        record.swsMinutes = 80
+        context.insert(record)
+        try context.save()
+
+        let stored = try #require(try context.fetch(FetchDescriptor<SleepRecord>()).first)
+        #expect(stored.lightMinutes == 200)
+        #expect(stored.remMinutes == 90)
+        #expect(stored.swsMinutes == 80)
+        #expect(stored.respiratoryRate == nil)
+    }
+
+    @Test func workoutRecordCarriesStrainAndHeartRates() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let workout = WorkoutRecord(externalID: "w-1", start: .now, durationMinutes: 45,
+                                    activityName: "Running", energyKcal: 500)
+        workout.strain = 12.4
+        workout.averageHR = 145
+        workout.maxHR = 178
+        context.insert(workout)
+        try context.save()
+
+        let stored = try #require(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+        #expect(stored.strain == 12.4)
+        #expect(stored.averageHR == 145)
+        #expect(stored.distanceMeters == nil)
+    }
+}
