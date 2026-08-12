@@ -12,9 +12,8 @@ struct HabitRow: Identifiable, Equatable {
 /// Same discipline as `TodaySnapshot`: the sheet never sees a `DailyMetrics` or
 /// a `PlanEntry`, so rendering cannot fault a SwiftData object mid-layout.
 ///
-/// `Identifiable` on the date is what drives `.sheet(item:)` — selecting a
-/// different day while the sheet is open re-renders it rather than requiring a
-/// dismiss first.
+/// `Identifiable` on the date is required by `.sheet(item:)`, which is what
+/// presents this sheet in `RootView`.
 struct DayDetailSnapshot: Identifiable, Equatable {
     var id: Date { date }
 

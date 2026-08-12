@@ -13,8 +13,11 @@ not quite behaving like one.
 "Today opens first" is a consequence of `Tab("Today", …)` happening to be
 written first rather than a decision the code states. In practice the app has
 been observed opening on another tab. Separately, `AppShell.swift:15-19` keeps
-`hasFinishedOnboarding` in plain `@State`, so any relaunch that cannot restore a
-Supabase session drops the user back into the intro flow instead of Today.
+`hasFinishedOnboarding` in plain `@State`, so a returning, already-signed-in
+user sees the intro carousel flash for a frame before `.task` catches up and
+skips it — `isSignedIn` resolves synchronously but `@State` starts false on
+every launch. (This has no effect on a relaunch that cannot restore a session;
+that always re-runs onboarding, with or without this flag.)
 
 **The month grid is a picture, not an interface.** `MonthCalendarView` renders
 one dot per day, coloured by `evaluate()` in `GoalEvaluation.swift:52`. Tapping
@@ -83,7 +86,9 @@ Today, and non-persisted `@State` delivers that for free. Selection still
 survives backgrounding, because the scene stays alive.
 
 `AppShell` moves `hasFinishedOnboarding` to `@AppStorage("hasFinishedOnboarding")`
-so a completed onboarding is not re-run on every launch.
+so a returning, already-signed-in user does not see the intro carousel flash
+before `.task` catches up. It does not change what happens when the session
+cannot be restored.
 
 `isGuest` stays non-persisted. `AppShell.swift:16` explains why — the "Skip for
 now" bypass must not quietly become the app's default state — and that reasoning

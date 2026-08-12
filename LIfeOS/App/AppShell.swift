@@ -12,9 +12,13 @@ private let shellLog = Logger(subsystem: "shivvyas.LIfeOS", category: "shell")
 struct AppShell: View {
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
-    /// Persisted: finishing onboarding is a fact about the user, not about this
-    /// launch. Without this, any relaunch that cannot restore a Supabase session
-    /// re-runs the intro flow instead of opening Today.
+    /// Persisted, but the win is narrower than the name suggests: `isSignedIn`
+    /// resolves synchronously (a keychain read), so on a relaunch that restores
+    /// a session this flag is already true on the first render, instead of
+    /// flashing the intro carousel for a frame before `.task` below sets it.
+    /// It buys nothing when the session cannot be restored — `isSignedIn` is
+    /// false there, so the gate below sends the user through onboarding
+    /// regardless of this flag.
     @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
     /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
     /// relaunch returns to signup and the bypass cannot quietly become the
