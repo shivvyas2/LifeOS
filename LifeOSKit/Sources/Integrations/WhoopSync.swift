@@ -58,18 +58,18 @@ public struct WhoopSync {
     private let client: WhoopClient
     private let exchange: WhoopTokenExchange
     private let tokens: WhoopTokenStoring
-    private let ingestion: WhoopIngestion
+    private let derivation: WhoopDerivation
 
     public init(
         client: WhoopClient = .init(),
         exchange: WhoopTokenExchange,
         tokens: WhoopTokenStoring,
-        ingestion: WhoopIngestion
+        derivation: WhoopDerivation
     ) {
         self.client = client
         self.exchange = exchange
         self.tokens = tokens
-        self.ingestion = ingestion
+        self.derivation = derivation
     }
 
     public var isConnected: Bool { tokens.load() != nil }
@@ -95,7 +95,7 @@ public struct WhoopSync {
             let sleeps = try await client.sleeps(accessToken: current.accessToken, since: since, until: now)
             let cycles = try await client.cycles(accessToken: current.accessToken, since: since, until: now)
 
-            try ingestion.ingest(recoveries: recoveries, sleeps: sleeps, cycles: cycles)
+            try derivation.derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles)
             return Set(recoveries.map(\.date) + cycles.map(\.date)).count
         } catch WhoopAPIError.unauthorized {
             // The stored token is dead. Clearing it puts the UI back into a

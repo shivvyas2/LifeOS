@@ -61,6 +61,30 @@ public struct MetricsStore {
         return try context.fetch(descriptor)
     }
 
+    /// Upsert keyed on the provider's record id, so a re-sync corrects a record
+    /// rather than adding a second copy of the same night.
+    public func upsertSleepRecord(
+        externalID: String,
+        start: Date,
+        end: Date,
+        attributedDate: Date,
+        apply: (SleepRecord) -> Void
+    ) throws {
+        let existing = try context.fetch(
+            FetchDescriptor<SleepRecord>(predicate: #Predicate { $0.externalID == externalID })
+        ).first
+
+        let record = existing ?? SleepRecord(
+            externalID: externalID, start: start, end: end, attributedDate: attributedDate
+        )
+        if existing == nil { context.insert(record) }
+        record.start = start
+        record.end = end
+        record.attributedDate = attributedDate
+        apply(record)
+        try context.save()
+    }
+
     /// There is exactly one goals row. Created with spec defaults on first access.
     public func goals() throws -> UserGoals {
         if let existing = try context.fetch(FetchDescriptor<UserGoals>()).first {

@@ -245,7 +245,10 @@ final class WhoopConnectionViewModel {
         let sync = WhoopSync(
             exchange: WhoopTokenExchange(endpoint: endpoint),
             tokens: tokens,
-            ingestion: WhoopIngestion(store: MetricsStore(context: context))
+            derivation: WhoopDerivation(
+                store: MetricsStore(context: context),
+                archive: WhoopArchive(context: context)
+            )
         )
 
         do {
