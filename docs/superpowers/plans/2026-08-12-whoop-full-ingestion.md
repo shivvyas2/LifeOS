@@ -1949,7 +1949,78 @@ public func recoveriesRaw(accessToken: String, since: Date, until: Date = .now)
 
 and the same shape for `sleepsRaw`, `cyclesRaw`, `workoutsRaw`. Each reuses the shared `sample` computed property that Task 6's fix put on the DTOs, so neither the plain nor the raw method carries a mapping body of its own. Do not reintroduce a second copy of any mapping.
 
-- [ ] **Step 5: Wire archiving into the sync**
+- [ ] **Step 5: Teach `rederive` about workouts**
+
+Added 2026-08-12 after a review caught that no task in this plan updated `rederive()` for the fourth collection. Without this, once archiving is wired below, a live sync populates workout rows and an archive rebuild silently drops them, which contradicts the one guarantee the archive exists to give.
+
+Write the failing test first, in the `WhoopDerivationTests` suite:
+
+```swift
+/// The archive's whole promise is that a rebuild reproduces what a sync
+/// produced. A collection the rebuild cannot decode breaks that silently.
+@Test func rederiveRebuildsWorkoutsToo() throws {
+    let context = try makeContext()
+    let store = MetricsStore(context: context)
+    let archive = WhoopArchive(context: context)
+    let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
+
+    try archive.store(kind: "workout", externalID: "w-1", payload: Data("""
+    {"id":"w-1","start":"2026-08-10T06:00:00.000Z","end":"2026-08-10T07:00:00.000Z",
+     "sport_name":"running","sport_id":1,"score_state":"SCORED",
+     "score":{"strain":8.2,"kilojoule":1569.34,"average_heart_rate":123,
+              "max_heart_rate":146,"distance_meter":1772.77}}
+    """.utf8))
+
+    _ = try derivation.rederive()
+
+    let stored = try #require(try context.fetch(FetchDescriptor<WorkoutRecord>()).first)
+    #expect(stored.activityName == "running")
+    #expect(stored.strain == 8.2)
+
+    let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+    #expect(row.exerciseMinutes == 60)
+}
+```
+
+Then in `rederive()`, decode the fourth kind alongside the other three and pass it through, reusing the same shared `sample` property:
+
+```swift
+let workouts = try decode(kind: "workout", as: WhoopDTOs.WorkoutRecord.self)
+    .filter { WhoopDTOs.isScored($0.score_state) }
+    .compactMap(\.sample)
+
+try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles, workouts: workouts)
+```
+
+Workout days must also join the returned day count, matching how `derive` seeds them:
+
+```swift
+for sample in workouts { days.insert(calendar.startOfDay(for: sample.start)) }
+```
+
+- [ ] **Step 6: Cover two workouts on one day**
+
+A review noted the minute rollup is only exercised with a single workout, so the `reduce` is correct by inspection but untested. Add to `WhoopDerivationTests`:
+
+```swift
+@Test func twoWorkoutsOnOneDaySumTheirMinutes() throws {
+    let context = try makeContext()
+    let store = MetricsStore(context: context)
+    let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context), calendar: calendar)
+
+    try derivation.derive(workouts: [
+        WhoopWorkoutSample(externalID: "a", start: date(2026, 8, 10, 6),
+                           end: date(2026, 8, 10, 7), sportName: "running"),
+        WhoopWorkoutSample(externalID: "b", start: date(2026, 8, 10, 18),
+                           end: date(2026, 8, 10, 18), sportName: "lifting"),
+    ])
+
+    let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+    #expect(row.exerciseMinutes == 60)   // 60 + 0
+}
+```
+
+- [ ] **Step 7: Wire archiving into the sync**
 
 In `WhoopSync.sync`:
 
@@ -1974,17 +2045,17 @@ return Set(recovery.samples.map(\.date) + cycle.samples.map(\.date)).count
 
 `WhoopSync` gains an `archive: WhoopArchive` stored property and initialiser parameter. Update its construction in `WhoopConnectionViewModel.swift` to pass one built from the same context as the store.
 
-- [ ] **Step 6: Run the suite and build the app**
+- [ ] **Step 8: Run the suite and build the app**
 
 Run: `swift test --package-path LifeOSKit`
 Run: `xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet build`
 Expected: both pass
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A LifeOSKit LIfeOS
-git commit -m "feat(whoop): archive raw payloads on every sync"
+git commit -m "feat(whoop): archive raw payloads on every sync, and rebuild workouts from it"
 ```
 
 ---
