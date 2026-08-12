@@ -1657,6 +1657,14 @@ public struct WhoopWorkoutSample: Sendable, Equatable {
 
 - [ ] **Step 6: Add the client call**
 
+Task 6's fix moved every DTO to sample mapping onto the DTO itself, as a `sample` computed property, so `WhoopClient` and `WhoopDerivation.rederive` share one copy instead of drifting apart. Follow that pattern here: put the mapping below in `extension WhoopDTOs.WorkoutRecord { var sample: WhoopWorkoutSample? { ... } }` (optional, because the `guard let id` can fail), drop the `record.` prefixes since the properties are on `self`, and reduce the client method to:
+
+```swift
+return records.filter { WhoopDTOs.isScored($0.score_state) }.compactMap(\.sample)
+```
+
+Check how the other three collections read after that fix and match them. Do not add a second copy of any mapping.
+
 ```swift
 public func workouts(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopWorkoutSample] {
     let records: [WhoopDTOs.WorkoutRecord] =
@@ -1939,7 +1947,7 @@ public func recoveriesRaw(accessToken: String, since: Date, until: Date = .now)
     async throws -> (samples: [WhoopRecoverySample], rawPages: [Data])
 ```
 
-and the same shape for `sleepsRaw`, `cyclesRaw`, `workoutsRaw`. Each reuses the existing mapping rather than duplicating it: extract the mapping of each collection into a private `static func map(_:)` and call it from both the plain and the raw method. Do not copy the mapping body twice.
+and the same shape for `sleepsRaw`, `cyclesRaw`, `workoutsRaw`. Each reuses the shared `sample` computed property that Task 6's fix put on the DTOs, so neither the plain nor the raw method carries a mapping body of its own. Do not reintroduce a second copy of any mapping.
 
 - [ ] **Step 5: Wire archiving into the sync**
 
