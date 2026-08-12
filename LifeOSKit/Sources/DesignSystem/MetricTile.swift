@@ -4,8 +4,8 @@ import SwiftUI
 /// dark text, sentence-case label above the value.
 ///
 /// Deliberately not `GlassCard { StatTile { } }`. Material plus white text over
-/// a mid-saturation hue is the low-contrast failure the reference designs avoid
-/// — they keep the surface light and the text dark.
+/// a mid-saturation hue is the low-contrast failure the reference designs
+/// avoid. They keep the surface light and the text dark.
 public struct MetricTile: View {
     private let label: String
     private let value: String?
@@ -68,6 +68,13 @@ public struct SegmentedPill<Value: Hashable>: View {
                 let isSelected = option.value == selection
                 Text(option.title)
                     .font(.system(size: 14, weight: .semibold))
+                    // One line, always. Four titles at this size overflow a
+                    // narrow phone, and an unconstrained Text answers that by
+                    // wrapping, which makes one segment two lines tall and
+                    // drags the whole pill with it. Shrinking the glyphs a
+                    // little is the lesser cost.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .foregroundStyle(
                         isSelected
                             ? LifeOSTokens.primaryText.resolve(scheme)
@@ -75,6 +82,10 @@ public struct SegmentedPill<Value: Hashable>: View {
                     )
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
+                    // Equal shares of whatever width there is, so the segments
+                    // stay a row of matching pills instead of sizing to their
+                    // own text and pushing the longest one off the edge.
+                    .frame(maxWidth: .infinity)
                     .background {
                         if isSelected {
                             Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme))
