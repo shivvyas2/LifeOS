@@ -917,7 +917,12 @@ Append to `WhoopArchiveTests.swift`:
 @Suite @MainActor struct WidenedModelTests {
     @Test func theContainerStillOpensWithTheWidenedSchema() throws {
         let container = try LifeOSContainer.make(inMemory: true)
-        #expect(container.schema.entities.isEmpty == false)
+        // The `try` above is the real assertion: a non-optional addition makes
+        // the store fail to open. This names the entity so the test also fails
+        // if the model is dropped from the schema rather than merely widened.
+        let names = container.schema.entities.map(\.name)
+        #expect(names.contains("WhoopRawRecord"))
+        #expect(names.contains("DailyMetrics"))
     }
 
     @Test func newDailyMetricsFieldsDefaultToNilRatherThanZero() throws {
