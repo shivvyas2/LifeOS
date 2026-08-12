@@ -95,13 +95,21 @@ public struct MonthCalendarView: View {
     private let cells: [DotCell]
     private let calendar: Calendar
     private let today: Date
+    private let onTap: ((DotCell) -> Void)?
     private let spacing: CGFloat = 6
 
-    public init(date: Date, cells: [DotCell], calendar: Calendar = .current, today: Date = .now) {
+    public init(
+        date: Date,
+        cells: [DotCell],
+        calendar: Calendar = .current,
+        today: Date = .now,
+        onTap: ((DotCell) -> Void)? = nil
+    ) {
         self.date = date
         self.cells = cells
         self.calendar = calendar
         self.today = today
+        self.onTap = onTap
     }
 
     public var body: some View {
@@ -112,7 +120,7 @@ public struct MonthCalendarView: View {
                 .padding(.top, 22)
                 .padding(.bottom, 10)
 
-            DotGrid(cells: cells, dotSize: nil, spacing: spacing)
+            DotGrid(cells: cells, dotSize: nil, spacing: spacing, onTap: onTap)
         }
     }
 }

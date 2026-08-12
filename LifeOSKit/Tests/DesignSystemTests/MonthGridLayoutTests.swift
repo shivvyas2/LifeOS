@@ -77,4 +77,17 @@ import Foundation
         let tomorrow = cells.first { $0.date == date(2026, 8, 11) }
         #expect(tomorrow?.state == .future)
     }
+
+    /// `DotGrid` decides whether a dot is tappable by checking `date != nil`,
+    /// so padding cells and only padding cells must lack a date. A real day
+    /// with a nil date would be silently unopenable.
+    @Test func onlyPaddingCellsLackADate() {
+        let cells = MonthGridLayout.cells(
+            monthContaining: date(2026, 8, 10),
+            calendar: calendar,
+            today: date(2026, 8, 10),
+            status: { _ in .noData }
+        )
+        #expect(cells.allSatisfy { ($0.date == nil) == ($0.state == .blank) })
+    }
 }
