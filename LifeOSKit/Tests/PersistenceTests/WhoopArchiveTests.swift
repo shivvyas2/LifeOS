@@ -88,6 +88,34 @@ import SwiftData
         #expect(payloads.count == 1)
         #expect(String(decoding: payloads[0], as: UTF8.self) == "updated")
     }
+
+    /// The body kind has no date of its own in its payload, unlike the other
+    /// four kinds. `receivedAt` is the only day a rebuild can attribute it to,
+    /// so `records(kind:)` exists as a sibling to `payloads(kind:)` that keeps
+    /// that timestamp rather than dropping it.
+    @Test func recordsCarryTheirReceivedAtAlongsideThePayload() throws {
+        let archive = try makeArchive()
+        try archive.store(kind: "body", externalID: "self", payload: Data(#"{"weight_kilogram":90.7}"#.utf8))
+
+        let records = try archive.records(kind: "body")
+        #expect(records.count == 1)
+        #expect(String(decoding: records[0].payload, as: UTF8.self) == #"{"weight_kilogram":90.7}"#)
+        #expect(records[0].receivedAt <= Date())
+    }
+
+    /// A re-sync overwrites the one body record in place, and the timestamp it
+    /// was received at must move forward with it, the same as the payload does.
+    @Test func restoringTheSameRecordUpdatesItsReceivedAtToo() throws {
+        let archive = try makeArchive()
+        try archive.store(kind: "body", externalID: "self", payload: Data(#"{"weight_kilogram":90.0}"#.utf8))
+        let first = try #require(try archive.records(kind: "body").first)
+
+        try archive.store(kind: "body", externalID: "self", payload: Data(#"{"weight_kilogram":91.0}"#.utf8))
+        let second = try #require(try archive.records(kind: "body").first)
+
+        #expect(second.receivedAt > first.receivedAt)
+        #expect(String(decoding: second.payload, as: UTF8.self) == #"{"weight_kilogram":91.0}"#)
+    }
 }
 
 /// Every added property must be optional. SwiftData's implicit lightweight

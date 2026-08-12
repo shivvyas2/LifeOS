@@ -203,6 +203,20 @@ extension WhoopDTOs.WorkoutRecord {
     }
 }
 
+/// Extracted once `rederive` gained a second call site for this DTO: the
+/// mapping used to be inlined in `WhoopClient.bodyMeasurement` alone, which
+/// was fine while there was exactly one place decoding it. A second place
+/// decoding the same DTO is exactly the condition rule 1 exists for.
+extension WhoopDTOs.BodyMeasurement {
+    var sample: WhoopBodySample {
+        WhoopBodySample(
+            heightMeters: height_meter,
+            weightKilograms: weight_kilogram,
+            maxHeartRate: max_heart_rate
+        )
+    }
+}
+
 public struct WhoopClient: Sendable {
     public struct Configuration: Sendable {
         public var baseURL: URL
@@ -281,10 +295,7 @@ public struct WhoopClient: Sendable {
 
         do {
             let body = try WhoopClient.decoder.decode(WhoopDTOs.BodyMeasurement.self, from: data)
-            let sample = WhoopBodySample(heightMeters: body.height_meter,
-                                         weightKilograms: body.weight_kilogram,
-                                         maxHeartRate: body.max_heart_rate)
-            return (sample, data)
+            return (body.sample, data)
         } catch {
             throw WhoopAPIError.decoding(String(describing: error))
         }

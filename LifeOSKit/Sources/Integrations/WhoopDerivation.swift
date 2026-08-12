@@ -134,7 +134,18 @@ public struct WhoopDerivation {
             .filter { WhoopDTOs.isScored($0.score_state) }
             .compactMap(\.sample)
 
-        try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles, workouts: workouts)
+        // The body payload carries no date of its own, unlike the four kinds
+        // above: it is a snapshot, not a dated record. `receivedAt` is the only
+        // day a rebuild can attribute it to, and there is exactly one body
+        // record per user, so the most recently received stands in for "current".
+        let body: (sample: WhoopBodySample, date: Date)? = try archive.records(kind: "body")
+            .max { $0.receivedAt < $1.receivedAt }
+            .flatMap { record in
+                (try? WhoopClient.decoder.decode(WhoopDTOs.BodyMeasurement.self, from: record.payload))
+                    .map { (sample: $0.sample, date: record.receivedAt) }
+            }
+
+        try derive(recoveries: recoveries, sleeps: sleeps, cycles: cycles, workouts: workouts, body: body)
 
         var days = Set<Date>()
         for sample in recoveries { days.insert(calendar.startOfDay(for: sample.date)) }
@@ -143,6 +154,7 @@ public struct WhoopDerivation {
             days.insert(WhoopAttribution.day(forSleepEndingAt: sample.end, calendar: calendar))
         }
         for sample in workouts { days.insert(calendar.startOfDay(for: sample.start)) }
+        if let body { days.insert(calendar.startOfDay(for: body.date)) }
         return days.count
     }
 

@@ -425,6 +425,84 @@ import SwiftData
         #expect(rows.first?.weightKg == nil)
     }
 
+    /// The body payload has no date field of its own, unlike the other four
+    /// archived kinds, so `rederive` has to fall back to the archive's
+    /// `receivedAt` to know which day's row to write the weight onto.
+    @Test func rederiveRestoresWeightFromTheArchivedBodyPayload() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let archive = WhoopArchive(context: context)
+        let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
+
+        // Noon, not midnight, so the record's day is unambiguous regardless of
+        // which local time zone the host running this test is in.
+        let receivedAt = date(2026, 8, 10, 12)
+        context.insert(WhoopRawRecord(
+            kind: "body", externalID: "self",
+            payload: Data(#"{"height_meter":1.8288,"weight_kilogram":90.7185,"max_heart_rate":200}"#.utf8),
+            receivedAt: receivedAt
+        ))
+        try context.save()
+
+        let days = try derivation.rederive()
+        #expect(days == 1)
+
+        let row = try #require(try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10)).first)
+        #expect(row.weightKg == 90.7185)
+    }
+
+    /// Mirrors `bodyHeightIsNotWrittenToTheDayRow` on the live path: height and
+    /// max heart rate are constants, not daily readings, so a rebuild must not
+    /// write them to the row either.
+    @Test func rederiveDoesNotWriteHeightToTheDayRow() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let archive = WhoopArchive(context: context)
+        let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
+
+        let receivedAt = date(2026, 8, 10, 12)
+        context.insert(WhoopRawRecord(
+            kind: "body", externalID: "self",
+            payload: Data(#"{"height_meter":1.8288,"weight_kilogram":null,"max_heart_rate":200}"#.utf8),
+            receivedAt: receivedAt
+        ))
+        try context.save()
+
+        _ = try derivation.rederive()
+
+        let rows = try store.metrics(from: date(2026, 8, 10), to: date(2026, 8, 10))
+        #expect(rows.first?.weightKg == nil)
+    }
+
+    /// Nil never overwrites a stored value on the rebuild path either: a
+    /// rebuild that replays an archived body payload with no weight must not
+    /// clear a weight another sync, or eventually HealthKit, already stored.
+    @Test func rederiveNeverClearsAStoredWeightWhenTheArchivedBodyHasNone() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let archive = WhoopArchive(context: context)
+        let derivation = WhoopDerivation(store: store, archive: archive, calendar: calendar)
+
+        let day = date(2026, 8, 10)
+        try store.upsert(date: day) { $0.weightKg = 77.2 }
+
+        let receivedAt = date(2026, 8, 10, 12)
+        context.insert(WhoopRawRecord(
+            kind: "body", externalID: "self",
+            payload: Data(#"{"height_meter":1.8288,"weight_kilogram":null,"max_heart_rate":200}"#.utf8),
+            receivedAt: receivedAt
+        ))
+        try context.save()
+
+        _ = try derivation.rederive()
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.weightKg == 77.2)
+    }
+
     /// Re-syncing the same workout must correct it, not add a second copy.
     @Test func resyncingAWorkoutUpdatesRatherThanDuplicating() throws {
         let container = try LifeOSContainer.make(inMemory: true)

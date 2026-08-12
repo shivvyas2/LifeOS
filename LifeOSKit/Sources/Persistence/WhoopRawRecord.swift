@@ -84,6 +84,20 @@ public struct WhoopArchive {
         ).map(\.payload)
     }
 
+    /// Sibling to `payloads(kind:)` rather than a change to it: the four
+    /// collection kinds carry their own date inside the payload and never
+    /// need `receivedAt`, so their call sites should not have to churn to
+    /// tolerate a shape they do not use. The body kind has no date field at
+    /// all, and `receivedAt` is the only day a rebuild can attribute it to.
+    public func records(kind: String) throws -> [(payload: Data, receivedAt: Date)] {
+        try context.fetch(
+            FetchDescriptor<WhoopRawRecord>(
+                predicate: #Predicate { $0.kind == kind },
+                sortBy: [SortDescriptor(\.receivedAt)]
+            )
+        ).map { (payload: $0.payload, receivedAt: $0.receivedAt) }
+    }
+
     public func count() throws -> Int {
         try context.fetchCount(FetchDescriptor<WhoopRawRecord>())
     }
