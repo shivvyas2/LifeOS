@@ -29,7 +29,7 @@ cd /Users/shivvyas/LIfeOS/LifeOSKit && swift test
 # App target build
 xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj \
   -scheme LIfeOS \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'generic/platform=iOS Simulator' \
   build
 ```
 
@@ -129,7 +129,7 @@ Leave `isGuest` on line 19 as plain `@State`. The comment at `AppShell.swift:16-
 
 Run:
 ```bash
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 Expected: `** BUILD SUCCEEDED **`
 
@@ -559,7 +559,7 @@ Expected: all tests pass, including the new `onlyPaddingCellsLackADate`.
 `PlanScreen.swift:96` calls `DotGrid(cells:dotSize:spacing:)` without `onTap`. Confirm it is unaffected:
 
 ```bash
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 Expected: `** BUILD SUCCEEDED **`
 
@@ -715,7 +715,7 @@ Then add these three methods after the closing brace of `load()` (line 78), stil
 
 Run:
 ```bash
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 Expected: `** BUILD SUCCEEDED **`. Nothing calls the new methods yet — this step is checking that `Persistence` types resolve and the `#Predicate` compiles.
 
@@ -956,7 +956,7 @@ private let previewHabits = [
 
 Run:
 ```bash
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 Expected: `** BUILD SUCCEEDED **`
 
@@ -1079,7 +1079,7 @@ In `LIfeOS/App/RootView.swift`, add this alongside the other `.sheet` modifiers 
 
 Run:
 ```bash
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 Expected: `** BUILD SUCCEEDED **`
 
@@ -1122,7 +1122,7 @@ sheet, so there is no selected-day state to keep in step with it."
 Run before considering the plan complete:
 
 - [ ] `cd /Users/shivvyas/LIfeOS/LifeOSKit && swift test` — all suites pass
-- [ ] `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'platform=iOS Simulator,name=iPhone 16' build` — succeeds
+- [ ] `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build` — succeeds
 - [ ] The two non-goals held. Both files are new on `feat/v1-foundation`, so this must be diffed against where *this plan* started, not against `main`. Capture the baseline before Task 1:
 
   ```bash
