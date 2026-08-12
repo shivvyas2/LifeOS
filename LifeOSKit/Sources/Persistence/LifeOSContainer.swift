@@ -7,6 +7,7 @@ public enum LifeOSContainer {
         UserGoals.self,
         WorkoutRecord.self,
         SleepRecord.self,
+        WhoopRawRecord.self,
         PlanEntry.self,
         HabitTick.self,
         MoneyEntry.self,
