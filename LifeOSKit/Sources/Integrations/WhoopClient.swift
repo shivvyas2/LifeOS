@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let whoopClientLog = Logger(subsystem: "shivvyas.LIfeOS", category: "whoop-client")
 
 /// Wire shapes for the Whoop developer API.
 ///
@@ -120,9 +123,9 @@ public struct WhoopClient: Sendable {
     }()
 
     public func recoveries(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopRecoverySample] {
-        let page: WhoopDTOs.Page<WhoopDTOs.RecoveryRecord> =
+        let records: [WhoopDTOs.RecoveryRecord] =
             try await get("recovery", accessToken: accessToken, since: since, until: until)
-        return page.records
+        return records
             .filter { WhoopDTOs.isScored($0.score_state) }
             .map {
                 WhoopRecoverySample(
@@ -137,9 +140,9 @@ public struct WhoopClient: Sendable {
     }
 
     public func sleeps(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopSleepSample] {
-        let page: WhoopDTOs.Page<WhoopDTOs.SleepRecord> =
+        let records: [WhoopDTOs.SleepRecord] =
             try await get("activity/sleep", accessToken: accessToken, since: since, until: until)
-        return page.records
+        return records
             .filter { WhoopDTOs.isScored($0.score_state) }
             .map { record in
                 let stages = record.score?.stage_summary
@@ -167,9 +170,9 @@ public struct WhoopClient: Sendable {
     }
 
     public func cycles(accessToken: String, since: Date, until: Date = .now) async throws -> [WhoopCycleSample] {
-        let page: WhoopDTOs.Page<WhoopDTOs.CycleRecord> =
+        let records: [WhoopDTOs.CycleRecord] =
             try await get("cycle", accessToken: accessToken, since: since, until: until)
-        return page.records
+        return records
             .filter { WhoopDTOs.isScored($0.score_state) }
             .map {
                 WhoopCycleSample(
@@ -183,40 +186,72 @@ public struct WhoopClient: Sendable {
             }
     }
 
-    private func get<T: Decodable>(
+    /// Whoop returns at most `limit` records per page and a `next_token` for the
+    /// rest. The token used to be decoded and dropped, which was invisible while
+    /// only daily records were fetched, twenty five being more than fourteen days
+    /// of them. Workouts do not fit, and a silent partial sync reads exactly like a
+    /// quiet fortnight.
+    private static let pageLimit = 25
+    /// Bounds a server that keeps handing back a token. Hitting this is logged,
+    /// because a silent truncation reads as a complete sync.
+    private static let pageCap = 20
+
+    private func get<Record: Decodable>(
         _ path: String, accessToken: String, since: Date, until: Date
-    ) async throws -> T {
-        var components = URLComponents(
-            url: configuration.baseURL.appendingPathComponent(path),
-            resolvingAgainstBaseURL: false
-        )!
-        let formatter = ISO8601DateFormatter()
-        components.queryItems = [
-            URLQueryItem(name: "start", value: formatter.string(from: since)),
-            URLQueryItem(name: "end", value: formatter.string(from: until)),
-            URLQueryItem(name: "limit", value: "25"),
-        ]
+    ) async throws -> [Record] {
+        var all: [Record] = []
+        var nextToken: String?
+        var pages = 0
 
-        var request = URLRequest(url: components.url!)
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        repeat {
+            var components = URLComponents(
+                url: configuration.baseURL.appendingPathComponent(path),
+                resolvingAgainstBaseURL: false
+            )!
+            let formatter = ISO8601DateFormatter()
+            var items = [
+                URLQueryItem(name: "start", value: formatter.string(from: since)),
+                URLQueryItem(name: "end", value: formatter.string(from: until)),
+                URLQueryItem(name: "limit", value: String(Self.pageLimit)),
+            ]
+            if let nextToken { items.append(URLQueryItem(name: "nextToken", value: nextToken)) }
+            components.queryItems = items
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw WhoopAPIError.transport }
+            var request = URLRequest(url: components.url!)
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-        switch http.statusCode {
-        case 200..<300: break
-        case 401: throw WhoopAPIError.unauthorized      // caller refreshes and retries
-        case 429: throw WhoopAPIError.rateLimited
-        default:  throw WhoopAPIError.status(http.statusCode)
-        }
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw WhoopAPIError.transport }
 
-        do {
-            return try WhoopClient.decoder.decode(T.self, from: data)
-        } catch {
-            // Distinguished from a transport failure so a field-name drift is
-            // obvious rather than looking like a network problem.
-            throw WhoopAPIError.decoding(String(describing: error))
-        }
+            switch http.statusCode {
+            case 200..<300: break
+            case 401: throw WhoopAPIError.unauthorized      // caller refreshes and retries
+            case 429: throw WhoopAPIError.rateLimited
+            default:  throw WhoopAPIError.status(http.statusCode)
+            }
+
+            let page: WhoopDTOs.Page<Record>
+            do {
+                page = try WhoopClient.decoder.decode(WhoopDTOs.Page<Record>.self, from: data)
+            } catch {
+                // Distinguished from a transport failure so a field-name drift is
+                // obvious rather than looking like a network problem.
+                throw WhoopAPIError.decoding(String(describing: error))
+            }
+
+            all.append(contentsOf: page.records)
+            nextToken = page.next_token
+            pages += 1
+
+            if pages >= Self.pageCap, nextToken != nil {
+                whoopClientLog.error(
+                    "\(path, privacy: .public): stopped at the \(Self.pageCap, privacy: .public) page cap with a token still pending; the sync is partial"
+                )
+                break
+            }
+        } while nextToken != nil
+
+        return all
     }
 }
 
