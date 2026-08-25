@@ -110,9 +110,13 @@ final class OnboardingViewModel {
 
     func back() {
         errorMessage = nil
-        phoneSendFailed = false
         switch step {
-        case .intro, .identity: step = .intro
+        case .intro, .identity:
+            // Only cleared here: a failure surfaced on CodeScreen (e.g. a
+            // "Resend code" retry) must survive the .code -> .identity leg so
+            // IdentityScreen can still offer the email escape.
+            phoneSendFailed = false
+            step = .intro
         case .code:             step = .identity
         case .profile:          step = .code
         case .connections:      step = .profile
@@ -249,7 +253,11 @@ final class OnboardingViewModel {
     }
 
     private func startResendCountdown() {
-        resendIn = 45
+        // 60s, not 45: phone's Edge Function cooldown (otp_guard.ts) is 45s,
+        // but email posts straight to /auth/v1/otp, governed by GoTrue's
+        // auth.email.max_frequency, which is 60s. The countdown has to clear
+        // the stricter of the two or "Resend code" invites a 429.
+        resendIn = 60
         Task {
             while resendIn > 0 {
                 try? await Task.sleep(for: .seconds(1))
