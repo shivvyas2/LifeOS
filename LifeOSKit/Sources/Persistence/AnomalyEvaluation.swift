@@ -54,9 +54,9 @@ public enum AnomalyEvaluation {
 
         let flagged: AnomalyFinding.Direction? = switch threshold {
         case .relativeAbove(let fraction):
-            today >= baseline * (1 + fraction) ? .above : nil
+            baseline > 0 && (today - baseline) / baseline >= fraction ? .above : nil
         case .relativeBelow(let fraction):
-            today <= baseline * (1 - fraction) ? .below : nil
+            baseline > 0 && (baseline - today) / baseline >= fraction ? .below : nil
         case .absoluteAbove(let delta):
             today >= baseline + delta ? .above : nil
         case .absoluteBelow(let delta):
