@@ -63,7 +63,8 @@ public struct BodyScorer: SectorScorer {
         guard !values.isEmpty, goal > 0 else { return nil }
         let mean = values.reduce(0, +) / Double(values.count)
         return EvidenceRow(
-            label: label, value: format(mean), normalised: mean / goal, weight: 1
+            label: label, value: format(mean), normalised: mean / goal, // Relies on EvidenceRow clamping above 1.0 when mean exceeds goal
+            weight: 1
         )
     }
 }
