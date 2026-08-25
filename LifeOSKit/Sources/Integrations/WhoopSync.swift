@@ -138,12 +138,11 @@ public struct WhoopSync {
 }
 
 extension WhoopAPIError {
-    /// The token endpoint reports a refused credential as `.status(401)`, since
-    /// the Edge Function forwards Whoop's status, while the collection
-    /// endpoints report it as `.unauthorized`. Both mean the same thing.
+    /// OAuth token endpoints use either 400 `invalid_grant` or 401 for a refused
+    /// refresh credential. Collection endpoints report `.unauthorized`.
     var isUnauthorized: Bool {
         switch self {
-        case .unauthorized, .status(401): true
+        case .unauthorized, .status(400), .status(401): true
         default: false
         }
     }

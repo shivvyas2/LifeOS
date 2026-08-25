@@ -132,6 +132,7 @@ final class WhoopConnectionViewModel {
             let newTokens = try await WhoopTokenExchange(endpoint: endpoint)
                 .exchange(code: code, verifier: pending.verifier, redirectURI: redirect)
             try tokens.save(newTokens)
+            lastCompletedSync = nil
             tokens.clearPending()
             manualURL = nil
             manualCode = ""
@@ -190,6 +191,7 @@ final class WhoopConnectionViewModel {
                 code: code, verifier: pending.verifier, redirectURI: redirect
             )
             try tokens.save(newTokens)
+            lastCompletedSync = nil
             tokens.clearPending()
             whoopLog.info("whoop connected, starting first sync")
             state = .connected(lastSyncedDays: nil)
@@ -233,6 +235,7 @@ final class WhoopConnectionViewModel {
     func disconnect() {
         tokens.clear()
         tokens.clearPending()
+        lastCompletedSync = nil
         state = .disconnected
     }
 

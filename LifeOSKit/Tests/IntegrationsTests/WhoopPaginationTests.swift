@@ -154,6 +154,23 @@ final class StubURLProtocol: URLProtocol {
         }
         #expect(tokens.load() == nil, "a dead refresh token must clear the connection")
     }
+
+    /// OAuth servers commonly report an expired or rotated refresh token as
+    /// `400 invalid_grant`, not 401. It is still a permanent credential failure.
+    @Test @MainActor func anInvalidGrantRefreshClearsTheConnection() async throws {
+        let session = stubSession()
+        let tokens = InMemoryWhoopTokenStore(tokens: WhoopTokens(
+            accessToken: "stale", refreshToken: "refresh",
+            expiresAt: .now.addingTimeInterval(-3_600)
+        ))
+        StubURLProtocol.statuses = [400]
+
+        let sync = try makeSync(session: session, tokens: tokens)
+        await #expect(throws: WhoopSyncError.reauthenticationRequired) {
+            try await sync.sync()
+        }
+        #expect(tokens.load() == nil)
+    }
 }
 
 /// The scope list and the endpoint list are two things that must agree, and
