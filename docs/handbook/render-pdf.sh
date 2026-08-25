@@ -43,7 +43,7 @@ async function render() {
     margin: { top: '16mm', bottom: '18mm', left: '15mm', right: '15mm' },
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;font-family:Roboto,-apple-system,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Life OS Engineering Handbook · Rev C</span><span class="pageNumber"></span></div>',
+    footerTemplate: '<div style="width:100%;font-family:Roboto,-apple-system,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Life OS Engineering Handbook · Rev D</span><span class="pageNumber"></span></div>',
   });
   await browser.close();
 }
