@@ -58,7 +58,17 @@ public struct SectorStore {
         return created
     }
 
+    /// Decides the sector, once.
+    ///
+    /// `record()` returns an existing decided row rather than refusing to
+    /// hand it back, which is what makes this guard load-bearing: without it,
+    /// any caller that re-records a committed sector and then commits again
+    /// would silently overwrite the person's decision. `advance()` never
+    /// re-offers a committed sector today, but that is a property of the view
+    /// model, not of the store, and the store should not depend on a caller
+    /// getting that right.
     public func commit(userScore: Int, to score: SectorScore) throws {
+        guard !score.isScored else { return }
         score.userScore = userScore
         score.closedAt = .now
         try context.save()
@@ -77,19 +87,25 @@ public struct SectorStore {
         return Array(all.suffix(months))
     }
 
-    /// The earliest month that still has an unscored sector.
+    /// How many sectors are scored in each month that has at least one
+    /// `SectorScore` row, for months before `limit`.
     ///
-    /// Deliberately the oldest rather than the most recent: skipping August
-    /// must not bury it under September, or the gap is lost silently.
-    public func oldestUnclosedMonth(before limit: Date) throws -> Date? {
+    /// A row is created by `record()`, which runs as soon as a sector is
+    /// *shown* during a close, well before it is decided. So a month with a
+    /// nil `userScore` on some of its rows is the ordinary shape of a
+    /// partial close, not a rare failure state: `CloseSchedule` is what turns
+    /// this into "the oldest month with a gap worth offering". A month with
+    /// no rows at all is not represented here; that is not a gap, it is a
+    /// month nothing has touched yet, which `CloseSchedule`'s fallback to the
+    /// previous month exists to handle.
+    public func scoredCounts(before limit: Date) throws -> [Date: Int] {
         let key = Date.startOfMonth(limit, calendar: calendar)
-        let open = try context.fetch(
-            FetchDescriptor<SectorScore>(
-                predicate: #Predicate { $0.month < key && $0.userScore == nil },
-                sortBy: [SortDescriptor(\.month)]
-            )
+        let rows = try context.fetch(
+            FetchDescriptor<SectorScore>(predicate: #Predicate { $0.month < key })
         )
-        return open.first?.month
+        return rows.reduce(into: [Date: Int]()) { counts, row in
+            counts[row.month, default: 0] += row.isScored ? 1 : 0
+        }
     }
 
     public func answers(sector: LifeSector, month: Date) throws -> [CheckInAnswer] {

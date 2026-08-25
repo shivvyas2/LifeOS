@@ -76,29 +76,57 @@ import SwiftData
         #expect(history.last?.userScore == 8)
     }
 
-    /// A month never closed stays offered rather than being replaced by a
-    /// newer one, so a gap in the history is always visible and fillable.
-    @Test func theOldestUnclosedMonthIsOfferedFirst() throws {
+    /// `commit` is a no-op once a sector is decided, however it is reached.
+    /// `record()` already refuses to touch a decided row, but it hands the
+    /// row back rather than refusing to return it, and that is exactly what
+    /// let a second `commit` overwrite the first decision before this guard
+    /// existed.
+    @Test func committingTwiceLeavesTheFirstDecisionIntact() throws {
         let store = try makeStore()
-        let july = month(2026, 7)
         let august = month(2026, 8)
-        _ = try store.record(sector: .body, month: july, proposed: 5, evidence: Evidence())
-        _ = try store.record(sector: .body, month: august, proposed: 5, evidence: Evidence())
+        let score = try store.record(sector: .growth, month: august, proposed: 6, evidence: Evidence())
 
-        #expect(try store.oldestUnclosedMonth(before: month(2026, 9)) == july)
+        try store.commit(userScore: 8, to: score)
+        try store.commit(userScore: 3, to: score)
+
+        let stored = try store.score(.growth, month: august)
+        #expect(stored?.userScore == 8)
     }
 
-    @Test func aFullyClosedMonthIsNotOffered() throws {
+    /// `record()` runs as soon as a sector is shown, well before it is
+    /// decided, so a month sitting at less than nine scored sectors is the
+    /// ordinary shape of a partial close, not a state only a save failure
+    /// could produce. This is the state `CloseSchedule` actually has to
+    /// reason about.
+    @Test func scoredCountsReflectsAGenuinePartialClose() throws {
         let store = try makeStore()
         let july = month(2026, 7)
-        for sector in LifeSector.allCases {
-            let score = try store.record(
-                sector: sector, month: july, proposed: 5, evidence: Evidence()
-            )
-            try store.commit(userScore: 5, to: score)
-        }
 
-        #expect(try store.oldestUnclosedMonth(before: month(2026, 8)) == nil)
+        let scored = try store.record(sector: .body, month: july, proposed: 8, evidence: Evidence())
+        try store.commit(userScore: 8, to: scored)
+        _ = try store.record(sector: .money, month: july, proposed: 4, evidence: Evidence())
+
+        let counts = try store.scoredCounts(before: month(2026, 8))
+        #expect(counts[july] == 1)
+    }
+
+    /// A month with no rows at all is not a gap: it has never been touched,
+    /// which is a different thing from having been left half-scored.
+    @Test func aMonthWithNoRowsIsAbsentFromScoredCounts() throws {
+        let store = try makeStore()
+        let counts = try store.scoredCounts(before: month(2026, 8))
+        #expect(counts[month(2026, 7)] == nil)
+    }
+
+    /// Only months strictly before the limit are reported, matching the
+    /// "before the previous month" boundary `CloseSchedule` relies on.
+    @Test func scoredCountsExcludesMonthsAtOrAfterTheLimit() throws {
+        let store = try makeStore()
+        let august = month(2026, 8)
+        _ = try store.record(sector: .body, month: august, proposed: 5, evidence: Evidence())
+
+        let counts = try store.scoredCounts(before: august)
+        #expect(counts[august] == nil)
     }
 
     /// `record` builds the row through the model initialiser while `score`
