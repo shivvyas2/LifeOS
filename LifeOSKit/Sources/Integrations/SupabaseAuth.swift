@@ -128,16 +128,24 @@ public struct SupabaseAuth: Sendable {
             let refresh_token: String?
             let expires_in: Double?
             let user: User?
-            struct User: Decodable { let id: String; let phone: String?; let email: String? }
+            struct User: Decodable {
+                let id: String
+                let phone: String?
+                let email: String?
+                let user_metadata: Metadata?
+                struct Metadata: Decodable { let first_name: String? }
+            }
         }
         let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let firstName = decoded.user?.user_metadata?.first_name ?? ""
         return AuthSession(
             accessToken: decoded.access_token,
             refreshToken: decoded.refresh_token,
             expiresAt: .now.addingTimeInterval(decoded.expires_in ?? 3_600),
             userID: decoded.user?.id ?? "",
             phone: decoded.user?.phone,
-            email: decoded.user?.email
+            email: decoded.user?.email,
+            hasProfile: !firstName.trimmingCharacters(in: .whitespaces).isEmpty
         )
     }
 }
@@ -149,15 +157,36 @@ public struct AuthSession: Codable, Sendable, Equatable {
     public let userID: String
     public let phone: String?
     public let email: String?
+    /// Whether this account has already been through the profile step. With OTP
+    /// there is no password, so this is the only thing that tells a returning
+    /// user apart from a new one after the code is accepted.
+    public let hasProfile: Bool
 
     public init(accessToken: String, refreshToken: String?, expiresAt: Date,
-                userID: String, phone: String?, email: String?) {
+                userID: String, phone: String?, email: String?, hasProfile: Bool = false) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.expiresAt = expiresAt
         self.userID = userID
         self.phone = phone
         self.email = email
+        self.hasProfile = hasProfile
+    }
+
+    /// Written by hand rather than synthesised: sessions already in the keychain
+    /// have no `hasProfile` key, and a synthesised decoder would throw on them
+    /// and sign every existing user out on upgrade. Defaulting to false is safe
+    /// because the flag is only read immediately after `verify`; a restored
+    /// session goes straight to the app on `hasFinishedOnboarding`.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken = try container.decode(String.self, forKey: .accessToken)
+        refreshToken = try container.decodeIfPresent(String.self, forKey: .refreshToken)
+        expiresAt = try container.decode(Date.self, forKey: .expiresAt)
+        userID = try container.decode(String.self, forKey: .userID)
+        phone = try container.decodeIfPresent(String.self, forKey: .phone)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        hasProfile = try container.decodeIfPresent(Bool.self, forKey: .hasProfile) ?? false
     }
 
     public func isExpired(now: Date = .now) -> Bool {
