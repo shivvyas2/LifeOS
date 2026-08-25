@@ -8,13 +8,16 @@ let package = Package(
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Integrations", targets: ["Integrations"]),
+        .library(name: "Insights", targets: ["Insights"]),
     ],
     targets: [
         .target(name: "DesignSystem"),
         .target(name: "Persistence"),
         .target(name: "Integrations", dependencies: ["Persistence"]),
+        .target(name: "Insights", dependencies: ["Persistence"]),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"]),
         .testTarget(name: "IntegrationsTests", dependencies: ["Integrations"]),
+        .testTarget(name: "InsightsTests", dependencies: ["Insights"]),
     ]
 )
