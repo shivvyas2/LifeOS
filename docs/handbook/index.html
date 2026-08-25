@@ -2918,15 +2918,13 @@ final class SettingsViewModel {
     <code>.modelNotReady</code> is transient while weights download and is re-checked per request.
   </p>
 
-  <p class="faq-q">What about devices below iOS 26?</p>
+  <p class="faq-q">Why is the floor iOS 26?</p>
   <p class="faq-a">
-    They have no on-device tier at all. <code>FoundationModels</code> requires iOS 26, and the app's
-    deployment floor was lowered to iOS 18 in <code>7d85604</code> so TestFlight is not restricted to
-    testers who have already upgraded. <code>OnDeviceEngine</code> is therefore
-    <code>@available(iOS 26, *)</code> and the router treats an older OS as a fourth unavailability
-    reason. <strong>Every coach and assistant turn on such a device escalates.</strong> This is the
-    dominant cost case for a TestFlight cohort, and it is why the projections in
-    <a href="#ch15">chapter fifteen</a> are stated per escalated turn rather than per turn.
+    Because the coach floors on <code>FoundationModels</code>, which does not exist before it. The
+    TestFlight floor was briefly 18.0; that is reversed. Devices below iOS 26 cannot install the
+    app, so there is no older-OS cohort that always escalates. Unavailability is only the three
+    runtime reasons above, and the projections in <a href="#ch15">chapter fifteen</a> stay per
+    escalated turn because capability — not OS version — is what still sends work to the cloud.
   </p>
 </div>
 
@@ -4110,8 +4108,8 @@ supabase functions deploy whoop-webhook</code></pre>
 </div>
 
 <p>
-  Three of the five never cost anything on a device running iOS 26 or later. On older devices there
-  is no on-device tier at all, so all three escalate; see <a href="#s10-1">10.1</a>.
+  Three of the five never cost anything unless they escalate for capability. The app's floor is
+  iOS 26, so there is no older-OS cohort that always pays; see <a href="#s10-1">10.1</a>.
 </p>
 
 <div class="note caution">

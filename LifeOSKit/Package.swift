@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "LifeOSKit",
-    platforms: [.iOS("18.0"), .macOS("15.0")],
+    platforms: [.iOS("26.0"), .macOS("26.0")],
     products: [
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "Persistence", targets: ["Persistence"]),

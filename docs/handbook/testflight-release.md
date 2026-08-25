@@ -10,7 +10,7 @@ need your Apple ID, and the two things that will bite you if you forget them.
 | Display name | `Life OS` | `INFOPLIST_KEY_CFBundleDisplayName` |
 | Bundle ID | `com.shivvyas.lifeos` | `PRODUCT_BUNDLE_IDENTIFIER` |
 | Team | `Z42YU5W6WY` | `DEVELOPMENT_TEAM` |
-| Minimum iOS | `18.0` | `IPHONEOS_DEPLOYMENT_TARGET` + `LifeOSKit/Package.swift` |
+| Minimum iOS | `26.0` | `IPHONEOS_DEPLOYMENT_TARGET` + `LifeOSKit/Package.swift` |
 | Version / build | `1.0` / `1` | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` |
 | Export compliance | declared exempt | `ITSAppUsesNonExemptEncryption` |
 
