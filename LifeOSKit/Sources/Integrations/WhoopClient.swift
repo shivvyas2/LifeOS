@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-private let whoopClientLog = Logger(subsystem: "shivvyas.LIfeOS", category: "whoop-client")
+private let whoopClientLog = Logger(subsystem: "com.shivvyas.lifeos", category: "whoop-client")
 
 /// Wire shapes for the Whoop developer API.
 ///

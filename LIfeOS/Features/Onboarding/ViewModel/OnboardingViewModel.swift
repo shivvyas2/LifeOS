@@ -4,7 +4,7 @@ import Integrations
 
 typealias SupabaseAuthChannel = SupabaseAuth.Channel
 
-private let authLog = Logger(subsystem: "shivvyas.LIfeOS", category: "auth")
+private let authLog = Logger(subsystem: "com.shivvyas.lifeos", category: "auth")
 
 @MainActor @Observable
 final class OnboardingViewModel {

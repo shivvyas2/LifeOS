@@ -14,11 +14,15 @@
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>WhoopRedirectURI</key>
 	<string>$(WHOOP_REDIRECT_URI)</string>
+	<!-- The app uses only standard HTTPS. That is exempt encryption, and saying
+	     so here stops App Store Connect prompting on every TestFlight upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>shivvyas.LIfeOS.whoop</string>
+			<string>com.shivvyas.lifeos.whoop</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>lifeos</string>

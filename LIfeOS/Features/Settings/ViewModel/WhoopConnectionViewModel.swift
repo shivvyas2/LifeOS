@@ -8,7 +8,7 @@ import Persistence
 /// Whoop failures used to collapse into the string "Sync failed", which made
 /// the wire format, the one thing that could not be verified without a live
 /// token, undiagnosable. Errors are now logged in full and surfaced.
-private let whoopLog = Logger(subsystem: "shivvyas.LIfeOS", category: "whoop")
+private let whoopLog = Logger(subsystem: "com.shivvyas.lifeos", category: "whoop")
 
 /// Owns the Whoop connection: the OAuth round trip, token storage, and sync.
 @MainActor @Observable

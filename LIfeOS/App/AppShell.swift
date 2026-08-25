@@ -2,7 +2,7 @@ import SwiftUI
 import DesignSystem
 import OSLog
 
-private let shellLog = Logger(subsystem: "shivvyas.LIfeOS", category: "shell")
+private let shellLog = Logger(subsystem: "com.shivvyas.lifeos", category: "shell")
 
 /// Decides between onboarding and the app.
 ///
