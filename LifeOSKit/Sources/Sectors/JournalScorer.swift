@@ -49,7 +49,7 @@ public struct JournalScorer: SectorScorer {
             rows.append(EvidenceRow(
                 label: "vs last month",
                 value: "\(change >= 0 ? "+" : "")\(Int((change * 100).rounded()))%",
-                normalised: 0.5 + change / 2,
+                normalised: 0.5 + change / 2,  // Relies on EvidenceRow clamping above 1.0 when writing more than last month
                 weight: 1
             ))
         }
