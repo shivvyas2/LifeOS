@@ -100,7 +100,7 @@ struct MonthlyCloseScreen: View {
                         "Adjust your score",
                         value: Binding(
                             get: { model.chosenScore },
-                            set: { model.chosenScore = $0 }
+                            set: { model.setChosenScore($0) }
                         ),
                         in: 0...10
                     )
@@ -121,7 +121,6 @@ struct MonthlyCloseScreen: View {
                 Button("Next") { model.commit() }
             }
         }
-        .task(id: sector) { await model.loadNote() }
     }
 
     @ViewBuilder
