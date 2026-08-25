@@ -29,10 +29,17 @@ public final class InMemoryBriefStore: BriefStore, @unchecked Sendable {
 /// That is free on-device and the single largest line item the moment the
 /// tier moves, which is why it is built now rather than when it starts to
 /// hurt.
-public struct BriefCache: Sendable {
+///
+/// An actor, and with an in-flight map, because the store lookup and the
+/// generation are two steps: two callers arriving for the same day before
+/// either has finished would both miss the store and both generate. Free
+/// today, two billed model runs tomorrow — the exact cost this type exists to
+/// prevent. Concurrent callers for the same day await one generation instead.
+public actor BriefCache {
 
     private let store: any BriefStore
     private let calendar: Calendar
+    private var inFlight: [Date: Task<CoachResult<DailyBrief>, Never>] = [:]
 
     public init(store: any BriefStore, calendar: Calendar = .current) {
         self.store = store
@@ -41,15 +48,21 @@ public struct BriefCache: Sendable {
 
     public func brief(
         for date: Date,
-        generate: @Sendable () async -> CoachResult<DailyBrief>
+        generate: @Sendable @escaping () async -> CoachResult<DailyBrief>
     ) async -> CoachResult<DailyBrief> {
         let day = calendar.startOfDay(for: date)
 
         if let cached = store.load(for: day) {
             return .answered(cached)
         }
+        if let existing = inFlight[day] {
+            return await existing.value
+        }
 
-        let result = await generate()
+        let task = Task { await generate() }
+        inFlight[day] = task
+        let result = await task.value
+        inFlight[day] = nil
 
         // Only a real answer is kept. Caching a refusal or an outage would
         // strand the user without a brief until midnight.
