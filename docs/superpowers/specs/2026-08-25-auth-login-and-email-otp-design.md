@@ -23,13 +23,26 @@ the project is on Supabase's built in sender, which delivers only to project
 team members and caps at two emails per hour. Someone did the template work and
 then had no way to send the mail, so the magic link stayed switched on.
 
-**Phone OTP fails with the wrong explanation.** Signup reports "Couldn't send
-the text to that number yet". That string has exactly one source:
-`classifyTwilioFailure` returning `sms_unverified`, which fires for Twilio code
-21608 or 21610 and nothing else. 21608 is trial accounts only and this account
-is paid, which leaves 21610, "attempt to send to unsubscribed recipient". The
-number is on Twilio's opt out list. The copy names neither cause and offers no
-remedy.
+**Phone OTP fails, and the copy sends the reader the wrong way.** Signup
+reports "Couldn't send the text to that number yet". That string has exactly
+one source: `classifyTwilioFailure` returning `sms_unverified`, which fires for
+Twilio code 21608 or 21610 and nothing else.
+
+The root cause is not yet established. 21610, "attempt to send to unsubscribed
+recipient", is ruled out: it is per number, and a second number failed the same
+way. That leaves 21608, "trial accounts cannot send messages to unverified
+numbers", which fails for every number and so fits the symptom exactly. It also
+contradicts the account being paid, since 21608 cannot fire on a paid account.
+
+Both can be true only if the credentials in `TWILIO_ACCOUNT_SID` belong to a
+different account than the one that was upgraded, most plausibly a subaccount,
+where a Verify service stays trial limited even when the parent is not.
+Pending confirmation from the Twilio console: trial badge, the code under
+Monitor → Logs → Errors, and whether any subaccounts exist.
+
+What is certain either way is the copy. One bucket covers a developer
+misconfiguration and a user opt out, and its wording names neither cause and
+offers no remedy.
 
 ## Approach
 
@@ -133,10 +146,12 @@ inside the roughly $2 per user per month ceiling.
 
 ### 4. Twilio
 
-The account fix is not code. Code 21610 means the number replied STOP and sits
-on Twilio's opt out list; clearing it is a console action under Messaging →
-Opt Outs, or texting START to the sender. This is recorded here because the
-error copy is what sent the reader looking in the wrong place.
+Whatever the console reports, the account fix is not code. If it is 21608 the
+remedy is upgrading the account that owns those credentials, or pointing
+`TWILIO_ACCOUNT_SID` at the one already upgraded. Nothing in this repository
+can make a trial account deliver to an unverified number. That is precisely why
+the code changes below are worth making anyway: the app's job is to say which
+of those it is, and to leave the user a way through.
 
 `classifyTwilioFailure` and `AuthError.fromHTTP` change regardless:
 
@@ -175,9 +190,11 @@ assumed.
 
 **Conflict with `fix/otp-error-copy`.** That branch is unmerged and edits the
 same `sms_unverified` case, rewriting it to "That number isn't verified for SMS
-yet. Add it in Twilio, then try again". That is the 21608 trial account reading
-and is wrong for this paid account. This work supersedes it in that block, and
-whichever lands second has to take the split version.
+yet. Add it in Twilio, then try again". That is the 21608 trial account reading,
+which may well turn out to be the right one, but it is still one message for two
+codes and it addresses a developer rather than the user reading it. This work
+supersedes it in that block, and whichever lands second has to take the split
+version.
 
 **Deleting the callback path.** Removing `AuthSession(callback:)` leaves
 `lifeos://auth-callback` allow listed in `config.toml` and unused. Harmless,
