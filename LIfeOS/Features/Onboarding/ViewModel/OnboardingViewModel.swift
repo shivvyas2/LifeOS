@@ -24,18 +24,28 @@ final class OnboardingViewModel {
     /// configured and the OTP screen comes back with no other changes.
     let emailUsesMagicLink = true
 
+    /// Stored rather than computed from the keychain on each read, so that
+    /// SwiftUI is told when it changes. A computed `store.load() != nil` is
+    /// invisible to `@Observable`, which left the shell showing the app after a
+    /// sign-out until something else happened to redraw it.
+    private(set) var isSignedIn: Bool
+
     private let store: any AuthSessionStoring
     private var auth: SupabaseAuth?
+    /// The in-flight restore, so two callers share one refresh. Supabase rotates
+    /// the refresh token on use, so a second concurrent refresh would present
+    /// the token the first one just retired and be refused — signing the user
+    /// out for doing nothing but foregrounding the app during launch.
+    private var restoreTask: Task<Bool, Never>?
 
     init(store: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.store = store
+        self.isSignedIn = store.load() != nil
         if let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
             auth = SupabaseAuth(baseURL: url, anonKey: key)
         }
         draft.dialCode = DialCountries.dial(for: draft.country)
     }
-
-    var isSignedIn: Bool { store.load() != nil }
 
     /// Picks a channel the project can actually deliver on. Phone stays the
     /// default when SMS is configured, and quietly falls back when it is not.
@@ -91,6 +101,39 @@ final class OnboardingViewModel {
         errorMessage = nil
     }
 
+    // MARK: - Session
+
+    /// Renews the stored session, on launch and on every return to the
+    /// foreground. Returns whether the user is still signed in.
+    ///
+    /// Only a refusal from the server ends the session; being offline or
+    /// hitting an outage keeps it. See `SessionRefresher`.
+    @discardableResult
+    func restoreSession() async -> Bool {
+        if let restoreTask { return await restoreTask.value }
+        guard let auth else { return isSignedIn }
+
+        let task = Task { await performRestore(auth) }
+        restoreTask = task
+        let result = await task.value
+        restoreTask = nil
+        return result
+    }
+
+    private func performRestore(_ auth: SupabaseAuth) async -> Bool {
+        switch await SessionRefresher(auth: auth, store: store).restore() {
+        case .active:
+            isSignedIn = true
+        case .signedOut:
+            isSignedIn = false
+        case .rejected:
+            authLog.info("stored session was refused; returning to signup")
+            signOut()
+            errorMessage = "Your session expired. Sign in again"
+        }
+        return isSignedIn
+    }
+
     // MARK: - Auth
 
     func sendCode() async {
@@ -130,6 +173,7 @@ final class OnboardingViewModel {
                 channel: draft.channel
             )
             try store.save(session)
+            isSignedIn = true
             step = .profile
         } catch let error as AuthError {
             authLog.error("verify failed: \(String(describing: error), privacy: .public)")
@@ -186,6 +230,7 @@ final class OnboardingViewModel {
 
         do {
             try store.save(session)
+            isSignedIn = true
             errorMessage = nil
             step = .profile
         } catch {
@@ -195,6 +240,7 @@ final class OnboardingViewModel {
 
     func signOut() {
         store.clear()
+        isSignedIn = false
         draft = SignupDraft()
         step = .intro
     }
