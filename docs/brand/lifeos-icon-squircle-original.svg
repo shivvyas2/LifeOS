@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="15%" r="120%">
+      <stop offset="0%" stop-color="#ffffff"></stop>
+      <stop offset="55%" stop-color="#f8f2ec"></stop>
+      <stop offset="100%" stop-color="#f0e5da"></stop>
+    </radialGradient>
+    <radialGradient id="core" cx="35%" cy="30%" r="100%">
+      <stop offset="0%" stop-color="#ffffff"></stop>
+      <stop offset="40%" stop-color="#ff8a5c"></stop>
+      <stop offset="100%" stop-color="#F0572E"></stop>
+    </radialGradient>
+    <radialGradient id="moon" cx="35%" cy="30%" r="100%">
+      <stop offset="0%" stop-color="#fff3ec"></stop>
+      <stop offset="60%" stop-color="#ff9a70"></stop>
+      <stop offset="100%" stop-color="#F0572E"></stop>
+    </radialGradient>
+    <linearGradient id="arc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0572E"></stop>
+      <stop offset="100%" stop-color="#F0572E" stop-opacity="0"></stop>
+    </linearGradient>
+    <filter id="coreGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feDropShadow dx="0" dy="0" stdDeviation="30" flood-color="#F0572E" flood-opacity="0.5"></feDropShadow>
+    </filter>
+    <filter id="moonGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#F0572E" flood-opacity="0.7"></feDropShadow>
+    </filter>
+    <clipPath id="squircle">
+      <path d="M512 0 C130 0 0 130 0 512 C0 894 130 1024 512 1024 C894 1024 1024 894 1024 512 C1024 130 894 0 512 0 Z"></path>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#bg)"></rect>
+
+    
+    <circle cx="512" cy="512" r="332" fill="none" stroke="#141210" stroke-width="3" opacity="0.14"></circle>
+    
+    <g stroke="#141210" stroke-width="5" opacity="0.35" stroke-linecap="round">
+      <line x1="512" y1="168" x2="512" y2="192"></line>
+      <line x1="512" y1="832" x2="512" y2="856"></line>
+      <line x1="168" y1="512" x2="192" y2="512"></line>
+      <line x1="832" y1="512" x2="856" y2="512"></line>
+    </g>
+
+    
+    <circle cx="512" cy="512" r="252" fill="none" stroke="#141210" stroke-width="12"></circle>
+    
+    <path d="M 512 260 A 252 252 0 0 1 736 375" fill="none" stroke="url(#arc)" stroke-width="12" stroke-linecap="round"></path>
+
+    
+    <circle cx="512" cy="512" r="80" fill="url(#core)" filter="url(#coreGlow)"></circle>
+    
+    <circle cx="512" cy="512" r="96" fill="none" stroke="#141210" stroke-width="4" opacity="0.85"></circle>
+
+    
+    <circle cx="512" cy="260" r="28" fill="url(#moon)" filter="url(#moonGlow)"></circle>
+    <circle cx="512" cy="260" r="28" fill="none" stroke="#141210" stroke-width="4"></circle>
+
+    
+    <circle cx="277" cy="747" r="13" fill="#141210"></circle>
+    <circle cx="277" cy="747" r="13" fill="none" stroke="#F0572E" stroke-width="3" opacity="0.9"></circle>
+  </g>
+</svg>
