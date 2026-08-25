@@ -1,0 +1,113 @@
+# Shipping Life OS to TestFlight
+
+Everything the repo can settle is already settled. This covers the parts that
+need your Apple ID, and the two things that will bite you if you forget them.
+
+## What the project already declares
+
+| Setting | Value | Where |
+| --- | --- | --- |
+| Display name | `Life OS` | `INFOPLIST_KEY_CFBundleDisplayName` |
+| Bundle ID | `com.shivvyas.lifeos` | `PRODUCT_BUNDLE_IDENTIFIER` |
+| Team | `Z42YU5W6WY` | `DEVELOPMENT_TEAM` |
+| Minimum iOS | `18.0` | `IPHONEOS_DEPLOYMENT_TARGET` + `LifeOSKit/Package.swift` |
+| Version / build | `1.0` / `1` | `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` |
+| Export compliance | declared exempt | `ITSAppUsesNonExemptEncryption` |
+
+The Xcode target is still named `LIfeOS` with the capital `I`. That is
+deliberate: renaming the target churns the project file for no user-visible
+gain, and nobody outside this repo ever sees it. `CFBundleDisplayName` is what
+appears under the home screen icon, and that reads `Life OS`.
+
+## One time, before the first upload
+
+The bundle ID is already registered on the developer portal. Xcode's automatic
+signing did it during the first archive, so there is nothing to do at
+developer.apple.com.
+
+What is left is the App Store Connect record:
+
+1. App Store Connect → **Apps** → **+** → **New App**
+2. Platform iOS, Name `Life OS`, Primary Language, Bundle ID
+   `com.shivvyas.lifeos`, SKU anything stable (`lifeos-ios` works)
+3. Create
+
+If the name `Life OS` is taken, App Store Connect rejects it here. That blocks
+only the public listing, never TestFlight: pick any unique placeholder name to
+create the record, and the home screen still reads `Life OS` because that comes
+from the bundle, not the listing.
+
+## Every upload
+
+**Bump the build number first.** App Store Connect rejects a `(version, build)`
+pair it has already seen, and it rejects it *after* the upload finishes, which
+wastes the whole round trip. Bump `CURRENT_PROJECT_VERSION` in both the Debug
+and Release configurations:
+
+```
+MARKETING_VERSION       1.0   → user-facing, bump for real releases
+CURRENT_PROJECT_VERSION 1     → bump for EVERY upload, even a re-upload
+```
+
+Then, in Xcode:
+
+1. Destination → **Any iOS Device (arm64)**. Archive is disabled for simulators.
+2. **Product → Archive**
+3. In Organizer: **Distribute App** → **TestFlight & App Store Connect**
+4. Accept automatic signing. Xcode re-signs with the Apple Distribution identity;
+   the Apple Development identity used for a local archive is not the one that
+   ships.
+5. Upload, then wait. Processing takes a few minutes, and TestFlight shows the
+   build as unavailable until it finishes.
+
+Internal testers (up to 100, on your own team) get the build immediately with no
+review. External testers require a Beta App Review on the first build.
+
+## The one real trap: Secrets.xcconfig
+
+`Config/Secrets.xcconfig` is the base configuration for both Debug and Release,
+and it is gitignored. It holds the Supabase URL and anon key, the Whoop client
+ID, and the Whoop redirect URI.
+
+A clean checkout has no such file. It still **builds and archives without
+error**. xcconfig substitution of a missing variable yields an empty string, not
+a failure. The result is an app that launches, shows the signup screen, and can
+never sign anyone in.
+
+So: before archiving on any machine that is not this one, confirm the file
+exists and is populated. `Config/Secrets.example.xcconfig` is the template.
+
+None of those four values is a true secret. Real secrets (the Supabase
+service-role key, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`) live only in the
+Supabase Edge Function environment.
+
+## Regenerating the app icon
+
+Sources are in `docs/brand/`:
+
+- `lifeos-icon.svg`: the square artwork the app actually ships
+- `lifeos-icon-squircle-original.svg`: the original, kept for reference
+
+The original clips its artwork to a squircle, which leaves the corners
+transparent. iOS applies its own mask and requires an opaque, full-square,
+1024×1024 image, so the shipping SVG has that `clip-path` removed and lets the
+background gradient run to the edges. An icon with an alpha channel is rejected
+at validation.
+
+To re-render after editing the SVG:
+
+```sh
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless --disable-gpu --force-device-scale-factor=1 --hide-scrollbars \
+  --screenshot=icon-1024.png --window-size=1024,1024 \
+  "file://$PWD/docs/brand/lifeos-icon.svg"
+
+cp icon-1024.png LIfeOS/Resources/Assets.xcassets/AppIcon.appiconset/
+```
+
+Confirm it stayed opaque before committing. `hasAlpha` must read `no`:
+
+```sh
+sips -g pixelWidth -g pixelHeight -g hasAlpha \
+  LIfeOS/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+```
