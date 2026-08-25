@@ -5,27 +5,50 @@ export async function twilioStart(args: {
   authToken: string;
   serviceSid: string;
   phone: string;
-}): Promise<{ ok: true } | { ok: false; status: number }> {
+}): Promise<{ ok: true } | { ok: false; kind: string }> {
   const body = new URLSearchParams();
   body.set("To", args.phone);
   body.set("Channel", "sms");
 
-  const response = await fetch(
-    `https://verify.twilio.com/v2/Services/${args.serviceSid}/Verifications`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: basic(args.accountSid, args.authToken),
-        "Content-Type": "application/x-www-form-urlencoded",
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://verify.twilio.com/v2/Services/${args.serviceSid}/Verifications`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: basic(args.accountSid, args.authToken),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body,
       },
-      body,
-    },
-  );
+    );
+  } catch (error) {
+    console.error(`twilio start threw: ${String(error)}`);
+    return { ok: false, kind: "send_failed" };
+  }
 
   if (response.ok) return { ok: true };
   const text = await response.text();
   console.error(`twilio start failed: ${response.status} ${text.slice(0, 180)}`);
-  return { ok: false, status: response.status };
+  return { ok: false, kind: classifyTwilioFailure(response.status, text) };
+}
+
+export function classifyTwilioFailure(status: number, body: string): string {
+  let code: number | undefined;
+  try {
+    const parsed = JSON.parse(body) as { code?: number };
+    if (typeof parsed.code === "number") code = parsed.code;
+  } catch {
+    // Twilio sometimes returns HTML. Treat it as a generic send failure.
+  }
+
+  if (status === 429 || code === 60203 || code === 20429) return "rate_limited";
+  if (code === 21408 || code === 21612) return "sms_region";
+  if (code === 21608 || code === 21610) return "sms_unverified";
+  if (code === 21211 || code === 21614 || code === 60200) return "invalid_phone";
+  if (code === 20003 || code === 20404) return "server_not_configured";
+  return "send_failed";
 }
 
 export async function twilioCheck(args: {

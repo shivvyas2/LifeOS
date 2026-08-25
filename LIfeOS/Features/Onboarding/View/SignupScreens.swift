@@ -98,6 +98,7 @@ struct IdentityScreen: View {
                         TextField("Phone number", text: $model.draft.phone)
                             .keyboardType(.phonePad)
                             .textContentType(.telephoneNumber)
+                            .autocorrectionDisabled()
                             .font(.system(size: 17))
                             .padding(.horizontal, Space.x2)
                             .frame(height: Space.x6 + Space.half)

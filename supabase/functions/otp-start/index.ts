@@ -76,7 +76,11 @@ Deno.serve(async (req: Request) => {
     phone: parsed.phone,
   });
   if (!sent.ok) {
-    if (sent.status === 429 || sent.status === 60203) return json({ error: "rate_limited" }, 429);
+    if (sent.kind === "rate_limited") return json({ error: "rate_limited" }, 429);
+    if (sent.kind === "invalid_phone") return json({ error: "invalid_phone" }, 400);
+    if (sent.kind === "server_not_configured") return json({ error: "server_not_configured" }, 500);
+    if (sent.kind === "sms_region") return json({ error: "sms_region" }, 502);
+    if (sent.kind === "sms_unverified") return json({ error: "sms_unverified" }, 502);
     return json({ error: "send_failed" }, 502);
   }
 

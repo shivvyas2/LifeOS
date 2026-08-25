@@ -131,18 +131,7 @@ public struct SupabaseAuth: Sendable {
         guard let http = response as? HTTPURLResponse else { throw AuthError.transport }
         guard (200..<300).contains(http.statusCode) else {
             let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-            if json["error"] as? String == "rate_limited" {
-                throw AuthError.server(status: 429, message: "Too many attempts. Wait a moment")
-            }
-            if json["error"] as? String == "invalid_phone" {
-                throw AuthError.server(status: 400, message: "That number doesn't look right")
-            }
-            if json["error"] as? String == "server_not_configured" {
-                throw AuthError.server(status: 500, message: "SMS isn't set up yet")
-            }
-            let message = json["msg"] as? String ?? json["error_description"] as? String
-                ?? json["message"] as? String
-            throw AuthError.server(status: http.statusCode, message: message)
+            throw AuthError.fromHTTP(status: http.statusCode, json: json)
         }
     }
 
@@ -238,6 +227,34 @@ public extension AuthSession {
 public enum AuthError: Error, Equatable {
     case transport
     case server(status: Int, message: String?)
+
+    /// Maps a failed Auth or Edge Function body onto a sentence the UI can show.
+    /// `{ "error": "send_failed" }` has no `message` field, so reading only
+    /// GoTrue's keys left the UI with a bare 502.
+    static func fromHTTP(status: Int, json: [String: Any]) -> AuthError {
+        let code = json["error"] as? String
+        switch code {
+        case "rate_limited":
+            return .server(status: 429, message: "Too many attempts. Wait a moment")
+        case "invalid_phone":
+            return .server(status: 400, message: "That number doesn't look right")
+        case "server_not_configured":
+            return .server(status: 500, message: "SMS isn't set up yet")
+        case "send_failed":
+            return .server(status: 502, message: "Couldn't send the text. Check the number and try again")
+        case "sms_region":
+            return .server(status: 502, message: "SMS isn't available for that country yet")
+        case "sms_unverified":
+            return .server(status: 502, message: "Couldn't send the text to that number yet")
+        case "check_failed", "session_failed":
+            return .server(status: status, message: "Couldn't finish sign-in. Try again")
+        default:
+            break
+        }
+        let message = json["msg"] as? String ?? json["error_description"] as? String
+            ?? json["message"] as? String
+        return .server(status: status, message: message)
+    }
 
     /// Plain-language reason, so the UI never shows a bare status code.
     public var readable: String {

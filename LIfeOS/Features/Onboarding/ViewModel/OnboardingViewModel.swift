@@ -157,7 +157,7 @@ final class OnboardingViewModel {
             }
             startResendCountdown()
         } catch let error as AuthError {
-            authLog.error("sendCode failed: \(String(describing: error), privacy: .public)")
+            authLog.error("sendCode failed: \(error.readable, privacy: .public)")
             errorMessage = error.readable
         } catch {
             errorMessage = "Couldn't send the code"
