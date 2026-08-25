@@ -13,11 +13,25 @@ final class MoneyViewModel {
         self.calendar = calendar
     }
 
+    #if DEBUG
+    /// Shared with the Settings toggle that writes it. Delete alongside
+    /// `SampleMoneyData.swift` when Plaid lands.
+    static let sampleDataKey = "useSampleFinanceData"
+    #endif
+
     func attach(_ context: ModelContext) {
         self.context = context
     }
 
     func load() {
+        #if DEBUG
+        // Off unless deliberately switched on in Settings. Release builds do not
+        // compile `SampleMoneyData` at all, so this branch cannot exist there.
+        if UserDefaults.standard.bool(forKey: Self.sampleDataKey) {
+            snapshot = .sample
+            return
+        }
+        #endif
         guard let context else { return }
         let store = MoneyStore(context: context, calendar: calendar)
 

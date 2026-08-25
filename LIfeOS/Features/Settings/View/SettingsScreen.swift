@@ -6,6 +6,9 @@ struct SettingsScreen: View {
     var whoop: WhoopConnectionViewModel?
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
+    #if DEBUG
+    @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
+    #endif
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
@@ -22,6 +25,11 @@ struct SettingsScreen: View {
 
                         sectionLabel("Connections")
                         connectionsRow
+
+                        #if DEBUG
+                        sectionLabel("Developer")
+                        sampleDataCard
+                        #endif
 
                         signOutButton
                             .padding(.top, 8)
@@ -42,6 +50,29 @@ struct SettingsScreen: View {
         }
         .onChange(of: model.draft) { model.save() }
     }
+
+    #if DEBUG
+    /// Fills the Money screen with invented numbers so its layout can be judged
+    /// before Plaid exists. Debug-only in the strongest sense: the sample data
+    /// is not compiled into a release build, so this control has nothing to
+    /// switch on there and is not shown.
+    private var sampleDataCard: some View {
+        GlassPanel {
+            Toggle(isOn: $useSampleFinanceData) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Use sample finance data")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Text("Invented numbers, for looking at the layout. Never in a release build.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(LifeOSTokens.accent)
+        }
+    }
+    #endif
 
     private var appearanceCard: some View {
         GlassPanel {
