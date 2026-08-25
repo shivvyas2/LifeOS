@@ -1,7 +1,7 @@
 # Login screen, email OTP, and the Twilio failure map
 
 Date: 2026-08-25
-Status: approved, not yet implemented
+Status: implemented in code; two server-side steps outstanding
 
 ## Problem
 
@@ -200,3 +200,38 @@ version.
 `lifeos://auth-callback` allow listed in `config.toml` and unused. Harmless,
 and left alone so the Whoop callback's neighbour is not disturbed in the same
 change.
+
+## Outstanding (server side, not code)
+
+Both are configuration on hosted services. Neither is fixable from this
+repository, and the code has been written so that the app behaves honestly
+until they land.
+
+- **Resend.** Verify a sending domain, then `supabase secrets set
+  RESEND_API_KEY=...` and `supabase config push` to put `[auth.email.smtp]`
+  and both templates on the hosted project. Until that lands, email OTP still
+  delivers only to project team members and caps at the built-in sender's two
+  per hour. The client is already correct: `sendCode`/`verify` implement email
+  OTP and the magic-link path is gone.
+- **Twilio.** Root cause still unconfirmed, pending the console: check the
+  trial badge, the code under Monitor > Logs > Errors, and whether any
+  subaccounts exist. If it reports 21608 on credentials belonging to a paid
+  account, those credentials are a subaccount's and `TWILIO_ACCOUNT_SID` needs
+  repointing. Nothing in this repository can make a trial account deliver to
+  an unverified number. The app's job, now done, is to say which failure it is
+  and to offer email as the way through.
+
+## What shipped
+
+- `classifyTwilioFailure` splits 21608 from 21610 and names 30034 and 60410;
+  `SEND_FAILURE_STATUS` maps each kind to its status in one place, so a new
+  kind cannot be added to the classifier and dropped by the caller.
+- `AuthSession.hasProfile`, decoded from `user_metadata.first_name`, carried
+  across a refresh, and decoded with `decodeIfPresent ?? false` so sessions
+  already in the keychain survive the upgrade.
+- `AuthMode` and a second door on the intro. Copy only: the post-verify branch
+  routes on the account, so picking the wrong door is harmless.
+- Email is the default channel, and any phone send failure offers "Use email
+  instead".
+- The first Deno test in the repository, on a pure function that had regressed
+  twice with no coverage.
