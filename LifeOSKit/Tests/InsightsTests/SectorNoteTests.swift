@@ -26,11 +26,18 @@ import Persistence
         #expect(prompt.contains("Soul"))
     }
 
-    @Test func lastMonthsScoreIsOfferedForComparison() {
+    /// The screen already shows "Last month you said N" on its own, and the
+    /// instructions forbid the model from mentioning a score at all. Feeding
+    /// it last month's number on the same 0-10 scale would work against that
+    /// instruction, so the prompt never carries it, even when the context
+    /// holds one.
+    @Test func previousScoreNeverReachesThePrompt() {
         let context = SectorEvidenceContext(
             sectorTitle: "Soul", rows: evidence.rows, previousUserScore: 7
         )
-        #expect(context.promptLines.contains("7"))
+        #expect(!context.promptLines.contains("7"))
+        #expect(!context.promptLines.lowercased().contains("you scored"))
+        #expect(!SectorNoteTask(sectorTitle: "Soul").prompt(context).lowercased().contains("you scored"))
     }
 
     @Test func aFirstMonthMentionsNoPreviousScore() {
