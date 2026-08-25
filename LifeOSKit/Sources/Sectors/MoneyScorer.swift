@@ -44,7 +44,7 @@ public struct MoneyScorer: SectorScorer {
             rows.append(EvidenceRow(
                 label: "spend vs last month",
                 value: "\(change >= 0 ? "-" : "+")\(Int((abs(change) * 100).rounded()))%",
-                normalised: 0.5 + change,
+                normalised: 0.5 + change,  // Relies on EvidenceRow clamping above 1.0 and below 0.0
                 weight: 1
             ))
         }
