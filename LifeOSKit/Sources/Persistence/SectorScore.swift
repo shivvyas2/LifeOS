@@ -6,9 +6,21 @@ public extension Date {
     ///
     /// Every sector row is keyed by this, so closing August on 3 September
     /// files the score under 1 August rather than under the day it was typed.
+    ///
+    /// The primary path reconstructs the date from year and month components.
+    /// The fallback preserves the invariant by calculating back from the day of month,
+    /// since it should never actually be reached in practice.
     static func startOfMonth(_ date: Date, calendar: Calendar = .current) -> Date {
         let parts = calendar.dateComponents([.year, .month], from: date)
-        return calendar.date(from: parts) ?? calendar.startOfDay(for: date)
+        if let reconstructed = calendar.date(from: parts) {
+            return reconstructed
+        }
+
+        // Fallback: subtract (day - 1) from the start of the current day
+        // to ensure we land on the first of the month even if date reconstruction fails.
+        let dayOfMonth = calendar.component(.day, from: date)
+        let startOfDay = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: .day, value: -(dayOfMonth - 1), to: startOfDay) ?? startOfDay
     }
 }
 
@@ -21,7 +33,7 @@ public extension Date {
 public final class SectorScore {
     public var sectorRaw: String
     /// Always the first day of the month being scored.
-    public var month: Date
+    public private(set) var month: Date
     /// What the rule said, or nil when there was no evidence at all.
     public var proposedScore: Int?
     /// What the person said. Nil until they pass through this sector.
@@ -69,7 +81,7 @@ public final class SectorScore {
 @Model
 public final class CheckInAnswer {
     public var sectorRaw: String
-    public var month: Date
+    public private(set) var month: Date
     public var questionID: String
     public var answer: String
     public var createdAt: Date
