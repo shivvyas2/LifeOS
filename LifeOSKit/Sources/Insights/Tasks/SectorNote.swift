@@ -16,17 +16,17 @@ public struct SectorNote: Equatable, Sendable {
 /// cite a figure that played no part in the number.
 public struct SectorEvidenceContext: Sendable {
     public let sectorTitle: String
-    public let evidence: Evidence
+    public let rows: [EvidenceRow]
     public let previousUserScore: Int?
 
-    public init(sectorTitle: String, evidence: Evidence, previousUserScore: Int?) {
+    public init(sectorTitle: String, rows: [EvidenceRow], previousUserScore: Int?) {
         self.sectorTitle = sectorTitle
-        self.evidence = evidence
+        self.rows = rows
         self.previousUserScore = previousUserScore
     }
 
     public var promptLines: String {
-        var lines = evidence.rows.map { "\($0.label): \($0.value)" }
+        var lines = rows.map { "\($0.label): \($0.value)" }
         if let previousUserScore {
             lines.append("last month you scored this \(previousUserScore) out of 10")
         }

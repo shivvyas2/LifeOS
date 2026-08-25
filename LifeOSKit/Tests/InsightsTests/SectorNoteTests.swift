@@ -16,7 +16,7 @@ import Persistence
     /// that played no part in the score.
     @Test func thePromptCarriesEveryEvidenceRow() {
         let context = SectorEvidenceContext(
-            sectorTitle: "Soul", evidence: evidence, previousUserScore: 7
+            sectorTitle: "Soul", rows: evidence.rows, previousUserScore: 7
         )
         let prompt = SectorNoteTask(sectorTitle: "Soul").prompt(context)
 
@@ -28,14 +28,14 @@ import Persistence
 
     @Test func lastMonthsScoreIsOfferedForComparison() {
         let context = SectorEvidenceContext(
-            sectorTitle: "Soul", evidence: evidence, previousUserScore: 7
+            sectorTitle: "Soul", rows: evidence.rows, previousUserScore: 7
         )
         #expect(context.promptLines.contains("7"))
     }
 
     @Test func aFirstMonthMentionsNoPreviousScore() {
         let context = SectorEvidenceContext(
-            sectorTitle: "Soul", evidence: evidence, previousUserScore: nil
+            sectorTitle: "Soul", rows: evidence.rows, previousUserScore: nil
         )
         #expect(!context.promptLines.lowercased().contains("last month you scored"))
     }
@@ -53,7 +53,7 @@ import Persistence
 
     @Test func emptyEvidenceStillProducesAUsablePrompt() {
         let context = SectorEvidenceContext(
-            sectorTitle: "Romance", evidence: Evidence(), previousUserScore: nil
+            sectorTitle: "Romance", rows: [], previousUserScore: nil
         )
         #expect(!SectorNoteTask(sectorTitle: "Romance").prompt(context).isEmpty)
     }
