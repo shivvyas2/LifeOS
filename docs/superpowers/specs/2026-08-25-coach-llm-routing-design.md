@@ -14,7 +14,7 @@ Apple's on-device model is free, private, offline, and always warm. It is also s
 
 This document specifies a layer that uses the on-device model for everything it can handle and escalates to cloud only where the on-device model genuinely cannot serve, with a spend ceiling that cannot be breached.
 
-The target: **under $1.50/month per user in typical use, and structurally incapable of exceeding $5.00 total.**
+The target: **under $1.00/month per user in typical use, and structurally incapable of exceeding a $2.00 monthly allowance.**
 
 ---
 
@@ -46,7 +46,7 @@ The V1 spec's underlying intent survives intact: `@Generable` types, `Generation
 | Data leaving the device | Aggregates only, never raw records | Privacy and cost improve together |
 | Proxy scope | Thin — app owns prompts, Edge Function owns key, model map, and budget | Prompts stay beside on-device prompts; model swaps ship without App Store review |
 | Shared contract | One `@Generable` type per task, serving both tiers | `GenerationSchema` is `Codable` and `GeneratedContent` has `init(json:)`, so this is possible without a second type system |
-| Spend ceiling | $5.00 lifetime per user, plus a global ceiling, enforced server-side by reservation | A hard invariant, not a soft guard |
+| Spend ceiling | $2.00 per user per calendar month, plus a global ceiling, enforced by a database check constraint | A hard invariant, not a soft guard. Internal — never surfaced to the user except on exhaustion. |
 | Streaming | Deferred past V2.0 | Three of four tasks don't want it; it doubles the engine surface |
 
 ---
@@ -253,7 +253,7 @@ Lives in the function beside the price table, because the two always change toge
 | Role | Initial model | Notes |
 |---|---|---|
 | `reasoning` | Claude Sonnet 5 | $3.00/$15.00 per 1M input/output at first-party rates ($2.00/$10.00 introductory through 2026-08-31). Escalate to Claude Opus 5 ($5.00/$25.00) if weekly-review quality disappoints. |
-| `vision` | Claude Sonnet 5 | Same model, image content block. Image dimensions capped client-side (Section 9). |
+| `vision` | Claude Haiku 4.5 | $1.00/$5.00 per 1M — a third of Sonnet 5's rate. Reading macros off a meal photo is perception, not reasoning; it does not need a frontier model. Image dimensions capped client-side (Section 9). Confirm image support via the Models API `capabilities` field before wiring it. |
 
 Only two roles exist because only two are used. A cheap classification role is easy to add when something needs it, and pointless before then.
 
@@ -265,9 +265,11 @@ OpenRouter applies its own margin on top of first-party rates; the price table i
 
 ---
 
-## 9. The $5 hard cap
+## 9. The $2/month allowance
 
-The requirement is that spending **cannot** exceed $5.00 per user, not that it usually does not.
+Each user gets **$2.00 of cloud inference per calendar month**. The requirement is that spending *cannot* exceed it, not that it usually does not.
+
+The allowance is **internal**. It exists to bound what the app costs to run, not to be a feature. Users are never shown a balance, a meter, a percentage, or a dollar figure. The only time the allowance becomes visible is when it runs out, and then it is one sentence.
 
 ### Why check-then-call is insufficient
 
@@ -275,46 +277,62 @@ The requirement is that spending **cannot** exceed $5.00 per user, not that it u
 read spend -> if under cap -> call -> add cost
 ```
 
-Two concurrent requests both read $4.98 and both proceed. The ceiling is breached by design. Any scheme that reads and writes in separate statements has this gap.
+Two concurrent requests both read $1.98 and both proceed. The ceiling is breached by design. Any scheme that reads and writes in separate statements has this gap.
 
-### Reserve, then settle
+### The invariant is enforced by the schema
 
-Every request pre-authorizes its **worst case** before a token is generated, and trues up afterward.
+Rather than relying on every call site writing its guard correctly, exceeding the allowance is made **representationally impossible**:
 
 ```sql
 create table coach_budget (
-  user_id        uuid primary key,
-  period_start   timestamptz not null default 'epoch',
-  spent_micros   bigint not null default 0,
-  reserved_micros bigint not null default 0
+  user_id         uuid not null,
+  period_start    date not null,               -- first day of the calendar month, UTC
+  ceiling_micros  bigint not null default 2000000,   -- $2.00
+  spent_micros    bigint not null default 0,
+  reserved_micros bigint not null default 0,
+  primary key (user_id, period_start),
+  constraint within_allowance
+    check (spent_micros + reserved_micros <= ceiling_micros)
 );
 
 create table coach_reservation (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references coach_budget(user_id),
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null,
+  period_start  date not null,
   amount_micros bigint not null,
-  created_at   timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  foreign key (user_id, period_start) references coach_budget(user_id, period_start)
 );
 ```
 
-Reservation is a single atomic statement. Concurrent callers serialize on the row; there is no read-then-write gap:
+Any statement that would push a row over its ceiling raises a check violation. The Edge Function catches that and returns `budget_exceeded`. A bug in the reservation SQL cannot silently overspend — it can only fail loudly.
+
+`ceiling_micros` is a column rather than a literal so the allowance can be raised for a single user, or globally, without a schema change.
+
+### Monthly periods need no reset job
+
+The period is part of the primary key. A new calendar month means a new row, created lazily on first use with `spent_micros = 0`. There is no cron job to reset balances and therefore no cron job to fail silently and strand every user at zero.
+
+Reservation is one atomic upsert:
 
 ```sql
-update coach_budget
-   set reserved_micros = reserved_micros + $reserve
- where user_id = $uid
-   and spent_micros + reserved_micros + $reserve <= 5000000
+insert into coach_budget (user_id, period_start, reserved_micros)
+values ($uid, date_trunc('month', now() at time zone 'utc')::date, $reserve)
+on conflict (user_id, period_start) do update
+   set reserved_micros = coach_budget.reserved_micros + $reserve
 returning user_id;
 ```
 
-Zero rows returned means refuse, before the provider is called.
+No `where` guard is needed on the update: the check constraint is the guard, on both the insert path and the update path. Concurrent callers serialize on the row.
 
-Because the reserved amount is the maximum the call could cost, the ceiling holds even if every in-flight request simultaneously returns its longest permitted answer.
+### Reserve, then settle
+
+Every request pre-authorizes its **worst case** before a token is generated, and trues up afterward. Because the reserved amount is the maximum the call could cost, the ceiling holds even if every in-flight request simultaneously returns its longest permitted answer.
 
 ### What makes the worst case computable
 
 - **`max_tokens` is mandatory on every request.** It bounds the output side. Without it the worst case is unbounded and the entire scheme is theatre. The Edge Function rejects a request that omits it.
-- **Micro-dollars as `bigint`, never floats.** $5.00 is `5_000_000`. Float accumulation drifts, and drift in the wrong direction defeats the cap.
+- **Micro-dollars as `bigint`, never floats.** $2.00 is `2_000_000`. Float accumulation drifts, and drift in the wrong direction defeats the cap.
 - **Images are resized client-side** to a fixed maximum dimension before upload, so `.vision` requests carry a predictable token ceiling rather than an unknown one. The worst-case estimate uses a conservative constant for image tokens.
 
 Worst case = `(estimated_input_tokens x input_price) + (max_tokens x output_price)`, rounded up.
@@ -329,7 +347,7 @@ OpenRouter returns actual usage when the request sets `usage: { include: true }`
 update coach_budget
    set reserved_micros = reserved_micros - $reserved,
        spent_micros    = spent_micros + $actual
- where user_id = $uid;
+ where user_id = $uid and period_start = $period;
 delete from coach_reservation where id = $rid;
 ```
 
@@ -354,9 +372,9 @@ If the app can write this table, the cap is decoration.
 
 ### Global ceiling
 
-A per-user cap does not protect the account. Ten accounts is $50.
+A per-user allowance does not protect the account. Ten accounts is $20/month.
 
-`coach_budget` carries a sentinel row (`user_id = '00000000-0000-0000-0000-000000000000'`) holding the global ceiling. Reservation runs the same guarded `update` against both the user row and the sentinel row **inside one transaction**: if either returns zero rows, the transaction rolls back and the request is refused. Settlement likewise decrements both rows in one transaction, so the two can never drift.
+`coach_budget` carries a sentinel row (`user_id = '00000000-0000-0000-0000-000000000000'`) with its own, larger `ceiling_micros`. Reservation upserts both the user row and the sentinel row **inside one transaction**: if either violates its check constraint, the transaction rolls back and the request is refused. Settlement decrements both in one transaction, so the two can never drift.
 
 The V1 spec establishes this as a single-user sideloaded app, so this is a backstop against unexpected account creation rather than a scaling concern — but Supabase permits signups by default, and it is a few lines.
 
@@ -364,13 +382,17 @@ The V1 spec establishes this as a single-user sideloaded app, so this is a backs
 
 Everything above is our code, and our code can be wrong. Therefore **also set a hard spend limit on the OpenRouter key itself** via their provisioning-key limits.
 
-That ceiling does not depend on our reservation logic being correct. Two independent limits, one of which our bugs cannot undermine. This is the guarantee; the SQL is the optimization that keeps us from hitting it.
+That ceiling does not depend on our reservation logic being correct. Three independent limits — the check constraint, the global sentinel row, and the provider key — of which only the first two are our code. This is the guarantee; the SQL is what keeps us from ever hitting it and turning a graceful degrade into a hard provider failure.
 
-### Period
+### What the user sees
 
-`$5.00` is **lifetime** per user. A monthly cap would mean $60/year per user, which does not satisfy the requirement as stated. The `period_start` column exists so a later switch to monthly is a configuration change rather than a migration.
+Nothing, until the allowance is gone. Then:
 
-At the ceiling, cloud tiers become unavailable and the coach continues on-device. The user is told once, as a state, not per request.
+> **You're out of limit.**
+
+No balance, no countdown, no "you have used 80%." When the allowance is exhausted, cloud tiers become unavailable and the coach keeps working on-device; tasks with a cloud floor show that one line, once, as a state rather than an error dialog per request.
+
+The `degraded` state (Section 11) must **not** mention the allowance. "This ran on-device" and "you are out of budget" are different sentences, and only the second one is ever shown.
 
 ---
 
@@ -380,16 +402,27 @@ At the ceiling, cloud tiers become unavailable and the coach continues on-device
 |---|---|---|---|
 | Daily brief | on-device | 30/mo | $0 |
 | Chat, on-device turns | on-device | majority | $0 |
-| Chat, escalated | `.reasoning` | ~30/mo | ~$0.60 |
-| Weekly review | `.reasoning` | 4/mo | ~$0.07 |
-| Meal photo | `.vision` | ~60/mo | ~$0.60 |
-| | | **Total** | **~$1.30/mo** |
+| Chat, escalated | `.reasoning` (Sonnet 5) | ~30/mo | ~$0.60 |
+| Weekly review | `.reasoning` (Sonnet 5) | 4/mo | ~$0.07 |
+| Meal photo | `.vision` (Haiku 4.5) | ~60/mo | ~$0.20 |
+| | | **Total** | **~$0.87/mo** |
 
 Figures are first-party Anthropic rates; OpenRouter adds a margin.
 
-Three levers produce this, in order of impact:
+### Headroom
 
-1. **The daily brief never goes to cloud, and is generated once per day rather than once per app-open.** Cached in SwiftData keyed by date. Without this, cost scales with how often Today is opened.
+Against a $2.00 allowance that leaves roughly 55% spare, which is the right amount: enough that a heavy month does not hit the wall, tight enough that a runaway bug does.
+
+This margin was not free. Routing `.vision` to Sonnet 5 alongside `.reasoning` — the obvious choice, one model for everything — put the projection at ~$1.30/mo, only 35% under the allowance, and a user who logs meals diligently would have hit the limit most months. Splitting vision onto Haiku 4.5 costs one extra line in the role map and buys back that margin.
+
+**The two levers to reach for if real usage overruns, in order:**
+
+1. **Escalated chat is the largest and least predictable line.** It is driven by how often the on-device model fails, which is a measured quantity, not a guess — the escalation reason is recorded per request (Section 14). If `.exceededContextWindowSize` dominates, shrink `MetricsDigest` before raising the allowance.
+2. **Meal photos scale linearly with diligence.** A user logging every meal costs triple the projection. Cap the resized image dimension harder before changing models.
+
+Three structural choices produce the baseline, in order of impact:
+
+1. **The daily brief never goes to cloud, and is generated once per day rather than once per app-open.** Cached in SwiftData keyed by date. Without this, cost scales with how often Today is opened — the single largest avoidable expense in the system.
 2. **`MetricsDigest` rather than rows** — roughly an order of magnitude fewer tokens.
 3. **Chat attempts on-device first**, so most turns cost nothing.
 
@@ -402,10 +435,13 @@ Results reach the UI as three states rather than thrown errors:
 | State | Meaning | UI |
 |---|---|---|
 | `answered` | Succeeded at or above the requested tier | Normal render |
-| `degraded` | On-device answered where cloud was wanted | Render, with a quiet note |
-| `unavailable` | Refusal, or budget exhausted with a cloud floor | Explain; no retry button for refusals |
+| `degraded` | On-device answered where cloud was wanted | Render, with a quiet note — never mentioning the allowance |
+| `refused` | Apple's guardrail declined | Show the refusal explanation; no retry button |
+| `exhausted` | Allowance spent, and the task has a cloud floor | "You're out of limit." Once, as a state. |
 
-`degraded` is the state that matters. A weekly review that silently ran on-device would read as the coach inexplicably getting worse. It says so instead.
+`degraded` and `exhausted` are deliberately separate states even though the allowance can cause both. A weekly review that silently ran on-device reads as the coach inexplicably getting worse, so it says something — but it says "this ran on-device," never "you are out of budget." The allowance surfaces in exactly one string, in one state.
+
+`refused` is split out from `exhausted` because they need opposite affordances: a refusal must not offer a retry, an exhausted allowance resolves itself next month.
 
 ---
 
@@ -414,10 +450,11 @@ Results reach the UI as three states rather than thrown errors:
 | Test | What it protects |
 |---|---|
 | **Schema pin** — encode `DailyBrief.generationSchema`, assert JSON shape | The one assumption this design rests on. If Apple's encoding is not JSON-Schema-compatible, this fails on day one rather than after the remote path is built. Fallback is a `GenerationSchema` -> JSON Schema adapter, roughly 50 lines, still one source type. |
-| **Budget concurrency** — N concurrent reservations against a $5 row | The cap is a correctness claim and needs a test that could falsify it. Asserts total reserved never exceeds the ceiling and that the right number are refused. |
+| **Budget concurrency** — N concurrent reservations against a $2 row | The cap is a correctness claim and needs a test that could falsify it. Asserts total reserved never exceeds the ceiling and that the right number are refused. Should be impossible to fail given the check constraint — which is the point: the test proves the constraint is actually in the migration. |
 | **Reservation leak** — reserve, kill before settle, run sweeper | The failure mode that silently destroys the budget. |
 | **Escalation table** — inject each `GenerationError` case | Especially that `.refusal` does not escalate. |
 | **Digest boundary** — assert no raw Whoop field reaches an engine | The privacy rule. |
+| **Month rollover** — reserve in month N, assert month N+1 starts at zero without a reset job | The lazy-row scheme is what removes the cron job; this proves it works. |
 | **Worst-case estimator** — assert estimate >= actual across recorded fixtures | If the estimate can under-predict, the cap can be breached. |
 
 Engines are protocol-mocked. No test calls OpenRouter or Apple's model.
