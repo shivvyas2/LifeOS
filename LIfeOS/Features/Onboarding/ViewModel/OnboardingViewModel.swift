@@ -109,6 +109,7 @@ final class OnboardingViewModel {
         case .code:             step = .identity
         case .profile:          step = .code
         case .connections:      step = .profile
+        case .signedIn:         break
         }
     }
 
@@ -185,7 +186,10 @@ final class OnboardingViewModel {
             )
             try store.save(session)
             isSignedIn = true
-            step = .profile
+            // The only thing that separates a returning user from a new one,
+            // and it is known only now. The door they came through does not
+            // decide this; the account does.
+            step = session.hasProfile ? .signedIn : .profile
         } catch let error as AuthError {
             authLog.error("verify failed: \(String(describing: error), privacy: .public)")
             errorMessage = error.readable

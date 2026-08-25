@@ -10,6 +10,7 @@ enum OnboardingStep: Equatable {
     case code                // OTP (phone or email)
     case profile             // name, country
     case connections         // Whoop and Health, all optional
+    case signedIn            // returning user; nothing left to ask
 }
 
 /// Which door the user came through. With OTP there is no password, so signing

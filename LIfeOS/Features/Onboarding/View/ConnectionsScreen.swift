@@ -143,9 +143,16 @@ struct OnboardingFlow: View {
             case .code:        CodeScreen(model: model)
             case .profile:     ProfileScreen(model: model)
             case .connections: ConnectionsScreen(model: model, whoop: whoop, onFinish: onFinish)
+            case .signedIn:    ProgressView().controlSize(.large)
             }
         }
         .animation(.easeInOut(duration: 0.28), value: model.step)
         .transition(.opacity)
+        // Called from onChange rather than the `.signedIn` view body: a body can
+        // run more than once for a single state, and onFinish flips persisted
+        // app state.
+        .onChange(of: model.step) { _, step in
+            if step == .signedIn { onFinish() }
+        }
     }
 }
