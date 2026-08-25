@@ -4,6 +4,7 @@ import DesignSystem
 /// Recovery for the selected day, and the way into the fortnight behind it.
 struct RecoverySection: View {
     let snapshot: RecoverySnapshot
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 20) {
@@ -11,7 +12,7 @@ struct RecoverySection: View {
                 let band = RecoveryBand.band(for: recovery)
                 VStack(spacing: 6) {
                     HeroNumeral(value: "\(Int(recovery))", unit: "%", label: "Recovery")
-                        .foregroundStyle(LifeOSTokens.onGradient)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     // The band is the point. A bare 31 and a bare 81 read alike
                     // at a glance; the colour does not.
                     Text(band.label.uppercased())
@@ -22,7 +23,7 @@ struct RecoverySection: View {
                 .padding(.top, 18)
             } else {
                 HeroEmptyState(label: "Recovery", reason: "Connect Whoop in Settings")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             }
 
@@ -40,17 +41,17 @@ struct RecoverySection: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
-                    .background(Capsule().fill(LifeOSTokens.onGradient.opacity(0.16)))
+                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
                 }
             }
 
             if let synced = snapshot.syncedAt {
                 Text("Synced \(Self.relative.localizedString(for: synced, relativeTo: .now))")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(LifeOSTokens.onGradient.opacity(0.7))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
     }
@@ -159,9 +160,7 @@ struct StatGroup: View {
 
 #Preview("Connected") {
     NavigationStack {
-        ZStack {
-            LinearGradient(colors: [ModuleHue.recovery.top, ModuleHue.recovery.bottom],
-                           startPoint: .top, endPoint: .bottom)
+        GradientCanvas(hue: .recovery) {
             ScrollView {
                 RecoverySection(snapshot: RecoverySnapshot(
                     recoveryPct: 72, hrvMs: 62, restingHR: 54, dayStrain: 14.2,
@@ -173,17 +172,13 @@ struct StatGroup: View {
                 .padding()
             }
         }
-        .ignoresSafeArea()
     }
 }
 
 #Preview("Empty, the real first run") {
     NavigationStack {
-        ZStack {
-            LinearGradient(colors: [ModuleHue.recovery.top, ModuleHue.recovery.bottom],
-                           startPoint: .top, endPoint: .bottom)
+        GradientCanvas(hue: .recovery) {
             RecoverySection(snapshot: RecoverySnapshot()).padding()
         }
-        .ignoresSafeArea()
     }
 }

@@ -55,10 +55,10 @@ public struct DotBloom: View {
     }
 
     private func colour(at index: Int, isFilled: Bool) -> Color {
-        guard isFilled else { return LifeOSTokens.onGradient.opacity(0.16) }
+        guard isFilled else { return LifeOSTokens.dotFuture.resolve(scheme) }
         return index % accentEvery == 0
             ? LifeOSTokens.accent
-            : LifeOSTokens.onGradient.opacity(0.92)
+            : LifeOSTokens.primaryText.resolve(scheme)
     }
 }
 
@@ -88,10 +88,7 @@ public struct StaggeredAppear<Content: View>: View {
 }
 
 #Preview {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.body.top, ModuleHue.body.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .body) {
         DotBloom()
     }
-    .ignoresSafeArea()
 }

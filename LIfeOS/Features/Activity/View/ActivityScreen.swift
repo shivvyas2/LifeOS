@@ -5,16 +5,17 @@ import DesignSystem
 /// the canvas and the day strip, so this contributes content only.
 struct ActivitySection: View {
     let snapshot: ActivitySnapshot
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 24) {
             if let steps = snapshot.steps {
                 HeroNumeral(value: steps.formatted(), label: "Steps")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             } else {
                 HeroEmptyState(label: "Steps", reason: "No movement recorded")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             }
 
@@ -33,7 +34,7 @@ struct ActivitySection: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Workouts")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(LifeOSTokens.onGradient.opacity(0.85))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
                     ForEach(snapshot.workouts) { WorkoutRow(workout: $0) }
                 }
@@ -106,9 +107,7 @@ struct WorkoutRow: View {
 }
 
 #Preview {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.activity.top, ModuleHue.activity.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .activity) {
         ActivitySection(snapshot: ActivitySnapshot(
             steps: 13143, exerciseMinutes: 72, activeEnergyKcal: 1277, restingHR: 54,
             workouts: [
@@ -122,5 +121,4 @@ struct WorkoutRow: View {
         ))
         .padding()
     }
-    .ignoresSafeArea()
 }

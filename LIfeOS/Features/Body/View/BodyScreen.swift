@@ -4,16 +4,17 @@ import DesignSystem
 /// Bodyweight for the selected day, plus its recent trend.
 struct WeightSection: View {
     let snapshot: BodySnapshot
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 24) {
             if let weight = snapshot.weightKg {
                 HeroNumeral(value: String(format: "%.1f", weight), unit: "kg", label: "Bodyweight")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             } else {
                 HeroEmptyState(label: "Bodyweight", reason: "No weigh-in recorded")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             }
 
@@ -30,7 +31,7 @@ struct WeightSection: View {
                 )
             }
 
-            SolidCard {
+            SoftCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("LAST 14 DAYS")
                         .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
@@ -76,9 +77,7 @@ private func previewWeights() -> [WeightPoint] {
 }
 
 #Preview {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.body.top, ModuleHue.body.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .body) {
         ScrollView {
             WeightSection(snapshot: BodySnapshot(
                 weightKg: 77.4, weeklyDeltaKg: -0.6, recentWeights: previewWeights()
@@ -86,5 +85,4 @@ private func previewWeights() -> [WeightPoint] {
             .padding()
         }
     }
-    .ignoresSafeArea()
 }

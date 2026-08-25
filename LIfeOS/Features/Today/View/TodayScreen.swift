@@ -28,28 +28,28 @@ struct TodayScreen: View {
                 streakLine
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    SolidCard {
+                    SoftCard {
                         StatTile(
                             label: "Steps",
                             value: snapshot.steps.map { $0.formatted() },
                             progress: snapshot.stepsProgress
                         )
                     }
-                    SolidCard {
+                    SoftCard {
                         StatTile(
                             label: "Sleep",
                             value: snapshot.sleepMinutes.map(Self.duration),
                             progress: snapshot.sleepProgress
                         )
                     }
-                    SolidCard {
+                    SoftCard {
                         StatTile(
                             label: "Weight",
                             value: snapshot.weightKg.map { String(format: "%.1f", $0) },
                             unit: "kg"
                         )
                     }
-                    SolidCard {
+                    SoftCard {
                         StatTile(
                             label: "Recovery",
                             value: snapshot.recoveryPct.map { "\(Int($0))" },

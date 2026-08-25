@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The one gradient primitive. Saturated at the top, near-white at the bottom.
-/// Adding a module later is a hue token, not a new screen design.
+/// The one canvas primitive. Flat and near-neutral, with a whisper of the
+/// module's hue washed in at the top. Adding a module later is a hue token,
+/// not a new screen design.
 public struct GradientCanvas<Content: View>: View {
     private let hue: ModuleHue
     private let content: Content
@@ -14,14 +15,18 @@ public struct GradientCanvas<Content: View>: View {
 
     public var body: some View {
         ZStack(alignment: .top) {
+            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
+
+            // A whisper of the module's identity at the top. The hue survives
+            // the restyle as a tint, not a paint job.
             LinearGradient(
-                colors: scheme == .dark
-                    ? [hue.darkTop, hue.darkBottom]
-                    : [hue.top, hue.bottom],
+                colors: [(scheme == .dark ? hue.pastelDark : hue.pastel).opacity(scheme == .dark ? 0.7 : 0.55),
+                         .clear],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .ignoresSafeArea()
+            .frame(height: 260)
+            .ignoresSafeArea(edges: .top)
 
             content
         }
@@ -34,7 +39,7 @@ public struct GradientCanvas<Content: View>: View {
             ForEach(ModuleHue.allCases, id: \.self) { hue in
                 GradientCanvas(hue: hue) {
                     Text(hue.rawValue)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(.light))
                         .padding(.top, 60)
                 }
                 .frame(width: 200, height: 420)
@@ -49,7 +54,7 @@ public struct GradientCanvas<Content: View>: View {
             ForEach(ModuleHue.allCases, id: \.self) { hue in
                 GradientCanvas(hue: hue) {
                     Text(hue.rawValue)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(.dark))
                         .padding(.top, 60)
                 }
                 .frame(width: 200, height: 420)

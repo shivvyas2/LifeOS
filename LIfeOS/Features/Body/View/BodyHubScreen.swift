@@ -13,13 +13,14 @@ struct BodyHubScreen: View {
 
     @Binding var section: BodySection
     @Binding var selectedDate: Date
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         GradientCanvas(hue: section.hue) {
             ScrollView {
                 VStack(spacing: 22) {
                     WeekStrip(selection: $selectedDate)
-                        .foregroundStyle(LifeOSTokens.onGradient)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .padding(.top, 4)
 
                     SegmentedPill(

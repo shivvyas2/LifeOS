@@ -7,16 +7,17 @@ import DesignSystem
 struct WellnessSection: View {
     let snapshot: WellnessSnapshot
     var onAddJournal: () -> Void = {}
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 24) {
             if let minutes = snapshot.averageSleepMinutes {
                 HeroNumeral(value: "\(minutes / 60)h \(minutes % 60)m", label: "Average sleep · 7 days")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             } else {
                 HeroEmptyState(label: "Average sleep", reason: "No sleep recorded this week")
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.top, 18)
             }
 
@@ -28,7 +29,7 @@ struct WellnessSection: View {
                            value: snapshot.averageExerciseMinutes.map { "\($0)" }, unit: "min")
             }
 
-            SolidCard {
+            SoftCard {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("TRAINING")
                         .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
@@ -48,7 +49,7 @@ struct WellnessSection: View {
     }
 
     private var journalCard: some View {
-        SolidCard {
+        SoftCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("JOURNAL")
@@ -84,14 +85,11 @@ struct WellnessSection: View {
 }
 
 #Preview {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.habits.top, ModuleHue.habits.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .habits) {
         WellnessSection(snapshot: WellnessSnapshot(
             averageSleepMinutes: 450, workoutDays: 4, averageExerciseMinutes: 38,
             sleepVerdict: "Optimal", trainingVerdict: "Consistent"
         ))
         .padding()
     }
-    .ignoresSafeArea()
 }
