@@ -9,24 +9,30 @@ struct WhoopDetailScreen: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                // First, because it is the only chart here showing structure
-                // rather than quantity. A short night and a fragmented night
-                // look identical on the duration chart below and obviously
-                // different here, which is the reason the stages are ingested.
-                SleepCompositionChart(nights: snapshot.nights)
+        GradientCanvas(hue: .recovery) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // First, because it is the only chart here showing structure
+                    // rather than quantity. A short night and a fragmented night
+                    // look identical on the duration chart below and obviously
+                    // different here, which is the reason the stages are ingested.
+                    SleepCompositionChart(nights: snapshot.nights)
 
-                TrendChart(title: "Recovery", unit: "%", series: snapshot.recoveryTrend)
-                TrendChart(title: "Day strain", unit: nil, series: snapshot.strainTrend)
-                TrendChart(title: "Sleep", unit: "min", series: snapshot.sleepTrend)
-                TrendChart(title: "HRV", unit: "ms", series: snapshot.hrvTrend)
-                TrendChart(title: "Resting heart rate", unit: "bpm", series: snapshot.restingHRTrend)
+                    TrendChart(title: "Recovery", unit: "%", series: snapshot.recoveryTrend,
+                               color: ModuleHue.recovery.top)
+                    TrendChart(title: "Day strain", unit: nil, series: snapshot.strainTrend,
+                               color: ModuleHue.activity.top)
+                    TrendChart(title: "Sleep", unit: "min", series: snapshot.sleepTrend,
+                               color: SleepComposition.Stage.rem.color)
+                    TrendChart(title: "HRV", unit: "ms", series: snapshot.hrvTrend,
+                               color: ModuleHue.body.top)
+                    TrendChart(title: "Resting heart rate", unit: "bpm",
+                               series: snapshot.restingHRTrend, color: ModuleHue.habits.top)
+                }
+                .padding(20)
+                .padding(.bottom, 60)
             }
-            .padding(20)
-            .padding(.bottom, 60)
         }
-        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
         .navigationTitle("14 days")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -37,56 +43,54 @@ struct TrendChart: View {
     let title: String
     let unit: String?
     let series: TrendSeries
+    var color: Color = ModuleHue.recovery.top
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         // Nothing recorded means no chart, not an empty axis.
         if series.points.contains(where: { $0.value != nil }) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Spacer()
-                    if let average = series.average {
-                        Text("avg \(formatted(average))\(unit.map { " \($0)" } ?? "")")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    }
-                }
-
-                Chart {
-                    // A day with no reading contributes no mark at all, so the
-                    // gap stays visible instead of being drawn as a zero.
-                    ForEach(series.points) { point in
-                        if let value = point.value {
-                            BarMark(
-                                x: .value("Day", point.date, unit: .day),
-                                y: .value(title, value)
-                            )
-                            .foregroundStyle(LifeOSTokens.accent.opacity(0.85))
-                            .cornerRadius(3)
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        Spacer()
+                        if let average = series.average {
+                            Text("avg \(formatted(average))\(unit.map { " \($0)" } ?? "")")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                     }
-                    if let average = series.average {
-                        RuleMark(y: .value("Average", average))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
+
+                    Chart {
+                        // A day with no reading contributes no mark at all, so the
+                        // gap stays visible instead of being drawn as a zero.
+                        ForEach(series.points) { point in
+                            if let value = point.value {
+                                BarMark(
+                                    x: .value("Day", point.date, unit: .day),
+                                    y: .value(title, value)
+                                )
+                                .foregroundStyle(color)
+                                .cornerRadius(3)
+                            }
+                        }
+                        if let average = series.average {
+                            RuleMark(y: .value("Average", average))
+                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
+                        }
                     }
-                }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 4)) { _ in
-                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: .day, count: 4)) { _ in
+                            AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                        }
                     }
+                    .frame(height: 120)
                 }
-                .frame(height: 120)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
-            )
         }
     }
 
@@ -95,57 +99,46 @@ struct TrendChart: View {
     }
 }
 
-/// Sleep stages stacked per night.
+/// One column per night so composition is compared by eye, not stacked inside
+/// a single chart box.
 struct SleepCompositionChart: View {
     let nights: [SleepComposition]
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
-        if !nights.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Sleep composition")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+    private var shown: [SleepComposition] {
+        Array(nights.suffix(14))
+    }
 
-                Chart {
-                    ForEach(nights) { night in
-                        ForEach(night.segments) { segment in
-                            BarMark(
-                                x: .value("Night", night.date, unit: .day),
-                                y: .value("Minutes", segment.minutes)
-                            )
-                            .foregroundStyle(by: .value("Stage", segment.stage.label))
+    var body: some View {
+        if !shown.isEmpty {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Sleep composition")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+
+                    HStack(spacing: 12) {
+                        ForEach([
+                            SleepComposition.Stage.sws,
+                            .rem,
+                            .light,
+                            .awake
+                        ], id: \.self) { stage in
+                            HStack(spacing: 5) {
+                                Capsule()
+                                    .fill(stage.color)
+                                    .frame(width: 10, height: 8)
+                                Text(stage.label)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                            }
                         }
                     }
+
+                    SleepNightStrip(nights: shown)
                 }
-                .chartForegroundStyleScale([
-                    SleepComposition.Stage.sws.label:   SleepComposition.Stage.sws.color,
-                    SleepComposition.Stage.rem.label:   SleepComposition.Stage.rem.color,
-                    SleepComposition.Stage.light.label: SleepComposition.Stage.light.color,
-                    SleepComposition.Stage.awake.label: SleepComposition.Stage.awake.color,
-                ])
-                .chartYAxis {
-                    // Hours read; minutes do not, at this scale.
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let minutes = value.as(Int.self) { Text("\(minutes / 60)h") }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 4)) { _ in
-                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                    }
-                }
-                .chartLegend(position: .bottom, spacing: 8)
-                .frame(height: 180)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
-            )
         }
     }
 }

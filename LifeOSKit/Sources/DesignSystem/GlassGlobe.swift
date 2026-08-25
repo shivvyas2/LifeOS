@@ -180,6 +180,8 @@ public struct GlassCircleButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .frame(width: size, height: size)
+        .contentShape(Circle())
     }
 }
 

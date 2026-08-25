@@ -31,7 +31,11 @@ struct AppShell: View {
     var body: some View {
         Group {
             if (onboarding.isSignedIn && hasFinishedOnboarding) || isGuest {
-                RootView(whoop: whoop)
+                RootView(whoop: whoop, onSignOut: {
+                    isGuest = false
+                    hasFinishedOnboarding = false
+                    onboarding.signOut()
+                })
             } else {
                 OnboardingFlow(
                     model: onboarding,

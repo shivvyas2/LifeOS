@@ -141,7 +141,11 @@ struct IdentityScreen: View {
         }
         .task { await model.loadChannels() }
         .sheet(isPresented: $showCountries) {
-            CountryPicker(selection: $model.draft.country, dial: $model.draft.dialCode)
+            CountryPicker(
+                selection: $model.draft.country,
+                dial: $model.draft.dialCode,
+                allowedIDs: DialCountries.otpRegions
+            )
         }
     }
 
@@ -270,11 +274,12 @@ private struct FieldStyle: ViewModifier {
 struct CountryPicker: View {
     @Binding var selection: String
     @Binding var dial: String
+    var allowedIDs: Set<String>? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
 
     private var matches: [DialCountry] {
-        let all = DialCountries.all
+        let all = DialCountries.all.filter { allowedIDs?.contains($0.id) ?? true }
         guard !search.isEmpty else { return all }
         return all.filter { $0.name.localizedCaseInsensitiveContains(search) || $0.dial.contains(search) }
     }

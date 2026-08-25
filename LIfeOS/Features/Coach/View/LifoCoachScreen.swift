@@ -23,6 +23,7 @@ struct LifoCoachScreen: View {
                     GlassGlobe(intensity: model.level, isActive: model.phase == .listening || model.phase == .thinking)
                         .frame(width: 240, height: 240)
                         .padding(.bottom, 28)
+                        .allowsHitTesting(false)
 
                     Text(headline)
                         .font(.system(size: 26, weight: .semibold))
@@ -89,6 +90,9 @@ struct LifoCoachScreen: View {
         }
         .onAppear { model.appear() }
         .onDisappear { model.disappear() }
+        .onChange(of: model.isTyping) { _, typing in
+            if typing { typingFocused = true }
+        }
         .sheet(isPresented: $showHistory) {
             historySheet
         }
@@ -180,17 +184,10 @@ struct LifoCoachScreen: View {
             }
             .accessibilityLabel(model.phase == .listening ? "Pause" : "Listen")
 
-            GlassCircleButton(systemImage: model.isTyping ? "mic" : "keyboard", size: 52) {
-                if model.isTyping {
-                    Task { await model.startListening() }
-                } else {
-                    model.disappear()
-                    model.isTyping = true
-                    model.phase = .idle
-                    model.status = "Type to talk to LIFO."
-                }
+            GlassCircleButton(systemImage: "keyboard", size: 52) {
+                model.showKeyboard()
             }
-            .accessibilityLabel(model.isTyping ? "Use microphone" : "Type")
+            .accessibilityLabel("Type")
         }
     }
 

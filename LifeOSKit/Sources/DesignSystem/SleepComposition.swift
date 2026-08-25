@@ -6,7 +6,7 @@ import SwiftUI
 /// night and a fragmented seven hour night look identical on a duration chart
 /// and obviously different once the structure is visible.
 public struct SleepComposition: Sendable, Equatable, Identifiable {
-    public enum Stage: Sendable, Equatable, CaseIterable {
+    public enum Stage: Sendable, Equatable, Hashable, CaseIterable {
         case sws, rem, light, awake
 
         public var label: String {
@@ -22,10 +22,10 @@ public struct SleepComposition: Sendable, Equatable, Identifiable {
         /// nights be compared by eye; ordering by size would not.
         public var color: Color {
             switch self {
-            case .sws:   Color(red: 0.18, green: 0.28, blue: 0.62)
-            case .rem:   Color(red: 0.36, green: 0.50, blue: 0.86)
-            case .light: Color(red: 0.62, green: 0.73, blue: 0.94)
-            case .awake: Color(white: 0.80)
+            case .sws:   Color(red: 0.10, green: 0.28, blue: 0.86)
+            case .rem:   Color(red: 0.22, green: 0.48, blue: 0.98)
+            case .light: Color(red: 0.38, green: 0.68, blue: 1.00)
+            case .awake: Color(red: 0.42, green: 0.52, blue: 0.78)
             }
         }
     }
@@ -53,6 +53,16 @@ public struct SleepComposition: Sendable, Equatable, Identifiable {
         self.awakeMinutes = awakeMinutes
     }
 
+    /// Light → REM → Deep, left to right. Awake is a quality fact, not a
+    /// stage of sleep, so it does not belong on the score bar.
+    public var scoreBarSegments: [Segment] {
+        [(Stage.light, lightMinutes), (.rem, remMinutes), (.sws, swsMinutes)]
+            .compactMap { stage, minutes in
+                guard let minutes, minutes > 0 else { return nil }
+                return Segment(stage: stage, minutes: minutes)
+            }
+    }
+
     /// Only the stages actually reported, in stacking order. A stage Whoop did
     /// not report is absent rather than a zero segment.
     public var segments: [Segment] {
@@ -78,4 +88,91 @@ public struct SleepComposition: Sendable, Equatable, Identifiable {
     /// as a zero-height bar reads as "you did not sleep", which is a claim the
     /// data does not make.
     public var isRenderable: Bool { !segments.isEmpty }
+}
+
+/// Horizontal Light → REM → Deep bar. Widths follow the minutes; colours are
+/// the solid stage colours, never a wash.
+public struct SleepStageBar: View {
+    public let segments: [SleepComposition.Segment]
+    public var height: CGFloat
+
+    public init(segments: [SleepComposition.Segment], height: CGFloat = 16) {
+        self.segments = segments
+        self.height = height
+    }
+
+    private var total: Int {
+        max(segments.reduce(0) { $0 + $1.minutes }, 1)
+    }
+
+    public var body: some View {
+        let total = CGFloat(self.total)
+        GeometryReader { geo in
+            let gap = CGFloat(max(segments.count - 1, 0)) * 3
+            let usable = max(geo.size.width - gap, 0)
+            HStack(alignment: .bottom, spacing: 3) {
+                ForEach(segments) { segment in
+                    VStack(spacing: 6) {
+                        Text(segment.stage.label)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(segment.stage.color)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        Capsule()
+                            .fill(segment.stage.color)
+                            .frame(height: height)
+                    }
+                    .frame(width: max(usable * CGFloat(segment.minutes) / total, 4),
+                           alignment: .bottom)
+                }
+            }
+        }
+        .frame(height: height + 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One column per night, Deep at the bottom. Separate columns, not one stacked
+/// chart box, so two nights can be compared by eye.
+public struct SleepNightStrip: View {
+    public let nights: [SleepComposition]
+    private let scale: Int
+    @Environment(\.colorScheme) private var scheme
+
+    public init(nights: [SleepComposition], maxMinutes: Int? = nil) {
+        self.nights = nights
+        self.scale = max(maxMinutes ?? nights.map(\.totalMinutes).max() ?? 1, 1)
+    }
+
+    public var body: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            ForEach(nights) { night in
+                VStack(spacing: 6) {
+                    SleepNightColumn(night: night, scale: scale)
+                    Text(night.date, format: .dateTime.weekday(.narrow))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+}
+
+private struct SleepNightColumn: View {
+    let night: SleepComposition
+    let scale: Int
+    private let height: CGFloat = 132
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(night.segments.reversed())) { segment in
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(segment.stage.color)
+                    .frame(height: max(3, height * CGFloat(segment.minutes) / CGFloat(scale)))
+            }
+        }
+        .frame(maxWidth: 18)
+        .frame(maxWidth: .infinity)
+    }
 }

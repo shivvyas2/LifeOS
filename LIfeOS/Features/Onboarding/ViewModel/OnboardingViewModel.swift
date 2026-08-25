@@ -45,6 +45,10 @@ final class OnboardingViewModel {
             auth = SupabaseAuth(baseURL: url, anonKey: key)
         }
         draft.dialCode = DialCountries.dial(for: draft.country)
+        if !DialCountries.otpRegions.contains(draft.country) {
+            draft.country = "US"
+            draft.dialCode = "+1"
+        }
     }
 
     /// Picks a channel the project can actually deliver on. Phone stays the
@@ -246,7 +250,7 @@ final class OnboardingViewModel {
     }
 
     private func startResendCountdown() {
-        resendIn = 30
+        resendIn = 45
         Task {
             while resendIn > 0 {
                 try? await Task.sleep(for: .seconds(1))

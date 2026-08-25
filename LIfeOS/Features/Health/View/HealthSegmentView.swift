@@ -8,6 +8,7 @@ struct HealthSegmentView: View {
     let recovery: RecoverySnapshot
     let weight: BodySnapshot
     let wellness: WellnessSnapshot
+    var selectedDate: Date = .now
     var onAddJournal: () -> Void = {}
     var onConnectWhoop: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
@@ -50,8 +51,10 @@ struct HealthSegmentView: View {
 
             HStack(spacing: 12) {
                 recoveryCard
-                sleepCard
+                caloriesCard
             }
+
+            SleepDashboardCard(recovery: recovery, wellness: wellness, selectedDate: selectedDate)
 
             HStack(spacing: 12) {
                 PastelFillCard(
@@ -89,7 +92,6 @@ struct HealthSegmentView: View {
                 )
             }
 
-            StatGroup(title: "Sleep", rows: sleepRows)
             StatGroup(title: "Vitals", rows: vitalRows)
             WeightSection(snapshot: weight)
             journalCard
@@ -136,12 +138,13 @@ struct HealthSegmentView: View {
         )
     }
 
-    private var sleepCard: some View {
+    private var caloriesCard: some View {
         PastelFillCard(
-            icon: "moon.fill",
-            hue: .money,
-            label: "Sleep",
-            split: recovery.sleepMinutes.map(SplitNumeral.sleep(minutes:))
+            icon: "flame.fill",
+            hue: .activity,
+            label: "Calories",
+            value: recovery.calories.map { "\(Int($0))" },
+            unit: "kcal"
         )
     }
 
@@ -179,27 +182,11 @@ struct HealthSegmentView: View {
         return formatter
     }()
 
-    private var sleepRows: [StatGroup.Row] {
-        [
-            .init(label: "Performance", value: recovery.sleepPerformancePct.map { "\(Int($0))%" }),
-            .init(label: "Efficiency", value: recovery.sleepEfficiencyPct.map { "\(Int($0))%" }),
-            .init(label: "Consistency", value: recovery.sleepConsistencyPct.map { "\(Int($0))%" }),
-            .init(label: "Sleep debt", value: recovery.sleepDebtMinutes.map(Self.duration)),
-            .init(label: "7-day average",
-                  value: wellness.averageSleepMinutes.map { Self.duration($0) }),
-            .init(label: "Verdict", value: wellness.sleepVerdict),
-        ]
-    }
-
     private var vitalRows: [StatGroup.Row] {
         [
             .init(label: "Respiratory rate",
                   value: recovery.respiratoryRate.map { String(format: "%.1f", $0) },
                   delta: recovery.respiratoryRateTrend.deltaFromAverage.map { String(format: "%+.1f", $0) }),
         ]
-    }
-
-    static func duration(_ minutes: Int) -> String {
-        minutes < 60 ? "\(minutes)m" : "\(minutes / 60)h \(minutes % 60)m"
     }
 }

@@ -49,6 +49,10 @@ struct RecoverySnapshot: Equatable {
     /// stacking it beside one misreads the week.
     var nights: [SleepComposition] = []
 
+    /// Minutes napped on the selected day. Nil when none were recorded, never
+    /// a silent zero.
+    var napMinutes: Int? = nil
+
     /// Vitals sitting outside the reader's own trailing baseline. Empty means
     /// quiet — either genuinely normal or not enough data to judge.
     var anomalies: [AnomalyFinding] = []

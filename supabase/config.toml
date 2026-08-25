@@ -180,7 +180,9 @@ password_requirements = ""
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
-sms_sent = 30
+# Phone OTP is sent by otp-start (Twilio Verify), not GoTrue, so this is a
+# backstop for anyone still hitting /auth/v1/otp.
+sms_sent = 8
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
 anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
@@ -188,7 +190,7 @@ token_refresh = 150
 # Number of sign up and sign-in requests that can be made in a 5 minute interval per IP address (excludes anonymous users).
 sign_in_sign_ups = 30
 # Number of OTP / Magic link verifications that can be made in a 5 minute interval per IP address.
-token_verifications = 30
+token_verifications = 8
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
 web3 = 30
 
@@ -262,7 +264,7 @@ enable_confirmations = false
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
-max_frequency = "5s"
+max_frequency = "1m0s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # Test numbers never send an SMS, so phone signup can be exercised without an
@@ -288,22 +290,16 @@ max_frequency = "5s"
 # enabled = true
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
-# Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+# Phone OTP is sent by the otp-start Edge Function (Twilio Verify), not by
+# GoTrue. Leaving the Twilio Programmable SMS provider off means /auth/v1/otp
+# cannot be used to pump SMS. Test numbers below still work against local
+# GoTrue if you hit it directly.
 #
-# Enabled so that `/auth/v1/settings` reports phone as available and the app's
-# phone-first signup screen offers it.
-#
-# The SIDs below are placeholders, not a real account. Every number in
-# [auth.sms.test_otp] short-circuits before Twilio is called, so the provider is
-# never contacted and no working credentials are needed yet — but the CLI
-# refuses to push an enabled provider with a blank SID, hence the zeros. Numbers
-# outside the test map will fail until a real account is filled in here.
-[auth.sms.twilio]
-enabled = true
-account_sid = "AC00000000000000000000000000000000"
-message_service_sid = "MG00000000000000000000000000000000"
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+# [auth.sms.twilio]
+# enabled = false
+# account_sid = "env(TWILIO_ACCOUNT_SID)"
+# message_service_sid = "env(TWILIO_VERIFY_SERVICE_SID)"
+# auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]

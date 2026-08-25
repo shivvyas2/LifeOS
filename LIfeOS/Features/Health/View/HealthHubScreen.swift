@@ -29,7 +29,8 @@ struct HealthHubScreen: View {
                     switch section {
                     case .health:
                         HealthSegmentView(recovery: recovery, weight: weight,
-                                          wellness: wellness, onAddJournal: onAddJournal,
+                                          wellness: wellness, selectedDate: selectedDate,
+                                          onAddJournal: onAddJournal,
                                           onConnectWhoop: onConnectWhoop)
                     case .fitness:
                         FitnessSegmentView(activity: activity, recovery: recovery,
@@ -51,7 +52,26 @@ struct HealthHubScreen: View {
     HealthHubScreen(
         activity: ActivitySnapshot(steps: 13143, exerciseMinutes: 72, activeEnergyKcal: 1277, restingHR: 54),
         weight: BodySnapshot(weightKg: 77.4, weeklyDeltaKg: -0.6),
-        recovery: RecoverySnapshot(hrvMs: 62, sleepMinutes: 432),
+        recovery: RecoverySnapshot(
+            recoveryPct: 82,
+            hrvMs: 62,
+            sleepMinutes: 432,
+            sleepPerformancePct: 89,
+            sleepEfficiencyPct: 92,
+            sleepConsistencyPct: 84,
+            sleepDebtMinutes: 18,
+            calories: 1293,
+            nights: (0..<7).map { offset in
+                SleepComposition(
+                    date: Calendar.current.date(byAdding: .day, value: offset - 6, to: Date())!,
+                    lightMinutes: 210,
+                    remMinutes: 98,
+                    swsMinutes: 92,
+                    awakeMinutes: 14
+                )
+            },
+            napMinutes: 90
+        ),
         wellness: WellnessSnapshot(averageSleepMinutes: 450, workoutDays: 4,
                                    averageExerciseMinutes: 38,
                                    sleepVerdict: "Optimal", trainingVerdict: "Consistent"),
