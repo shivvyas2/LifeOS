@@ -105,6 +105,7 @@ final class OnboardingViewModel {
     func toggleMode() {
         mode = mode == .signUp ? .signIn : .signUp
         errorMessage = nil
+        phoneSendFailed = false
     }
 
     func back() {
