@@ -2961,3 +2961,12 @@ From the spec's "Out of scope", plus one thing this plan defers on its own:
 - **Wiring the six data-fed scorers into `recompute()`.** Task 12 leaves them
   falling through to an empty proposal. Each needs a store read for the month
   and is a small commit of its own; do them before calling the feature done.
+- **Board as hub is not implemented.** The spec's third decision says tapping
+  a sector opens its screen, routing Body, Money and Mission to the existing
+  Health, Money and Plan surfaces rather than a second copy of them.
+  `SectorCard` has no tap handling, and this plan never built any: the tasks
+  above ship the board and the close, not navigation from one to the other.
+  The spec's decision stands; it is simply outstanding. Wiring nine sectors to
+  their destinations, three of them existing tabs, is a feature in its own
+  right and belongs in its own task rather than folded into an unrelated
+  fix pass.
