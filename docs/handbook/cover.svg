@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
+  <!-- Kindle cover ù 1600ù2560 (Amazon recommended portrait).
+       Same orbital as docs/brand/lifeos-icon.svg on the handbook cream plate. -->
+  <defs>
+    <radialGradient id="coverGround" cx="50%" cy="18%" r="90%">
+      <stop offset="0%" stop-color="#FBFAF7"/>
+      <stop offset="55%" stop-color="#EFEDE8"/>
+      <stop offset="100%" stop-color="#E7E4DD"/>
+    </radialGradient>
+    <radialGradient id="coverCore" cx="35%" cy="30%" r="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#ff8a5c"/>
+      <stop offset="100%" stop-color="#F0572E"/>
+    </radialGradient>
+    <radialGradient id="coverMoon" cx="35%" cy="30%" r="100%">
+      <stop offset="0%" stop-color="#fff3ec"/>
+      <stop offset="60%" stop-color="#ff9a70"/>
+      <stop offset="100%" stop-color="#F0572E"/>
+    </radialGradient>
+    <linearGradient id="coverArc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0572E"/>
+      <stop offset="100%" stop-color="#F0572E" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="coverCoreGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feDropShadow dx="0" dy="0" stdDeviation="30" flood-color="#F0572E" flood-opacity="0.5"/>
+    </filter>
+    <filter id="coverMoonGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feDropShadow dx="0" dy="0" stdDeviation="12" flood-color="#F0572E" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="2560" fill="url(#coverGround)"/>
+
+  <!-- Orbital mark, unclipped, sitting on the page rather than in an app-icon squircle. -->
+  <g transform="translate(288, 220)">
+    <circle cx="512" cy="512" r="332" fill="none" stroke="#141210" stroke-width="3" opacity="0.14"/>
+    <g stroke="#141210" stroke-width="5" opacity="0.35" stroke-linecap="round">
+      <line x1="512" y1="168" x2="512" y2="192"/>
+      <line x1="512" y1="832" x2="512" y2="856"/>
+      <line x1="168" y1="512" x2="192" y2="512"/>
+      <line x1="832" y1="512" x2="856" y2="512"/>
+    </g>
+    <circle cx="512" cy="512" r="252" fill="none" stroke="#141210" stroke-width="12"/>
+    <path d="M 512 260 A 252 252 0 0 1 736 375" fill="none" stroke="url(#coverArc)" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="512" cy="512" r="80" fill="url(#coverCore)" filter="url(#coverCoreGlow)"/>
+    <circle cx="512" cy="512" r="96" fill="none" stroke="#141210" stroke-width="4" opacity="0.85"/>
+    <circle cx="512" cy="260" r="28" fill="url(#coverMoon)" filter="url(#coverMoonGlow)"/>
+    <circle cx="512" cy="260" r="28" fill="none" stroke="#141210" stroke-width="4"/>
+    <circle cx="277" cy="747" r="13" fill="#141210"/>
+    <circle cx="277" cy="747" r="13" fill="none" stroke="#F0572E" stroke-width="3" opacity="0.9"/>
+  </g>
+
+  <!-- Handbook title-page dots: three done, one current, three still open. -->
+  <g aria-hidden="true">
+    <circle cx="160" cy="1396" r="7" fill="#16150F"/>
+    <circle cx="186" cy="1396" r="7" fill="#16150F"/>
+    <circle cx="212" cy="1396" r="7" fill="#16150F"/>
+    <circle cx="238" cy="1396" r="7" fill="#F0572E"/>
+    <circle cx="264" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
+    <circle cx="290" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
+    <circle cx="316" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
+  </g>
+
+  <text x="160" y="1468" fill="#F0572E" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="6.6">LIFE OS</text>
+
+  <text x="160" y="1588" fill="#16150F" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3.2">Engineering</text>
+  <text x="160" y="1688" fill="#16150F" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3.2">Handbook</text>
+
+  <line x1="160" y1="1768" x2="1440" y2="1768" stroke="#D6D2C8" stroke-width="1"/>
+
+  <text x="160" y="1828" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">Revision D  ù  25 August 2026</text>
+  <text x="160" y="1872" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">iOS 26  ù  Swift 6  ù  MVVM</text>
+
+  <rect x="0" y="2528" width="1600" height="32" fill="#F0572E"/>
+</svg>
