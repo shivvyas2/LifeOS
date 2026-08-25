@@ -9,11 +9,44 @@ struct HealthSegmentView: View {
     let weight: BodySnapshot
     let wellness: WellnessSnapshot
     var onAddJournal: () -> Void = {}
+    var onConnectWhoop: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 16) {
             AlertBanner(messages: recovery.anomalies.map(Self.message))
+
+            if !recovery.hasAnyReading {
+                Button(action: onConnectWhoop) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "bolt.heart.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(LifeOSTokens.accent)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Connect Whoop")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                            Text("Recovery, sleep and strain")
+                                .font(.system(size: 13))
+                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        }
+                        Spacer()
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
+                                                  lineWidth: 1)
+                            }
+                    )
+                }
+                .buttonStyle(.plain)
+            }
 
             HStack(spacing: 12) {
                 recoveryCard

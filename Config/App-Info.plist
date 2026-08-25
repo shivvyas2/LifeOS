@@ -16,8 +16,10 @@
 	<string>$(WHOOP_REDIRECT_URI)</string>
 	<!-- The app uses only standard HTTPS. That is exempt encryption, and saying
 	     so here stops App Store Connect prompting on every TestFlight upload. -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LIFO listens so you can ask about your health out loud.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LIFO uses the microphone when you choose to talk instead of type.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

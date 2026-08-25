@@ -19,4 +19,13 @@ import Testing
         #expect(LifeOSTokens.alertBackground.resolve(.light) != LifeOSTokens.alertBackground.resolve(.dark))
         #expect(LifeOSTokens.alertText.resolve(.light) != LifeOSTokens.alertText.resolve(.dark))
     }
+
+    /// The plus used to paint a white glyph on `primaryText`. In dark mode
+    /// `primaryText` is itself near-white, so the button vanished. Fill and
+    /// glyph have to stay opposite in both schemes.
+    @Test func fabFillAndGlyphStayOppositeInBothSchemes() {
+        #expect(LifeOSTokens.fabFill.resolve(.light) != LifeOSTokens.fabGlyph.resolve(.light))
+        #expect(LifeOSTokens.fabFill.resolve(.dark) != LifeOSTokens.fabGlyph.resolve(.dark))
+        #expect(LifeOSTokens.fabFill.resolve(.light) != LifeOSTokens.fabFill.resolve(.dark))
+    }
 }
