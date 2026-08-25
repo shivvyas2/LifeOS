@@ -22,7 +22,7 @@ private final class ReadCount: @unchecked Sendable {
 private struct StubEngine: Engine {
     let outcome: @Sendable () throws -> DailyBrief
 
-    func run<T: CoachTask>(_ task: T, _ digest: MetricsDigest) async throws -> T.Output {
+    func run<T: CoachTask>(_ task: T, _ context: T.Context) async throws -> T.Output {
         try outcome() as! T.Output
     }
 }

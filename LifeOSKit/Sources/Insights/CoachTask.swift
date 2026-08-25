@@ -23,17 +23,21 @@ public enum Tier: Sendable, Equatable {
 /// a schema to send and decodes the reply that comes back.
 public protocol CoachTask: Sendable {
     associatedtype Output: Generable
+    /// What this task needs to see. Was fixed at `MetricsDigest`, which made
+    /// any task about something other than health metrics inexpressible.
+    associatedtype Context: Sendable
 
     var floor: Tier { get }
 
     /// Stable across requests. Anything that varies belongs in `prompt`.
     var instructions: String { get }
 
-    func prompt(_ digest: MetricsDigest) -> String
+    func prompt(_ context: Context) -> String
 }
 
 public struct BriefTask: CoachTask {
     public typealias Output = DailyBrief
+    public typealias Context = MetricsDigest
 
     public init() {}
 
@@ -61,6 +65,7 @@ public struct BriefTask: CoachTask {
 
 public struct AnswerTask: CoachTask {
     public typealias Output = CoachAnswer
+    public typealias Context = MetricsDigest
 
     public let question: String
 
