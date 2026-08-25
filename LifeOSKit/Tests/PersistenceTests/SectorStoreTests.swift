@@ -101,6 +101,37 @@ import SwiftData
         #expect(try store.oldestUnclosedMonth(before: month(2026, 8)) == nil)
     }
 
+    /// `record` builds the row through the model initialiser while `score`
+    /// looks it up through a fetch predicate. Both must key off the same
+    /// calendar, or a store built with a non-default one writes under one
+    /// "first of month" and reads under another, and idempotency silently
+    /// breaks: the read misses, `record` thinks the row is new, and a second
+    /// row gets created for what should be the same sector-month.
+    @Test func recordAndScoreAgreeUnderAnInjectedCalendar() throws {
+        var nonDefault = Calendar(identifier: .gregorian)
+        nonDefault.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+        let store = SectorStore(
+            context: ModelContext(try LifeOSContainer.make(inMemory: true)),
+            calendar: nonDefault
+        )
+        let august = month(2026, 8)
+
+        let created = try store.record(
+            sector: .growth, month: august, proposed: 6, evidence: Evidence()
+        )
+
+        let found = try store.score(.growth, month: august)
+        #expect(found?.month == created.month)
+        #expect(found?.proposedScore == 6)
+
+        _ = try store.record(
+            sector: .growth, month: august, proposed: 9, evidence: Evidence()
+        )
+        let all = try store.scores(forMonth: august)
+        #expect(all.count == 1)
+        #expect(all.first?.proposedScore == 9)
+    }
+
     @Test func answersAreKeptPerSectorMonth() throws {
         let store = try makeStore()
         let august = month(2026, 8)

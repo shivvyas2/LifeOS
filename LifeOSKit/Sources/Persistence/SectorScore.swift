@@ -64,9 +64,9 @@ public final class SectorScore {
     /// A sector the person has actually passed through and answered.
     public var isScored: Bool { userScore != nil }
 
-    public init(sector: LifeSector, month: Date, proposedScore: Int?) {
+    public init(sector: LifeSector, month: Date, proposedScore: Int?, calendar: Calendar = .current) {
         self.sectorRaw = sector.rawValue
-        self.month = Date.startOfMonth(month)
+        self.month = Date.startOfMonth(month, calendar: calendar)
         self.proposedScore = proposedScore
         self.userScore = nil
         self.closedAt = nil
@@ -91,9 +91,9 @@ public final class CheckInAnswer {
         set { sectorRaw = newValue.rawValue }
     }
 
-    public init(sector: LifeSector, month: Date, questionID: String, answer: String) {
+    public init(sector: LifeSector, month: Date, questionID: String, answer: String, calendar: Calendar = .current) {
         self.sectorRaw = sector.rawValue
-        self.month = Date.startOfMonth(month)
+        self.month = Date.startOfMonth(month, calendar: calendar)
         self.questionID = questionID
         self.answer = answer
         self.createdAt = .now

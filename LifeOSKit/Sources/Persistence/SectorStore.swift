@@ -49,7 +49,9 @@ public struct SectorStore {
             try context.save()
             return existing
         }
-        let created = SectorScore(sector: sector, month: month, proposedScore: proposed)
+        let created = SectorScore(
+            sector: sector, month: month, proposedScore: proposed, calendar: calendar
+        )
         created.archivedEvidence = evidence
         context.insert(created)
         try context.save()
@@ -111,7 +113,8 @@ public struct SectorStore {
             existing.answer = answer
         } else {
             context.insert(CheckInAnswer(
-                sector: sector, month: month, questionID: questionID, answer: answer
+                sector: sector, month: month, questionID: questionID, answer: answer,
+                calendar: calendar
             ))
         }
         try context.save()
