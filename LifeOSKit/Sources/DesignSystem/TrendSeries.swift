@@ -30,7 +30,25 @@ public struct TrendSeries: Sendable, Equatable {
         self.points = points
     }
 
+    /// The `count` days ending on `date`, oldest first.
+    ///
+    /// Every day gets a slot whether or not a reading exists for it, so the
+    /// caller fills gaps with nil rather than dropping them. Compacting the
+    /// days that do have readings would draw a chart whose neighbouring bars
+    /// are not a day apart: a quieter lie than a false zero, but a lie.
+    public static func days(endingOn date: Date, count: Int, calendar: Calendar) -> [Date] {
+        guard count > 0 else { return [] }
+        let end = calendar.startOfDay(for: date)
+        return (0..<count).reversed().compactMap {
+            calendar.date(byAdding: .day, value: -$0, to: end)
+        }
+    }
+
     private var readings: [Double] { points.compactMap(\.value) }
+
+    /// Whether the window holds a single reading. False is the shape of a fresh
+    /// install, or of a metric this user has never connected a source for.
+    public var hasAnyReading: Bool { points.contains { $0.value != nil } }
 
     /// Mean of the readings that exist. Nil when none do.
     public var average: Double? {

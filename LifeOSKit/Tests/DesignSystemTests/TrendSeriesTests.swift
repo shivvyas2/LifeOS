@@ -60,4 +60,48 @@ import Foundation
         #expect(trend.points.count == 3)
         #expect(trend.points[1].value == nil)
     }
+
+    // MARK: - The window a chart is drawn over
+
+    @Test func aWindowRunsOldestFirstAndEndsOnTheDayAsked() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let end = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let days = TrendSeries.days(endingOn: end, count: 7, calendar: calendar)
+
+        #expect(days.count == 7)
+        #expect(days == days.sorted())
+        #expect(calendar.isDate(days.last!, inSameDayAs: end))
+    }
+
+    /// Every slot is a day wide. A chart relies on this: neighbouring bars are
+    /// only comparable if they are the same distance apart.
+    @Test func everyDayInTheWindowIsOneDayAfterTheLast() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let days = TrendSeries.days(endingOn: .now, count: 7, calendar: calendar)
+
+        for (earlier, later) in zip(days, days.dropFirst()) {
+            #expect(calendar.dateComponents([.day], from: earlier, to: later).day == 1)
+        }
+    }
+
+    /// Guards the range construction: a non-positive count must not trap.
+    @Test func anEmptyWindowIsEmptyRatherThanACrash() {
+        #expect(TrendSeries.days(endingOn: .now, count: 0, calendar: .current).isEmpty)
+        #expect(TrendSeries.days(endingOn: .now, count: -3, calendar: .current).isEmpty)
+    }
+
+    @Test func aWindowOfNothingButGapsHoldsNoReading() {
+        let gaps = TrendSeries(points: (0..<7).map {
+            TrendPoint(date: Date(timeIntervalSince1970: Double($0) * 86_400), value: nil)
+        })
+        #expect(gaps.hasAnyReading == false)
+
+        let one = TrendSeries(points: gaps.points.dropLast() + [
+            TrendPoint(date: Date(timeIntervalSince1970: 7 * 86_400), value: 61)
+        ])
+        #expect(one.hasAnyReading)
+    }
 }

@@ -61,6 +61,23 @@ final class TodayViewModel {
 
             let today = rows.first { calendar.isDateInToday($0.date) }
 
+            // `rows` is already in hand for the streak, so the week costs a
+            // dictionary and seven lookups rather than a second query.
+            // Keyed on the row rather than its `DayReading`, which carries no
+            // weight or recovery. The rows stay inside this method: the closures
+            // below run here and only plain numbers reach the snapshot, so the
+            // screen still never holds a SwiftData object.
+            var rowByDay: [Date: DailyMetrics] = [:]
+            rowByDay.reserveCapacity(rows.count)
+            for row in rows { rowByDay[calendar.startOfDay(for: row.date)] = row }
+
+            let week = TrendSeries.days(endingOn: .now, count: 7, calendar: calendar)
+            func series(_ value: (DailyMetrics) -> Double?) -> TrendSeries {
+                TrendSeries(points: week.map { day in
+                    TrendPoint(date: day, value: rowByDay[day].flatMap(value))
+                })
+            }
+
             snapshot = TodaySnapshot(
                 date: .now,
                 cells: cells,
@@ -70,7 +87,13 @@ final class TodayViewModel {
                 sleepMinutes: today?.sleepMinutes,
                 sleepProgress: today?.sleepMinutes.map { Double($0) / Double(targets.sleepMinutes) },
                 weightKg: today?.weightKg,
-                recoveryPct: today?.whoopRecoveryPct
+                recoveryPct: today?.whoopRecoveryPct,
+                stepsWeek: series { $0.steps.map(Double.init) },
+                sleepWeek: series { $0.sleepMinutes.map(Double.init) },
+                weightWeek: series(\.weightKg),
+                recoveryWeek: series(\.whoopRecoveryPct),
+                stepsTarget: Double(targets.steps),
+                sleepTargetMinutes: Double(targets.sleepMinutes)
             )
 
             // Keeps an open sheet current on every reload, including the

@@ -3,7 +3,7 @@ import SwiftUI
 /// A metric tile for a repeated row of stats: solid surface, dark text,
 /// sentence-case label above the value.
 ///
-/// Deliberately not `SoftCard { StatTile { } }`: `SoftCard`'s shadow is an
+/// Deliberately not a `SoftCard` wrapping a bare figure: `SoftCard`'s shadow is an
 /// offscreen pass meant for screen furniture, not for a row of tiles that
 /// repeats down a list.
 public struct MetricTile: View {

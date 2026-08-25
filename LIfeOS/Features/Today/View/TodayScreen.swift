@@ -74,34 +74,41 @@ struct TodayScreen: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns),
             spacing: 12
         ) {
-            SoftCard {
-                StatTile(
-                    label: "Steps",
-                    value: snapshot.steps.map { $0.formatted() },
-                    progress: snapshot.stepsProgress
-                )
-            }
-            SoftCard {
-                StatTile(
-                    label: "Sleep",
-                    value: snapshot.sleepMinutes.map(Self.duration),
-                    progress: snapshot.sleepProgress
-                )
-            }
-            SoftCard {
-                StatTile(
-                    label: "Weight",
-                    value: snapshot.weightKg.map { String(format: "%.1f", $0) },
-                    unit: "kg"
-                )
-            }
-            SoftCard {
-                StatTile(
-                    label: "Recovery",
-                    value: snapshot.recoveryPct.map { "\(Int($0))" },
-                    unit: "%"
-                )
-            }
+            TrendStatTile(
+                icon: "figure.walk",
+                hue: .activity,
+                label: "Steps",
+                value: snapshot.steps.map { $0.formatted() },
+                series: snapshot.stepsWeek,
+                goal: snapshot.stepsTarget
+            )
+            TrendStatTile(
+                icon: "moon.fill",
+                hue: .nutrition,
+                label: "Sleep",
+                value: snapshot.sleepMinutes.map(Self.duration),
+                series: snapshot.sleepWeek,
+                goal: snapshot.sleepTargetMinutes
+            )
+            TrendStatTile(
+                icon: "scalemass.fill",
+                hue: .body,
+                label: "Weight",
+                value: snapshot.weightKg.map { String(format: "%.1f", $0) },
+                unit: "kg",
+                series: snapshot.weightWeek,
+                // Weight has no target to hit and never nears nought, so it is
+                // read against its own week rather than against zero.
+                baseline: .windowMinimum
+            )
+            TrendStatTile(
+                icon: "bolt.heart.fill",
+                hue: .recovery,
+                label: "Recovery",
+                value: snapshot.recoveryPct.map { "\(Int($0))" },
+                unit: "%",
+                series: snapshot.recoveryWeek
+            )
         }
     }
 
