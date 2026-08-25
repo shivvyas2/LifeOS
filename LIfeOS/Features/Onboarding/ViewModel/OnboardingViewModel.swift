@@ -19,11 +19,6 @@ final class OnboardingViewModel {
     /// channel that cannot deliver.
     private(set) var availableChannels: Set<SupabaseAuthChannel> = []
 
-    /// Email uses a magic link because the free tier cannot send a six-digit
-    /// code, whose template is fixed to a link. Flip this once custom SMTP is
-    /// configured and the OTP screen comes back with no other changes.
-    let emailUsesMagicLink = true
-
     /// Stored rather than computed from the keychain on each read, so that
     /// SwiftUI is told when it changes. A computed `store.load() != nil` is
     /// invisible to `@Observable`, which left the shell showing the app after a
@@ -71,14 +66,9 @@ final class OnboardingViewModel {
     /// whose button silently fails.
     var isConfigured: Bool { auth != nil }
 
-    var sendButtonTitle: String {
-        draft.channel == .email && emailUsesMagicLink ? "Send link" : "Send code"
-    }
-
     var identitySubtitle: String {
-        if draft.channel == .phone { return "We'll text you a six-digit code." }
-        return emailUsesMagicLink
-            ? "We'll email you a link that signs you straight in."
+        draft.channel == .phone
+            ? "We'll text you a six-digit code."
             : "We'll email you a six-digit code."
     }
 
@@ -94,7 +84,7 @@ final class OnboardingViewModel {
         errorMessage = nil
         switch step {
         case .intro, .identity: step = .intro
-        case .code, .linkSent:  step = .identity
+        case .code:             step = .identity
         case .profile:          step = .code
         case .connections:      step = .profile
         }
@@ -147,14 +137,9 @@ final class OnboardingViewModel {
         defer { isBusy = false }
 
         do {
-            if draft.channel == .email && emailUsesMagicLink {
-                try await auth.sendMagicLink(to: draft.destination, redirectTo: Self.authCallback)
-                step = .linkSent
-            } else {
-                try await auth.sendCode(to: draft.destination, channel: draft.channel)
-                draft.code = ""
-                step = .code
-            }
+            try await auth.sendCode(to: draft.destination, channel: draft.channel)
+            draft.code = ""
+            step = .code
             startResendCountdown()
         } catch let error as AuthError {
             authLog.error("sendCode failed: \(error.readable, privacy: .public)")
@@ -209,36 +194,6 @@ final class OnboardingViewModel {
             step = .connections
         } catch {
             step = .connections
-        }
-    }
-
-    /// Where the magic link returns. Must match an allow-listed redirect URL on
-    /// the project, or Supabase drops the user on its own page instead.
-    static let authCallback = "lifeos://auth-callback"
-
-    /// Handles the magic-link redirect.
-    func handleAuthCallback(_ url: URL) {
-        guard url.scheme == AppConfig.appURLScheme, url.host == "auth-callback" else { return }
-
-        if let failure = AuthSession.errorDescription(in: url) {
-            authLog.error("magic link failed: \(failure, privacy: .public)")
-            errorMessage = failure
-            step = .identity
-            return
-        }
-        guard let session = AuthSession(callback: url) else {
-            errorMessage = "That link didn't work. Request a new one"
-            step = .identity
-            return
-        }
-
-        do {
-            try store.save(session)
-            isSignedIn = true
-            errorMessage = nil
-            step = .profile
-        } catch {
-            errorMessage = "Couldn't save your session"
         }
     }
 

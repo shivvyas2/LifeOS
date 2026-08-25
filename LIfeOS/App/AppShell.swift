@@ -78,15 +78,11 @@ struct AppShell: View {
             }
         }
         .onOpenURL { url in
-            // Two callbacks share the scheme; the host decides which owns it.
             // Logged at the door: if nothing appears here, the redirect never
             // reached the app at all and the problem is upstream of our code.
+            // Only Whoop uses the scheme now that email is a code, not a link.
             shellLog.info("opened url host=\(url.host ?? "?", privacy: .public)")
-            if url.host == "auth-callback" {
-                onboarding.handleAuthCallback(url)
-            } else {
-                whoop.handleCallback(url)
-            }
+            whoop.handleCallback(url)
         }
     }
 }
