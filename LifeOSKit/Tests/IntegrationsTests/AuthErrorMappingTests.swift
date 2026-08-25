@@ -82,4 +82,39 @@ final class OTPStubURLProtocol: URLProtocol {
             Issue.record("expected AuthError, got \(error)")
         }
     }
+
+    @Test func anUnverifiedTwilioTrialNumberIsNamedAsSuch() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, #"{"error":"sms_unverified"}"#)
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "That number isn't verified for SMS yet. Add it in Twilio, then try again")
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    @Test func anEmptyGateway502IsStillASentence() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, "")
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "Couldn't send the text. Check the number and try again")
+            if case .server(_, let message) = error {
+                #expect(message != nil)
+            }
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
 }
