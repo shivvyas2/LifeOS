@@ -77,11 +77,20 @@ async function pageIndex() {
   await render();
 
   const pages = await pageIndex();
-  // The contents itself repeats every heading string; never match against it.
-  const isContents = pages.map((t) => t.includes('tableofcontents'));
 
   let html = fs.readFileSync(HTML, 'utf8');
   const entries = tocEntries(html);
+
+  // The contents repeats every heading string, so it must never be matched
+  // against. It also runs to more than one page and only the first carries the
+  // "Table of contents" title, so the rest are found by density instead: a body
+  // page never contains eight different headings, and a contents page always
+  // does. Detecting only the titled page silently sent every entry that also
+  // appears on an overflow page to that page number.
+  const isContents = pages.map((t) =>
+    t.includes('tableofcontents') ||
+    entries.filter((e) => t.includes(e.needle)).length >= 8
+  );
   const missing = [];
 
   for (const { id, needle } of entries) {
