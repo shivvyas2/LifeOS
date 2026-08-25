@@ -32,10 +32,18 @@ public enum SectorEvidenceFactory {
             ).evidence()
 
         case .mind:
-            return JournalScorer(
+            // Mind asks a check-in question (`mind.clarity`) exactly the way
+            // Soul does, so it merges the same way: journal rows plus
+            // check-in rows, never just one. Routing Mind to the journal
+            // scorer alone would ask the question, store the answer, and
+            // then silently drop it from the score, which is worse than not
+            // asking at all.
+            let journal = JournalScorer(
                 sector: .mind, entryDates: inputs.journalDates, daysInMonth: inputs.daysInMonth,
                 previousEntryCount: inputs.previousJournalCount, calendar: calendar
             ).evidence()
+            let checkIn = CheckInScorer(sector: .mind, answers: answers).evidence()
+            return Evidence(journal.rows + checkIn.rows)
 
         case .soul:
             // Soul is the one sector with two live sources: what got written
