@@ -29,6 +29,17 @@ import Foundation
                 < LayoutMetrics.metrics(for: .compact).fabBottomInset)
     }
 
+    /// The pill bar floats over the scroll view instead of insetting it, so
+    /// compact content has to reserve a band for it. A side rail takes its space
+    /// out of the width, so regular content reserves nothing but breathing room.
+    @Test func onlyCompactContentReservesRoomForABottomBar() {
+        let compact = LayoutMetrics.metrics(for: .compact)
+        let regular = LayoutMetrics.metrics(for: .regular)
+
+        #expect(compact.contentBottomInset > compact.fabBottomInset)
+        #expect(regular.contentBottomInset < compact.contentBottomInset)
+    }
+
     /// A wide pane earns more columns, but a bounded number of them. Unbounded
     /// growth is how a 4-up grid becomes a row of postage stamps.
     @Test func regularWidthEarnsMoreColumnsButNotUnboundedly() {
@@ -41,6 +52,19 @@ import Foundation
         #expect(regular.tileColumns <= 8)
     }
 
+    /// The bar moves from the bottom to the side, so the room it needs moves
+    /// with it. The action buttons never claim room on either width: they float
+    /// over the bottom corner in both.
+    @Test func onlyRegularWidthPaysForTheRailOnTheLeadingEdge() {
+        #expect(LayoutMetrics.metrics(for: .compact).railInset == 0)
+        #expect(LayoutMetrics.metrics(for: .regular).railInset > 0)
+    }
+
+    @Test func metricsReportTheWidthClassTheyCameFrom() {
+        #expect(LayoutMetrics.metrics(for: .regular).isRegular)
+        #expect(LayoutMetrics.metrics(for: .compact).isRegular == false)
+    }
+
     @Test func everyMetricIsPositive() {
         for width in [LayoutWidth.compact, .regular] {
             let metrics = LayoutMetrics.metrics(for: width)
@@ -48,6 +72,8 @@ import Foundation
             #expect(metrics.sectionSpacing > 0)
             #expect(metrics.heroScale > 0)
             #expect(metrics.fabBottomInset > 0)
+            #expect(metrics.contentBottomInset > 0)
+            #expect(metrics.railInset >= 0)
             #expect(metrics.statColumns >= 1)
             #expect(metrics.tileColumns >= 1)
         }

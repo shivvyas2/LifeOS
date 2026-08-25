@@ -14,6 +14,8 @@ struct HealthHubScreen: View {
     @Binding var section: HealthSection
     @Binding var selectedDate: Date
 
+    @Environment(\.layout) private var layout
+
     var body: some View {
         GradientCanvas(hue: section.hue) {
             ScrollView {
@@ -37,8 +39,11 @@ struct HealthHubScreen: View {
                                            wellness: wellness)
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 130)
+                .frame(maxWidth: layout.maxContentWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, layout.gutter)
+                .padding(.leading, layout.railInset)
+                .padding(.bottom, layout.contentBottomInset)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: section)

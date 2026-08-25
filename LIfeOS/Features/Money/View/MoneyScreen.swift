@@ -5,6 +5,7 @@ struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.layout) private var layout
 
     var body: some View {
         GradientCanvas(hue: .money) {
@@ -39,8 +40,11 @@ struct MoneyScreen: View {
                         emptyState
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 130)
+                .frame(maxWidth: layout.maxContentWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, layout.gutter)
+                .padding(.leading, layout.railInset)
+                .padding(.bottom, layout.contentBottomInset)
             }
         }
     }

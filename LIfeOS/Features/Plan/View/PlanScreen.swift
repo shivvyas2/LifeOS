@@ -11,6 +11,7 @@ struct PlanScreen: View {
     var onToggleHabit: (UUID) -> Void = { _ in }
     var onDelete: (UUID) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.layout) private var layout
 
     var body: some View {
         GradientCanvas(hue: section.hue) {
@@ -54,8 +55,11 @@ struct PlanScreen: View {
                             .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 130)
+                .frame(maxWidth: layout.maxContentWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, layout.gutter)
+                .padding(.leading, layout.railInset)
+                .padding(.bottom, layout.contentBottomInset)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: section)
