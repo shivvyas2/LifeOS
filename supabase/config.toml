@@ -289,10 +289,19 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
+#
+# Enabled so that `/auth/v1/settings` reports phone as available and the app's
+# phone-first signup screen offers it.
+#
+# The SIDs below are placeholders, not a real account. Every number in
+# [auth.sms.test_otp] short-circuits before Twilio is called, so the provider is
+# never contacted and no working credentials are needed yet — but the CLI
+# refuses to push an enabled provider with a blank SID, hence the zeros. Numbers
+# outside the test map will fail until a real account is filled in here.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
+enabled = true
+account_sid = "AC00000000000000000000000000000000"
+message_service_sid = "MG00000000000000000000000000000000"
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
 auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
