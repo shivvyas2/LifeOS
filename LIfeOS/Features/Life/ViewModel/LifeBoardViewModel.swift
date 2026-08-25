@@ -56,9 +56,10 @@ final class LifeBoardViewModel {
         summary = BoardSummary(scores: current, previous: previous)
 
         monthAwaitingClose = CloseSchedule.monthAwaitingClose(
-            oldestUnclosed: try? store.oldestUnclosedMonth(before: thisMonth),
+            scoredCounts: (try? store.scoredCounts(before: thisMonth)) ?? [:],
             previousMonth: lastMonth,
-            scoredSectorsInPreviousMonth: current.count
+            scoredSectorsInPreviousMonth: current.count,
+            calendar: calendar
         )
 
         cards = LifeSector.boardOrder.map { sector in
