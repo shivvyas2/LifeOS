@@ -34,7 +34,7 @@ public struct MoneyScorer: SectorScorer {
         rows.append(EvidenceRow(
             label: "kept of what came in",
             value: earned > 0 ? "\(Int((savingRate * 100).rounded()))%" : "no income",
-            normalised: savingRate / 0.5,  // Relies on EvidenceRow clamping above 1.0
+            normalised: savingRate / 0.5,  // Relies on EvidenceRow clamping above 1.0 (high savings) and below 0.0 (spending more than earning)
             weight: 3
         ))
 
