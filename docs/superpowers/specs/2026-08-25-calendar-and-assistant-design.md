@@ -1,8 +1,8 @@
 # Calendar + AI Assistant Design Spec
 
 **Date:** 2026-08-25
-**Status:** Approved in brainstorming; awaiting spec review
-**Scope of this document:** Project 4 of the August 2026 roadmap. Adds a calendar layer to LifeOS and a conversational assistant that reads and writes it.
+**Status:** Approved in brainstorming; reconciled against the coach LLM routing spec; awaiting spec review
+**Scope of this document:** Project 4 of the August 2026 roadmap. Adds a calendar layer to LifeOS, and a conversational assistant over it built as the first consumer of tool calling in the existing `Insights` coach stack.
 
 ---
 
@@ -11,16 +11,29 @@
 LifeOS gains two coupled capabilities, ported in spirit (not in code) from the user's existing React Native app `shivvyas2/Calander-Assistant`, also known as DayGuide:
 
 1. **A calendar layer.** Events from Apple EventKit and, later, the Google Calendar API, merged and deduped into a local SwiftData cache, surfaced as an agenda card on Today.
-2. **An AI assistant.** A chat sheet driven by Claude Haiku 4.5 with function calling, able to answer questions about the schedule and to create, move, and delete events on the user's behalf.
+2. **An AI assistant.** A chat sheet that answers questions about the schedule and creates, moves, and deletes events, by calling tools rather than describing what the user should do.
 
-The interaction being reproduced is DayGuide's: the user says "move my 6am workout to 8" and the model calls a tool rather than describing what the user should do. The architecture is reproduced, not the source. DayGuide is TypeScript on React Native; LifeOS is Swift on SwiftUI, so every line is new.
+The interaction being reproduced is DayGuide's: the user says "move my 6am workout to 8" and the model calls a function. The architecture is not DayGuide's. DayGuide is TypeScript on React Native with a dedicated Gemini proxy; LifeOS is Swift on SwiftUI, and it already has an inference layer.
 
-### 1.1 What carries over from DayGuide
+### 1.1 Relationship to the coach
+
+`2026-08-25-coach-llm-routing-design.md` specifies `Insights`: a `CoachTask` contract, an `Engine` protocol with on-device and remote implementations, a `CoachRouter` with an escalation policy, a thin Edge Function proxy that owns the key and the role-to-model map, and a $2 per user per month allowance enforced by reserve-then-settle against a database check constraint.
+
+**This spec adds no second inference layer.** The assistant is a consumer of `Insights`. Specifically:
+
+- It uses `CoachRouter`, not its own client.
+- It calls `supabase/functions/coach/index.ts`, not a second proxy.
+- It names a `Tier.Role`, never a model ID.
+- It spends from the same $2 allowance, through the same reserve-and-settle path.
+
+The coach spec defers tool calling, noting that `Tool.parameters` is a `GenerationSchema` and `GenerationSchema` is `Codable`, so the schema-sharing trick that lets one `@Generable` type serve both tiers extends to tools. This spec is the first feature to need that, and Section 8 builds it. The coach adopts it later at no additional cost.
+
+### 1.2 What carries over from DayGuide
 
 | DayGuide element | Carried over? | Note |
 |---|---|---|
-| Function-calling loop with a round cap | Yes | Cap lowered from 10 to 6 |
-| Server-side proxy holding the AI key | Yes | Gemini becomes Claude; JWT verification added |
+| Tool-calling loop with a round cap | Yes | Cap lowered from 10 to 6 |
+| Server-side proxy holding the key | Yes, the coach's | Not a second one |
 | Two calendar sources merged with dedup | Yes | Dedup rule `title + startDate` kept verbatim |
 | Sync window of 30 days back, 90 days forward | Yes | |
 | Tools conditionally offered by connection state | Yes | |
@@ -28,85 +41,81 @@ The interaction being reproduced is DayGuide's: the user says "move my 6am worko
 | Confirmation requested via system prompt text | No | Replaced by a structural gate, see Section 10 |
 | Events mirrored to Supabase with realtime | No | Local only, see Section 5 |
 | Chat history in Supabase | No | Local only |
+| A cloud model on every turn | No | Floors on-device, see Section 9 |
 
 ---
 
 ## 2. Roadmap context
 
-The August 2026 roadmap, from the health restructure spec, is Project 1 (Health restructure + app-wide restyle), Project 0.5 (Cloud Run API backbone), Project 2 (Nutrition + AI meal logging), Project 3 (Wake-triggered morning check-in). This project is **Project 4**, and it **starts now, in parallel with Project 1**.
+The August 2026 roadmap is Project 1 (Health restructure + app-wide restyle), Project 0.5 (Cloud Run API backbone), Project 2 (Nutrition + AI meal logging), Project 3 (Wake-triggered morning check-in). This project is **Project 4**, and it **starts now, in parallel with Project 1**. The work is ordered so nothing in the first two phases touches a file Project 1 rewrites. See Section 15.
 
-Parallelism is safe because the work is ordered so that nothing in the first two phases touches a file Project 1 rewrites. See Section 15.
+Two couplings:
 
-Two roadmap couplings to hold in mind:
-
-- **Project 0.5 (Cloud Run).** The assistant ships on a Supabase Edge Function because that path already works in this repo (`whoop-token`, `whoop-callback`). When the Cloud Run backbone lands, the function moves there. It is small enough that this is a port, not a rewrite.
-- **Project 2 (Nutrition).** Project 2 already chose Claude for meal analysis. Using Claude here keeps LifeOS on one AI provider and one billing account.
+- **The coach must land first, or at least its `Insights` skeleton.** Phase B depends on `CoachTask`, `Engine`, `CoachRouter`, and the `coach` Edge Function existing. Tasks 1, 3, 4 and 6 of `2026-08-25-coach-on-device-foundation.md` are the hard prerequisite. Phase A has no such dependency and can proceed immediately.
+- **Project 0.5 (Cloud Run).** The coach's proxy is a Supabase Edge Function today, while Project 0.5 states that Cloud Run replaces Edge Functions as the home for server logic. That tension is the coach spec's to resolve, not this one's. This spec follows the coach: whatever hosts `coach`, hosts the assistant's requests too. There is nothing here to migrate separately.
 
 ---
 
-## 3. Decisions taken in brainstorming
-
-Recorded so the implementation plan does not relitigate them.
+## 3. Decisions on record
 
 | Decision | Choice | Rejected alternatives |
 |---|---|---|
 | Assistant scope | Calendar only | Calendar + read-only LifeOS context; full LifeOS agent |
 | Calendar source | Both EventKit and Google API, merged, staged | EventKit only; Google API only |
-| AI backend | Supabase Edge Function now, Claude Haiku 4.5 | Gemini 3 Flash; blocking on Cloud Run |
+| Inference layer | Reuse `Insights` and the coach proxy | A dedicated `assistant-chat` function on Anthropic direct |
+| Tier floor | On-device, escalating through `CoachRouter` | Cloud floor on `.reasoning`; on-device reads with cloud writes |
 | Event storage | SwiftData cache, no Supabase mirror | Read-through with no cache; SwiftData plus Supabase mirror |
 | Write safety | Create freely, confirm edits and deletes | Confirm every write; write freely with undo |
 | Sequencing | Start now, parallel with Project 1 | After Project 1; after Project 3 |
 
-**Consequence of "calendar only":** the assistant is given no access to `DailyMetrics`, `PlanEntry`, `HabitTick`, `MoneyEntry`, or any Whoop record. It cannot read recovery to reason about workout timing. This is deliberate and is the smallest surface that delivers the interaction the user wants.
+**Consequence of "calendar only":** the assistant's tools reach `CalendarStore` and the calendar write path. They do not reach `DailyMetrics`, `PlanEntry`, `HabitTick`, `MoneyEntry`, or any Whoop record. It cannot read recovery to reason about workout timing. This is deliberate, and it is a different boundary from the coach's, which sees `MetricsDigest` and no calendar.
 
 ---
 
 ## 4. Module layout
 
-No new calendar target. `Calendar` is unusable as a target name because it would shadow `Foundation.Calendar` at every use site, and the calendar pieces divide cleanly along the existing Persistence/Integrations seam anyway.
+No calendar target. `Calendar` would shadow `Foundation.Calendar` at every use site, and the pieces divide cleanly along the existing seams anyway.
 
 **`LifeOSKit/Sources/Persistence/`**
 
-- `CalendarEvent.swift`: the `@Model` plus `CalendarEventSnapshot`, following the `PlanEntry` / `PlanItemSnapshot` split exactly.
+- `CalendarEvent.swift`: the `@Model` plus `CalendarEventSnapshot`, following the `PlanEntry` / `PlanItemSnapshot` split.
 - `CalendarStore.swift`: windowed queries, upsert, dedup, free-slot computation.
+- `ChatMessage.swift`: conversation persistence.
 
 **`LifeOSKit/Sources/Integrations/`**
 
-- `CalendarSource.swift`: the protocol both sources implement.
-- `EventKitSource.swift`: `EKEventStore` reads and writes.
-- `GoogleCalendarSource.swift`: Phase D only.
-- `CalendarMerge.swift`: pure dedup, no I/O, fully unit testable.
-- `CalendarSync.swift`: the actor that drives a sync pass.
+- `CalendarSource.swift`, `EventKitSource.swift`, `GoogleCalendarSource.swift` (Phase D), `CalendarMerge.swift`, `CalendarSync.swift`.
 
-**New target `Assistant`**, depending on `Persistence`
+**`LifeOSKit/Sources/Insights/`**, additions to the coach's target rather than a new one
 
-- `AssistantClient.swift`: one request to the edge function, one response.
-- `ToolCatalog.swift`: tool definitions and the local executor.
-- `ToolLoop.swift`: the round loop and the confirmation gate.
-- `ChatMessage.swift`: the `@Model` plus its snapshot type.
+- `CoachTool.swift`: the tool contract (Section 8).
+- `ToolLoop.swift`: the provider-neutral round loop (Section 9).
+- `Engines/Engine.swift`: gains a tool-calling entry point alongside the existing single-shot `run`.
 
-A separate target rather than a folder inside `Integrations` so the loop can be tested against a stubbed transport without dragging in `WhoopClient`, and so `swift test` continues to run with no simulator and no network.
+These are general capabilities, not calendar ones. `Insights` keeps its rule of depending on `Persistence` only and stays free of calendar knowledge.
 
-`Package.swift` gains:
+**New target `Assistant`**, depending on `Insights` and `Persistence`
+
+- `CalendarTools.swift`: the six `CoachTool` conformances.
+- `CalendarWriting.swift`: the write protocol the app satisfies with `CalendarSync`.
+- `AssistantTask.swift`: the `CoachTask` describing the conversation, its instructions and its tier floor.
+
+`Assistant` exists because its tools must reach the calendar write path, which lives in `Integrations`, and `Insights` may not depend on `Integrations`. Injecting `CalendarWriting` keeps the dependency graph acyclic and lets tests drive the tools with a fake.
 
 ```swift
 .library(name: "Assistant", targets: ["Assistant"]),
-...
-.target(name: "Assistant", dependencies: ["Persistence"]),
+.target(name: "Assistant", dependencies: ["Insights", "Persistence"]),
 .testTarget(name: "AssistantTests", dependencies: ["Assistant"]),
 ```
 
 **App target**
 
-- `LIfeOS/Features/Today/View/AgendaCard.swift`
-- `LIfeOS/Features/Today/View/EventSheet.swift`
-- `LIfeOS/Features/Assistant/ViewModel/AssistantViewModel.swift`
-- `LIfeOS/Features/Assistant/Model/AssistantSnapshot.swift`
-- `LIfeOS/Features/Assistant/View/AssistantSheet.swift`
+- `LIfeOS/Features/Today/View/AgendaCard.swift`, `EventSheet.swift`
+- `LIfeOS/Features/Assistant/{ViewModel,Model,View}/`
 
 **Server**
 
-- `supabase/functions/assistant-chat/index.ts`
+- `supabase/functions/coach/index.ts` gains a tool-calling request shape. No new function.
 
 **Config**
 
@@ -140,13 +149,7 @@ public final class CalendarEvent {
     public var notes: String?
     public var lastSyncedAt: Date
 }
-```
 
-`CalendarEventSnapshot` is the detached `Equatable, Identifiable` value type handed to views and to the tool layer. Nothing above `CalendarStore` ever holds a `CalendarEvent`, for the same reason `TodaySnapshot` exists: a view that holds a SwiftData object can fault it mid-layout.
-
-`LifeOSContainer.schema` gains `CalendarEvent.self` and `ChatMessage.self`.
-
-```swift
 @Model
 public final class ChatMessage {
     public var id: UUID
@@ -159,9 +162,13 @@ public final class ChatMessage {
 }
 ```
 
-**Persistence identity.** The natural key is `(sourceRaw, sourceID)`. `id` is a local UUID and is never sent anywhere. Upsert matches on the natural key.
+`CalendarEventSnapshot` is the detached `Equatable, Identifiable, Sendable` value type handed to views and to tools. Nothing above `CalendarStore` holds a `CalendarEvent`, for the reason `TodaySnapshot` exists: a view holding a SwiftData object can fault it mid-layout.
 
-**No Supabase mirror.** Calendar contents and chat history stay on the device. The assistant does send the relevant slice of the calendar to Anthropic as prompt context, which is stated plainly in Section 14.
+`Sendable` matters more here than it does for `PlanItemSnapshot`. Tool results cross into an engine, and the coach spec relies on exactly this to make its privacy boundary a compile-time check rather than a review-time one. A `CalendarEvent` cannot cross that line because it is not `Sendable`; a snapshot can.
+
+`LifeOSContainer.schema` gains `CalendarEvent.self` and `ChatMessage.self`. The natural key is `(sourceRaw, sourceID)`; `id` is local and never leaves the device.
+
+**No Supabase mirror.** Calendar contents and chat history stay on device. What does leave, on an escalated turn only, is described in Section 14.
 
 ---
 
@@ -181,7 +188,7 @@ public protocol CalendarSource: Sendable {
 }
 ```
 
-Phase D adds `GoogleCalendarSource` behind this protocol and changes nothing else.
+Phase D adds `GoogleCalendarSource` behind this and changes nothing else.
 
 ### 6.2 Sync
 
@@ -193,134 +200,200 @@ Phase D adds `GoogleCalendarSource` behind this protocol and changes nothing els
 4. Upsert into `CalendarStore` by natural key; delete cached rows in-window whose natural key is absent from the fetch, so deletions made in another app propagate.
 5. Save. `ModelContext.didSave` fires and `RootView` reloads every view model through the path it already has.
 
-Triggers: `scenePhase == .active`, and after any write the assistant or the UI performs. No polling and no timer.
+Triggers: `scenePhase == .active`, and after any write. This matches how Whoop sync was wired in `d5f9ca9`. No polling, no timer.
 
 ### 6.3 Merge
 
 DayGuide's rule, kept verbatim: two events collide when `title.lowercased()` is equal and `startDate` is equal. On collision **EventKit wins**, because that copy is writable offline and is what the OS shows the user elsewhere.
 
-`CalendarMerge` is a pure function over two arrays. It performs no I/O and is the single unit test target for this behaviour.
+`CalendarMerge` is a pure function over two arrays with no I/O, and is the single unit test target for this behaviour.
 
-**Why the merge matters more than it looks.** If the user's Google account is added under iOS Settings, EventKit already returns those events, so in the common configuration Phase D's Google source is fully redundant and the dedup rule is the only thing preventing every event from appearing twice. The Google source earns its keep only for accounts not added to iOS, and it is deliberately last and optional in the phasing for that reason.
+**Why the merge matters more than it looks.** If the user's Google account is added under iOS Settings, EventKit already returns those events, so in the common configuration Phase D's Google source is fully redundant and the dedup rule is the only thing preventing every event from appearing twice. The Google source earns its keep only for accounts not added to iOS, which is why it is last and optional.
 
 ### 6.4 Writes
 
-`CalendarStore` never writes to a provider. Writes route through `CalendarSync.write(...)`, which dispatches to the source that owns the event by its `source` field, then re-syncs the affected window so the cache reflects whatever the provider actually stored. Providers normalise fields (all-day handling, timezone coercion), so trusting the local draft after a write would drift.
+`CalendarStore` never writes to a provider. Writes route through `CalendarSync.write(...)`, which dispatches to the source owning the event by its `source` field, then re-syncs the affected window so the cache reflects what the provider actually stored. Providers normalise all-day handling and timezones, so trusting the local draft after a write would drift.
+
+`CalendarSync` conforms to `Assistant.CalendarWriting`. That protocol is the only calendar mutation surface the tools can reach.
 
 ---
 
-## 7. Assistant: the server
+## 7. Inference: what this spec does not build
 
-`supabase/functions/assistant-chat/index.ts`, modelled on the existing `gemini-chat` function but with three differences.
+For the avoidance of a second stack, stated explicitly.
 
-**Model:** `claude-haiku-4-5`. The exact string, with no date suffix appended. Haiku 4.5 has a 200K context window and does not accept the `output_config.effort` parameter, so requests must not send one.
+| Concern | Owner | This spec |
+|---|---|---|
+| Provider API key | `coach` Edge Function env | never sees it |
+| Model selection | `COACH_MODEL_REASONING` / `_VISION` | names a `Role` |
+| Price lookup and fail-closed behaviour | coach function, OpenRouter catalog | inherits |
+| Spend ceiling and reserve/settle | `coach` function plus the DB check constraint | inherits |
+| On-device availability checks | `CoachRouter` | inherits |
+| Escalation policy | `CoachRouter` escalation table | inherits |
+| Refusal handling | `CoachRouter`, surfaced never escalated | inherits |
 
-**Request:** accepts `{ system, messages, tools }`, forwards to `POST https://api.anthropic.com/v1/messages` with `x-api-key: ANTHROPIC_API_KEY` and `anthropic-version: 2023-06-01`, and returns the response body unchanged. `max_tokens` is set to 2048 server-side; replies here are short and the cap is a cost backstop.
+The earlier revision of this document specified a separate `assistant-chat` function on the Anthropic API with a hardcoded model ID and its own `assistant_usage` table capped at 100 messages a month. All of that is deleted. It duplicated the proxy, introduced a second key and provider, put a model ID in a place where changing it needs a deploy, and created a second budget that could not jointly honour a $2 ceiling.
 
-**Auth:** verifies the caller's Supabase JWT and rejects anonymous requests. The DayGuide function was reachable by anyone holding the URL. The assistant's Anthropic spend makes that unacceptable here.
+### 7.1 The one server change
 
-**Usage cap:** a `assistant_usage` table keyed by `(user_id, month)` is incremented per request and the function returns HTTP 429 past the cap. Enforced server-side, so editing the client cannot bypass it. The client also tracks the count locally to show remaining messages, but that copy is advisory only.
+`supabase/functions/coach/index.ts` gains a second request shape. Everything else about it, including auth, the role map, price lookup, and reserve/settle, is unchanged and applies to both shapes.
 
-Secrets: `ANTHROPIC_API_KEY` set via `supabase secrets set`. It never reaches the app.
+```
+POST /coach
+
+  single-shot (existing)
+    { role, instructions, prompt, schema, maxTokens, image? }
+    -> { content }
+
+  tool-calling (new)
+    { role, instructions, messages[], tools[], maxTokens }
+    -> { content?, toolCalls: [{ id, name, arguments }] }
+
+  errors (unchanged)
+    { error: "budget_exceeded" }        402
+    { error: "server_not_configured" }  500
+```
+
+`messages[]` and `tools[]` are provider-neutral on the wire. The function translates to whatever the configured model expects, which today is OpenAI-style `tool_calls` through OpenRouter. **No Anthropic-specific block types appear anywhere in Swift or in this document's contract.** That was a defect of the earlier revision: it wrote `tool_use` / `tool_result` / `is_error` into the client, which would have pinned the app to one provider and defeated the env-var model swap.
 
 ---
 
-## 8. Assistant: the tool catalog
+## 8. Tools
 
-Six tools. Four are answered entirely from the local cache and cost nothing beyond the tokens describing them.
+### 8.1 The contract
 
-| Tool | Input | Executes against | Gated |
-|---|---|---|---|
-| `get_events` | `start`, `end` (ISO 8601) | `CalendarStore` | no |
-| `find_free_time` | `start`, `end`, `duration_minutes` | `CalendarStore` | no |
-| `analyze_schedule` | `start`, `end` | `CalendarStore` | no |
-| `create_event` | `title`, `start`, `end`, `is_all_day`, `location`, `notes` | `CalendarSync.write` | no |
-| `update_event` | `id`, plus any of the create fields | `CalendarSync.write` | **yes** |
-| `delete_event` | `id` | `CalendarSync.write` | **yes** |
+```swift
+public protocol CoachTool: Sendable {
+    var name: String { get }
+    var description: String { get }
+    /// Codable, so the same declaration serves both tiers.
+    var parameters: GenerationSchema { get }
+    /// True for tools the loop must not execute without confirmation.
+    var requiresConfirmation: Bool { get }
+    func call(_ arguments: GeneratedContent) async throws -> String
+}
+```
 
-`find_free_time` computed locally is why DayGuide's `get_free_busy` tool, which called Google's `freeBusy` endpoint, is not needed. This also means free-slot answers work offline.
+One declaration, two bindings, mirroring the output-schema trick the coach already uses:
 
-Every tool is declared with `strict: true`, which requires `additionalProperties: false` and an explicit `required` array on each schema. This guarantees the `input` object validates before it reaches Swift decoding.
+| | On-device | Cloud |
+|---|---|---|
+| Declare | adapt to `LanguageModelSession.Tool` | `JSONEncoder().encode(parameters)` into `tools[]` |
+| Invoke | Foundation Models calls `call` | `toolCalls[]` dispatched to `call` |
+| Return | tool output | appended to `messages[]` |
 
-Tool availability follows DayGuide: if no calendar source is authorized, no calendar tools are sent, and the system prompt says so. The model then explains what to connect instead of calling a tool that would fail.
+`CoachTool` lives in `Insights` because it is general. The coach's deferred "tool calling over `Persistence`" adopts it unchanged.
 
-`id` in `update_event` and `delete_event` is the local `CalendarEvent.id` as a UUID string, never a provider id. The model only ever sees ids that `get_events` handed it.
+### 8.2 The six calendar tools
 
-`update_event` and `delete_event` return `is_error: true` with an explaining message when the target row has `isRecurring == true`, so the model tells the user to edit the series in their calendar app instead. See Section 17.
+Defined in `Assistant/CalendarTools.swift`. Four never leave the device even on an escalated turn, because they read the local cache.
+
+| Tool | Reads/writes | Confirmed |
+|---|---|---|
+| `get_events(start, end)` | `CalendarStore` | no |
+| `find_free_time(start, end, duration_minutes)` | `CalendarStore` | no |
+| `analyze_schedule(start, end)` | `CalendarStore` | no |
+| `create_event(title, start, end, is_all_day, location, notes)` | `CalendarWriting` | no |
+| `update_event(id, ...)` | `CalendarWriting` | **yes** |
+| `delete_event(id)` | `CalendarWriting` | **yes** |
+
+`find_free_time` computed from the cache is why DayGuide's `get_free_busy`, which called Google's `freeBusy` endpoint, is unnecessary. It also works offline.
+
+Tool availability follows DayGuide: with no authorized calendar source, no calendar tools are offered and the instructions say so, so the model explains what to connect rather than calling something that would fail.
+
+`id` is the local `CalendarEvent.id` as a UUID string, never a provider id. The model only sees ids `get_events` handed it, and `CalendarStore` rejects unknown ones.
+
+`update_event` and `delete_event` fail with an explaining message when the target has `isRecurring == true`, so the model tells the user to edit the series in their calendar app. See Section 17.
 
 ---
 
-## 9. Assistant: the loop
+## 9. The loop and the tier floor
 
-`ToolLoop` runs at most **6 rounds** per user message, down from DayGuide's 10. With events cached locally most turns resolve in one round, and the cap is a cost backstop rather than a real limit. Exhausting it returns a plain message saying the request could not be completed, not a silent stop.
+### 9.1 Floor
+
+`AssistantTask` declares `floor: .onDevice`. Most turns are a lookup and at most one write, well within the on-device model's reach, and reads then work with no network. Escalation is `CoachRouter`'s existing table, unchanged: `.exceededContextWindowSize`, `.assetsUnavailable`, `.rateLimited` and `.unsupportedLanguageOrLocale` escalate; `.decodingFailure` retries once then escalates; `.concurrentRequests` retries locally; `.unsupportedGuide` fails loudly; `.refusal` and `.guardrailViolation` surface and never escalate.
+
+An escalated turn runs on `.reasoning`, whichever model that currently maps to.
+
+**The risk this accepts:** a roughly 3B model driving writes is less reliable at argument construction than a frontier model. Three things bound it. Edits and deletes cannot execute without confirmation (Section 10). Ids are validated against the store, so a hallucinated id fails rather than hitting the wrong event. `.decodingFailure` escalates after one retry, which is precisely the failure mode a small model exhibits when it loses a schema.
+
+If measurement shows on-device tool calling is not good enough, the fix is a one-line floor change to `.cloud(.reasoning)`, not a redesign. This is recorded as a risk in Section 18 rather than assumed away.
+
+### 9.2 The loop
+
+`ToolLoop` in `Insights` runs at most **6 rounds** per user message, down from DayGuide's 10. With events cached locally most turns resolve in one. Exhausting the cap returns a plain message saying the request could not be completed, not a silent stop.
 
 One round:
 
-1. Send `system`, `messages`, `tools` through `AssistantClient`.
-2. If `stop_reason` is not `tool_use`, append the text and finish.
-3. Otherwise, for every `tool_use` block in the response: execute it if ungated, or hold it if gated (Section 10).
-4. When all results exist, append them as `tool_result` blocks in a **single** user message and loop.
+1. Ask the engine for the next step, given instructions, conversation, and tools.
+2. If the engine returns content and no tool calls, append it and finish.
+3. Otherwise execute each returned tool call, or hold it if it requires confirmation (Section 10).
+4. When every call in the round has a result, append them all and loop.
 
-Step 4's single-message requirement is not stylistic. Splitting `tool_result` blocks across multiple user messages trains the model to stop making parallel calls.
+A failing tool returns its error as the result rather than being dropped, so the model can recover or explain.
 
-Failed tools return `tool_result` with `is_error: true` and a short reason rather than being dropped, so the model can recover or explain.
+The loop is written against `Engine`, not against a provider, so it runs identically on-device and escalated.
+
+### 9.3 Budget interaction
+
+Only escalated rounds cost anything. Each escalated round is a separate reserve-and-settle against the coach's allowance, exactly like any other remote call, so a runaway loop cannot outrun the ceiling: the round that does not fit is refused with `budget_exceeded`.
+
+`ToolLoop` treats `budget_exceeded` as terminal for the turn, not as a tool error. The conversation ends with the coach's existing exhaustion sentence. Retrying inside the loop would spend the reservation attempt repeatedly for no possible progress.
 
 ---
 
 ## 10. The confirmation gate
 
-The gate is structural. `update_event` and `delete_event` are described to the model normally, but `ToolLoop` is not wired to execute them.
+The gate is structural. `update_event` and `delete_event` set `requiresConfirmation`, and `ToolLoop` is not wired to execute a tool with that flag.
 
-When a gated `tool_use` arrives, the loop returns `.awaitingConfirmation(PendingWrite)` and suspends. `PendingWrite` carries the tool call plus the current `CalendarEventSnapshot` read from the store, so the card can show the before state beside the proposed after state.
+When such a call arrives, the loop returns `.awaitingConfirmation(PendingWrite)` and suspends. `PendingWrite` carries the call plus the current `CalendarEventSnapshot` read from the store, so the card shows the before state beside the proposed after state.
 
-- **Confirm.** Execute, append the `tool_result`, resume the loop.
-- **Cancel.** Append `tool_result` with `is_error: true` and the text "User declined this change", resume the loop so the model can acknowledge it.
+- **Confirm.** Execute, append the result, resume.
+- **Cancel.** Append a result reading "User declined this change", resume so the model can acknowledge it.
 
-The model cannot skip the gate because nothing it emits can cause a gated write to execute. This is the substantive improvement over DayGuide, which asked Gemini in the system prompt to confirm first, and therefore relied on the model choosing to.
+The model cannot route around this, because nothing it emits causes a gated write to execute. This is the substantive improvement over DayGuide, which asked Gemini in the system prompt to confirm first and therefore depended on the model choosing to. It matters more here than it did there, because the floor is a small on-device model.
 
-**Batch interaction.** A single response may contain several `tool_use` blocks, some gated and some not. Ungated ones execute immediately, gated ones queue, and the user message is not sent until every block has a result. If several gated calls arrive together they are confirmed one at a time in arrival order.
+**Batch interaction.** One round may return several calls, some gated. Ungated ones execute immediately, gated ones queue, and the round does not complete until every call has a result. Several gated calls are confirmed one at a time in arrival order.
 
-Creates are not gated, per the brainstorming decision. A newly created event is announced in the reply with an undo affordance on the message.
+Creates are not gated, per the brainstorming decision. A created event is announced in the reply with an undo affordance on the message.
 
 ---
 
-## 11. System prompt and context budget
+## 11. Instructions and context
 
-Assembled per message:
+`AssistantTask.instructions` carries the behavioural rules: resolve relative dates against the stated current time, never invent an event id, state times in the user's timezone, keep replies to a sentence or two, ask before assuming a duration.
 
-- Current date, time, and IANA timezone identifier.
-- Which calendar sources are authorized.
-- Today's and tomorrow's events, inlined as a compact list.
-- Behavioural instructions: resolve relative dates against the stated current time, never invent an event id, state times in the user's timezone, keep replies to a sentence or two.
+The prompt carries current date, time, IANA timezone, which calendar sources are authorized, and today's and tomorrow's events inline. Inlining two days means "what's on today?" is answered with no tool call at all, which matters twice over: it is the cheapest possible path, and it is the most reliable one on a small model.
 
-Inlining the next two days means the common question ("what's on today?") is answered with zero tool calls, which is the single largest cost saving available.
+Conversation history is capped at the last **20 messages**, down from DayGuide's 50. The cap is enforced in `ToolLoop`, so it holds on both tiers.
 
-History is capped at the last **20 messages**, down from DayGuide's 50.
-
-**Prompt cache.** A `cache_control` breakpoint sits after the tool definitions. Render order is `tools`, then `system`, then `messages`, so the tool block is the stable prefix; the volatile date line and event list sit after it in `system` and are not cached. The tool definitions run about 1,500 tokens, comfortably over the roughly 1,024-token minimum cacheable prefix. `usage.cache_read_input_tokens` should be non-zero from the second message of any conversation; if it is zero, something upstream of the breakpoint is varying per request.
+There is no `MetricsDigest` here. The assistant's context is calendar, and the coach's is metrics; neither task sees the other's.
 
 ---
 
 ## 12. Cost model
 
-Haiku 4.5 is $1.00 per million input tokens and $5.00 per million output tokens.
+Almost every turn runs on-device and costs **nothing**.
 
-Per user message, assuming two API calls per turn (one tool round plus the reply), since each round resends the full request:
+An escalated turn, at the current demo-tier model `google/gemini-2.5-flash-lite` at $0.10 per million input and $0.40 per million output:
 
 | Component | Tokens |
 |---|---|
-| Tool definitions | ~1,500 |
-| System prompt with inlined events | ~600 |
+| Tool declarations | ~1,000 |
+| Instructions plus inlined events | ~600 |
 | History, capped at 20 messages | ~2,000 |
-| Input per call | ~4,100 |
-| Input per turn, two calls | ~8,200 |
+| Input per round | ~3,600 |
+| Input per escalated turn, two rounds | ~7,200 |
 | Output per turn | ~300 |
 
-Uncached: about **$0.0097 per message**. With the tool-definition prefix cached at the 0.1x read rate: about **$0.005 per message**.
+That is **$0.00072 input plus $0.00012 output, about $0.0008 per escalated turn**. At 100 assistant messages a month with a generous 20% escalation rate, the assistant costs roughly **$0.02 per user per month**, against a $2.00 allowance the coach spec projects at ~$0.04 on the same tier.
 
-At 100 messages per user per month that is roughly **$0.50 to $0.97**, inside the $2 per user per month ceiling while leaving room for Cloud Run, meal analysis, and APNs.
+Two consequences worth stating:
 
-**The cap ships at 100 messages per user per month** and is raised only against observed usage. These figures are modelled, not measured; the first month of real `usage` data replaces them.
+1. **No separate cap is needed.** The earlier revision proposed a 100-message monthly limit because it priced every turn against a frontier model on a second budget. On-device floor plus demo-tier escalation makes the assistant a rounding error, and the coach's existing ceiling is the only control required.
+2. **The number moves with the role map, and that is fine.** If `.reasoning` is upgraded to Claude Sonnet 5 at $3.00/$15.00, an escalated turn costs about $0.026 and 20 escalated turns about $0.52 a month. Still inside $2, alongside the coach's ~$0.87 at frontier tier, but no longer negligible. The reserve-and-settle ceiling makes this safe without anyone recomputing this table, which is the point of the coach's design.
+
+These figures are modelled, not measured. The escalation rate is the sensitive input and is the first thing to check against real data.
 
 ---
 
@@ -333,13 +406,12 @@ At 100 messages per user per month that is roughly **$0.50 to $0.97**, inside th
 `AgendaCard` sits between the streak line and the stat tile grid:
 
 - Header "TODAY" with an event count.
-- Up to four rows of time, title, and duration. More than four collapses to "+N more", which opens the day.
-- "+ Add event" opens `EventSheet` in create mode.
-- Row tap opens `EventSheet` in view/edit mode.
-- When access has not been granted, the card body is an empty state with a request button. **The EventKit permission prompt is triggered from here, never at launch.**
-- When access is granted and the day is empty, the card says so rather than disappearing, so the affordance stays discoverable.
+- Up to four rows of time, title, and duration. Beyond four, "+N more" opens the day.
+- "+ Add event" opens `EventSheet` in create mode; a row tap opens it in view/edit mode.
+- With access not granted, the body is an empty state with a request button. **The EventKit prompt is triggered from here, never at launch.**
+- With access granted and no events, the card says so rather than disappearing, so the affordance stays discoverable.
 
-Styling follows whatever Project 1 lands. This card is built in Phase C, after the restyle, so it is styled once.
+Styling follows Project 1. The card is built in Phase C, after the restyle, so it is styled once.
 
 ### 13.2 The assistant sheet
 
@@ -347,38 +419,38 @@ A sparkle button joins the gear in Today's toolbar and presents `AssistantSheet`
 
 - Message list with user and assistant bubbles.
 - A compact activity chip per executed tool ("Checked your calendar", "Found 3 free slots"), so tool use is visible rather than implied.
-- Confirmation cards for gated writes, rendered inline in the conversation with Confirm and Cancel.
+- Confirmation cards for gated writes, inline in the conversation, with Confirm and Cancel.
 - Composer with a send button, disabled while a turn is in flight.
-- Remaining-messages indicator when the monthly count runs low.
-- History loads from the most recent conversation on open, matching DayGuide.
+- History loads from the most recent conversation on open.
 
-`AssistantViewModel` owns the loop and publishes an `AssistantSnapshot`. The sheet stays a pure function of that snapshot, consistent with every other screen in this app.
+There is no remaining-messages indicator. The allowance is internal per the coach spec, and surfaces only as its one exhaustion sentence.
+
+`AssistantViewModel` owns the loop and publishes an `AssistantSnapshot`. The sheet stays a pure function of that snapshot, consistent with every other screen.
 
 ---
 
 ## 14. Permissions and privacy
 
 - EventKit full access is requested from the agenda card's empty state, with `NSCalendarsFullAccessUsageDescription` explaining that LifeOS shows the day's schedule and lets the assistant change it.
-- Denied access is a first-class state. The agenda card explains it and links to Settings; calendar tools are withheld from the model.
+- Denied access is a first-class state: the card explains it, links to Settings, and calendar tools are withheld.
 - Calendar events and chat history are stored only on the device.
-- **The assistant sends calendar data to Anthropic.** The system prompt inlines today's and tomorrow's events, and `get_events` results enter the conversation. This must be stated in the app's privacy copy and surfaced once before first use of the assistant. It is the one place calendar contents leave the device.
-- No calendar data reaches Supabase. The edge function forwards the request and stores only the usage counter.
+- **On an on-device turn, nothing leaves the device at all.** This is a genuine improvement over the earlier revision, where every turn went to a cloud provider.
+- **On an escalated turn, calendar content does leave.** The inlined two days and any `get_events` results travel to OpenRouter and the configured model. This is a weaker guarantee than the coach's aggregates-only `MetricsDigest` boundary, because an event title is content, not a derived number, and it cannot be aggregated without destroying its usefulness. It must be stated in the app's privacy copy and surfaced once before first use of the assistant.
+- No calendar data reaches Supabase. The function forwards the request and stores only budget accounting.
 
 ---
 
 ## 15. Phasing
 
-Ordered so nothing collides with Project 1 until Project 1 has landed.
+**Phase A: calendar core.** `CalendarEvent`, `CalendarStore`, `CalendarSource`, `EventKitSource`, `CalendarMerge`, `CalendarSync`, schema registration, tests. Touches no view file and does not depend on the coach. Safe to start immediately, in parallel with both Project 1 and the coach.
 
-**Phase A: calendar core.** `CalendarEvent`, `CalendarStore`, `CalendarSource`, `EventKitSource`, `CalendarMerge`, `CalendarSync`, schema registration, tests. Touches no view file. Safe to land while the restyle is in flight.
+**Phase B: assistant.** Requires the `Insights` skeleton from the coach plan. `CoachTool`, `ToolLoop`, the `Engine` tool-calling entry point, the `coach` function's second request shape, the `Assistant` target, `AssistantSheet`, tests. Delivers the interaction the user asked for, and does not depend on Phase C.
 
-**Phase B: assistant.** `assistant-chat` function, `assistant_usage` table, `Assistant` target, `AssistantSheet`, the toolbar button, tests. The sheet is a new screen, so the restyle does not rework it. This phase delivers the interaction the user actually asked for, and it does not depend on Phase C.
+**Phase C: agenda card.** After Project 1 merges: `AgendaCard`, `EventSheet`, and the `TodaySnapshot` and `TodayViewModel` changes. Built once, in the new visual language.
 
-**Phase C: agenda card.** After Project 1 merges: `AgendaCard`, `EventSheet`, `TodaySnapshot` and `TodayViewModel` changes. Built once, in the new visual language.
+**Phase D: Google Calendar source.** Optional and last. `GoogleCalendarSource` behind `CalendarSource`, plus the Supabase Google OAuth provider, a token store and refresh, modelled on `WhoopOAuth`. Deferrable indefinitely for any user whose Google account is in iOS Settings.
 
-**Phase D: Google Calendar source.** Optional and last. `GoogleCalendarSource` behind `CalendarSource`, plus the Supabase Google OAuth provider, a token store, and refresh, modelled on `WhoopOAuth`. Deferrable indefinitely for any user whose Google account is in iOS Settings.
-
-Phase B before Phase C is deliberate: the assistant works against the store from Phase A and needs no agenda card to be useful.
+Phase B before Phase C is deliberate: the assistant works against the Phase A store and needs no agenda card to be useful.
 
 ---
 
@@ -388,36 +460,46 @@ Phase B before Phase C is deliberate: the assistant works against the store from
 
 - Upsert matches on `(source, sourceID)` and does not duplicate across syncs.
 - In-window rows absent from a fetch are deleted; out-of-window rows are untouched.
-- `CalendarStore` window queries respect day boundaries and all-day events.
-- `find_free_time` given a day of known events returns the expected gaps, including the empty-day and fully-booked cases.
+- Window queries respect day boundaries and all-day events.
+- Free-slot computation over a day of known events, including empty and fully booked.
 
 **`IntegrationsTests`**
 
-- `CalendarMerge` dedupes on case-insensitive title plus equal start, and EventKit wins collisions.
-- A source that throws does not prevent the other source's events from being merged.
+- `CalendarMerge` dedupes on case-insensitive title plus equal start, EventKit winning.
+- A source that throws does not prevent the other source's events from merging.
 
-**`AssistantTests`**, against a stubbed transport and a fake `CalendarSource`
+**`InsightsTests`** (extending the coach's suite)
 
-- The loop stops at 6 rounds and returns the exhaustion message.
-- A gated `tool_use` suspends the loop and executes nothing.
-- Confirm resumes with a `tool_result`; cancel resumes with `is_error: true`.
-- Several `tool_result` blocks from one response are sent in exactly one user message.
-- A throwing tool produces `is_error: true` rather than a dropped block.
-- History is truncated to 20 messages.
+- `ToolLoop` stops at 6 rounds and returns the exhaustion message.
+- A `requiresConfirmation` tool suspends the loop and executes nothing.
+- Confirm resumes with a result; cancel resumes with the declined result.
+- Every call in a multi-call round is resolved before the round completes.
+- A throwing tool yields an error result rather than a dropped one.
+- History truncates to 20 messages.
+- `budget_exceeded` ends the turn and is not retried.
+- A `CoachTool`'s `parameters` round-trips through `JSONEncoder` and back, pinning the schema-sharing assumption the same way the coach's output-schema pin test does.
 
-Every test runs under `swift test` with no simulator and no network, which is why `EventKitSource` sits behind a protocol and `AssistantClient` behind a transport.
+**`AssistantTests`**, against a fake `CalendarSource` and a fake `CalendarWriting`
+
+- Each of the six tools maps arguments to the right store or write call.
+- An unknown event id is rejected rather than dispatched.
+- A recurring event is refused by `update_event` and `delete_event` with an explaining message.
+
+All of it runs under `swift test` with no simulator and no network, which is why `EventKitSource` sits behind a protocol, writes behind `CalendarWriting`, and the loop behind `Engine`.
 
 ---
 
 ## 17. Out of scope
 
-- **Gmail.** DayGuide's `draft_email` and `send_email` tools are not ported. The assistant scope decision was calendar only.
-- **LifeOS data in the assistant.** No recovery, habit, plan, money, or Whoop access, read or write.
+- **Gmail.** DayGuide's `draft_email` and `send_email` are not ported.
+- **LifeOS data in the assistant.** No metrics, habit, plan, money, or Whoop access. That is the coach's boundary, not this one's.
+- **Calendar data in the coach.** The reverse also holds until someone specs it.
 - **Event mirroring to Supabase**, and any web view of the calendar.
 - **Voice input.** DayGuide used `expo-speech-recognition`; not carried over.
+- **Streaming.** Deferred by the coach spec; the assistant inherits that and shows a thinking indicator.
 - **Notifications and reminders** for events. Project 3 owns the notification pipeline; revisit after it lands.
-- **Attendees and invitations.** Events are read and written as the user's own. No invite semantics.
-- **Recurring event editing.** A recurring event can be read and, in Phase A, is cached as its expanded occurrences. Editing "this occurrence" versus "the series" is not modelled; `update_event` and `delete_event` are rejected for events belonging to a recurrence rule, with the tool returning an error the model can explain. Full recurrence handling is a follow-up.
+- **Attendees and invitations.** Events are read and written as the user's own.
+- **Recurring event editing.** Occurrences are read and cached as expanded rows carrying `isRecurring`. Editing "this occurrence" versus "the series" is not modelled, and gated writes refuse such rows with an error the model explains. Full recurrence handling is a follow-up.
 
 ---
 
@@ -425,9 +507,12 @@ Every test runs under `swift test` with no simulator and no network, which is wh
 
 | Risk | Mitigation |
 |---|---|
-| Assistant cost overruns the $2 ceiling | Server-side monthly cap at 100, prompt caching, 20-message history, events inlined so most turns need no tool call. Figures in Section 12 are modelled and must be checked against real usage in month one. |
-| Duplicate events once Phase D lands | `CalendarMerge` is a pure function with direct unit tests, and Phase D is optional. |
-| Model invents an event id and a write targets the wrong event | Ids only ever come from `get_events` results; `CalendarStore` rejects unknown ids; gated writes show the resolved current event on the confirm card before anything executes. |
-| Recurring events surprise the user | Rejected explicitly with an explaining error rather than silently mangling a series. See Section 17. |
-| Phase C collides with Project 1 | Phase C is scheduled after Project 1 merges, and Phases A and B touch no restyled file. |
-| Edge function is throwaway work | It is roughly 100 lines and moves to Cloud Run as a port during Project 0.5. |
+| On-device model is unreliable at constructing tool arguments | Confirmation gate on destructive writes; ids validated against the store; `.decodingFailure` escalates after one retry. If measurement disproves the floor, it is a one-line change to `.cloud(.reasoning)`. |
+| Escalation rate far exceeds the assumed 20% | Escalation reason is already recorded per request by the coach. If `.exceededContextWindowSize` dominates, shrink the inlined context before raising anything. |
+| Extending the `coach` contract destabilises the coach | The additions are a second request shape and a new response field. The single-shot path is untouched, and the coach's existing tests pin it. |
+| Duplicate events once Phase D lands | `CalendarMerge` is pure with direct unit tests, and Phase D is optional. |
+| Model targets the wrong event | Ids come only from `get_events`; unknown ids rejected; gated writes show the resolved current event before executing. |
+| Recurring events surprise the user | Refused explicitly rather than silently mangling a series. |
+| Phase C collides with Project 1 | Phase C is scheduled after Project 1 merges; Phases A and B touch no restyled file. |
+| Calendar content leaves the device on escalation | Stated in Section 14, disclosed once before first use. Cannot be aggregated away the way `MetricsDigest` is. |
+| Phase B blocked on the coach landing | Phase A is independent and carries the calendar layer to completion regardless. |
