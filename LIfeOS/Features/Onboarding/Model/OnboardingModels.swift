@@ -61,7 +61,10 @@ extension IntroPage {
 
 /// What the user types during signup, before any of it is trusted.
 struct SignupDraft: Equatable {
-    var channel: SupabaseAuthChannel = .phone
+    /// Email first: it is free through Resend to 3,000 a month, needs no A2P
+    /// registration, and carries none of the SMS failure modes. An SMS costs
+    /// about $0.05 and can fail four different ways.
+    var channel: SupabaseAuthChannel = .email
     var phone = ""
     var dialCode = "+1"
     var email = ""

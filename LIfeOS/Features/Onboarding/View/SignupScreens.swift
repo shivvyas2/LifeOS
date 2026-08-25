@@ -76,8 +76,8 @@ struct IdentityScreen: View {
                     get: { model.draft.channel },
                     set: { model.switchChannel(to: $0) }
                 )) {
-                    Text("Phone").tag(SupabaseAuthChannel.phone)
                     Text("Email").tag(SupabaseAuthChannel.email)
+                    Text("Phone").tag(SupabaseAuthChannel.phone)
                 }
                 .pickerStyle(.segmented)
 
@@ -118,6 +118,12 @@ struct IdentityScreen: View {
 
                 if let error = model.errorMessage {
                     Text(error).font(.system(size: 13)).foregroundStyle(.red)
+                }
+                if model.phoneSendFailed {
+                    Button("Use email instead") { model.useEmailInstead() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.accent)
+                        .frame(height: Space.x5)
                 }
                 if let note = model.phoneUnavailableNote {
                     Text(note).font(.system(size: 13)).foregroundStyle(.orange)
