@@ -20,6 +20,7 @@ struct AppShell: View {
     /// false there, so the gate below sends the user through onboarding
     /// regardless of this flag.
     @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
+    @Environment(\.scenePhase) private var scenePhase
     /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
     /// relaunch returns to signup and the bypass cannot quietly become the
     /// default state of the app.
@@ -41,9 +42,27 @@ struct AppShell: View {
         }
         .task {
             whoop.attach(context)
-            // A returning user has a session already; skip straight past signup
-            // rather than making them prove themselves again on every launch.
-            if onboarding.isSignedIn { hasFinishedOnboarding = true }
+            // A returning user has a session already; renew it and skip past
+            // signup rather than making them prove themselves on every launch.
+            if await onboarding.restoreSession() { hasFinishedOnboarding = true }
+        }
+        // An access token lasts an hour, so a session that was fine when the app
+        // went into the background is often stale by the time it comes back.
+        // Renewing here keeps the app usable without a relaunch; concurrent
+        // calls are coalesced inside the view model.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task {
+                // Renewal only, deliberately one-directional. Whether onboarding
+                // is done was decided at launch; promoting here as well would
+                // yank a user straight out of the profile step the moment they
+                // switched apps after entering their code. Demotion still
+                // applies: a refused session must not leave a shell behind that
+                // can no longer sync.
+                if await onboarding.restoreSession() == false, !isGuest {
+                    hasFinishedOnboarding = false
+                }
+            }
         }
         .onOpenURL { url in
             // Two callbacks share the scheme; the host decides which owns it.
