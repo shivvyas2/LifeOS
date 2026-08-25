@@ -15,7 +15,7 @@
 - **Work in the worktree** `/Users/shivvyas/LIfeOS/.claude/worktrees/auth-login-email-otp` on branch `feat/auth-login-and-email-otp`. Never commit to `main`. Other sessions share the primary checkout and move `HEAD` there.
 - **There is no test target for the `LIfeOS` app.** Only `LifeOSKit` has tests. Everything in `LIfeOS/Features/...` and `LIfeOS/App/...` is verified by `xcodebuild` plus the manual simulator pass in Task 7 — do not invent an app test target to satisfy a step.
 - **Run Swift tests with:** `swift test --package-path LifeOSKit` (add `--filter` to narrow).
-- **Build the app with:** `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
+- **Build the app with:** `xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`, run from the worktree root. **Every path in this plan is relative to the worktree.** Never pass an absolute path under `/Users/shivvyas/LIfeOS/` that is not inside `.claude/worktrees/auth-login-email-otp/`, and never edit, build, or test the primary checkout at `/Users/shivvyas/LIfeOS`. It sits at a different commit, other sessions share it, and edits made there both break its build and are invisible to this branch. An earlier run of this plan did exactly that and left the primary checkout uncompilable.
 - **Run Deno tests with:** `deno test supabase/functions/_shared/otp_twilio_test.ts`
 - **Test naming follows the existing codebase:** full sentences, e.g. `@Test func anEmptyGateway502IsStillASentence()`. See `LifeOSKit/Tests/IntegrationsTests/AuthErrorMappingTests.swift`.
 - **Commit style:** lowercase `type(scope): imperative summary`. No `Co-Authored-By` trailer. No em dashes in commit messages.
@@ -511,7 +511,7 @@ Expected: **only** the `additional_redirect_urls` line in `supabase/config.toml`
 Run: `swift test --package-path LifeOSKit`
 Expected: PASS, whole suite.
 
-Run: `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
+Run: `xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
 Expected: `** BUILD SUCCEEDED **`.
 
 - [ ] **Step 10: Commit**
@@ -963,7 +963,7 @@ In `LIfeOS/Features/Onboarding/View/SignupScreens.swift`, inside `IdentityScreen
 
 - [ ] **Step 6: Build**
 
-Run: `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
+Run: `xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
 Expected: `** BUILD SUCCEEDED **`.
 
 - [ ] **Step 7: Commit**
@@ -1033,7 +1033,7 @@ In `LIfeOS/Features/Onboarding/View/ConnectionsScreen.swift`, add the `.signedIn
 
 - [ ] **Step 4: Build**
 
-Run: `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
+Run: `xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
 Expected: `** BUILD SUCCEEDED **`. A non-exhaustive-switch error here means `back()` or `OnboardingFlow` is missing the new case.
 
 - [ ] **Step 5: Commit**
@@ -1156,7 +1156,7 @@ In `LIfeOS/Features/Onboarding/View/SignupScreens.swift`, inside `IdentityScreen
 
 - [ ] **Step 4: Build**
 
-Run: `xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
+Run: `xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
 Expected: `** BUILD SUCCEEDED **`.
 
 - [ ] **Step 5: Commit**
@@ -1183,7 +1183,7 @@ git commit -m "feat(auth): default to email and offer it when SMS fails"
 swift test --package-path LifeOSKit
 deno test supabase/functions/_shared/otp_twilio_test.ts
 deno check supabase/functions/otp-start/index.ts
-xcodebuild -project /Users/shivvyas/LIfeOS/LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
+xcodebuild -project ./LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build
 ```
 
 Expected: all four succeed. Paste the actual counts into the PR body; do not claim a number you did not read.
