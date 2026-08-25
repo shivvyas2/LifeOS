@@ -48,6 +48,27 @@ import Persistence
         #expect(evidence.rows.contains { $0.label == "days written" })
     }
 
+    /// Mind asks `mind.clarity` at close time exactly the way Soul asks its
+    /// check-in questions. If the answer never reaches the score, the close
+    /// asked a question and threw the answer away, which is worse than not
+    /// asking.
+    @Test func mindMergesJournalAndCheckInRows() {
+        var inputs = MonthInputs()
+        inputs.journalDates = [Date()]
+        inputs.daysInMonth = 30
+        let answers = ["mind.clarity": "a lot"]
+        let evidence = SectorEvidenceFactory.evidence(for: .mind, inputs: inputs, answers: answers)
+        #expect(evidence.rows.contains { $0.label == "days written" })
+        #expect(evidence.rows.contains { $0.label == "how clear was your head?" })
+    }
+
+    @Test func mindWithOnlyCheckInAnswersStillProposes() {
+        let evidence = SectorEvidenceFactory.evidence(
+            for: .mind, inputs: MonthInputs(), answers: ["mind.clarity": "a lot"]
+        )
+        #expect(evidence.proposedScore != nil)
+    }
+
     @Test func familyRoutesToCheckInScorer() {
         let answers = ["family.contact": "a lot"]
         let evidence = SectorEvidenceFactory.evidence(for: .family, inputs: MonthInputs(), answers: answers)
