@@ -39,7 +39,7 @@ public struct JournalScorer: SectorScorer {
             EvidenceRow(
                 label: "days written",
                 value: "\(daysWritten)/\(daysInMonth)",
-                normalised: Double(daysWritten) / Double(daysInMonth),
+                normalised: Double(daysWritten) / Double(daysInMonth),  // No caller currently passes more days than daysInMonth; EvidenceRow's clamp is the backstop if one ever does
                 weight: 2
             )
         ]
