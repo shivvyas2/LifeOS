@@ -251,14 +251,14 @@ POST /coach
 
 Lives in the function beside the price table, because the two always change together.
 
-**Current setting — demo tier.** One model serves both roles while the feature is being shown:
+**Current setting — demo tier.** One model serves both roles while the feature is being shown. These are the *current values* of the environment variables below, not constants in the source:
 
 | Role | Model | Rate ($/1M in, out) | Notes |
 |---|---|---|---|
 | `reasoning` | `google/gemini-2.5-flash-lite` | $0.10 / $0.40 | 1M context, reliable JSON-schema structured output |
 | `vision` | `google/gemini-2.5-flash-lite` | $0.10 / $0.40 | Same model; strong enough at reading a meal photo |
 
-Prices are OpenRouter's quoted rates as of 2026-08-25 and include their margin. **Re-check them before deploying** — the catalog moves, and the price table in the function is what the budget reservation depends on being right.
+Prices are OpenRouter's quoted rates as of 2026-08-25 and include their margin. They are shown here for the cost model only — the function does not hardcode them, it looks them up (below), so this table going stale is a documentation problem rather than a budget one.
 
 ### Why not the actual cheapest model
 
@@ -270,11 +270,44 @@ The selection rule is therefore not *cheapest available* but **cheapest model th
 
 Runners-up, if Gemini Flash Lite disappoints or its price moves: `qwen/qwen3.5-flash-02-23` ($0.065/$0.26, 1M context, vision) is ~35% cheaper; `openai/gpt-5-nano` ($0.05/$0.40, 400K, vision) is comparable.
 
+### Changing models must be a config change, not a code change
+
+Model IDs are **environment variables**, not constants in the function source:
+
+```
+COACH_MODEL_REASONING = google/gemini-2.5-flash-lite
+COACH_MODEL_VISION    = google/gemini-2.5-flash-lite
+```
+
+Swapping to a better model is then:
+
+```sh
+supabase secrets set COACH_MODEL_REASONING=anthropic/claude-sonnet-5
+```
+
+No deploy, no code edit, no App Store release, no client change. The app only ever names a role.
+
+### Prices are looked up, never hardcoded
+
+A hardcoded price table would defeat this. The model ID and its price must agree, and if someone swaps the model without updating the table, the worst-case estimate under-predicts — which is the single path that can breach the allowance (Section 9). An easy swap that quietly breaks the budget guarantee is worse than a hard one.
+
+So the function resolves prices for whatever model is configured, from OpenRouter's own public catalog:
+
+```
+GET https://openrouter.ai/api/v1/models   ->  data[].pricing.{prompt,completion}
+```
+
+Cached in a `coach_model_price` table with a TTL of a few hours, refreshed lazily. The price always describes the model actually being called, because both come from the same source of truth.
+
+**This lookup fails closed.** If the catalog is unreachable and no cached price exists for the configured model, the request is **refused** — not attempted at a guessed price. Guessing low is how a ceiling gets breached, and an unavailable coach is a far better failure than an unbounded bill. The refusal surfaces as `unavailable`, not `budget_exceeded`; they are different problems and want different messages.
+
+A model ID that does not exist in the catalog is caught here too, on the first request after a typo'd `secrets set`, rather than as a provider error mid-conversation.
+
 ### Upgrade path
 
-When demo constraints lift, `.reasoning` moves to Claude Sonnet 5 ($3.00/$15.00) and `.vision` to Claude Haiku 4.5 ($1.00/$5.00) — the pairing costed in Section 10.
+When demo constraints lift, `.reasoning` moves to Claude Sonnet 5 ($3.00/$15.00) and `.vision` to Claude Haiku 4.5 ($1.00/$5.00) — the pairing costed in Section 10. Two `secrets set` commands; the budget math follows automatically.
 
-**That change is one line in this function and a `supabase functions deploy`.** No App Store release, no client change, no schema change. The app only ever names a role. This is the whole return on the thin-proxy decision, and it is worth not giving up: the moment a model ID appears in Swift, upgrading the coach becomes a shipping event.
+**This is the whole return on the thin-proxy decision, and it is worth defending.** The moment a model ID appears in Swift, upgrading the coach becomes a shipping event gated on App Store review. Keeping it in the function's environment keeps it a thirty-second operation.
 
 ### Secrets
 
@@ -465,7 +498,7 @@ In order of impact, and independent of which models are in the role map:
 
 ## 11. Error handling
 
-Results reach the UI as three states rather than thrown errors:
+Results reach the UI as five states rather than thrown errors:
 
 | State | Meaning | UI |
 |---|---|---|
@@ -473,10 +506,11 @@ Results reach the UI as three states rather than thrown errors:
 | `degraded` | On-device answered where cloud was wanted | Render, with a quiet note — never mentioning the allowance |
 | `refused` | Apple's guardrail declined | Show the refusal explanation; no retry button |
 | `exhausted` | Allowance spent, and the task has a cloud floor | "You're out of limit." Once, as a state. |
+| `unavailable` | Cloud path cannot run safely — network down, or price lookup failed closed | Transient. Offer retry; never mention the allowance. |
 
 `degraded` and `exhausted` are deliberately separate states even though the allowance can cause both. A weekly review that silently ran on-device reads as the coach inexplicably getting worse, so it says something — but it says "this ran on-device," never "you are out of budget." The allowance surfaces in exactly one string, in one state.
 
-`refused` is split out from `exhausted` because they need opposite affordances: a refusal must not offer a retry, an exhausted allowance resolves itself next month.
+`refused` is split out from `exhausted` because they need opposite affordances: a refusal must not offer a retry, an exhausted allowance resolves itself next month. `unavailable` is split from both because it is the only one where retrying is the right thing to do.
 
 ---
 
@@ -490,6 +524,7 @@ Results reach the UI as three states rather than thrown errors:
 | **Escalation table** — inject each `GenerationError` case | Especially that `.refusal` does not escalate. |
 | **Digest boundary** — assert no raw Whoop field reaches an engine | The privacy rule. |
 | **Month rollover** — reserve in month N, assert month N+1 starts at zero without a reset job | The lazy-row scheme is what removes the cron job; this proves it works. |
+| **Price lookup fails closed** — unknown model ID and unreachable catalog, both with a cold cache | Asserts the request is refused rather than attempted at a guessed price. This is the path that would breach the allowance, and it is only exercised deliberately. |
 | **Worst-case estimator** — assert estimate >= actual across recorded fixtures | If the estimate can under-predict, the cap can be breached. |
 
 Engines are protocol-mocked. No test calls OpenRouter or Apple's model.
@@ -516,3 +551,4 @@ Engines are protocol-mocked. No test calls OpenRouter or Apple's model.
 | On-device model escalates far more often than expected, raising cost | Escalation reason is recorded per request; if `.exceededContextWindowSize` dominates, shrink the digest before raising the budget |
 | On-device quality is poor enough that users always want cloud | Measured, not assumed. If the daily brief is not good enough on-device, that is a finding to act on, not a reason to pre-emptively route everything to cloud |
 | Aggregates still identify the user in combination | Digest carries no identifiers; OpenRouter sees a bearer token and numbers |
+| A model swap silently breaks the budget math | Prices are resolved from OpenRouter's catalog for whichever model is configured, so the two cannot drift; lookup fails closed |
