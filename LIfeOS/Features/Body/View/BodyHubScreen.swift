@@ -29,10 +29,11 @@ struct BodyHubScreen: View {
                     )
 
                     switch section {
-                    case .activity: ActivitySection(snapshot: activity)
-                    case .weight:   WeightSection(snapshot: weight)
-                    case .recovery: RecoverySection(snapshot: recovery)
-                    case .wellness: WellnessSection(snapshot: wellness, onAddJournal: onAddJournal)
+                    case .activity, .recovery:
+                        FitnessSegmentView(activity: activity, recovery: recovery, wellness: wellness)
+                    case .weight, .wellness:
+                        HealthSegmentView(recovery: recovery, weight: weight,
+                                          wellness: wellness, onAddJournal: onAddJournal)
                     }
                 }
                 .padding(.horizontal, 20)
