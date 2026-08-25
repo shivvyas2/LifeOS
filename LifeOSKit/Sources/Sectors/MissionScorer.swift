@@ -45,7 +45,7 @@ public struct MissionScorer: SectorScorer {
             rows.append(EvidenceRow(
                 label: "habits kept",
                 value: "\(Int((habitTickRate * 100).rounded()))%",
-                normalised: habitTickRate,  // Relies on EvidenceRow clamping above 1.0 and below 0.0
+                normalised: habitTickRate,  // No caller currently produces a value outside 0...1; EvidenceRow's clamp is the backstop if one ever does.
                 weight: 1
             ))
         }
