@@ -244,11 +244,29 @@ public enum AuthError: Error, Equatable {
             return .server(status: 502, message: "Couldn't send the text. Check the number and try again")
         case "sms_region":
             return .server(status: 502, message: "SMS isn't available for that country yet")
-        case "sms_unverified":
+        // Twilio 21608. Cannot happen on a paid account, so the reader can do
+        // nothing about it and the copy must not send them off to fix a number
+        // that is not the problem.
+        case "sms_trial_unverified", "sms_unverified":
             return .server(
                 status: 502,
-                message: "That number isn't verified for SMS yet. Add it in Twilio, then try again"
+                message: "We can't text this number yet. The SMS account is still in trial mode"
             )
+        // Twilio 21610. Per number, and the user is the only one who can undo it.
+        case "sms_opted_out":
+            return .server(
+                status: 502,
+                message: "That number opted out of our texts. Text START to our number to opt back in"
+            )
+        // Twilio 30034.
+        case "sms_unregistered_campaign":
+            return .server(
+                status: 502,
+                message: "Our SMS sender isn't registered with that carrier yet"
+            )
+        // Twilio 60410.
+        case "sms_blocked":
+            return .server(status: 502, message: "The carrier blocked that text")
         case "check_failed", "session_failed":
             return .server(status: status, message: "Couldn't finish sign-in. Try again")
         default:
