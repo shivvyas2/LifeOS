@@ -76,4 +76,32 @@ import SwiftData
         #expect(fetched?.questionID == "friends.seen")
         #expect(fetched?.answer == "3")
     }
+
+    /// Verify that nil optionals on Int? properties persist correctly through the store.
+    /// Optional integers are a known trouble spot in SwiftData.
+    @Test func nilScorePersistsThroughTheStore() throws {
+        let context = try makeContext()
+        let score = SectorScore(sector: .mind, month: august, proposedScore: nil)
+        // userScore defaults to nil in init, and closedAt is also nil
+        context.insert(score)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<SectorScore>()).first
+        #expect(fetched?.proposedScore == nil)
+        #expect(fetched?.userScore == nil)
+    }
+
+    /// Verify that a combination of nil and non-nil optional scores persists correctly.
+    /// This combination should not be masked or confused.
+    @Test func nilProposedWithUserScorePersists() throws {
+        let context = try makeContext()
+        let score = SectorScore(sector: .mission, month: august, proposedScore: nil)
+        score.userScore = 7
+        context.insert(score)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<SectorScore>()).first
+        #expect(fetched?.proposedScore == nil)
+        #expect(fetched?.userScore == 7)
+    }
 }
