@@ -28,3 +28,7 @@ Config/Secrets.xcconfig
 ## Supabase CLI (Plan 3)
 supabase/.temp/
 supabase/.branches/
+
+## Agent workspaces: worktrees and plan-execution scratch, never committed
+.claude/worktrees/
+.superpowers/
