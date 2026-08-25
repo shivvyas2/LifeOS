@@ -33,6 +33,7 @@ struct RootView: View {
     @State private var plan = PlanViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
+    @State private var coach = CoachViewModel()
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -41,6 +42,8 @@ struct RootView: View {
     @State private var showAddPlan = false
     @State private var showAddMoney = false
     @State private var showJournal = false
+    @State private var showCoach = false
+    @State private var showWhoop = false
 
     /// The tab bar's selection, stated rather than inferred from ordering.
     /// Deliberately not persisted: the requirement is that a cold launch lands
@@ -75,6 +78,7 @@ struct RootView: View {
                             recovery: recovery.snapshot,
                             wellness: wellness.snapshot,
                             onAddJournal: { showJournal = true },
+                            onConnectWhoop: { showWhoop = true },
                             section: $healthSection,
                             selectedDate: Binding(
                                 get: { healthDate },
@@ -107,19 +111,52 @@ struct RootView: View {
             .frame(maxWidth: .infinity)          // centers the pill
             .padding(.bottom, 12)
 
-            Button {
-                showQuickLog = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(LifeOSTokens.primaryText.resolve(scheme)))
-                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+            VStack(spacing: 14) {
+                Button {
+                    showCoach = true
+                } label: {
+                    Image(systemName: "message.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .frame(width: 52, height: 52)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Circle().strokeBorder(
+                                        Color.white.opacity(scheme == .dark ? 0.2 : 0.55),
+                                        lineWidth: 1
+                                    )
+                                }
+                                .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16),
+                                        radius: 10, y: 4)
+                        )
+                }
+                .accessibilityLabel("LIFO")
+
+                Button {
+                    showQuickLog = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(LifeOSTokens.fabFill.resolve(scheme))
+                                .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.2),
+                                        radius: 10, y: 4)
+                        )
+                }
+                .accessibilityLabel("Quick log")
             }
             .padding(.trailing, metrics.gutter)
             .padding(.bottom, metrics.fabBottomInset)
-            .accessibilityLabel("Quick log")
+
+            if showWhoop {
+                WhoopConnectModal(model: whoop) { showWhoop = false }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         // `today.detail` is the only source of truth for what the sheet shows;
         // there is deliberately no parallel `selectedDay` state to keep in step.
@@ -132,8 +169,11 @@ struct RootView: View {
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
         }
-        .sheet(isPresented: $showSettings) {
+        .fullScreenCover(isPresented: $showSettings) {
             SettingsScreen(model: settings, whoop: whoop)
+        }
+        .fullScreenCover(isPresented: $showCoach) {
+            LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
         }
         .sheet(isPresented: $showAddPlan) {
             AddPlanEntrySheet(
@@ -187,6 +227,7 @@ struct RootView: View {
         plan.attach(context)
         settings.attach(context)
         quickLog.attach(context)
+        coach.attach(context)
     }
 
     private func reloadAll() {

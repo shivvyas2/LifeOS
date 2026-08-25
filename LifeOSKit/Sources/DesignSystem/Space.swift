@@ -47,8 +47,12 @@ public struct GlassPanel<Content: View>: View {
                     .fill(.ultraThinMaterial)
                     .overlay {
                         RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(LifeOSTokens.cardSurface.resolve(scheme).opacity(scheme == .dark ? 0.28 : 0.18))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
                             .strokeBorder(
-                                LifeOSTokens.primaryText.resolve(scheme).opacity(scheme == .dark ? 0.10 : 0.35),
+                                Color.white.opacity(scheme == .dark ? 0.16 : 0.55),
                                 lineWidth: 1
                             )
                     }

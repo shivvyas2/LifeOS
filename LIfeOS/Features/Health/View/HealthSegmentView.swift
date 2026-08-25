@@ -9,13 +9,86 @@ struct HealthSegmentView: View {
     let weight: BodySnapshot
     let wellness: WellnessSnapshot
     var onAddJournal: () -> Void = {}
+    var onConnectWhoop: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             AlertBanner(messages: recovery.anomalies.map(Self.message))
 
-            recoveryCard
+            if !recovery.hasAnyReading {
+                Button(action: onConnectWhoop) {
+                    HStack(spacing: 14) {
+                        Image(systemName: "bolt.heart.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(LifeOSTokens.accent)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Connect Whoop")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                            Text("Recovery, sleep and strain")
+                                .font(.system(size: 13))
+                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        }
+                        Spacer()
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
+                                                  lineWidth: 1)
+                            }
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 12) {
+                recoveryCard
+                sleepCard
+            }
+
+            HStack(spacing: 12) {
+                PastelFillCard(
+                    icon: "waveform.path.ecg",
+                    hue: .recovery,
+                    label: "HRV",
+                    value: recovery.hrvMs.map { "\(Int($0))" },
+                    unit: "ms"
+                )
+                PastelFillCard(
+                    icon: "heart.fill",
+                    hue: .habits,
+                    label: "Resting HR",
+                    value: recovery.restingHR.map { "\(Int($0))" },
+                    unit: "bpm"
+                )
+            }
+
+            HStack(spacing: 12) {
+                PastelFillCard(
+                    icon: "drop.fill",
+                    hue: .body,
+                    label: "Blood oxygen",
+                    value: recovery.spo2Percentage.map { String(format: "%.1f", $0) },
+                    unit: "%",
+                    caption: recovery.spo2Trend.deltaFromAverage.map { String(format: "%+.1f", $0) }
+                )
+                PastelFillCard(
+                    icon: "thermometer.medium",
+                    hue: .activity,
+                    label: "Skin temp",
+                    value: recovery.skinTempCelsius.map { String(format: "%.1f", $0) },
+                    unit: "°C",
+                    caption: recovery.skinTempTrend.deltaFromAverage.map { String(format: "%+.1f", $0) }
+                )
+            }
+
             StatGroup(title: "Sleep", rows: sleepRows)
             StatGroup(title: "Vitals", rows: vitalRows)
             WeightSection(snapshot: weight)
@@ -50,26 +123,26 @@ struct HealthSegmentView: View {
         return "\(finding.metric) is \(direction) your 2-week baseline"
     }
 
-    @ViewBuilder
     private var recoveryCard: some View {
-        if let pct = recovery.recoveryPct {
-            let band = RecoveryBand.band(for: pct)
-            SoftCard {
-                VStack(spacing: 6) {
-                    HeroNumeral(value: "\(Int(pct))", unit: "%", label: "Recovery")
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text(band.label.uppercased())
-                        .font(.system(size: 12, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(band.color)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        } else {
-            HeroEmptyState(label: "Recovery", reason: "Connect Whoop in Settings")
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .padding(.top, 18)
-        }
+        let band = recovery.recoveryPct.map(RecoveryBand.band(for:))
+        return PastelFillCard(
+            icon: "bolt.heart.fill",
+            hue: .nutrition,
+            label: "Recovery",
+            value: recovery.recoveryPct.map { "\(Int($0))" },
+            unit: "%",
+            caption: band?.label.uppercased(),
+            captionColor: band?.color
+        )
+    }
+
+    private var sleepCard: some View {
+        PastelFillCard(
+            icon: "moon.fill",
+            hue: .money,
+            label: "Sleep",
+            split: recovery.sleepMinutes.map(SplitNumeral.sleep(minutes:))
+        )
     }
 
     private var journalCard: some View {
@@ -108,7 +181,6 @@ struct HealthSegmentView: View {
 
     private var sleepRows: [StatGroup.Row] {
         [
-            .init(label: "Duration", value: recovery.sleepMinutes.map(Self.duration)),
             .init(label: "Performance", value: recovery.sleepPerformancePct.map { "\(Int($0))%" }),
             .init(label: "Efficiency", value: recovery.sleepEfficiencyPct.map { "\(Int($0))%" }),
             .init(label: "Consistency", value: recovery.sleepConsistencyPct.map { "\(Int($0))%" }),
@@ -121,17 +193,9 @@ struct HealthSegmentView: View {
 
     private var vitalRows: [StatGroup.Row] {
         [
-            .init(label: "Blood oxygen",
-                  value: recovery.spo2Percentage.map { String(format: "%.1f%%", $0) },
-                  delta: recovery.spo2Trend.deltaFromAverage.map { String(format: "%+.1f", $0) }),
-            .init(label: "Skin temp",
-                  value: recovery.skinTempCelsius.map { String(format: "%.1f°C", $0) },
-                  delta: recovery.skinTempTrend.deltaFromAverage.map { String(format: "%+.1f", $0) }),
             .init(label: "Respiratory rate",
                   value: recovery.respiratoryRate.map { String(format: "%.1f", $0) },
                   delta: recovery.respiratoryRateTrend.deltaFromAverage.map { String(format: "%+.1f", $0) }),
-            .init(label: "HRV", value: recovery.hrvMs.map { "\(Int($0)) ms" }),
-            .init(label: "Resting HR", value: recovery.restingHR.map { "\(Int($0)) bpm" }),
         ]
     }
 

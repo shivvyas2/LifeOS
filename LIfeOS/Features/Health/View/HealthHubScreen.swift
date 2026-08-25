@@ -9,6 +9,7 @@ struct HealthHubScreen: View {
     let recovery: RecoverySnapshot
     let wellness: WellnessSnapshot
     var onAddJournal: () -> Void = {}
+    var onConnectWhoop: () -> Void = {}
 
     @Binding var section: HealthSection
     @Binding var selectedDate: Date
@@ -28,7 +29,8 @@ struct HealthHubScreen: View {
                     switch section {
                     case .health:
                         HealthSegmentView(recovery: recovery, weight: weight,
-                                          wellness: wellness, onAddJournal: onAddJournal)
+                                          wellness: wellness, onAddJournal: onAddJournal,
+                                          onConnectWhoop: onConnectWhoop)
                     case .fitness:
                         FitnessSegmentView(activity: activity, recovery: recovery,
                                            wellness: wellness)

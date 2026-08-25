@@ -20,6 +20,7 @@ struct AppShell: View {
     /// false there, so the gate below sends the user through onboarding
     /// regardless of this flag.
     @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
+    @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @Environment(\.scenePhase) private var scenePhase
     /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
     /// relaunch returns to signup and the bypass cannot quietly become the
@@ -40,6 +41,7 @@ struct AppShell: View {
                 )
             }
         }
+        .preferredColorScheme(appearance.colorScheme)
         .task {
             whoop.attach(context)
             // A returning user has a session already; renew it and skip past
