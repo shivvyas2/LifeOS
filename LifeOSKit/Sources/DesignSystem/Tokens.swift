@@ -35,6 +35,32 @@ public enum ModuleHue: String, CaseIterable, Sendable {
     }
 
     public var darkBottom: Color { Color(white: 0.06) }
+
+    /// Soft tint of the hue for icon bubbles, chart fills and canvas washes.
+    /// The saturated `top` colours survive only as chart/accent ink; pastel
+    /// carries the module identity on the light canvas.
+    public var pastel: Color {
+        switch self {
+        case .body:      Color(red: 0.84, green: 0.92, blue: 0.90)
+        case .activity:  Color(red: 0.98, green: 0.89, blue: 0.78)
+        case .recovery:  Color(red: 0.85, green: 0.90, blue: 0.98)
+        case .nutrition: Color(red: 0.90, green: 0.87, blue: 0.98)
+        case .money:     Color(red: 0.85, green: 0.93, blue: 0.87)
+        case .habits:    Color(red: 0.99, green: 0.88, blue: 0.82)
+        }
+    }
+
+    /// Deep muted counterpart for dark mode bubbles and washes.
+    public var pastelDark: Color {
+        switch self {
+        case .body:      Color(red: 0.10, green: 0.18, blue: 0.17)
+        case .activity:  Color(red: 0.24, green: 0.18, blue: 0.09)
+        case .recovery:  Color(red: 0.10, green: 0.15, blue: 0.26)
+        case .nutrition: Color(red: 0.16, green: 0.13, blue: 0.27)
+        case .money:     Color(red: 0.09, green: 0.18, blue: 0.12)
+        case .habits:    Color(red: 0.26, green: 0.14, blue: 0.09)
+        }
+    }
 }
 
 /// A light/dark colour pair, resolved explicitly by the consuming view.
@@ -88,22 +114,38 @@ public enum LifeOSTokens {
     public static let dotFuture = AdaptiveColor(light: Color(white: 0.93), dark: Color(white: 0.18))
     public static let dotOutline = AdaptiveColor(light: Color(white: 0.85), dark: Color(white: 0.30))
 
-    /// Tile surface for cards sitting on a saturated gradient.
-    ///
-    /// Light and opaque enough to carry dark text: white-on-translucent over a
-    /// mid-saturation hue is the low-contrast failure the reference designs
-    /// avoid by keeping the tile light and the text dark.
+    /// Surface for repeated tiles and rows. Since the canvas went light this
+    /// is a solid card tone, not a translucency: translucent white over a
+    /// near-white canvas is invisible.
     public static let tileSurface = AdaptiveColor(
-        light: Color.white.opacity(0.58),
-        dark: Color.white.opacity(0.14)
+        light: .white,
+        dark: Color(white: 0.13)
     )
-
-    /// Text sitting directly on a gradient, where the backdrop is saturated in
-    /// light mode and near-black in dark mode, and white reads in both.
-    public static let onGradient = Color.white
 
     /// Leading and trailing cells that belong to no day. Faint rather than
     /// invisible so the month reads as one solid block of dots. The grid is
     /// the app's central visual claim and a ragged edge weakens it.
     public static let dotPadding = AdaptiveColor(light: Color(white: 0.965), dark: Color(white: 0.11))
+
+    /// Soft companion to `accent`: the track behind a filled bar, the wash
+    /// behind an accent icon.
+    public static let accentSoft = AdaptiveColor(
+        light: Color(red: 0.99, green: 0.88, blue: 0.82),
+        dark: Color(red: 0.33, green: 0.16, blue: 0.10)
+    )
+
+    /// Anomaly banner surfaces. Red enough to interrupt, soft enough to live
+    /// on the cream canvas.
+    public static let alertBackground = AdaptiveColor(
+        light: Color(red: 1.00, green: 0.92, blue: 0.92),
+        dark: Color(red: 0.28, green: 0.09, blue: 0.09)
+    )
+    public static let alertText = AdaptiveColor(
+        light: Color(red: 0.78, green: 0.16, blue: 0.16),
+        dark: Color(red: 1.00, green: 0.58, blue: 0.55)
+    )
+
+    /// The one card shadow. Light mode only; dark mode separates surfaces by
+    /// tone, and a black shadow on a black canvas is invisible cost.
+    public static let cardShadow = Color.black.opacity(0.06)
 }

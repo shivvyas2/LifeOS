@@ -35,7 +35,7 @@ struct DayDetailSheet: View {
     }
 
     private var metrics: some View {
-        SolidCard {
+        SoftCard {
             VStack(spacing: 0) {
                 MetricRow(
                     label: "Steps",
@@ -78,7 +78,7 @@ struct DayDetailSheet: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
-                SolidCard {
+                SoftCard {
                     VStack(spacing: 0) {
                         ForEach(Array(snapshot.habits.enumerated()), id: \.element.id) { index, habit in
                             if index > 0 { Divider() }

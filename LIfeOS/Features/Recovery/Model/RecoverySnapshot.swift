@@ -1,4 +1,5 @@
 import Foundation
+import Persistence
 import DesignSystem
 
 /// Everything the Recovery screens render for the selected day, plus the
@@ -47,6 +48,13 @@ struct RecoverySnapshot: Equatable {
     /// Night by night, naps excluded. A nap is real but it is not a night, and
     /// stacking it beside one misreads the week.
     var nights: [SleepComposition] = []
+
+    /// Vitals sitting outside the reader's own trailing baseline. Empty means
+    /// quiet — either genuinely normal or not enough data to judge.
+    var anomalies: [AnomalyFinding] = []
+
+    /// startOfDay → recovery fraction (0…1) for the strip's rings.
+    var weekRecovery: [Date: Double] = [:]
 
     /// True once anything at all has arrived, so the screens can tell "not
     /// connected" apart from "connected and quiet".

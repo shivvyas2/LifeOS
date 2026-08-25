@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// A metric tile for use on a saturated gradient: light translucent surface,
-/// dark text, sentence-case label above the value.
+/// A metric tile for a repeated row of stats: solid surface, dark text,
+/// sentence-case label above the value.
 ///
-/// Deliberately not `GlassCard { StatTile { } }`. Material plus white text over
-/// a mid-saturation hue is the low-contrast failure the reference designs
-/// avoid. They keep the surface light and the text dark.
+/// Deliberately not `SoftCard { StatTile { } }`: `SoftCard`'s shadow is an
+/// offscreen pass meant for screen furniture, not for a row of tiles that
+/// repeats down a list.
 public struct MetricTile: View {
     private let label: String
     private let value: String?
@@ -47,6 +47,7 @@ public struct MetricTile: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(LifeOSTokens.tileSurface.resolve(scheme))
+                .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 8, y: 2)
         )
     }
 }
@@ -78,7 +79,7 @@ public struct SegmentedPill<Value: Hashable>: View {
                     .foregroundStyle(
                         isSelected
                             ? LifeOSTokens.primaryText.resolve(scheme)
-                            : LifeOSTokens.onGradient.opacity(0.75)
+                            : LifeOSTokens.secondaryText.resolve(scheme)
                     )
                     .padding(.vertical, 8)
                     .padding(.horizontal, 14)
@@ -88,7 +89,9 @@ public struct SegmentedPill<Value: Hashable>: View {
                     .frame(maxWidth: .infinity)
                     .background {
                         if isSelected {
-                            Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme))
+                            Capsule()
+                                .fill(LifeOSTokens.cardSurface.resolve(scheme))
+                                .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 6, y: 2)
                         }
                     }
                     .contentShape(.capsule)
@@ -96,14 +99,12 @@ public struct SegmentedPill<Value: Hashable>: View {
             }
         }
         .padding(4)
-        .background(Capsule().fill(LifeOSTokens.onGradient.opacity(0.14)))
+        .background(Capsule().fill(LifeOSTokens.primaryText.resolve(scheme).opacity(0.06)))
     }
 }
 
 #Preview("Tiles") {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.activity.top, ModuleHue.activity.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .activity) {
         VStack(spacing: 16) {
             HStack(spacing: 10) {
                 MetricTile(label: "Distance", value: "6.7", unit: "km")
@@ -113,5 +114,4 @@ public struct SegmentedPill<Value: Hashable>: View {
         }
         .padding()
     }
-    .ignoresSafeArea()
 }

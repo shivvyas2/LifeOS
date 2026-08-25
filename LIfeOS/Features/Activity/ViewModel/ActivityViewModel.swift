@@ -28,8 +28,26 @@ final class ActivityViewModel {
         let store = MetricsStore(context: context, calendar: calendar)
 
         do {
-            // One day only. This section shows no history.
-            let today = try store.metrics(from: selectedDate, to: selectedDate).first
+            let end = selectedDate
+            let start = calendar.date(byAdding: .day, value: -6, to: end) ?? end
+            let rows = try store.metrics(from: start, to: end)
+            let today = rows.first { calendar.isDate($0.date, inSameDayAs: end) }
+
+            var byDay: [Date: Double] = [:]
+            for row in rows {
+                if let kcal = row.whoopCalories ?? row.activeEnergyKcal {
+                    byDay[calendar.startOfDay(for: row.date)] = kcal
+                }
+            }
+            var weekCalories: [DayValue] = []
+            var cursor = calendar.startOfDay(for: start)
+            let last = calendar.startOfDay(for: end)
+            while cursor <= last {
+                weekCalories.append(DayValue(id: cursor, value: byDay[cursor]))
+                guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+                cursor = next
+            }
+
             snapshot = ActivitySnapshot(
                 steps: today?.steps,
                 exerciseMinutes: today?.exerciseMinutes,
@@ -45,7 +63,8 @@ final class ActivityViewModel {
                         distanceMeters: $0.distanceMeters,
                         percentRecorded: $0.percentRecorded
                     )
-                }
+                },
+                weekCalories: weekCalories
             )
         } catch {
             assertionFailure("Activity load failed: \(error)")

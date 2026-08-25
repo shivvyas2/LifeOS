@@ -8,6 +8,7 @@ struct IntroScreen: View {
     let onStart: () -> Void
     var onSkipAuth: (() -> Void)?
     @State private var page = 0
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let pages = IntroPage.all
@@ -36,12 +37,12 @@ struct IntroScreen: View {
                     if let onSkipAuth {
                         Button("Skip for now") { onSkipAuth() }
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .frame(height: Space.x5)
                     } else {
                         Button("Skip") { onStart() }
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .frame(height: Space.x5)
                     }
                 }
@@ -66,13 +67,13 @@ struct IntroScreen: View {
                 StaggeredAppear(index: 1) {
                     Text(item.headline)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(LifeOSTokens.onGradient)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 StaggeredAppear(index: 2) {
                     Text(item.body)
                         .font(.system(size: 16))
-                        .foregroundStyle(LifeOSTokens.onGradient.opacity(0.85))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -87,7 +88,9 @@ struct IntroScreen: View {
         HStack(spacing: Space.x1) {
             ForEach(0..<count, id: \.self) { index in
                 Capsule()
-                    .fill(LifeOSTokens.onGradient.opacity(index == page ? 1 : 0.35))
+                    .fill(index == page
+                          ? LifeOSTokens.primaryText.resolve(scheme)
+                          : LifeOSTokens.dotFuture.resolve(scheme))
                     .frame(width: index == page ? Space.x3 : Space.x1, height: Space.x1)
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
             }

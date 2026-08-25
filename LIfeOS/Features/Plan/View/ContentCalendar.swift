@@ -29,7 +29,7 @@ struct ContentCalendar: View {
         let marks = byDay
 
         VStack(spacing: 16) {
-            SolidCard {
+            SoftCard {
                 VStack(spacing: 12) {
                     HStack {
                         Text(month.formatted(.dateTime.month(.wide).year()))
@@ -49,7 +49,7 @@ struct ContentCalendar: View {
             }
 
             ForEach(groups, id: \.status) { group in
-                SolidCard {
+                SoftCard {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 6) {
                             Circle()
@@ -136,9 +136,7 @@ struct ContentCalendar: View {
 }
 
 #Preview {
-    ZStack {
-        LinearGradient(colors: [ModuleHue.recovery.top, ModuleHue.recovery.bottom],
-                       startPoint: .top, endPoint: .bottom)
+    GradientCanvas(hue: .recovery) {
         ScrollView {
             ContentCalendar(
                 items: [
@@ -153,5 +151,4 @@ struct ContentCalendar: View {
             .padding()
         }
     }
-    .ignoresSafeArea()
 }

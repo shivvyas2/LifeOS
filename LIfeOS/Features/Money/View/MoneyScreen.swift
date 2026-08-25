@@ -4,6 +4,7 @@ import DesignSystem
 struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         GradientCanvas(hue: .money) {
@@ -23,7 +24,7 @@ struct MoneyScreen: View {
                         }
 
                         if let netWorth = snapshot.netWorth {
-                            SolidCard {
+                            SoftCard {
                                 HStack {
                                     Text("Net worth").font(.system(size: 15, weight: .medium))
                                     Spacer()
@@ -51,21 +52,21 @@ struct MoneyScreen: View {
                     value: Self.money(snapshot.net) ?? "—",
                     label: "Net · \(snapshot.monthLabel)"
                 )
-                .foregroundStyle(LifeOSTokens.onGradient)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .padding(.top, 26)
 
                 Text(snapshot.verdict)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LifeOSTokens.onGradient)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 6)
                     .padding(.horizontal, 14)
-                    .background(Capsule().fill(LifeOSTokens.onGradient.opacity(0.18)))
+                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
             }
         }
     }
 
     private var transactions: some View {
-        SolidCard {
+        SoftCard {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("RECENT")
@@ -98,16 +99,16 @@ struct MoneyScreen: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             HeroEmptyState(label: "Money", reason: "No transactions yet")
-                .foregroundStyle(LifeOSTokens.onGradient)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Button("Add a transaction", action: onAdd)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(.light))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .padding(.vertical, 12)
                 .padding(.horizontal, 22)
-                .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(.light)))
+                .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
             Text("Plaid sync arrives in a later slice.")
                 .font(.footnote)
-                .foregroundStyle(LifeOSTokens.onGradient.opacity(0.7))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         }
         .padding(.top, 40)
     }

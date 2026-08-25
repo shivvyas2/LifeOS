@@ -10,6 +10,7 @@ struct PlanScreen: View {
     var onAdvance: (UUID) -> Void = { _ in }
     var onToggleHabit: (UUID) -> Void = { _ in }
     var onDelete: (UUID) -> Void = { _ in }
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         GradientCanvas(hue: section.hue) {
@@ -36,7 +37,7 @@ struct PlanScreen: View {
                         )
                     } else {
                         ForEach(items) { item in
-                            SolidCard {
+                            SoftCard {
                                 row(for: item)
                             }
                         }
@@ -47,10 +48,10 @@ struct PlanScreen: View {
                     } label: {
                         Label(section.addPrompt, systemImage: "plus")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(.light))
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .padding(.vertical, 13)
                             .frame(maxWidth: .infinity)
-                            .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(.light)))
+                            .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -79,7 +80,7 @@ struct PlanScreen: View {
             case .goals:
                 if let fraction = item.fraction {
                     ProgressView(value: fraction)
-                        .tint(fraction >= 1 ? LifeOSTokens.accent : LifeOSTokens.primaryText.resolve(.light))
+                        .tint(fraction >= 1 ? LifeOSTokens.accent : LifeOSTokens.primaryText.resolve(scheme))
                     HStack {
                         Text(milestoneLabel(item)).font(.system(size: 12)).opacity(0.55)
                         Spacer()
@@ -103,7 +104,7 @@ struct PlanScreen: View {
                             .font(.system(size: 26))
                             .foregroundStyle(item.recentTicks.last == true
                                              ? LifeOSTokens.accent
-                                             : LifeOSTokens.secondaryText.resolve(.light))
+                                             : LifeOSTokens.secondaryText.resolve(scheme))
                     }
                     .accessibilityLabel(item.recentTicks.last == true ? "Mark not done" : "Mark done")
                 }
@@ -152,10 +153,10 @@ struct PlanScreen: View {
         VStack(spacing: 8) {
             Text("Nothing here yet")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.onGradient)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Text("Add your first \(section.title.lowercased().dropLast(section.title.hasSuffix("s") ? 1 : 0))")
                 .font(.system(size: 13))
-                .foregroundStyle(LifeOSTokens.onGradient.opacity(0.75))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         }
         .padding(.vertical, 50)
     }
