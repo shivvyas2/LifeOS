@@ -11,7 +11,7 @@ import {
   parsePhone,
   recordEvent,
 } from "../_shared/otp_guard.ts";
-import { twilioStart } from "../_shared/otp_twilio.ts";
+import { SEND_FAILURE_STATUS, twilioStart } from "../_shared/otp_twilio.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -76,12 +76,7 @@ Deno.serve(async (req: Request) => {
     phone: parsed.phone,
   });
   if (!sent.ok) {
-    if (sent.kind === "rate_limited") return json({ error: "rate_limited" }, 429);
-    if (sent.kind === "invalid_phone") return json({ error: "invalid_phone" }, 400);
-    if (sent.kind === "server_not_configured") return json({ error: "server_not_configured" }, 500);
-    if (sent.kind === "sms_region") return json({ error: "sms_region" }, 502);
-    if (sent.kind === "sms_unverified") return json({ error: "sms_unverified" }, 502);
-    return json({ error: "send_failed" }, 502);
+    return json({ error: sent.kind }, SEND_FAILURE_STATUS[sent.kind] ?? 502);
   }
 
   return json({ ok: true }, 200);
