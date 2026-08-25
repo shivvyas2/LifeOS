@@ -14,6 +14,10 @@ final class OnboardingViewModel {
 
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// Set when a code could not be sent over SMS. Every Twilio failure the
+    /// classifier knows about is one the user cannot fix from inside the app,
+    /// so the only useful next move is the other channel.
+    private(set) var phoneSendFailed = false
     /// Seconds until the code can be requested again; 0 means it can be now.
     private(set) var resendIn = 0
     /// Empty until checked; the identity screen waits rather than offering a
@@ -47,14 +51,15 @@ final class OnboardingViewModel {
         }
     }
 
-    /// Picks a channel the project can actually deliver on. Phone stays the
-    /// default when SMS is configured, and quietly falls back when it is not.
+    /// Picks a channel the project can actually deliver on. Email stays the
+    /// default when it is configured, and quietly falls back to phone when
+    /// it is not.
     func loadChannels() async {
         guard let auth else { return }
         let channels = await auth.availableChannels()
         availableChannels = channels
-        if !channels.contains(.phone), channels.contains(.email) {
-            draft.channel = .email
+        if !channels.contains(.email), channels.contains(.phone) {
+            draft.channel = .phone
         }
     }
 
@@ -104,6 +109,7 @@ final class OnboardingViewModel {
 
     func back() {
         errorMessage = nil
+        phoneSendFailed = false
         switch step {
         case .intro, .identity: step = .intro
         case .code:             step = .identity
@@ -116,6 +122,13 @@ final class OnboardingViewModel {
     func switchChannel(to channel: SupabaseAuthChannel) {
         draft.channel = channel
         errorMessage = nil
+        phoneSendFailed = false
+    }
+
+    /// The one move that gets a user past a Twilio failure. Nothing in the app
+    /// can make SMS deliver, so the escape has to be the other channel.
+    func useEmailInstead() {
+        switchChannel(to: .email)
     }
 
     // MARK: - Session
@@ -157,6 +170,7 @@ final class OnboardingViewModel {
         guard let auth, draft.canSendCode else { return }
         isBusy = true
         errorMessage = nil
+        phoneSendFailed = false
         defer { isBusy = false }
 
         do {
@@ -167,8 +181,10 @@ final class OnboardingViewModel {
         } catch let error as AuthError {
             authLog.error("sendCode failed: \(error.readable, privacy: .public)")
             errorMessage = error.readable
+            phoneSendFailed = draft.channel == .phone
         } catch {
             errorMessage = "Couldn't send the code"
+            phoneSendFailed = draft.channel == .phone
         }
     }
 
