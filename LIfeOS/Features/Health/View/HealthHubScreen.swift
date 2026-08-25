@@ -1,39 +1,37 @@
 import SwiftUI
 import DesignSystem
 
-/// The Body tab. Movement, weight, recovery and wellness sit behind one tab
-/// with a segmented switcher, which keeps the tab bar free for the other life
-/// domains. Life OS is not a fitness app.
-struct BodyHubScreen: View {
+/// The Health tab: one week strip, two halves. Health is how the body is
+/// doing; Fitness is what it did. Life OS is still not a fitness app.
+struct HealthHubScreen: View {
     let activity: ActivitySnapshot
     let weight: BodySnapshot
     let recovery: RecoverySnapshot
     let wellness: WellnessSnapshot
     var onAddJournal: () -> Void = {}
 
-    @Binding var section: BodySection
+    @Binding var section: HealthSection
     @Binding var selectedDate: Date
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         GradientCanvas(hue: section.hue) {
             ScrollView {
                 VStack(spacing: 22) {
-                    WeekStrip(selection: $selectedDate)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    WeekStrip(selection: $selectedDate, progress: recovery.weekRecovery)
                         .padding(.top, 4)
 
                     SegmentedPill(
                         selection: $section,
-                        options: BodySection.allCases.map { ($0, $0.title) }
+                        options: HealthSection.allCases.map { ($0, $0.title) }
                     )
 
                     switch section {
-                    case .activity, .recovery:
-                        FitnessSegmentView(activity: activity, recovery: recovery, wellness: wellness)
-                    case .weight, .wellness:
+                    case .health:
                         HealthSegmentView(recovery: recovery, weight: weight,
                                           wellness: wellness, onAddJournal: onAddJournal)
+                    case .fitness:
+                        FitnessSegmentView(activity: activity, recovery: recovery,
+                                           wellness: wellness)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -45,10 +43,10 @@ struct BodyHubScreen: View {
 }
 
 #Preview {
-    @Previewable @State var section = BodySection.activity
+    @Previewable @State var section = HealthSection.health
     @Previewable @State var day = Date()
 
-    BodyHubScreen(
+    HealthHubScreen(
         activity: ActivitySnapshot(steps: 13143, exerciseMinutes: 72, activeEnergyKcal: 1277, restingHR: 54),
         weight: BodySnapshot(weightKg: 77.4, weeklyDeltaKg: -0.6),
         recovery: RecoverySnapshot(hrvMs: 62, sleepMinutes: 432),

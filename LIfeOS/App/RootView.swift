@@ -6,7 +6,7 @@ import DesignSystem
 /// hands each one the model context, and reloads them when the store changes.
 /// Views below this point never touch SwiftData.
 ///
-/// Four tabs, not six. Body absorbs activity, weight, recovery and wellness so
+/// Four tabs, not six. Health absorbs activity, weight, recovery and wellness so
 /// the bar stays free for the other life domains, and Settings sits behind a
 /// gear on Today rather than spending a slot.
 struct RootView: View {
@@ -34,8 +34,8 @@ struct RootView: View {
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
 
-    @State private var bodySection = BodySection.activity
-    @State private var bodyDate = Date()
+    @State private var healthSection = HealthSection.health
+    @State private var healthDate = Date()
     @State private var showQuickLog = false
     @State private var showSettings = false
     @State private var showAddPlan = false
@@ -46,21 +46,20 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
-    private enum AppTab: Hashable { case today, body, money, plan }
+    private enum AppTab: Hashable { case today, health, money, plan }
 
     @State private var tab: AppTab = .today
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            TabView(selection: $tab) {
-                Tab("Today", systemImage: "circle.grid.3x3.fill", value: AppTab.today) {
+            Group {
+                switch tab {
+                case .today:
                     NavigationStack {
                         TodayScreen(snapshot: today.snapshot, onSelectDay: { today.select($0) })
                             .toolbar {
                                 ToolbarItem(placement: .topBarTrailing) {
-                                    Button {
-                                        showSettings = true
-                                    } label: {
+                                    Button { showSettings = true } label: {
                                         Image(systemName: "gearshape.fill")
                                     }
                                     .tint(LifeOSTokens.primaryText.resolve(scheme))
@@ -68,30 +67,24 @@ struct RootView: View {
                                 }
                             }
                     }
-                }
-                Tab("Body", systemImage: "figure", value: AppTab.body) {
-                    // Body had no stack of its own until Recovery gained a
-                    // detail screen to push. Without one the trends link is
-                    // inert rather than broken, which is worse.
+                case .health:
                     NavigationStack {
-                        BodyHubScreen(
+                        HealthHubScreen(
                             activity: activity.snapshot,
                             weight: weight.snapshot,
                             recovery: recovery.snapshot,
                             wellness: wellness.snapshot,
                             onAddJournal: { showJournal = true },
-                            section: $bodySection,
+                            section: $healthSection,
                             selectedDate: Binding(
-                                get: { bodyDate },
-                                set: { bodyDate = $0; selectBodyDate($0) }
+                                get: { healthDate },
+                                set: { healthDate = $0; selectHealthDate($0) }
                             )
                         )
                     }
-                }
-                Tab("Money", systemImage: "dollarsign.circle.fill", value: AppTab.money) {
+                case .money:
                     MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }
-                }
-                Tab("Plan", systemImage: "checklist", value: AppTab.plan) {
+                case .plan:
                     PlanScreen(
                         snapshot: plan.snapshot,
                         section: Binding(get: { plan.section }, set: { plan.section = $0 }),
@@ -102,10 +95,17 @@ struct RootView: View {
                     )
                 }
             }
-            // A sidebar on iPad, the tab bar on iPhone. One modifier, but it
-            // restructures how the four tabs present, so it is verified by
-            // screenshot rather than assumed.
-            .tabViewStyle(.sidebarAdaptable)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // The pill owns the bottom center; the FAB keeps the corner.
+            PillNavBar(selection: $tab, items: [
+                PillNavItem(value: AppTab.today, systemImage: "circle.grid.3x3.fill", label: "Today"),
+                PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
+                PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
+                PillNavItem(value: AppTab.plan, systemImage: "checklist", label: "Plan"),
+            ])
+            .frame(maxWidth: .infinity)          // centers the pill
+            .padding(.bottom, 12)
 
             Button {
                 showQuickLog = true
@@ -170,7 +170,7 @@ struct RootView: View {
 
     }
 
-    private func selectBodyDate(_ date: Date) {
+    private func selectHealthDate(_ date: Date) {
         activity.select(date)
         weight.select(date)
         recovery.select(date)

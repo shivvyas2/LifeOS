@@ -113,6 +113,9 @@ struct HealthSegmentView: View {
             .init(label: "Efficiency", value: recovery.sleepEfficiencyPct.map { "\(Int($0))%" }),
             .init(label: "Consistency", value: recovery.sleepConsistencyPct.map { "\(Int($0))%" }),
             .init(label: "Sleep debt", value: recovery.sleepDebtMinutes.map(Self.duration)),
+            .init(label: "7-day average",
+                  value: wellness.averageSleepMinutes.map { Self.duration($0) }),
+            .init(label: "Verdict", value: wellness.sleepVerdict),
         ]
     }
 
