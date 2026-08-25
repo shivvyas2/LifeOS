@@ -14,7 +14,7 @@ Apple's on-device model is free, private, offline, and always warm. It is also s
 
 This document specifies a layer that uses the on-device model for everything it can handle and escalates to cloud only where the on-device model genuinely cannot serve, with a spend ceiling that cannot be breached.
 
-The target: **under $1.00/month per user in typical use, and structurally incapable of exceeding a $2.00 monthly allowance.**
+The target: **structurally incapable of exceeding a $2.00 per-user monthly allowance**, at a projected ~$0.04/month on the current demo-tier models and ~$0.87/month if every role moves to frontier models.
 
 ---
 
@@ -48,6 +48,7 @@ The V1 spec's underlying intent survives intact: `@Generable` types, `Generation
 | Shared contract | One `@Generable` type per task, serving both tiers | `GenerationSchema` is `Codable` and `GeneratedContent` has `init(json:)`, so this is possible without a second type system |
 | Spend ceiling | $2.00 per user per calendar month, plus a global ceiling, enforced by a database check constraint | A hard invariant, not a soft guard. Internal — never surfaced to the user except on exhaustion. |
 | Streaming | Deferred past V2.0 | Three of four tasks don't want it; it doubles the engine surface |
+| Models, now | Demo tier — one cheap flash-class model for both roles | The feature has to be shown. Chosen as the cheapest model clearly *better* than on-device, not the cheapest available |
 
 ---
 
@@ -250,14 +251,30 @@ POST /coach
 
 Lives in the function beside the price table, because the two always change together.
 
-| Role | Initial model | Notes |
-|---|---|---|
-| `reasoning` | Claude Sonnet 5 | $3.00/$15.00 per 1M input/output at first-party rates ($2.00/$10.00 introductory through 2026-08-31). Escalate to Claude Opus 5 ($5.00/$25.00) if weekly-review quality disappoints. |
-| `vision` | Claude Haiku 4.5 | $1.00/$5.00 per 1M — a third of Sonnet 5's rate. Reading macros off a meal photo is perception, not reasoning; it does not need a frontier model. Image dimensions capped client-side (Section 9). Confirm image support via the Models API `capabilities` field before wiring it. |
+**Current setting — demo tier.** One model serves both roles while the feature is being shown:
 
-Only two roles exist because only two are used. A cheap classification role is easy to add when something needs it, and pointless before then.
+| Role | Model | Rate ($/1M in, out) | Notes |
+|---|---|---|---|
+| `reasoning` | `google/gemini-2.5-flash-lite` | $0.10 / $0.40 | 1M context, reliable JSON-schema structured output |
+| `vision` | `google/gemini-2.5-flash-lite` | $0.10 / $0.40 | Same model; strong enough at reading a meal photo |
 
-OpenRouter applies its own margin on top of first-party rates; the price table in the function must reflect OpenRouter's quoted prices, not the numbers above.
+Prices are OpenRouter's quoted rates as of 2026-08-25 and include their margin. **Re-check them before deploying** — the catalog moves, and the price table in the function is what the budget reservation depends on being right.
+
+### Why not the actual cheapest model
+
+OpenRouter lists models an order of magnitude cheaper than this — Gemma 3 4B at $0.05/$0.10, Llama 3.1 8B at $0.05/$0.08, Mistral Nemo at $0.019/$0.030.
+
+**They are smaller than Apple's on-device model.** Escalating to one of them means paying money to get a worse answer than the free tier already produced, which inverts the entire premise of the router. There is a floor below which "cheap" stops being cheap and starts being pointless.
+
+The selection rule is therefore not *cheapest available* but **cheapest model that is meaningfully more capable than the on-device model**. In practice that means the flash tier: roughly 1M-token context against the on-device model's few thousand, which is what makes `.exceededContextWindowSize` — the expected escalation trigger — actually resolvable.
+
+Runners-up, if Gemini Flash Lite disappoints or its price moves: `qwen/qwen3.5-flash-02-23` ($0.065/$0.26, 1M context, vision) is ~35% cheaper; `openai/gpt-5-nano` ($0.05/$0.40, 400K, vision) is comparable.
+
+### Upgrade path
+
+When demo constraints lift, `.reasoning` moves to Claude Sonnet 5 ($3.00/$15.00) and `.vision` to Claude Haiku 4.5 ($1.00/$5.00) — the pairing costed in Section 10.
+
+**That change is one line in this function and a `supabase functions deploy`.** No App Store release, no client change, no schema change. The app only ever names a role. This is the whole return on the thin-proxy decision, and it is worth not giving up: the moment a model ID appears in Swift, upgrading the coach becomes a shipping event.
 
 ### Secrets
 
@@ -398,29 +415,47 @@ The `degraded` state (Section 11) must **not** mention the allowance. "This ran 
 
 ## 10. Cost model
 
+### Demo tier (current)
+
 | Task | Tier | Volume | Cost |
 |---|---|---|---|
 | Daily brief | on-device | 30/mo | $0 |
 | Chat, on-device turns | on-device | majority | $0 |
-| Chat, escalated | `.reasoning` (Sonnet 5) | ~30/mo | ~$0.60 |
-| Weekly review | `.reasoning` (Sonnet 5) | 4/mo | ~$0.07 |
-| Meal photo | `.vision` (Haiku 4.5) | ~60/mo | ~$0.20 |
-| | | **Total** | **~$0.87/mo** |
+| Chat, escalated | `.reasoning` | ~30/mo | ~$0.02 |
+| Weekly review | `.reasoning` | 4/mo | ~$0.002 |
+| Meal photo | `.vision` | ~60/mo | ~$0.02 |
+| | | **Total** | **~$0.04/mo** |
 
-Figures are first-party Anthropic rates; OpenRouter adds a margin.
+### Frontier tier (upgrade path)
 
-### Headroom
+Sonnet 5 for `.reasoning`, Haiku 4.5 for `.vision`:
 
-Against a $2.00 allowance that leaves roughly 55% spare, which is the right amount: enough that a heavy month does not hit the wall, tight enough that a runaway bug does.
+| | Total |
+|---|---|
+| | **~$0.87/mo** |
 
-This margin was not free. Routing `.vision` to Sonnet 5 alongside `.reasoning` — the obvious choice, one model for everything — put the projection at ~$1.30/mo, only 35% under the allowance, and a user who logs meals diligently would have hit the limit most months. Splitting vision onto Haiku 4.5 costs one extra line in the role map and buys back that margin.
+### What this means for the allowance
+
+At demo-tier prices the $2.00 monthly allowance is roughly **50x** projected spend. It is not a cost control at this tier — it is unreachable in normal use.
+
+That is worth stating plainly rather than treating the allowance as load-bearing right now. Its real job at demo tier is the **runaway-bug backstop**: a retry loop, a router that escalates every request, or a prompt that stops terminating. Those are the things that empty a card, and they are exactly what a hard ceiling catches. The check constraint earns its place; the specific dollar figure does not yet.
+
+The allowance becomes a genuine cost control at the frontier tier (~44% of the ceiling), which is the point at which the headroom analysis below starts to matter.
+
+### Headroom at frontier tier
+
+~$0.87/mo against $2.00 leaves roughly 55% spare: enough that a heavy month does not hit the wall, tight enough that a runaway bug does.
+
+That margin was not free. Routing `.vision` to Sonnet 5 alongside `.reasoning` — the obvious choice, one model for everything — put the projection at ~$1.30/mo, only 35% under, and a user who logs meals diligently would have hit the limit most months. Splitting vision onto Haiku 4.5 costs one line in the role map and buys the margin back.
 
 **The two levers to reach for if real usage overruns, in order:**
 
-1. **Escalated chat is the largest and least predictable line.** It is driven by how often the on-device model fails, which is a measured quantity, not a guess — the escalation reason is recorded per request (Section 14). If `.exceededContextWindowSize` dominates, shrink `MetricsDigest` before raising the allowance.
+1. **Escalated chat is the largest and least predictable line.** It is driven by how often the on-device model fails, which is measured, not guessed — the escalation reason is recorded per request. If `.exceededContextWindowSize` dominates, shrink `MetricsDigest` before raising the allowance.
 2. **Meal photos scale linearly with diligence.** A user logging every meal costs triple the projection. Cap the resized image dimension harder before changing models.
 
-Three structural choices produce the baseline, in order of impact:
+### The structural choices that produce the baseline
+
+In order of impact, and independent of which models are in the role map:
 
 1. **The daily brief never goes to cloud, and is generated once per day rather than once per app-open.** Cached in SwiftData keyed by date. Without this, cost scales with how often Today is opened — the single largest avoidable expense in the system.
 2. **`MetricsDigest` rather than rows** — roughly an order of magnitude fewer tokens.
