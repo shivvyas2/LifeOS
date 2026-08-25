@@ -35,8 +35,15 @@ final class MonthlyCloseViewModel {
     var chosenScore: Int = 5
 
     private var skippedThisSession: Set<LifeSector> = []
+    /// This month's store reads, already fetched and month-filtered. Rebuilt
+    /// once per sector in `advance()`, not on every keystroke: `recompute()`
+    /// only re-runs `SectorEvidenceFactory` against what is already here.
+    private var monthInputs = MonthInputs()
 
     private let store: SectorStore
+    private let metricsStore: MetricsStore
+    private let moneyStore: MoneyStore
+    private let planStore: PlanStore
     private let month: Date
     private let calendar: Calendar
     private let engine: Engine
@@ -46,6 +53,9 @@ final class MonthlyCloseViewModel {
         engine: Engine = OnDeviceEngine(), calendar: Calendar = .current
     ) {
         self.store = SectorStore(context: context, calendar: calendar)
+        self.metricsStore = MetricsStore(context: context, calendar: calendar)
+        self.moneyStore = MoneyStore(context: context, calendar: calendar)
+        self.planStore = PlanStore(context: context, calendar: calendar)
         self.month = month
         self.calendar = calendar
         self.engine = engine
@@ -74,19 +84,20 @@ final class MonthlyCloseViewModel {
         for stored in (try? store.answers(sector: sector, month: month)) ?? [] {
             answers[stored.questionID] = stored.answer
         }
+        monthInputs = (try? loadMonthInputs()) ?? MonthInputs()
         recompute()
     }
 
-    /// Rebuilds the proposal from the answers on screen.
-    ///
-    /// Only the check-in sectors recompute live here. The six data-fed
-    /// sectors (Body, Money, Mission, Growth, Mind, Soul) are not wired into
-    /// this yet, so they fall through to `CheckInScorer`, which returns no
-    /// rows for a sector with no check-in questions and therefore proposes
-    /// nothing — the honest answer for a sector with no evidence, not a bug.
+    /// Rebuilds the proposal for the sector on screen from `monthInputs` and
+    /// the answers on screen. All the routing and merging logic — which
+    /// scorer serves which sector, how Soul's journal and check-in evidence
+    /// combine — lives in `SectorEvidenceFactory`, which is pure and unit
+    /// tested; this is the single call into it.
     func recompute() {
         guard let sector else { return }
-        evidence = CheckInScorer(sector: sector, answers: answers).evidence()
+        evidence = SectorEvidenceFactory.evidence(
+            for: sector, inputs: monthInputs, answers: answers, calendar: calendar
+        )
         proposed = evidence.proposedScore
         chosenScore = proposed ?? previousUserScore ?? 5
     }
@@ -137,6 +148,53 @@ final class MonthlyCloseViewModel {
             sectorTitle: sector.title, rows: evidence.rows, previousUserScore: previousUserScore
         )
         note = try? await engine.run(SectorNoteTask(sectorTitle: sector.title), context).summary
+    }
+
+    /// Reads and month-filters everything the six data-fed scorers need.
+    /// `MonthWindow` (from `Sectors`) owns the date-boundary arithmetic and
+    /// the filtering itself, so this is store reads plus assembly, nothing
+    /// that needs its own test coverage.
+    private func loadMonthInputs() throws -> MonthInputs {
+        let window = MonthWindow(for: month, calendar: calendar)
+
+        let readings = try metricsStore.metrics(from: window.start, to: window.lastDay).map(\.reading)
+        let targets = try metricsStore.goals().targets
+
+        let amounts = try moneyStore.entries(from: window.start, to: window.lastDay)
+            .filter { !$0.pending }
+            .map(\.amount)
+
+        let goals = try planStore.entries(kind: .goal)
+        let habits = try planStore.entries(kind: .habit)
+        let goalStatuses = window.filter(goals, on: \.updatedAt).map(\.status)
+        let planStatuses = window.filter(goals + habits, on: \.updatedAt).map(\.status)
+
+        let perHabitTicks = try habits.map {
+            try planStore.recentTicks(for: $0, days: window.daysInMonth, endingOn: window.lastDay)
+        }
+        let habitTickRate = SectorEvidenceFactory.habitTickRate(perHabitTicks: perHabitTicks)
+
+        let journalEntries = try planStore.entries(kind: .journal)
+        let journalDates = window.filter(journalEntries, on: \.createdAt).map(\.createdAt)
+
+        var previousAmounts: [Double] = []
+        var previousJournalCount: Int?
+        if let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) {
+            let previousWindow = MonthWindow(for: previousMonth, calendar: calendar)
+            previousAmounts = try moneyStore.entries(from: previousWindow.start, to: previousWindow.lastDay)
+                .filter { !$0.pending }
+                .map(\.amount)
+            previousJournalCount = previousWindow.filter(journalEntries, on: \.createdAt).count
+        }
+
+        return MonthInputs(
+            readings: readings, targets: targets,
+            amounts: amounts, previousAmounts: previousAmounts,
+            planStatuses: planStatuses, goalStatuses: goalStatuses,
+            habitTickRate: habitTickRate,
+            journalDates: journalDates, previousJournalCount: previousJournalCount,
+            daysInMonth: window.daysInMonth
+        )
     }
 
     private func committedSectors() -> Set<LifeSector> {
