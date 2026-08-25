@@ -37,6 +37,7 @@ struct RootView: View {
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
     @State private var plan = PlanViewModel()
+    @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
     @State private var coach = CoachViewModel()
@@ -55,7 +56,7 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
-    private enum AppTab: Hashable { case today, health, money, plan }
+    private enum AppTab: Hashable { case today, health, money, plan, life }
 
     @State private var tab: AppTab = .today
 
@@ -173,6 +174,7 @@ struct RootView: View {
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
             PillNavItem(value: AppTab.plan, systemImage: "checklist", label: "Plan"),
+            PillNavItem(value: AppTab.life, systemImage: "square.grid.3x3.fill", label: "Life"),
         ]
     }
 
@@ -227,6 +229,8 @@ struct RootView: View {
                     onToggleHabit: { plan.toggleHabit(id: $0) },
                     onDelete: { plan.delete(id: $0) }
                 )
+            case .life:
+                LifeBoardScreen(model: life)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -289,6 +293,7 @@ struct RootView: View {
         wellness.attach(context)
         money.attach(context)
         plan.attach(context)
+        life.attach(context)
         settings.attach(context)
         quickLog.attach(context)
         coach.attach(context)
@@ -302,6 +307,7 @@ struct RootView: View {
         wellness.load()
         money.load()
         plan.load()
+        life.load()
         settings.load()
     }
 }
