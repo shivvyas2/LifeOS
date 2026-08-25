@@ -245,7 +245,10 @@ public enum AuthError: Error, Equatable {
         case "sms_region":
             return .server(status: 502, message: "SMS isn't available for that country yet")
         case "sms_unverified":
-            return .server(status: 502, message: "Couldn't send the text to that number yet")
+            return .server(
+                status: 502,
+                message: "That number isn't verified for SMS yet. Add it in Twilio, then try again"
+            )
         case "check_failed", "session_failed":
             return .server(status: status, message: "Couldn't finish sign-in. Try again")
         default:
@@ -253,7 +256,16 @@ public enum AuthError: Error, Equatable {
         }
         let message = json["msg"] as? String ?? json["error_description"] as? String
             ?? json["message"] as? String
-        return .server(status: status, message: message)
+        if let message, !message.isEmpty {
+            return .server(status: status, message: message)
+        }
+        if status == 502 {
+            return .server(
+                status: 502,
+                message: "Couldn't send the text. Check the number and try again"
+            )
+        }
+        return .server(status: status, message: nil)
     }
 
     /// Plain-language reason, so the UI never shows a bare status code.
