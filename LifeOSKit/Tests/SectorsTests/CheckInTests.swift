@@ -44,6 +44,29 @@ import Persistence
         #expect(notes.count == 1)
         #expect(notes.first?.options.isEmpty == true)
     }
+
+    /// Expected questions per sector. IDs are persisted and append-only, so a
+    /// silently dropped question would orphan answers and go unnoticed without
+    /// this explicit assertion.
+    @Test func sectorQuestionIDsAreExactlyAsDesigned() {
+        let expected: [LifeSector: [String]] = [
+            .family: ["family.contact", "family.showedUp", "family.note"],
+            .romance: ["romance.state", "romance.time", "romance.note"],
+            .friends: ["friends.seen", "friends.depth", "friends.note"],
+            .soul: ["soul.settled", "soul.note"],
+            .mind: ["mind.clarity"],
+            .growth: [],
+            .money: [],
+            .mission: [],
+            .body: [],
+        ]
+
+        for sector in LifeSector.allCases {
+            let actual = CheckInQuestion.questions(for: sector).map(\.id)
+            let expectedForSector = expected[sector] ?? []
+            #expect(actual == expectedForSector, "Sector \(sector.rawValue) has unexpected questions: expected \(expectedForSector), got \(actual)")
+        }
+    }
 }
 
 @Suite struct CheckInScorerTests {
