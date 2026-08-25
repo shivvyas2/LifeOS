@@ -37,8 +37,13 @@ public enum EscalationPolicy {
             return .retryThenEscalate
 
         case .concurrentRequests:
-            // The router is supposed to serialise. This is our bug, and
-            // billing a cloud call for it would hide that.
+            // Contention on a single local session, not a limit of the model.
+            // The cloud cannot fix contention; it can only charge for it. Wait
+            // for the other request and ask again here.
+            //
+            // `OnDeviceEngine` builds a fresh session per call and this error
+            // is per-session, so it is unlikely to be reachable at all — the
+            // router does not serialise, and does not need to.
             return .retryLocally
 
         case .unsupportedGuide:

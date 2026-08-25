@@ -9,7 +9,7 @@ import FoundationModels
     }
 
     /// Hardware eligibility cannot change while the app is running, so this
-    /// answer is resolved once and cached.
+    /// is the one answer the router is allowed to remember.
     @Test func anIneligibleDeviceIsPermanentlyUnavailable() {
         #expect(ModelAvailability.from(.unavailable(.deviceNotEligible)) == .unavailablePermanently)
     }
@@ -20,11 +20,5 @@ import FoundationModels
 
     @Test func aModelStillDownloadingIsWorthReChecking() {
         #expect(ModelAvailability.from(.unavailable(.modelNotReady)) == .unavailableForNow)
-    }
-
-    @Test func onlyTheTransientCasesAreReChecked() {
-        #expect(ModelAvailability.available.isWorthReChecking == false)
-        #expect(ModelAvailability.unavailablePermanently.isWorthReChecking == false)
-        #expect(ModelAvailability.unavailableForNow.isWorthReChecking == true)
     }
 }

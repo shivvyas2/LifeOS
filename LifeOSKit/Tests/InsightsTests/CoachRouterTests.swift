@@ -3,6 +3,21 @@ import Foundation
 import FoundationModels
 @testable import Insights
 
+/// A synchronous call counter, because the availability closure the router
+/// takes is not async and so cannot await an actor.
+private final class ReadCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    /// Returns how many calls came before this one.
+    func next() -> Int {
+        lock.withLock {
+            defer { count += 1 }
+            return count
+        }
+    }
+}
+
 /// A stand-in engine, so the router's decisions can be tested without a model.
 private struct StubEngine: Engine {
     let outcome: @Sendable () throws -> DailyBrief
@@ -83,10 +98,10 @@ private struct StubEngine: Engine {
         #expect(result == .answered(cloud))
     }
 
-    /// The policy calls a concurrency failure our own bug. This is the router
-    /// honouring that: however many times it fails, it must not reach for a
-    /// paid engine, even when one is sitting right there.
-    @Test func ourOwnConcurrencyBugNeverReachesThePaidEngine() async {
+    /// A concurrency failure is contention, and no paid model fixes
+    /// contention. However many times it fails, the router must not reach for
+    /// a paid engine, even when one is sitting right there.
+    @Test func aContentionFailureNeverReachesThePaidEngine() async {
         let result = await router(
             onDevice: { throw LanguageModelSession.GenerationError.concurrentRequests(self.context) },
             remote: {
@@ -96,6 +111,26 @@ private struct StubEngine: Engine {
         ).run(BriefTask(), empty)
 
         #expect(result == .unavailable)
+    }
+
+    /// The user can switch Apple Intelligence off while the app is
+    /// backgrounded. A router that remembered `.available` would keep taking
+    /// the local path, fail, escalate, and bill every later request to the
+    /// cloud, so availability is re-read on every request.
+    @Test func availabilityIsReReadRatherThanTrustedForeverOnceAvailable() async {
+        let cloud = DailyBrief(headline: "From the cloud.", observations: ["a", "b"])
+        let reads = ReadCount()
+        let router = CoachRouter(
+            onDevice: StubEngine(outcome: { self.brief }),
+            remote: StubEngine(outcome: { cloud }),
+            availability: { reads.next() == 0 ? .available : .unavailablePermanently }
+        )
+
+        let first = await router.run(BriefTask(), empty)
+        let second = await router.run(BriefTask(), empty)
+
+        #expect(first == .answered(brief))
+        #expect(second == .answered(cloud))
     }
 
     @Test func anIneligibleDeviceWithNoCloudIsUnavailable() async {

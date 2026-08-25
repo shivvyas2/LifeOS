@@ -1,12 +1,13 @@
 import FoundationModels
 
 /// Apple's availability, collapsed to the distinction the router acts on:
-/// is it worth asking again?
+/// can this answer still change?
 ///
-/// Hardware eligibility never changes while the process is alive. Apple
-/// Intelligence being switched off, or a model still downloading, both do.
-/// Asking the framework on every request wastes work on the first and gives
-/// a stale answer on the others, so the router caches by this distinction.
+/// Hardware eligibility never changes while the process is alive, so
+/// `.unavailablePermanently` is the one answer the router is allowed to
+/// remember. Being available, Apple Intelligence being switched off, and a
+/// model still downloading are all conditions the user can change from under
+/// us, so the router re-reads them every time.
 public enum ModelAvailability: Sendable, Equatable {
     case available
     case unavailablePermanently
@@ -29,9 +30,5 @@ public enum ModelAvailability: Sendable, Equatable {
                 return .unavailableForNow
             }
         }
-    }
-
-    public var isWorthReChecking: Bool {
-        self == .unavailableForNow
     }
 }

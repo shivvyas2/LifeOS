@@ -28,10 +28,12 @@ extension CoachResult: Equatable where Output: Equatable {}
 
 /// Picks a tier, and decides what a failure means.
 ///
-/// An actor because `.concurrentRequests` is a real on-device failure mode:
-/// serialising here is cheaper than handling it, and the escalation policy
-/// treats that error as our bug precisely because this type is supposed to
-/// prevent it.
+/// An actor because it holds mutable state — `cachedAvailability` — and that
+/// alone is reason enough. It is deliberately *not* a serialisation point for
+/// model calls: an actor releases its executor at every `await`, so two
+/// concurrent `run(_:_:)` calls do interleave with requests in flight. That is
+/// the behaviour we want. Making a chat turn queue behind a daily brief would
+/// be worse than anything it prevents.
 public actor CoachRouter {
 
     private let onDevice: any Engine
@@ -78,9 +80,10 @@ public actor CoachRouter {
 
             case .retryLocally:
                 // Never reaches the cloud, however many times it fails. This
-                // error means the router failed to serialise, and billing a
-                // cloud call for our own race condition is exactly what the
-                // policy exists to prevent.
+                // error is contention on a local session, and a paid model
+                // fixes nothing about contention — it only bills for it. A
+                // second local attempt, once the contending request has
+                // finished, is the only thing that can help.
                 guard retriesLeft > 0 else { return .unavailable }
                 return await runLocal(task, digest, retriesLeft: retriesLeft - 1)
 
@@ -115,9 +118,18 @@ public actor CoachRouter {
         }
     }
 
+    /// Only `.unavailablePermanently` is remembered. It means the hardware is
+    /// ineligible, which cannot change while the process is alive.
+    ///
+    /// Everything else is re-read on every request, `.available` included.
+    /// Apple Intelligence can be switched off while the app is backgrounded,
+    /// and a router that still believed `.available` would take the local path,
+    /// throw `.assetsUnavailable`, escalate, and bill every remaining request
+    /// of the process to the cloud — over a condition one property read
+    /// catches. That read is the whole cost of being right.
     private func currentAvailability() -> ModelAvailability {
-        if let cached = cachedAvailability, cached.isWorthReChecking == false {
-            return cached
+        if cachedAvailability == .unavailablePermanently {
+            return .unavailablePermanently
         }
         let fresh = availability()
         cachedAvailability = fresh
