@@ -238,23 +238,58 @@ final class WhoopConnectionViewModel {
 
     // MARK: - Sync
 
-    func sync() async {
-        guard let context, let endpoint = AppConfig.whoopTokenEndpoint else { return }
-        guard tokens.load() != nil else { state = .disconnected; return }
+    /// Recorded on every completed sync so `syncIfStale` can decide cheaply.
+    /// UserDefaults rather than Keychain: this is a convenience timestamp, not
+    /// a credential, and losing it costs one extra sync.
+    private var lastCompletedSync: Date? {
+        get { UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: Self.lastSyncKey) }
+    }
+    private static let lastSyncKey = "whoopLastCompletedSyncAt"
 
-        let sync = WhoopSync(
-            exchange: WhoopTokenExchange(endpoint: endpoint),
-            tokens: tokens,
-            derivation: WhoopDerivation(
-                store: MetricsStore(context: context),
-                archive: WhoopArchive(context: context)
-            ),
-            archive: WhoopArchive(context: context)
-        )
+    /// Set before the first await and cleared when the sync ends, so the
+    /// launch task and the foreground transition, which fire together on a
+    /// cold start, coalesce into one sync instead of racing Whoop's rate
+    /// limit with duplicate requests.
+    private var isSyncing = false
 
+    /// Automatic sync, on launch and on every return to the foreground.
+    /// Silent by design: the screens already show correct, if stale, local
+    /// data, so a transient failure changes nothing the user needs to know
+    /// about. Only a dead credential surfaces, because only that one needs
+    /// the user to act. The guards never mutate state, so an OAuth attempt
+    /// in flight (`.connecting`) is left untouched.
+    func syncIfStale() async {
+        guard context != nil, AppConfig.whoopTokenEndpoint != nil else { return }
+        guard tokens.load() != nil, !isSyncing else { return }
+        guard WhoopSyncPolicy.shouldSync(lastSync: lastCompletedSync) else { return }
+
+        isSyncing = true
+        defer { isSyncing = false }
         do {
-            let days = try await sync.sync()
-            state = .connected(lastSyncedDays: days)
+            state = .connected(lastSyncedDays: try await performSync())
+        } catch WhoopSyncError.reauthenticationRequired {
+            whoopLog.error("auto-sync: refresh token rejected, reauthentication required")
+            state = .failed("Whoop sign-in expired")
+        } catch WhoopSyncError.accessDenied {
+            whoopLog.error("auto-sync: whoop refused a live token, scopes are probably stale")
+            state = .failed("Whoop needs new permissions. Disconnect, then connect again")
+        } catch {
+            whoopLog.info("auto-sync deferred: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Manual sync: "Sync now" and the first sync after connecting. Every
+    /// failure is surfaced, because the user asked and deserves an answer.
+    func sync() async {
+        guard context != nil, AppConfig.whoopTokenEndpoint != nil else { return }
+        guard tokens.load() != nil else { state = .disconnected; return }
+        guard !isSyncing else { return }
+
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            state = .connected(lastSyncedDays: try await performSync())
         } catch WhoopSyncError.reauthenticationRequired {
             whoopLog.error("sync: refresh token rejected, reauthentication required")
             state = .failed("Whoop sign-in expired")
@@ -275,5 +310,25 @@ final class WhoopConnectionViewModel {
             whoopLog.error("sync failed: \(String(describing: error), privacy: .public)")
             state = .failed("Sync failed: \(error.localizedDescription)")
         }
+    }
+
+    private func performSync() async throws -> Int {
+        guard let context, let endpoint = AppConfig.whoopTokenEndpoint else {
+            throw WhoopSyncError.notConnected
+        }
+
+        let sync = WhoopSync(
+            exchange: WhoopTokenExchange(endpoint: endpoint),
+            tokens: tokens,
+            derivation: WhoopDerivation(
+                store: MetricsStore(context: context),
+                archive: WhoopArchive(context: context)
+            ),
+            archive: WhoopArchive(context: context)
+        )
+
+        let days = try await sync.sync()
+        lastCompletedSync = .now
+        return days
     }
 }

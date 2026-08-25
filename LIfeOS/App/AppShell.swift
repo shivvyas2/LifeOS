@@ -25,6 +25,7 @@ struct AppShell: View {
     /// default state of the app.
     @State private var isGuest = false
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -44,6 +45,15 @@ struct AppShell: View {
             // A returning user has a session already; skip straight past signup
             // rather than making them prove themselves again on every launch.
             if onboarding.isSignedIn { hasFinishedOnboarding = true }
+            await whoop.syncIfStale()
+        }
+        // Nothing awaits the sync: screens render local data immediately and
+        // repaint through the ModelContext.didSave reload when it lands. The
+        // launch task above and this transition fire together on a cold start;
+        // the view model coalesces them into one sync.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await whoop.syncIfStale() }
         }
         .onOpenURL { url in
             // Two callbacks share the scheme; the host decides which owns it.
