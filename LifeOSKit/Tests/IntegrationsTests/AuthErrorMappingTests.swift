@@ -176,10 +176,28 @@ final class OTPStubURLProtocol: URLProtocol {
             try await auth.sendCode(to: "+14155552671", channel: .phone)
             Issue.record("expected sendCode to throw")
         } catch let error as AuthError {
-            #expect(error.readable == "Couldn't send the text. Check the number and try again")
+            #expect(error.readable == "Couldn't send your code. Try again")
             if case .server(_, let message) = error {
                 #expect(message != nil)
             }
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    /// The generic 502 fallback is reachable on the email path too (email is
+    /// the default channel now), so it must not name a phone number.
+    @Test func anEmptyGateway502OnEmailIsChannelNeutral() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, "")
+        ]
+
+        do {
+            try await auth.sendCode(to: "person@example.com", channel: .email)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "Couldn't send your code. Try again")
         } catch {
             Issue.record("expected AuthError, got \(error)")
         }

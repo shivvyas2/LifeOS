@@ -248,9 +248,12 @@ public enum AuthError: Error, Equatable {
             return .server(status: status, message: message)
         }
         if status == 502 {
+            // Channel-neutral: an empty- or HTML-bodied 502 with no msg/
+            // error_description/message can come from the email path too
+            // (email is now the default channel), so this cannot assume SMS.
             return .server(
                 status: 502,
-                message: "Couldn't send the text. Check the number and try again"
+                message: "Couldn't send your code. Try again"
             )
         }
         return .server(status: status, message: nil)
