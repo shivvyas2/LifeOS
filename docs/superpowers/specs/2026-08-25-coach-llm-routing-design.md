@@ -176,6 +176,10 @@ Built from `MetricsStore.metrics(from:to:)`, it carries derived numbers only. It
 
 `DailyMetrics` is a SwiftData `@Model` class and is not `Sendable`. `Engine.run` takes `MetricsDigest`. The compiler therefore prevents a raw model object from crossing into an engine — the privacy rule is checked at build time rather than at review time.
 
+Verified end to end on 2026-08-25. The guarantee is **structural**: `Day` declares six numeric fields and nothing raw, and `promptLines` emits an explicit per-field list — so a field added to `Day` later does *not* silently flow into a prompt, it needs its own line.
+
+**The limit of that guarantee, which the cloud tier must handle:** the type system guards *transport*, not *content*. `CoachTask.prompt` returns a `String`, and `AnswerTask.question` is arbitrary user text. Nothing stops a user typing an identifier into a question that then leaves the device. Aggregates-only is enforced for data the app assembles; it is not enforced for words the user writes.
+
 This is also the largest token lever in the system: a digest is roughly 200 tokens per day where raw rows are thousands.
 
 ---
@@ -259,6 +263,25 @@ Lives in the function beside the price table, because the two always change toge
 | `vision` | `google/gemini-2.5-flash-lite` | $0.10 / $0.40 | Same model; strong enough at reading a meal photo |
 
 Prices are OpenRouter's quoted rates as of 2026-08-25 and include their margin. They are shown here for the cost model only — the function does not hardcode them, it looks them up (below), so this table going stale is a documentation problem rather than a budget one.
+
+### What the schema pin proved
+
+Measured on 2026-08-25 against iOS 26.2, encoding `DailyBrief.generationSchema`:
+
+```json
+{ "type": "object", "title": "DailyBrief",
+  "required": ["headline", "observations"],
+  "additionalProperties": false,
+  "x-order": ["headline", "observations"],
+  "properties": {
+    "headline": { "type": "string", "description": "<from @Guide>" },
+    "observations": { "type": "array", "items": {"type": "string"},
+                      "minItems": 2, "maxItems": 3, "description": "<from @Guide>" } } }
+```
+
+Clean JSON Schema, no envelope. `@Guide(description:)` becomes `description`; `.count(2...3)` becomes `minItems`/`maxItems`; `additionalProperties: false` — which strict structured-output modes require — is already present.
+
+**One thing the remote engine must do:** strip unknown `x-` keys before sending. `x-order` is a vendor extension, not standard JSON Schema, and a strict validator may reject it. One line, but it has to exist.
 
 ### Why not the actual cheapest model
 
@@ -546,7 +569,7 @@ Engines are protocol-mocked. No test calls OpenRouter or Apple's model.
 
 | Risk | Mitigation |
 |---|---|
-| `GenerationSchema` JSON is not OpenRouter-compatible | Schema pin test fails immediately; adapter fallback is scoped and small |
+| ~~`GenerationSchema` JSON is not OpenRouter-compatible~~ | **Retired 2026-08-25** — measured, not assumed. See "What the schema pin proved". |
 | Worst-case estimator under-predicts, breaching the cap | Estimator test over fixtures; OpenRouter key limit as the independent backstop |
 | On-device model escalates far more often than expected, raising cost | Escalation reason is recorded per request; if `.exceededContextWindowSize` dominates, shrink the digest before raising the budget |
 | On-device quality is poor enough that users always want cloud | Measured, not assumed. If the daily brief is not good enough on-device, that is a finding to act on, not a reason to pre-emptively route everything to cloud |
