@@ -67,7 +67,7 @@ struct IdentityScreen: View {
 
     var body: some View {
         SignupScaffold(
-            title: "Create your account",
+            title: model.identityTitle,
             subtitle: model.identitySubtitle,
             onBack: { model.back() }
         ) {
@@ -134,6 +134,11 @@ struct IdentityScreen: View {
                     Task { await model.sendCode() }
                 }
                 .disabled(!model.draft.canSendCode || !model.isConfigured)
+
+                Button(model.modeSwitchTitle) { model.toggleMode() }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(height: Space.x5)
 
                 if let onSkipAuth {
                     SecondaryButton("Continue without an account") { onSkipAuth() }

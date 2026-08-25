@@ -133,7 +133,12 @@ struct OnboardingFlow: View {
     var body: some View {
         Group {
             switch model.step {
-            case .intro:       IntroScreen(onStart: { model.beginSignup() }, onSkipAuth: onSkipAuth)
+            case .intro:
+                IntroScreen(
+                    onStart: { model.beginSignup() },
+                    onSignIn: { model.beginSignIn() },
+                    onSkipAuth: onSkipAuth
+                )
             case .identity:    IdentityScreen(model: model, onSkipAuth: onSkipAuth)
             case .code:        CodeScreen(model: model)
             case .profile:     ProfileScreen(model: model)
