@@ -6,6 +6,7 @@ import Integrations
 /// rest of the app uses, so the product explains itself by looking like itself.
 struct IntroScreen: View {
     let onStart: () -> Void
+    var onSignIn: (() -> Void)?
     var onSkipAuth: (() -> Void)?
     @State private var page = 0
     @Environment(\.colorScheme) private var scheme
@@ -33,6 +34,12 @@ struct IntroScreen: View {
                         } else {
                             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { page += 1 }
                         }
+                    }
+                    if let onSignIn {
+                        Button("I already have an account") { onSignIn() }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(LifeOSTokens.accent)
+                            .frame(height: Space.x5)
                     }
                     if let onSkipAuth {
                         Button("Skip for now") { onSkipAuth() }
@@ -99,5 +106,5 @@ struct IntroScreen: View {
 }
 
 #Preview {
-    IntroScreen(onStart: {})
+    IntroScreen(onStart: {}, onSignIn: {})
 }

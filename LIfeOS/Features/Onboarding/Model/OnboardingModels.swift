@@ -12,6 +12,16 @@ enum OnboardingStep: Equatable {
     case connections         // Whoop and Health, all optional
 }
 
+/// Which door the user came through. With OTP there is no password, so signing
+/// in and signing up are the same three steps; this changes copy and nothing
+/// else. Picking the wrong door is harmless by design: the branch after verify
+/// is what actually routes, so a "Sign in" tap with no account creates one and
+/// a "Get started" tap with an account skips the profile step.
+enum AuthMode: Equatable {
+    case signUp
+    case signIn
+}
+
 /// One page of the intro. Kept as data so the pager is a loop, not five
 /// hand-written screens that drift apart.
 struct IntroPage: Identifiable, Equatable {

@@ -9,6 +9,7 @@ private let authLog = Logger(subsystem: "com.shivvyas.lifeos", category: "auth")
 @MainActor @Observable
 final class OnboardingViewModel {
     private(set) var step: OnboardingStep = .intro
+    private(set) var mode: AuthMode = .signUp
     var draft = SignupDraft()
 
     private(set) var isBusy = false
@@ -72,13 +73,34 @@ final class OnboardingViewModel {
             : "We'll email you a six-digit code."
     }
 
+    var identityTitle: String {
+        mode == .signUp ? "Create your account" : "Welcome back"
+    }
+
+    var modeSwitchTitle: String {
+        mode == .signUp ? "Already have an account? Sign in" : "New here? Create an account"
+    }
+
     var destinationLabel: String {
         draft.channel == .phone ? draft.e164 : draft.email
     }
 
     // MARK: - Navigation
 
-    func beginSignup() { step = .identity }
+    func beginSignup() {
+        mode = .signUp
+        step = .identity
+    }
+
+    func beginSignIn() {
+        mode = .signIn
+        step = .identity
+    }
+
+    func toggleMode() {
+        mode = mode == .signUp ? .signIn : .signUp
+        errorMessage = nil
+    }
 
     func back() {
         errorMessage = nil
@@ -201,6 +223,7 @@ final class OnboardingViewModel {
         store.clear()
         isSignedIn = false
         draft = SignupDraft()
+        mode = .signUp
         step = .intro
     }
 
