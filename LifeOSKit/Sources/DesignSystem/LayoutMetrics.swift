@@ -19,8 +19,13 @@ public enum LayoutWidth: Sendable, Equatable {
 public struct LayoutMetrics: Sendable, Equatable {
     public let gutter: CGFloat
     public let sectionSpacing: CGFloat
-    /// Caps prose and single-column content so a 1366pt pane does not produce a
-    /// 90 character measure. Grids are exempt and fill the pane.
+    /// Caps single-column content so a 1366pt pane does not produce a sprawling
+    /// measure. Grids are exempt and fill the pane.
+    ///
+    /// Set above a portrait iPad's 1024pt on purpose: portrait is already close
+    /// to one comfortable column, and capping it again only bought dead margin
+    /// down both sides. The cap is there for landscape and for wide Stage
+    /// Manager panes.
     public let maxContentWidth: CGFloat
     public let heroScale: CGFloat
     public let fabBottomInset: CGFloat
@@ -64,7 +69,7 @@ public struct LayoutMetrics: Sendable, Equatable {
             // The floating button clears a sidebar rather than a bottom tab bar,
             // so it no longer needs to sit a tab bar's height off the floor.
             LayoutMetrics(gutter: 32, sectionSpacing: 30,
-                          maxContentWidth: 860, heroScale: 1.3,
+                          maxContentWidth: 1060, heroScale: 1.3,
                           fabBottomInset: 28, contentBottomInset: 32,
                           railInset: 80,
                           statColumns: 4, tileColumns: 6, isRegular: true)

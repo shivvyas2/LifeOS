@@ -21,6 +21,14 @@ import Foundation
         #expect(LayoutMetrics.metrics(for: .regular).maxContentWidth < .infinity)
     }
 
+    /// A portrait iPad is 1024pt wide, and the cap sits above that on purpose:
+    /// portrait is already close to a single comfortable column, so capping it
+    /// again only bought dead margin. The cap exists for landscape and for wide
+    /// Stage Manager panes, where an uncapped column really would sprawl.
+    @Test func theContentCapOnlyBitesWiderThanAPortraitIPad() {
+        #expect(LayoutMetrics.metrics(for: .regular).maxContentWidth > 1024)
+    }
+
     /// The floating button sits above a bottom tab bar on iPhone. In regular
     /// width the bar is a sidebar, so the old inset left it hovering above
     /// nothing.
