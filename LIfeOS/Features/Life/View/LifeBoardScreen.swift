@@ -7,13 +7,21 @@ import Sectors
 /// and `PlanScreen` — `RootView` owns the model, attaches the context, and
 /// reloads it; this screen only renders what it is handed.
 ///
-/// No `.sheet` here. The close flow (`MonthlyCloseScreen`) is a later task;
-/// this screen only shows the banner that will eventually open it.
+/// The one exception to "pure function of the model" is the close sheet:
+/// tapping the banner is purely local navigation (which month to close was
+/// already decided by `model.monthAwaitingClose`), so it is state owned right
+/// here rather than threaded up through `RootView`, the way `MoneyScreen` and
+/// `PlanScreen` thread their add-sheets — those need `RootView` because the
+/// thing being added belongs to a model `RootView` owns and other tabs read;
+/// nothing outside this screen needs to know the close sheet is open.
 struct LifeBoardScreen: View {
     let model: LifeBoardViewModel
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
+
+    @State private var showClose = false
+    @State private var closeMonth = Date.now
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: Space.x2), count: layout.isRegular ? 3 : 2)
@@ -23,9 +31,15 @@ struct LifeBoardScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
                 if let month = model.monthAwaitingClose {
-                    AlertBanner(messages: [
-                        "Close \(month.formatted(.dateTime.month(.wide).year())): score your nine sectors for the month."
-                    ])
+                    Button {
+                        closeMonth = month
+                        showClose = true
+                    } label: {
+                        AlertBanner(messages: [
+                            "Close \(month.formatted(.dateTime.month(.wide).year())): score your nine sectors for the month."
+                        ])
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 header
@@ -44,6 +58,12 @@ struct LifeBoardScreen: View {
             .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .sheet(isPresented: $showClose) {
+            MonthlyCloseScreen(month: closeMonth) {
+                showClose = false
+                model.load()
+            }
+        }
     }
 
     /// The header carries the two `BoardSummary` facts. There is no combined
