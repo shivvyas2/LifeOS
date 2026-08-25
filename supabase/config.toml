@@ -230,6 +230,12 @@ port = 465
 user = "resend"
 pass = "env(RESEND_API_KEY)"
 sender_name = "Life OS"
+# Required whenever auth.email.smtp.enabled = true; it supplies the From
+# header. Without it, config load hard-fails with "Missing required field
+# in config: auth.email.smtp.admin_email" (supabase status, config push,
+# functions deploy all refuse to run). Must be an address on the verified
+# Resend sending domain.
+admin_email = "env(RESEND_SENDER_EMAIL)"
 
 # Supabase's stock templates send a magic LINK. A link cannot be typed into an
 # app, so signup dead-ended at "confirm your email address" with no code to

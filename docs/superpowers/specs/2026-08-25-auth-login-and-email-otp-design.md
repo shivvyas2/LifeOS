@@ -209,10 +209,13 @@ until they land.
 
 - **Resend.** Verify a sending domain, then `supabase secrets set
   RESEND_API_KEY=...` and `supabase config push` to put `[auth.email.smtp]`
-  and both templates on the hosted project. Until that lands, email OTP still
-  delivers only to project team members and caps at the built-in sender's two
-  per hour. The client is already correct: `sendCode`/`verify` implement email
-  OTP and the magic-link path is gone.
+  and both templates on the hosted project. `auth.email.smtp.admin_email`
+  (the `From` header) reads `env(RESEND_SENDER_EMAIL)`, so also `supabase
+  secrets set RESEND_SENDER_EMAIL=...` with an address on that verified
+  domain before pushing, or edit the value in `config.toml` directly. Until
+  that lands, email OTP still delivers only to project team members and caps
+  at the built-in sender's two per hour. The client is already correct:
+  `sendCode`/`verify` implement email OTP and the magic-link path is gone.
 - **Twilio.** Root cause still unconfirmed, pending the console: check the
   trial badge, the code under Monitor > Logs > Errors, and whether any
   subaccounts exist. If it reports 21608 on credentials belonging to a paid
