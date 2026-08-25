@@ -55,6 +55,38 @@ final class RecoveryViewModel {
                 // which reads as "you did not sleep".
                 .filter(\.isRenderable)
 
+            let restingTrend = trend(rows, from: start, to: end) { $0.restingHR }
+            let respTrend = trend(rows, from: start, to: end) { $0.respiratoryRate }
+            let skinTrend = trend(rows, from: start, to: end) { $0.skinTempCelsius }
+            let spo2TrendSeries = trend(rows, from: start, to: end) { $0.spo2Percentage }
+            let hrvTrendSeries = trend(rows, from: start, to: end) { $0.hrvMs }
+
+            // History excludes the selected day: a spike must not drag the
+            // baseline toward itself on the very day it is being judged.
+            func history(_ series: TrendSeries) -> [Double?] {
+                series.points.dropLast().map(\.value)
+            }
+
+            let anomalies = [
+                AnomalyEvaluation.evaluate(metric: "Resting HR", today: day?.restingHR,
+                    history: history(restingTrend), threshold: .relativeAbove(0.10)),
+                AnomalyEvaluation.evaluate(metric: "Respiratory rate", today: day?.respiratoryRate,
+                    history: history(respTrend), threshold: .relativeAbove(0.08)),
+                AnomalyEvaluation.evaluate(metric: "Skin temp", today: day?.skinTempCelsius,
+                    history: history(skinTrend), threshold: .absoluteAbove(1.0)),
+                AnomalyEvaluation.evaluate(metric: "Blood oxygen", today: day?.spo2Percentage,
+                    history: history(spo2TrendSeries), threshold: .absoluteBelow(3.0)),
+                AnomalyEvaluation.evaluate(metric: "HRV", today: day?.hrvMs,
+                    history: history(hrvTrendSeries), threshold: .relativeBelow(0.30)),
+            ].compactMap { $0 }
+
+            var weekRecovery: [Date: Double] = [:]
+            for row in rows {
+                if let pct = row.whoopRecoveryPct {
+                    weekRecovery[calendar.startOfDay(for: row.date)] = pct / 100
+                }
+            }
+
             snapshot = RecoverySnapshot(
                 recoveryPct: day?.whoopRecoveryPct,
                 hrvMs: day?.hrvMs,
@@ -80,13 +112,15 @@ final class RecoveryViewModel {
                 recoveryTrend: trend(rows, from: start, to: end) { $0.whoopRecoveryPct },
                 strainTrend: trend(rows, from: start, to: end) { $0.whoopDayStrain },
                 sleepTrend: trend(rows, from: start, to: end) { $0.sleepMinutes.map(Double.init) },
-                hrvTrend: trend(rows, from: start, to: end) { $0.hrvMs },
-                restingHRTrend: trend(rows, from: start, to: end) { $0.restingHR },
-                spo2Trend: trend(rows, from: start, to: end) { $0.spo2Percentage },
-                skinTempTrend: trend(rows, from: start, to: end) { $0.skinTempCelsius },
-                respiratoryRateTrend: trend(rows, from: start, to: end) { $0.respiratoryRate },
+                hrvTrend: hrvTrendSeries,
+                restingHRTrend: restingTrend,
+                spo2Trend: spo2TrendSeries,
+                skinTempTrend: skinTrend,
+                respiratoryRateTrend: respTrend,
 
-                nights: nights
+                nights: nights,
+                anomalies: anomalies,
+                weekRecovery: weekRecovery
             )
         } catch {
             assertionFailure("Recovery load failed: \(error)")

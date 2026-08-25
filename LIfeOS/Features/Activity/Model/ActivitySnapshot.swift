@@ -9,6 +9,15 @@ struct ActivitySnapshot: Equatable {
     /// The day's sessions, oldest first. Empty on most days, which is why the
     /// view renders nothing at all rather than an empty frame.
     var workouts: [WorkoutSummary] = []
+
+    /// Seven days of calories, oldest first, ending on the selected day.
+    var weekCalories: [DayValue] = []
+}
+
+/// One day's value in a small weekly series; nil is a gap, never zero.
+struct DayValue: Equatable, Identifiable {
+    let id: Date
+    let value: Double?
 }
 
 /// One Whoop workout, flattened for display so the view never touches SwiftData.
