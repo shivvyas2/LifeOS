@@ -7,8 +7,7 @@ import Integrations
 enum OnboardingStep: Equatable {
     case intro
     case identity            // phone or email
-    case code                // OTP (phone)
-    case linkSent            // magic link (email)
+    case code                // OTP (phone or email)
     case profile             // name, country
     case connections         // Whoop and Health, all optional
 }
