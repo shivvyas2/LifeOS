@@ -14,6 +14,12 @@ public struct SectorNote: Equatable, Sendable {
 ///
 /// Deliberately only the rows the rule actually used, so the sentence cannot
 /// cite a figure that played no part in the number.
+///
+/// `previousUserScore` is carried on the context but deliberately does not
+/// reach `promptLines`. The instructions already forbid the model from
+/// mentioning a score; feeding it last month's number on the same 0-10 scale
+/// works against that instruction instead of with it. The close screen shows
+/// "Last month you said N" on its own, so the model does not need to.
 public struct SectorEvidenceContext: Sendable {
     public let sectorTitle: String
     public let rows: [EvidenceRow]
@@ -26,10 +32,7 @@ public struct SectorEvidenceContext: Sendable {
     }
 
     public var promptLines: String {
-        var lines = rows.map { "\($0.label): \($0.value)" }
-        if let previousUserScore {
-            lines.append("last month you scored this \(previousUserScore) out of 10")
-        }
+        let lines = rows.map { "\($0.label): \($0.value)" }
         return lines.isEmpty ? "no data recorded" : lines.joined(separator: "\n")
     }
 }
