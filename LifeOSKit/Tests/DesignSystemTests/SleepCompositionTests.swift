@@ -53,4 +53,13 @@ import Foundation
         )
         #expect(composition.segments.map(\.stage) == [.sws, .rem, .light, .awake])
     }
+
+    /// The score bar is sleep stages only, left to right, and never awake.
+    @Test func scoreBarIsLightThenRemThenDeepAndOmitsAwake() {
+        let composition = SleepComposition(
+            date: night, lightMinutes: 231, remMinutes: 103, swsMinutes: 98, awakeMinutes: 12
+        )
+        #expect(composition.scoreBarSegments.map(\.stage) == [.light, .rem, .sws])
+        #expect(composition.scoreBarSegments.map(\.minutes) == [231, 103, 98])
+    }
 }

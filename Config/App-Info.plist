@@ -14,6 +14,9 @@
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>WhoopRedirectURI</key>
 	<string>$(WHOOP_REDIRECT_URI)</string>
+	<!-- Injected from gitignored Secrets.xcconfig. Never commit a live value. -->
+	<key>ElevenLabsAPIKey</key>
+	<string>$(ELEVENLABS_API_KEY)</string>
 	<!-- The app uses only standard HTTPS. That is exempt encryption, and saying
 	     so here stops App Store Connect prompting on every TestFlight upload. -->
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -11,6 +11,7 @@ import DesignSystem
 /// gear on Today rather than spending a slot.
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    var onSignOut: () -> Void = {}
 
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
@@ -170,7 +171,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop)
+            SettingsScreen(model: settings, whoop: whoop, onSignOut: onSignOut)
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })

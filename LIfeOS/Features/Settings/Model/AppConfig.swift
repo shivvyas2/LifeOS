@@ -14,6 +14,14 @@ enum AppConfig {
     /// Public by design. Row Level Security protects rows, not this key.
     static var supabaseAnonKey: String? { string("SupabaseAnonKey") }
 
+    /// ElevenLabs speech-to-text. Lives in gitignored Secrets.xcconfig.
+    /// Still extractable from a shipped `.ipa` — do not log or print it.
+    nonisolated static var elevenLabsAPIKey: String? { string("ElevenLabsAPIKey") }
+
+    /// Phone OTP (Twilio Verify) lives in Edge Functions, never in the app.
+    static var otpStartEndpoint: URL? {
+        supabaseURL?.appendingPathComponent("functions/v1/otp-start")
+    }
     /// The function that performs the confidential-client token exchange.
     static var whoopTokenEndpoint: URL? {
         supabaseURL?.appendingPathComponent("functions/v1/whoop-token")
@@ -37,7 +45,7 @@ enum AppConfig {
         whoopClientID?.isEmpty == false && whoopTokenEndpoint != nil
     }
 
-    private static func string(_ key: String) -> String? {
+    nonisolated private static func string(_ key: String) -> String? {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String,
               !value.isEmpty,
               // An unresolved build setting comes through literally.

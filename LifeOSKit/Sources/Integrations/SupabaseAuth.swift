@@ -27,9 +27,9 @@ public struct SupabaseAuth: Sendable {
 
     /// Which channels the project can actually deliver on.
     ///
-    /// Worth one call at startup: SMS requires a provider (Twilio and friends)
-    /// that is off by default, and a phone-first signup screen that cannot send
-    /// anything is a dead end the user cannot diagnose.
+    /// Phone is always offered: SMS goes through the `otp-start` Edge Function
+    /// (Twilio Verify), not GoTrue's own provider. Email still comes from
+    /// `/auth/v1/settings`.
     public func availableChannels() async -> Set<Channel> {
         var request = URLRequest(url: baseURL.appendingPathComponent("auth/v1/settings"))
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
@@ -37,21 +37,21 @@ public struct SupabaseAuth: Sendable {
               let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
               let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let external = json["external"] as? [String: Any]
-        else { return [.email] }   // email is the safe assumption
+        else { return [.email, .phone] }
 
-        var channels: Set<Channel> = []
+        var channels: Set<Channel> = [.phone]
         if external["email"] as? Bool == true { channels.insert(.email) }
-        if external["phone"] as? Bool == true { channels.insert(.phone) }
-        return channels.isEmpty ? [.email] : channels
+        return channels
     }
 
-    /// Sends a one-time code. `shouldCreateUser` is true because this is the
-    /// signup path: Supabase treats OTP as sign-in-or-create.
+    /// Sends a one-time code. Phone goes through Twilio Verify on the server.
+    /// Email still uses GoTrue.
     public func sendCode(to destination: String, channel: Channel) async throws {
-        let body: [String: Any] = channel == .phone
-            ? ["phone": destination, "create_user": true]
-            : ["email": destination, "create_user": true]
-        _ = try await post("otp", body: body)
+        if channel == .phone {
+            _ = try await postFunction("otp-start", body: ["phone": destination])
+            return
+        }
+        _ = try await post("otp", body: ["email": destination, "create_user": true])
     }
 
     /// Sends a magic link that returns to `redirectTo`.
@@ -69,10 +69,11 @@ public struct SupabaseAuth: Sendable {
 
     /// Exchanges the code for a session.
     public func verify(code: String, destination: String, channel: Channel) async throws -> AuthSession {
-        var body: [String: Any] = ["token": code, "type": channel == .phone ? "sms" : "email"]
-        body[channel.rawValue] = destination
-
-        let data = try await post("verify", body: body)
+        if channel == .phone {
+            let data = try await postFunction("otp-check", body: ["phone": destination, "code": code])
+            return try decode(data)
+        }
+        let data = try await post("verify", body: ["token": code, "type": "email", "email": destination])
         return try decode(data)
     }
 
@@ -101,6 +102,19 @@ public struct SupabaseAuth: Sendable {
         try check(response, data)
     }
 
+    private func postFunction(_ name: String, body: [String: Any]) async throws -> Data {
+        var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/\(name)"))
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        try check(response, data)
+        return data
+    }
+
     private func post(_ path: String, body: [String: Any]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent("auth/v1/\(path)"))
         request.httpMethod = "POST"
@@ -116,12 +130,18 @@ public struct SupabaseAuth: Sendable {
     private func check(_ response: URLResponse, _ data: Data) throws {
         guard let http = response as? HTTPURLResponse else { throw AuthError.transport }
         guard (200..<300).contains(http.statusCode) else {
-            // Supabase returns a readable reason; surfacing it verbatim is what
-            // makes "SMS provider not configured" visible instead of a generic
-            // failure the user cannot act on.
-            let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
-                .flatMap { $0?["msg"] as? String ?? $0?["error_description"] as? String
-                            ?? $0?["message"] as? String }
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            if json["error"] as? String == "rate_limited" {
+                throw AuthError.server(status: 429, message: "Too many attempts. Wait a moment")
+            }
+            if json["error"] as? String == "invalid_phone" {
+                throw AuthError.server(status: 400, message: "That number doesn't look right")
+            }
+            if json["error"] as? String == "server_not_configured" {
+                throw AuthError.server(status: 500, message: "SMS isn't set up yet")
+            }
+            let message = json["msg"] as? String ?? json["error_description"] as? String
+                ?? json["message"] as? String
             throw AuthError.server(status: http.statusCode, message: message)
         }
     }

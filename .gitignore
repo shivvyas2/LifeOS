@@ -22,8 +22,9 @@ Config/Secrets.xcconfig
 .env.*
 !.env.example
 
-# Service-role keys, Whoop client secret, and the Anthropic key live only in
-# Supabase Edge Function environments (`supabase secrets set`), never in this repo.
+# Service-role keys, Whoop client secret, Twilio auth token, and the Anthropic
+# key live only in Supabase Edge Function environments (`supabase secrets set`),
+# never in this repo.
 
 ## Supabase CLI (Plan 3)
 supabase/.temp/

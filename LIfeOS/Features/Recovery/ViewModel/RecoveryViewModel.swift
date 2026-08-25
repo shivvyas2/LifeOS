@@ -55,6 +55,10 @@ final class RecoveryViewModel {
                 // which reads as "you did not sleep".
                 .filter(\.isRenderable)
 
+            let napMinutes = try store.sleepRecords(from: end, to: end, includingNaps: true)
+                .filter { $0.isNap == true }
+                .reduce(0) { $0 + $1.durationMinutes }
+
             let restingTrend = trend(rows, from: start, to: end) { $0.restingHR }
             let respTrend = trend(rows, from: start, to: end) { $0.respiratoryRate }
             let skinTrend = trend(rows, from: start, to: end) { $0.skinTempCelsius }
@@ -119,6 +123,7 @@ final class RecoveryViewModel {
                 respiratoryRateTrend: respTrend,
 
                 nights: nights,
+                napMinutes: napMinutes > 0 ? napMinutes : nil,
                 anomalies: anomalies,
                 weekRecovery: weekRecovery
             )

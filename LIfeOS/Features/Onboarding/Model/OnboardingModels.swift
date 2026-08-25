@@ -67,7 +67,7 @@ struct SignupDraft: Equatable {
 
     var canSendCode: Bool {
         channel == .phone
-            ? phone.filter(\.isNumber).count >= 7
+            ? PhoneOTP.isAcceptable(e164)
             : email.contains("@") && email.contains(".")
     }
 
@@ -95,6 +95,8 @@ struct DialCountry: Identifiable, Equatable {
 }
 
 enum DialCountries {
+    /// Phone OTP is only sent to the US and India.
+    static let otpRegions: Set<String> = ["US", "IN"]
     /// Built from the system's region list so it is complete and localised,
     /// rather than a hand-typed subset that omits someone's country.
     static let all: [DialCountry] = {

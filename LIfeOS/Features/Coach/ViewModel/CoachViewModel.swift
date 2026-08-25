@@ -28,7 +28,7 @@ final class CoachViewModel {
     var phase: LifoPhase = .idle
     var liveTranscript = ""
     var answer = ""
-    var status = "Go ahead, I'm listening…"
+    var status = "Tap the mic, or type."
     var error: String?
     var history: [LifoTurn] = []
     var isTyping = false
@@ -60,9 +60,13 @@ final class CoachViewModel {
 
     func appear() {
         error = nil
-        if !isTyping {
-            Task { await startListening() }
-        }
+    }
+
+    func showKeyboard() {
+        speech.stop()
+        phase = .idle
+        isTyping = true
+        status = "Type to talk to LIFO."
     }
 
     func disappear() {
@@ -72,9 +76,12 @@ final class CoachViewModel {
 
     func toggleListening() async {
         if phase == .listening {
-            speech.stop()
-            phase = .idle
-            status = "Paused"
+            status = "Hearing that back…"
+            await speech.finish()
+            if phase == .listening {
+                phase = .idle
+                status = "Paused"
+            }
             return
         }
         await startListening()
