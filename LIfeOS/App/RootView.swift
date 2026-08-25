@@ -15,6 +15,14 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
+    /// The one place the platform's size class is read. `LayoutMetrics` is
+    /// expressed over our own `LayoutWidth` so the design system keeps building
+    /// for macOS and `swift test` keeps running without a simulator.
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var metrics: LayoutMetrics {
+        .metrics(for: sizeClass == .regular ? .regular : .compact)
+    }
 
     @State private var today = TodayViewModel()
     @State private var weight = BodyViewModel()
@@ -94,6 +102,10 @@ struct RootView: View {
                     )
                 }
             }
+            // A sidebar on iPad, the tab bar on iPhone. One modifier, but it
+            // restructures how the four tabs present, so it is verified by
+            // screenshot rather than assumed.
+            .tabViewStyle(.sidebarAdaptable)
 
             Button {
                 showQuickLog = true
@@ -105,8 +117,8 @@ struct RootView: View {
                     .background(Circle().fill(LifeOSTokens.primaryText.resolve(scheme)))
                     .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 72)
+            .padding(.trailing, metrics.gutter)
+            .padding(.bottom, metrics.fabBottomInset)
             .accessibilityLabel("Quick log")
         }
         // `today.detail` is the only source of truth for what the sheet shows;
@@ -140,6 +152,7 @@ struct RootView: View {
                 money.add(merchant: merchant, amount: amount, isIncome: isIncome, category: category)
             }
         }
+        .environment(\.layout, metrics)
         .task {
             attachAll()
             reloadAll()
