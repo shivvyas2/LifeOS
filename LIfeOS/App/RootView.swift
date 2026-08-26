@@ -67,6 +67,7 @@ struct RootView: View {
     @State private var showCoach = false
     @State private var showAssistant = false
     @State private var showWhoop = false
+    @State private var eventSheet: EventSheetPresentation?
 
     /// The tab bar's selection, stated rather than inferred from ordering.
     /// Deliberately not persisted: the requirement is that a cold launch lands
@@ -125,6 +126,24 @@ struct RootView: View {
         }
         .sheet(isPresented: $showBudgets, onDismiss: { money.load(connection: plaid) }) {
             BucketEditorSheet(model: money)
+        }
+        .sheet(item: $eventSheet) { mode in
+            EventSheet(
+                mode: mode,
+                onSave: { draft in
+                    guard let calendarSync else { return }
+                    switch mode {
+                    case .create:
+                        Task { try? await calendarSync.create(draft) }
+                    case .edit(let event):
+                        Task { try? await calendarSync.update(id: event.id, with: draft) }
+                    }
+                },
+                onDelete: {
+                    guard let calendarSync, case .edit(let event) = mode else { return }
+                    Task { try? await calendarSync.delete(id: event.id) }
+                }
+            )
         }
         .environment(\.layout, metrics)
         .task {
@@ -224,11 +243,10 @@ struct RootView: View {
                     TodayScreen(
                         snapshot: today.snapshot,
                         onSelectDay: { today.select($0) },
-                        // Task 3 wires these for real; the app just needs to build.
-                        onConnectCalendar: {},
-                        onAddEvent: {},
-                        onTapEvent: { _ in },
-                        onOpenToday: {}
+                        onConnectCalendar: { requestCalendarAccess() },
+                        onAddEvent: { eventSheet = .create },
+                        onTapEvent: { eventSheet = .edit($0) },
+                        onOpenToday: { today.select(.now) }
                     )
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
