@@ -1,13 +1,18 @@
-#if DEBUG
 import Foundation
 
 /// A month of invented finances, so the Money screen can be looked at before
 /// Plaid is wired and there is any real data to look at.
 ///
-/// `#if DEBUG` is the whole safety story: this file does not exist in a release
-/// build, so the toggle that reads it cannot be flipped on in TestFlight and
-/// invented numbers cannot be mistaken for someone's actual money. When Plaid
-/// lands, delete this file and the two places that reference it.
+/// This deliberately ships in release builds, because bank connection is
+/// broken and TestFlight testers otherwise see an empty screen and can judge
+/// nothing. That removes the `#if DEBUG` that used to be the whole safety
+/// story, so the labelling replaces it: `isSample` travels with the snapshot
+/// and the Money screen states on the screen itself that the figures are
+/// invented. Numbers a viewer could mistake for their own money must never be
+/// presented as real, and a toggle buried in Settings is not something a
+/// tester who opens the app tomorrow will remember flipping.
+///
+/// When Plaid works, delete this file, the toggle, and the badge together.
 ///
 /// The numbers are deliberately unremarkable — a salary, a rent payment, a
 /// grocery run — because the point is to see how the layout handles a normal
@@ -28,6 +33,7 @@ extension MoneySnapshot {
             budgets: sampleBudgets,
             unclaimed: sampleUnclaimed,
             monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
+            isSample: true,
             isConnected: true
         )
     }
@@ -80,4 +86,3 @@ extension MoneySnapshot {
         }
     }
 }
-#endif

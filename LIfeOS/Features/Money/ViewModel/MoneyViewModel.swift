@@ -15,25 +15,24 @@ final class MoneyViewModel {
         self.calendar = calendar
     }
 
-    #if DEBUG
     /// Shared with the Settings toggle that writes it. Delete alongside
     /// `SampleMoneyData.swift` when Plaid lands.
     static let sampleDataKey = "useSampleFinanceData"
-    #endif
 
     func attach(_ context: ModelContext) {
         self.context = context
     }
 
     func load(connection: PlaidConnectionViewModel? = nil) {
-        #if DEBUG
-        // Off unless deliberately switched on in Settings. Release builds do not
-        // compile `SampleMoneyData` at all, so this branch cannot exist there.
+        // Off unless deliberately switched on in Settings. This now applies in
+        // release builds too, so that a TestFlight tester can see the screen
+        // while bank connection is broken. The snapshot it returns carries
+        // `isSample`, and the screen says so on itself: nothing here may look
+        // like the reader's real money.
         if UserDefaults.standard.bool(forKey: Self.sampleDataKey) {
             snapshot = .sample
             return
         }
-        #endif
         guard let context else { return }
         let store = MoneyStore(context: context, calendar: calendar)
 

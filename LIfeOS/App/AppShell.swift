@@ -23,10 +23,17 @@ struct AppShell: View {
     @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @Environment(\.scenePhase) private var scenePhase
-    /// TEMPORARY: set by "Skip for now". Deliberately not persisted, so a
-    /// relaunch returns to signup and the bypass cannot quietly become the
-    /// default state of the app.
-    @State private var isGuest = false
+    /// Set by "Skip for now", and now persisted, because signing in is no
+    /// longer required to reach the app: a launch that restores no session
+    /// lands on the app rather than on signup. Persisting it is what stops the
+    /// intro reappearing on every cold start for someone who never intends to
+    /// sign in.
+    ///
+    /// Signing in is still reachable, through Settings, and is still what a
+    /// user needs before anything server-backed works: bank connection and the
+    /// coach's cloud tier both authenticate with a real session, so a guest
+    /// gets the local app and is told as much at the point those fail.
+    @AppStorage("isGuest") private var isGuest = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -53,7 +60,19 @@ struct AppShell: View {
             health.attach(context)
             // A returning user has a session already; renew it and skip past
             // signup rather than making them prove themselves on every launch.
-            if await onboarding.restoreSession() { hasFinishedOnboarding = true }
+            if await onboarding.restoreSession() {
+                hasFinishedOnboarding = true
+            } else {
+                // No session, so open the app anyway rather than holding the
+                // door shut. Signing in is a thing this app offers, not a
+                // toll it charges: everything local works without an account,
+                // and the parts that cannot say so where they fail.
+                //
+                // This is what makes the intro reachable only through Settings
+                // -> Sign out. Restoring the old behaviour is deleting this
+                // else branch, which puts a signed-out launch back on signup.
+                isGuest = true
+            }
             await whoop.syncIfStale()
             // After Whoop, not before: Health fills the gaps Whoop leaves, so
             // running it second means it sees the strap's numbers already in

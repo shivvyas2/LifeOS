@@ -8,9 +8,7 @@ struct SettingsScreen: View {
     var plaid: PlaidConnectionViewModel?
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
-    #if DEBUG
     @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
-    #endif
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
 
@@ -28,10 +26,8 @@ struct SettingsScreen: View {
                         sectionLabel("Connections")
                         connectionsRow
 
-                        #if DEBUG
                         sectionLabel("Developer")
                         sampleDataCard
-                        #endif
 
                         signOutButton
                             .padding(.top, 8)
@@ -53,11 +49,10 @@ struct SettingsScreen: View {
         .onChange(of: model.draft) { model.save() }
     }
 
-    #if DEBUG
     /// Fills the Money screen with invented numbers so its layout can be judged
-    /// before Plaid exists. Debug-only in the strongest sense: the sample data
-    /// is not compiled into a release build, so this control has nothing to
-    /// switch on there and is not shown.
+    /// while bank connection is broken. Ships in release builds, which is why
+    /// the Money screen badges the month as sample: the toggle alone is not
+    /// enough for a tester who flipped it once and opens the app a week later.
     private var sampleDataCard: some View {
         GlassPanel {
             Toggle(isOn: $useSampleFinanceData) {
@@ -65,7 +60,7 @@ struct SettingsScreen: View {
                     Text("Use sample finance data")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text("Invented numbers, for looking at the layout. Never in a release build.")
+                    Text("Invented numbers, for looking at the layout. The Money screen marks the month as sample while this is on.")
                         .font(.system(size: 13))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
@@ -74,7 +69,6 @@ struct SettingsScreen: View {
             .tint(LifeOSTokens.accent)
         }
     }
-    #endif
 
     private var appearanceCard: some View {
         GlassPanel {

@@ -11,6 +11,10 @@ struct MoneySnapshot: Equatable {
     var budgets: [BudgetBandRow] = []
     var unclaimed: [UnclaimedBandRow] = []
     var monthLabel: String = ""
+    /// These figures are invented, not this person's money. Carried on the
+    /// snapshot rather than read from defaults at the point of display, so
+    /// every screen rendering a sample month is holding the fact that says so.
+    var isSample = false
     var isConnected = false
     /// A bank is linked, whether or not any transaction has arrived yet.
     var hasConnectedBank = false
