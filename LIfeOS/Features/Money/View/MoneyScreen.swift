@@ -109,7 +109,11 @@ struct MoneyScreen: View {
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .padding(.vertical, 12)
                 .padding(.horizontal, 22)
-                .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
+                .background(
+                    Capsule()
+                        .fill(LifeOSTokens.tileSurface.resolve(scheme))
+                        .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 8, y: 2)
+                )
             Text("Plaid sync arrives in a later slice.")
                 .font(.footnote)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))

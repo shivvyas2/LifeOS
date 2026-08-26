@@ -89,8 +89,12 @@ public struct SegmentedPill<Value: Hashable>: View {
                     .frame(maxWidth: .infinity)
                     .background {
                         if isSelected {
+                            // A tonal gray in dark mode rather than the ordinary
+                            // card-surface token: cardSurface sits too close to
+                            // the pill's own translucent background at this
+                            // scale, so the selected segment nearly disappears.
                             Capsule()
-                                .fill(LifeOSTokens.cardSurface.resolve(scheme))
+                                .fill(scheme == .dark ? Color(white: 0.24) : LifeOSTokens.cardSurface.resolve(scheme))
                                 .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 6, y: 2)
                         }
                     }

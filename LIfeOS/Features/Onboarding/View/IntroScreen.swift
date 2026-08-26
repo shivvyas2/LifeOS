@@ -113,7 +113,7 @@ struct IntroScreen: View {
                 Capsule()
                     .fill(index == page
                           ? LifeOSTokens.primaryText.resolve(scheme)
-                          : LifeOSTokens.dotFuture.resolve(scheme))
+                          : LifeOSTokens.dotMissed.resolve(scheme))
                     .frame(width: index == page ? Space.x3 : Space.x1, height: Space.x1)
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
             }

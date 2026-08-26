@@ -40,6 +40,22 @@ struct FitnessSegmentView: View {
             }
 
             trainingCard
+
+            if recovery.hasAnyReading {
+                NavigationLink {
+                    WhoopDetailScreen(snapshot: recovery)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("14-day trends").font(.system(size: 14, weight: .semibold))
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -49,7 +65,7 @@ struct FitnessSegmentView: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Calories Burnt").font(.system(size: 16, weight: .semibold))
-                        Text("This week").font(.system(size: 12))
+                        Text("Last 7 days").font(.system(size: 12))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                     Spacer()

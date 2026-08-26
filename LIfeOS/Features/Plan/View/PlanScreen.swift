@@ -52,7 +52,11 @@ struct PlanScreen: View {
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .padding(.vertical, 13)
                             .frame(maxWidth: .infinity)
-                            .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
+                            .background(
+                                Capsule()
+                                    .fill(LifeOSTokens.tileSurface.resolve(scheme))
+                                    .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 8, y: 2)
+                            )
                     }
                 }
                 .frame(maxWidth: layout.maxContentWidth)
