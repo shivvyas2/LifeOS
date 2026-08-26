@@ -21,6 +21,15 @@ public final class WorkoutRecord {
     /// the two would be the false zero this app refuses.
     public var percentRecorded: Double?
     public var sportID: Int?
+    /// Minutes in each heart rate zone, 0 through 5. Six optional columns
+    /// rather than one array because SwiftData stores scalars cleanly and an
+    /// array attribute is a migration this does not need.
+    public var zoneZeroMinutes: Int?
+    public var zoneOneMinutes: Int?
+    public var zoneTwoMinutes: Int?
+    public var zoneThreeMinutes: Int?
+    public var zoneFourMinutes: Int?
+    public var zoneFiveMinutes: Int?
 
     public init(externalID: String, start: Date, durationMinutes: Int, activityName: String, energyKcal: Double? = nil) {
         self.externalID = externalID

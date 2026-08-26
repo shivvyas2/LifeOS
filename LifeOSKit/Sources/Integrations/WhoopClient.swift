@@ -94,10 +94,6 @@ enum WhoopDTOs {
         let score_state: String?
         let score: Score?
 
-        // `zone_durations` is deliberately not decoded. The published sample shows
-        // it as an empty object with no documented member names, so there is
-        // nothing to decode into. It is still captured in the raw archive, which
-        // is exactly the case the archive exists for.
         struct Score: Decodable {
             let strain: Double?
             let kilojoule: Double?
@@ -107,6 +103,21 @@ enum WhoopDTOs {
             let distance_meter: Double?
             let altitude_gain_meter: Double?
             let altitude_change_meter: Double?
+            /// Documented in the v2 specification as six required int64 fields.
+            /// An earlier comment here declined to decode this on the grounds
+            /// that the published sample showed an empty object with no member
+            /// names. The specification names all six, so it is decoded now.
+            /// Still optional: a payload that omits it must degrade, not fail.
+            let zone_durations: Zones?
+
+            struct Zones: Decodable {
+                let zone_zero_milli: Double?
+                let zone_one_milli: Double?
+                let zone_two_milli: Double?
+                let zone_three_milli: Double?
+                let zone_four_milli: Double?
+                let zone_five_milli: Double?
+            }
         }
     }
 
@@ -198,7 +209,12 @@ extension WhoopDTOs.WorkoutRecord {
             percentRecorded: score?.percent_recorded,
             distanceMeters: score?.distance_meter,
             altitudeGainMeters: score?.altitude_gain_meter,
-            altitudeChangeMeters: score?.altitude_change_meter
+            altitudeChangeMeters: score?.altitude_change_meter,
+            zoneMinutes: score?.zone_durations.map { z in
+                [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli,
+                 z.zone_three_milli, z.zone_four_milli, z.zone_five_milli]
+                    .map { WhoopSleepMath.minutes(fromMilliseconds: $0) ?? 0 }
+            }
         )
     }
 }

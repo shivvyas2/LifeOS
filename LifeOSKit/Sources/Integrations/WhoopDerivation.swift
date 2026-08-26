@@ -214,6 +214,14 @@ public struct WhoopDerivation {
                 if let value = sample.altitudeGainMeters { record.altitudeGainMeters = value }
                 if let value = sample.altitudeChangeMeters { record.altitudeChangeMeters = value }
                 if let value = sample.sportID { record.sportID = value }
+                if let zones = sample.zoneMinutes, zones.count == 6 {
+                    record.zoneZeroMinutes = zones[0]
+                    record.zoneOneMinutes = zones[1]
+                    record.zoneTwoMinutes = zones[2]
+                    record.zoneThreeMinutes = zones[3]
+                    record.zoneFourMinutes = zones[4]
+                    record.zoneFiveMinutes = zones[5]
+                }
             }
         }
     }

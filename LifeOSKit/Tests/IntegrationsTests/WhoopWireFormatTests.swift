@@ -266,4 +266,52 @@ import Foundation
         #expect(body.weight_kilogram == 90.7185)
         #expect(body.max_heart_rate == 200)
     }
+
+    @Test func aWorkoutPayloadCarriesItsZoneDurations() throws {
+        let json = """
+        {
+          "id": "ecfc6a15-4661-442f-a9a4-f160dd7afae8",
+          "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:32:00.000Z",
+          "sport_name": "cycling",
+          "score_state": "SCORED",
+          "score": {
+            "strain": 11.4,
+            "kilojoule": 1569.34,
+            "average_heart_rate": 141,
+            "max_heart_rate": 172,
+            "percent_recorded": 100.0,
+            "zone_durations": {
+              "zone_zero_milli": 300000,
+              "zone_one_milli": 600000,
+              "zone_two_milli": 900000,
+              "zone_three_milli": 900000,
+              "zone_four_milli": 600000,
+              "zone_five_milli": 300000
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        // 300000ms = 5min, 600000 = 10, 900000 = 15
+        #expect(sample.zoneMinutes == [5, 10, 15, 15, 10, 5])
+    }
+
+    @Test func aWorkoutPayloadWithoutZoneDurationsDecodesToNil() throws {
+        let json = """
+        {
+          "id": "abc", "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:00:00.000Z", "sport_name": "running",
+          "score_state": "SCORED", "score": { "strain": 8.0 }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        #expect(sample.zoneMinutes == nil)
+    }
 }
