@@ -26,10 +26,6 @@ struct LifeBoardScreen: View {
     @State private var showClose = false
     @State private var closeMonth = Date.now
 
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: Space.x2), count: layout.isRegular ? 3 : 2)
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -48,14 +44,7 @@ struct LifeBoardScreen: View {
 
                     header
 
-                    LazyVGrid(columns: columns, spacing: Space.x2) {
-                        ForEach(model.cards) { card in
-                            NavigationLink(value: card.sector) {
-                                SectorCard(card: card)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    SectorStack(cards: model.cards)
                 }
                 .frame(maxWidth: layout.maxContentWidth)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -97,40 +86,6 @@ struct LifeBoardScreen: View {
                 Text("Biggest move: \(mover.sector.title) \(mover.delta > 0 ? "+" : "")\(mover.delta)")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            }
-        }
-    }
-}
-
-/// One sector's tile: the design system's pastel metric card, plus its own
-/// six-month strip underneath when there is more than one point to show.
-private struct SectorCard: View {
-    let card: LifeBoardViewModel.Card
-
-    var body: some View {
-        VStack(spacing: Space.x1) {
-            // `value: nil` renders PastelFillCard's own em dash for a sector
-            // that has not been scored yet, rather than a hand-built one.
-            PastelFillCard(
-                icon: SectorPalette.icon(card.sector),
-                hue: SectorPalette.hue(card.sector),
-                label: card.sector.title,
-                value: card.score.map(String.init)
-            )
-
-            if card.history.count > 1 {
-                RoundedBarChart(
-                    bars: card.history.map {
-                        RoundedBarChart.Bar(
-                            id: $0.id,
-                            label: $0.id.formatted(.dateTime.month(.narrow)),
-                            value: $0.value
-                        )
-                    },
-                    hue: SectorPalette.hue(card.sector),
-                    spacing: Space.half,
-                    height: 48
-                )
             }
         }
     }
