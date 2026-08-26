@@ -1321,17 +1321,28 @@ supabase db reset
 
 Expected: the reset completes and lists `20260826120000_plaid_items.sql` among the applied migrations.
 
-Then confirm the deny is real. In the Supabase Studio SQL editor, or with `psql` against the local database:
+Then confirm the deny is real. This needs at least one row in `auth.users`, so sign in through the app once first if the local database is empty.
+
+Run against the local database (`psql "$(supabase status -o env | grep DB_URL | cut -d= -f2- | tr -d '\"')"`, or the Studio SQL editor):
 
 ```sql
+-- A real user id, because the table has a foreign key to auth.users.
 insert into public.plaid_items (user_id, item_id, access_token)
-values ('00000000-0000-0000-0000-000000000000', 'item_test', 'access-test');
+select id, 'item_test', 'access-test' from auth.users limit 1;
 
-set local role authenticated;
-select count(*) from public.plaid_items;
+-- The role switch must be inside a transaction. `set local` outside one is a
+-- no-op, and the check would then run as the owner and pass no matter what
+-- the policies say.
+begin;
+  set local role authenticated;
+  select count(*) as visible_to_client from public.plaid_items;
+commit;
+
+-- And prove the row is really there when the owner looks.
+select count(*) as visible_to_owner from public.plaid_items;
 ```
 
-Expected: the count is `0`, not an error and not `1`. RLS hides the row from an authenticated client rather than refusing the query.
+Expected: `visible_to_client` is `0` and `visible_to_owner` is `1`. Both halves matter. A zero from an empty table proves nothing, which is why the second count is here.
 
 - [ ] **Step 3: Commit**
 
