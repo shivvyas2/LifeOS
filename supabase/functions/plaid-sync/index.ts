@@ -71,15 +71,25 @@ async function syncItem(
     pages += 1;
   }
 
-  const balances = await callPlaid("/accounts/balance/get", {
-    access_token: row.access_token,
-  });
+  // Balances are refreshed opportunistically. A failure here must not discard
+  // transaction pages already fetched: the device would re-fetch them next sync
+  // for a reason that has nothing to do with them.
+  let accounts: unknown[] = [];
+  try {
+    const balances = await callPlaid("/accounts/balance/get", {
+      access_token: row.access_token,
+    });
+    accounts = (balances.accounts as unknown[]) ?? [];
+  } catch (failure) {
+    const kind = failure instanceof PlaidError ? failure.kind : "upstream_failure";
+    console.error(`plaid balance fetch failed for item: ${kind}`);
+  }
 
   return {
     item_id: row.item_id,
     institution_name: row.institution_name,
     added, modified, removed,
-    accounts: balances.accounts ?? [],
+    accounts,
     next_cursor: nextCursor,
     has_more: hasMore,
     error: null,

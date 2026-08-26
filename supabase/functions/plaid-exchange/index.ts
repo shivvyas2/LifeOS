@@ -20,13 +20,21 @@ Deno.serve(async (req: Request) => {
   // transactions under different transaction ids, which the device cannot
   // deduplicate. Refuse before spending the exchange.
   if (body.institution_id) {
-    const { data: existing } = await db
+    const { data: existing, error: lookupError } = await db
       .from("plaid_items")
       .select("item_id")
       .eq("user_id", userID)
       .eq("institution_id", body.institution_id)
-      .maybeSingle();
-    if (existing) return json({ error: "institution_already_connected" }, 409);
+      .limit(1);
+    // A failed lookup must not read as "no duplicate". Refusing costs the user a
+    // retry; passing spends an exchange and creates an Item that bills monthly.
+    if (lookupError) {
+      console.error(`plaid duplicate check failed: ${lookupError.code}`);
+      return json({ error: "storage_failed" }, 500);
+    }
+    if (existing && existing.length > 0) {
+      return json({ error: "institution_already_connected" }, 409);
+    }
   }
 
   try {
@@ -44,6 +52,12 @@ Deno.serve(async (req: Request) => {
     if (error) {
       // Never log the row: it holds the credential.
       console.error(`plaid item insert failed: ${error.code}`);
+      // The database is the last line of defense against the check-then-insert
+      // race above: two requests can both pass the lookup and only one insert
+      // wins the unique constraint. Report that loss the same way as the guard.
+      if (error.code === "23505") {
+        return json({ error: "institution_already_connected" }, 409);
+      }
       return json({ error: "storage_failed" }, 500);
     }
 

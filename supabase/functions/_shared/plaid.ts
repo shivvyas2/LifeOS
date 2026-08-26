@@ -33,23 +33,33 @@ export function plaidConfig() {
 
 export type PlaidFailure = "item_login_required" | "rate_limited" | "upstream_failure";
 
+// Plaid is not obliged to send JSON when it is having a bad day.
+function plaidErrorCode(body: string): string {
+  try {
+    return (JSON.parse(body)?.error_code ?? "") as string;
+  } catch {
+    return "";
+  }
+}
+
 /// An expired bank login needs a reconnect prompt, not a retry spinner, so it
 /// gets its own code. A rate limit is worth retrying later. Everything else is
 /// opaque on purpose: Plaid's error bodies echo request parameters.
 export function classifyPlaidFailure(status: number, body: string): PlaidFailure {
-  let code = "";
-  try {
-    code = (JSON.parse(body)?.error_code ?? "") as string;
-  } catch {
-    // Plaid is not obliged to send JSON when it is having a bad day.
-  }
+  const code = plaidErrorCode(body);
   if (code === "ITEM_LOGIN_REQUIRED") return "item_login_required";
   if (status === 429 || code === "RATE_LIMIT_EXCEEDED") return "rate_limited";
   return "upstream_failure";
 }
 
 export class PlaidError extends Error {
-  constructor(public kind: PlaidFailure, public status: number) {
+  // `code` is Plaid's raw error_code, kept alongside the coarse `kind` for the
+  // rare caller that needs to distinguish within a kind (plaid-disconnect
+  // telling ITEM_NOT_FOUND apart from every other upstream_failure). Adding a
+  // PlaidFailure kind for every such case would force every other caller to
+  // handle a bucket it doesn't care about, so this stays a narrow escape hatch
+  // instead.
+  constructor(public kind: PlaidFailure, public status: number, public code = "") {
     super(kind);
   }
 }
@@ -77,7 +87,11 @@ export async function callPlaid(
     // client receives only a kind, because Plaid's errors echo request
     // parameters. The request body is never logged: it holds the secret.
     console.error(`plaid ${path} failed: ${response.status} ${text.slice(0, 300)}`);
-    throw new PlaidError(classifyPlaidFailure(response.status, text), response.status);
+    throw new PlaidError(
+      classifyPlaidFailure(response.status, text),
+      response.status,
+      plaidErrorCode(text),
+    );
   }
   return JSON.parse(text);
 }

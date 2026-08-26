@@ -24,14 +24,19 @@ Deno.serve(async (req: Request) => {
 
   if (!row) return json({ error: "not_found" }, 404);
 
+  // An Item that still exists at Plaid keeps billing, so the local record is
+  // the only handle left for retrying the disconnect. It stays until the
+  // remote side is really gone: either /item/remove succeeded, or Plaid says
+  // there is nothing left to remove.
   try {
     await callPlaid("/item/remove", { access_token: row.access_token });
   } catch (error) {
-    // Plaid refusing the removal must not strand the row. A connected Item
-    // bills monthly, so the local record going and the remote staying is the
-    // worse failure: the user would have no way left to reach it.
-    const kind = error instanceof PlaidError ? error.kind : "upstream_failure";
-    console.error(`plaid item remove failed: ${kind}`);
+    const alreadyGone = error instanceof PlaidError && error.code === "ITEM_NOT_FOUND";
+    if (!alreadyGone) {
+      const kind = error instanceof PlaidError ? error.kind : "upstream_failure";
+      console.error(`plaid item remove failed: ${kind}`);
+      return json({ error: kind }, 502);
+    }
   }
 
   await db.from("plaid_items").delete().eq("user_id", userID).eq("item_id", itemID);

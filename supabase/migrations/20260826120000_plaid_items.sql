@@ -38,6 +38,15 @@ alter table public.plaid_items enable row level security;
 -- The one access pattern: "this user's connected banks".
 create index plaid_items_user_idx on public.plaid_items (user_id);
 
+-- Backstops the Edge Function's check-then-insert duplicate guard, which is
+-- otherwise a race: two concurrent exchanges can both pass the lookup before
+-- either writes. Postgres treats NULL as distinct from any other NULL for
+-- uniqueness purposes, so rows with no institution_id (which is nullable, so
+-- this stays possible) are deliberately not constrained by this and can
+-- repeat.
+alter table public.plaid_items
+  add constraint plaid_items_user_institution_key unique (user_id, institution_id);
+
 -- No sync_state row is created for Plaid. The sync cursor lives on the device,
 -- because a server-advanced cursor would permanently lose a page of
 -- transactions to an app that crashed mid-ingest. See the design spec, 6.1.
