@@ -20,6 +20,8 @@
 	</array>
 	<key>ElevenLabsAPIKey</key>
 	<string>$(ELEVENLABS_API_KEY)</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>LifeOS shows your day's schedule on Today and lets the assistant create and change events for you.</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SupabaseURL</key>
