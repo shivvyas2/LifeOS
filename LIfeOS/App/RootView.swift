@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import DesignSystem
 import Persistence
+import Integrations
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
@@ -49,6 +50,11 @@ struct RootView: View {
     // the environment context is available; it is created once in
     // `attachAll()` instead of at property declaration.
     @State private var assistantModel: AssistantViewModel?
+    // Calendar sync is owned here so one pass serves Today's agenda, the
+    // day sheet, and the assistant alike; every trigger funnels through
+    // `syncCalendar()`. Built in `attachAll()` because it needs the context.
+    @State private var eventKitSource: EventKitSource?
+    @State private var calendarSync: CalendarSync?
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -124,6 +130,7 @@ struct RootView: View {
         .task {
             attachAll()
             reloadAll()
+            syncCalendar()
         }
         // Event-driven, not polled: a save is the only thing that can change
         // what these screens show while the app is running.
@@ -133,7 +140,10 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { reloadAll() }
+            if phase == .active {
+                reloadAll()
+                syncCalendar()
+            }
         }
 
     }
@@ -365,6 +375,14 @@ struct RootView: View {
         if assistantModel == nil {
             assistantModel = AssistantViewModel(context: context)
         }
+        if calendarSync == nil {
+            let source = EventKitSource()
+            eventKitSource = source
+            calendarSync = CalendarSync(
+                sources: [source],
+                store: CalendarStore(context: context)
+            )
+        }
     }
 
     private func reloadAll() {
@@ -381,5 +399,22 @@ struct RootView: View {
         plan.load()
         life.load()
         settings.load()
+    }
+
+    /// Ambient: fires on scene activation and after any calendar write. The
+    /// pass saves through the store, `ModelContext.didSave` fires, and
+    /// `reloadAll()` refreshes every snapshot; nothing polls.
+    private func syncCalendar() {
+        guard CalendarAccessState.current == .authorized, let calendarSync else { return }
+        Task { await calendarSync.sync() }
+    }
+
+    /// The one place the EventKit prompt is allowed to originate.
+    private func requestCalendarAccess() {
+        guard let eventKitSource else { return }
+        Task {
+            _ = try? await eventKitSource.requestAccess()
+            syncCalendar()
+        }
     }
 }

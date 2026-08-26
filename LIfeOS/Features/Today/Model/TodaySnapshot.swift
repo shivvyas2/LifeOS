@@ -1,5 +1,30 @@
 import Foundation
 import DesignSystem
+import Persistence
+import EventKit
+
+/// Where calendar permission stands. Read synchronously so `load()` stays
+/// synchronous; the prompt itself is only ever triggered from the agenda
+/// card's connect button.
+enum CalendarAccessState: Equatable {
+    case notDetermined, denied, authorized
+
+    static var current: CalendarAccessState {
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .fullAccess: .authorized
+        case .notDetermined: .notDetermined
+        default: .denied
+        }
+    }
+}
+
+/// One row of the Upcoming list: an event plus the day label it renders
+/// under, precomputed so the view does no date math.
+struct UpcomingEvent: Equatable, Identifiable {
+    let id: UUID
+    let dayLabel: String
+    let event: CalendarEventSnapshot
+}
 
 /// Everything the Today screen renders, as plain values.
 ///
@@ -28,4 +53,10 @@ struct TodaySnapshot: Equatable {
     /// be drawn differently from one that did not.
     var stepsTarget: Double?
     var sleepTargetMinutes: Double?
+
+    var calendarAccess: CalendarAccessState = .notDetermined
+    /// Today's events, sorted by start.
+    var agenda: [CalendarEventSnapshot] = []
+    /// The next seven days after today, flattened and capped by the view.
+    var upcoming: [UpcomingEvent] = []
 }

@@ -78,6 +78,20 @@ final class TodayViewModel {
                 })
             }
 
+            let calendarStore = CalendarStore(context: context, calendar: calendar)
+            let dayStart = calendar.startOfDay(for: .now)
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+            let weekOut = calendar.date(byAdding: .day, value: 8, to: dayStart) ?? tomorrow
+            let agenda = (try? calendarStore.events(from: dayStart, to: tomorrow)) ?? []
+            let upcoming = ((try? calendarStore.events(from: tomorrow, to: weekOut)) ?? [])
+                .map { event in
+                    UpcomingEvent(
+                        id: event.id,
+                        dayLabel: event.startDate.formatted(.dateTime.weekday(.abbreviated).day()),
+                        event: event
+                    )
+                }
+
             snapshot = TodaySnapshot(
                 date: .now,
                 cells: cells,
@@ -95,6 +109,9 @@ final class TodayViewModel {
                 stepsTarget: Double(targets.steps),
                 sleepTargetMinutes: Double(targets.sleepMinutes)
             )
+            snapshot.calendarAccess = CalendarAccessState.current
+            snapshot.agenda = agenda
+            snapshot.upcoming = upcoming
 
             // Keeps an open sheet current on every reload, including the
             // `didSave`-driven one in `RootView`. Without this, an external
@@ -125,6 +142,9 @@ final class TodayViewModel {
             let targets = try metrics.goals().targets
             let row = try metrics.metrics(from: day, to: day).first
             let ticked = try plan.tickedHabitIDs(on: day)
+            let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+            let events = (try? CalendarStore(context: context, calendar: calendar)
+                .events(from: day, to: dayEnd)) ?? []
 
             detail = DayDetailSnapshot(
                 date: day,
@@ -137,7 +157,8 @@ final class TodayViewModel {
                 recoveryPct: row?.whoopRecoveryPct,
                 habits: try plan.entries(kind: .habit).map { entry in
                     HabitRow(id: entry.id, title: entry.title, isDone: ticked.contains(entry.id))
-                }
+                },
+                events: events
             )
         } catch {
             assertionFailure("Day detail load failed: \(error)")
