@@ -17,6 +17,7 @@ import Persistence
 /// actions into its foot. The screens themselves are identical in both.
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var health: HealthConnectionViewModel
     var onSignOut: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -81,7 +82,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop, onSignOut: onSignOut)
+            SettingsScreen(model: settings, whoop: whoop, health: health, onSignOut: onSignOut)
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
