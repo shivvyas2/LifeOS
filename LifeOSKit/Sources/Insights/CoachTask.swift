@@ -32,6 +32,12 @@ public protocol CoachTask: Sendable {
     /// Stable across requests. Anything that varies belongs in `prompt`.
     var instructions: String { get }
 
+    /// Has no audience parameter yet, so a `Context` of `MetricsDigest`
+    /// always renders through `digest.promptLines`, which defaults to
+    /// `.onDevice`. That output is on-device-shaped: it carries the raw
+    /// Whoop series that must not leave the phone. A cloud caller cannot use
+    /// this method as written; `prompt` needs an audience parameter before a
+    /// remote engine can call it safely.
     func prompt(_ context: Context) -> String
 }
 

@@ -73,6 +73,13 @@ public struct MetricsDigest: Sendable, Equatable {
     /// Who the render is for. The distinction exists because the raw Whoop
     /// series stays on the phone: on-device inference sends nothing anywhere,
     /// and a provider call does.
+    ///
+    /// Nothing in production selects `.offDevice` today. `CoachTask.prompt`
+    /// has no audience parameter and reaches this type through
+    /// `promptLines`, which defaults to `.onDevice`, so this case is
+    /// exercised only by tests. It is a mechanism waiting to be wired, not
+    /// one currently protecting anything: a remote engine built before the
+    /// wiring exists would still get the on-device render.
     public enum Audience: Sendable {
         case onDevice
         case offDevice

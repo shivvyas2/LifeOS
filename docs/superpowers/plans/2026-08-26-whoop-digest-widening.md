@@ -1600,4 +1600,4 @@ After Task 10, before any merge:
 
 ## Follow-on, explicitly not in this plan
 
-The cloud tier (`RemoteEngine`, the coach Edge Function, the spend ceiling) stays in `2026-08-25-coach-llm-routing-design.md`. Task 7 leaves it a ready seam: a remote engine renders with `.offDevice` and gets the redaction for free. Wiring the router to choose the audience per tier is that plan's work, not this one's.
+The cloud tier (`RemoteEngine`, the coach Edge Function, the spend ceiling) stays in `2026-08-25-coach-llm-routing-design.md`. Task 7 does not leave that seam ready. `MetricsDigest.Audience.offDevice` exists and omits the four raw Whoop series, but nothing selects it: `CoachTask.prompt` has no audience parameter and always renders through `promptLines`, which defaults to `.onDevice`, and `Engine.run` has no audience parameter to pass one down. A remote engine built against the current protocol would call `task.prompt(context)` and receive the on-device render, raw series included, with the redaction never applied. Giving `CoachTask.prompt` an audience parameter, and threading it through `Engine.run`, is a prerequisite of that plan's work, not a detail inside it.
