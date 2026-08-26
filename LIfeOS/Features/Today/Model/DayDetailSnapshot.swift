@@ -1,4 +1,5 @@
 import Foundation
+import Persistence
 
 /// One habit as the day sheet renders it.
 struct HabitRow: Identifiable, Equatable {
@@ -33,4 +34,7 @@ struct DayDetailSnapshot: Identifiable, Equatable {
     /// sheet". The consequence is that an old day can list a habit that did not
     /// exist then, which is why the sheet's header is a count and never a grade.
     let habits: [HabitRow]
+
+    /// That day's schedule. Empty when access is missing or nothing is on.
+    var events: [CalendarEventSnapshot] = []
 }

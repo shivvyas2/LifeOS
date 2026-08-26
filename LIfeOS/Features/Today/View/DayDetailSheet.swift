@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Persistence
 
 /// One day in full: what the metrics said, and which habits were done.
 ///
@@ -16,6 +17,9 @@ struct DayDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    if !snapshot.events.isEmpty {
+                        schedule
+                    }
                     metrics
                     habits
                 }
@@ -32,6 +36,46 @@ struct DayDetailSheet: View {
                 }
             }
         }
+    }
+
+    private var schedule: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Schedule")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+
+            SoftCard {
+                VStack(spacing: 0) {
+                    ForEach(Array(snapshot.events.enumerated()), id: \.element.id) { index, event in
+                        if index > 0 { Divider() }
+                        scheduleRow(event)
+                    }
+                }
+            }
+        }
+    }
+
+    private func scheduleRow(_ event: CalendarEventSnapshot) -> some View {
+        HStack(spacing: 12) {
+            Text(event.timeLabel)
+                .font(.system(size: 14))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .frame(width: 56, alignment: .leading)
+
+            Text(event.title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .lineLimit(1)
+
+            Spacer()
+
+            if !event.durationLabel.isEmpty {
+                Text(event.durationLabel)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            }
+        }
+        .padding(.vertical, 12)
     }
 
     private var metrics: some View {

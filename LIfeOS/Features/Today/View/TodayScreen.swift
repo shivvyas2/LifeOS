@@ -1,11 +1,20 @@
 import SwiftUI
 import DesignSystem
+import Persistence
 
 struct TodayScreen: View {
     let snapshot: TodaySnapshot
     /// Raised when a dot for a real, non-future day is tapped. The screen stays
     /// a pure function of its inputs: it does not decide what a day opens.
     let onSelectDay: (Date) -> Void
+    /// Raised from the agenda card's empty state. The EventKit prompt itself
+    /// fires from here, never at launch.
+    let onConnectCalendar: () -> Void
+    let onAddEvent: () -> Void
+    let onTapEvent: (CalendarEventSnapshot) -> Void
+    /// Raised by the agenda's "+N more" row, since only the day sheet lists
+    /// everything.
+    let onOpenToday: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -40,6 +49,7 @@ struct TodayScreen: View {
             HStack(alignment: .top, spacing: 32) {
                 VStack(alignment: .leading, spacing: 22) {
                     month
+                    agendaCard
                     streakLine
                 }
                 .frame(maxWidth: 520)
@@ -49,10 +59,23 @@ struct TodayScreen: View {
         } else {
             VStack(alignment: .leading, spacing: 22) {
                 month
+                agendaCard
                 streakLine
                 statGrid(columns: layout.statColumns)
             }
         }
+    }
+
+    private var agendaCard: some View {
+        AgendaCard(
+            access: snapshot.calendarAccess,
+            agenda: snapshot.agenda,
+            upcoming: snapshot.upcoming,
+            onConnect: onConnectCalendar,
+            onAddEvent: onAddEvent,
+            onTapEvent: onTapEvent,
+            onOpenToday: onOpenToday
+        )
     }
 
     private var month: some View {
@@ -129,6 +152,22 @@ struct TodayScreen: View {
 }
 
 #Preview {
+    let now = Date.now
+    let fakeEvents = [
+        CalendarEventSnapshot(
+            id: UUID(), source: .eventKit, sourceID: "1",
+            calendarTitle: "Work", title: "Standup",
+            startDate: now, endDate: now.addingTimeInterval(30 * 60),
+            isAllDay: false, isRecurring: false, location: nil, notes: nil
+        ),
+        CalendarEventSnapshot(
+            id: UUID(), source: .eventKit, sourceID: "2",
+            calendarTitle: "Work", title: "Design review",
+            startDate: now.addingTimeInterval(3600), endDate: now.addingTimeInterval(3600 * 2.5),
+            isAllDay: false, isRecurring: false, location: nil, notes: nil
+        ),
+    ]
+
     TodayScreen(
         snapshot: TodaySnapshot(
             cells: (0..<35).map { DotCell(id: $0, date: nil, state: $0 < 10 ? .onTarget : ($0 == 10 ? .today : .future)) },
@@ -138,8 +177,14 @@ struct TodayScreen: View {
             sleepMinutes: 432,
             sleepProgress: 0.9,
             weightKg: 77.4,
-            recoveryPct: nil
+            recoveryPct: nil,
+            calendarAccess: .authorized,
+            agenda: fakeEvents
         ),
-        onSelectDay: { _ in }
+        onSelectDay: { _ in },
+        onConnectCalendar: {},
+        onAddEvent: {},
+        onTapEvent: { _ in },
+        onOpenToday: {}
     )
 }

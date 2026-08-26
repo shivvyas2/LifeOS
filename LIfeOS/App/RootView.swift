@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import DesignSystem
 import Persistence
+import Integrations
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
@@ -49,6 +50,11 @@ struct RootView: View {
     // the environment context is available; it is created once in
     // `attachAll()` instead of at property declaration.
     @State private var assistantModel: AssistantViewModel?
+    // Calendar sync is owned here so one pass serves Today's agenda, the
+    // day sheet, and the assistant alike; every trigger funnels through
+    // `syncCalendar()`. Built in `attachAll()` because it needs the context.
+    @State private var eventKitSource: EventKitSource?
+    @State private var calendarSync: CalendarSync?
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -61,6 +67,7 @@ struct RootView: View {
     @State private var showCoach = false
     @State private var showAssistant = false
     @State private var showWhoop = false
+    @State private var eventSheet: EventSheetPresentation?
 
     /// The tab bar's selection, stated rather than inferred from ordering.
     /// Deliberately not persisted: the requirement is that a cold launch lands
@@ -120,10 +127,29 @@ struct RootView: View {
         .sheet(isPresented: $showBudgets, onDismiss: { money.load(connection: plaid) }) {
             BucketEditorSheet(model: money)
         }
+        .sheet(item: $eventSheet) { mode in
+            EventSheet(
+                mode: mode,
+                onSave: { draft in
+                    guard let calendarSync else { return }
+                    switch mode {
+                    case .create:
+                        Task { try? await calendarSync.create(draft) }
+                    case .edit(let event):
+                        Task { try? await calendarSync.update(id: event.id, with: draft) }
+                    }
+                },
+                onDelete: {
+                    guard let calendarSync, case .edit(let event) = mode else { return }
+                    Task { try? await calendarSync.delete(id: event.id) }
+                }
+            )
+        }
         .environment(\.layout, metrics)
         .task {
             attachAll()
             reloadAll()
+            syncCalendar()
         }
         // Event-driven, not polled: a save is the only thing that can change
         // what these screens show while the app is running.
@@ -133,7 +159,10 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { reloadAll() }
+            if phase == .active {
+                reloadAll()
+                syncCalendar()
+            }
         }
 
     }
@@ -211,16 +240,23 @@ struct RootView: View {
             switch tab {
             case .today:
                 NavigationStack {
-                    TodayScreen(snapshot: today.snapshot, onSelectDay: { today.select($0) })
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button { showSettings = true } label: {
-                                    Image(systemName: "gearshape.fill")
-                                }
-                                .tint(LifeOSTokens.primaryText.resolve(scheme))
-                                .accessibilityLabel("Settings")
+                    TodayScreen(
+                        snapshot: today.snapshot,
+                        onSelectDay: { today.select($0) },
+                        onConnectCalendar: { requestCalendarAccess() },
+                        onAddEvent: { eventSheet = .create },
+                        onTapEvent: { eventSheet = .edit($0) },
+                        onOpenToday: { today.select(.now) }
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { showSettings = true } label: {
+                                Image(systemName: "gearshape.fill")
                             }
+                            .tint(LifeOSTokens.primaryText.resolve(scheme))
+                            .accessibilityLabel("Settings")
                         }
+                    }
                 }
             case .health:
                 NavigationStack {
@@ -365,6 +401,14 @@ struct RootView: View {
         if assistantModel == nil {
             assistantModel = AssistantViewModel(context: context)
         }
+        if calendarSync == nil {
+            let source = EventKitSource()
+            eventKitSource = source
+            calendarSync = CalendarSync(
+                sources: [source],
+                store: CalendarStore(context: context)
+            )
+        }
     }
 
     private func reloadAll() {
@@ -381,5 +425,22 @@ struct RootView: View {
         plan.load()
         life.load()
         settings.load()
+    }
+
+    /// Ambient: fires on scene activation and after any calendar write. The
+    /// pass saves through the store, `ModelContext.didSave` fires, and
+    /// `reloadAll()` refreshes every snapshot; nothing polls.
+    private func syncCalendar() {
+        guard CalendarAccessState.current == .authorized, let calendarSync else { return }
+        Task { await calendarSync.sync() }
+    }
+
+    /// The one place the EventKit prompt is allowed to originate.
+    private func requestCalendarAccess() {
+        guard let eventKitSource else { return }
+        Task {
+            _ = try? await eventKitSource.requestAccess()
+            syncCalendar()
+        }
     }
 }
