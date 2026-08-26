@@ -146,6 +146,8 @@ final class CoachViewModel {
                 fail("LIFO cannot reach further right now.")
             case .unavailable:
                 fail("LIFO needs Apple Intelligence on this device. You can still type — try again after it is on.")
+            case .tooLarge:
+                fail("That covered too much at once. Try asking about a shorter stretch.")
             }
         } catch {
             fail("Could not load your metrics.")

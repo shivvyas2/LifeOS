@@ -314,7 +314,7 @@ final class MonthlyCloseViewModel {
         switch result {
         case .answered(let output), .degraded(let output):
             note = output.summary
-        case .refused, .exhausted, .unavailable:
+        case .refused, .exhausted, .unavailable, .tooLarge:
             note = nil
         }
     }
