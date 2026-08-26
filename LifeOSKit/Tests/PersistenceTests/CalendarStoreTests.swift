@@ -116,4 +116,20 @@ import SwiftData
         #expect(try store.snapshot(id: id)?.title == "Standup")
         #expect(try store.snapshot(id: UUID()) == nil)
     }
+
+    @Test func aReschedulingIntoTheWindowReusesTheExistingRow() throws {
+        let store = try makeStore()
+        let past = calendar.date(byAdding: .day, value: -45, to: noon)!
+        let pastWindow = DateInterval(start: past.addingTimeInterval(-86_400), end: past.addingTimeInterval(86_400))
+        try store.apply([snapshot("Review", sourceID: "ek-1", start: past)], window: pastWindow)
+        let originalID = try store.events(from: pastWindow.start, to: pastWindow.end)[0].id
+
+        // The provider reschedules the same event into the current window.
+        try store.apply([snapshot("Review", sourceID: "ek-1", start: noon)], window: window)
+
+        let wide = try store.events(from: calendar.date(byAdding: .day, value: -60, to: noon)!, to: window.end)
+        #expect(wide.count == 1)
+        #expect(wide[0].id == originalID)
+        #expect(wide[0].startDate == noon)
+    }
 }

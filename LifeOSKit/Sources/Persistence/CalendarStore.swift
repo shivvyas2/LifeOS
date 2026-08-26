@@ -48,15 +48,9 @@ public struct CalendarStore {
         for snapshot in fetched {
             let key = Key(sourceRaw: snapshot.source.rawValue, sourceID: snapshot.sourceID)
             if let row = cachedByKey.removeValue(forKey: key) {
-                row.calendarTitle = snapshot.calendarTitle
-                row.title = snapshot.title
-                row.startDate = snapshot.startDate
-                row.endDate = snapshot.endDate
-                row.isAllDay = snapshot.isAllDay
-                row.isRecurring = snapshot.isRecurring
-                row.location = snapshot.location
-                row.notes = snapshot.notes
-                row.lastSyncedAt = syncedAt
+                updateRow(row, from: snapshot, syncedAt: syncedAt)
+            } else if let row = try rowByKey(sourceRaw: snapshot.source.rawValue, sourceID: snapshot.sourceID) {
+                updateRow(row, from: snapshot, syncedAt: syncedAt)
             } else {
                 context.insert(CalendarEvent(from: snapshot, syncedAt: syncedAt))
             }
@@ -65,6 +59,24 @@ public struct CalendarStore {
         // Whatever remains was in the window but not in the fetch: deleted upstream.
         cachedByKey.values.forEach(context.delete)
         try context.save()
+    }
+
+    private func updateRow(_ row: CalendarEvent, from snapshot: CalendarEventSnapshot, syncedAt: Date) {
+        row.calendarTitle = snapshot.calendarTitle
+        row.title = snapshot.title
+        row.startDate = snapshot.startDate
+        row.endDate = snapshot.endDate
+        row.isAllDay = snapshot.isAllDay
+        row.isRecurring = snapshot.isRecurring
+        row.location = snapshot.location
+        row.notes = snapshot.notes
+        row.lastSyncedAt = syncedAt
+    }
+
+    private func rowByKey(sourceRaw: String, sourceID: String) throws -> CalendarEvent? {
+        try context.fetch(FetchDescriptor<CalendarEvent>(
+            predicate: #Predicate { $0.sourceRaw == sourceRaw && $0.sourceID == sourceID }
+        )).first
     }
 
     private func row(id: UUID) throws -> CalendarEvent? {
