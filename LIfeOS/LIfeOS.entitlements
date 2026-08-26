@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Read access to Apple Health. This is the whole requirement for steps,
+	     sleep, weight and heart data.
+
+	     Three keys Xcode's capability editor added have been removed on purpose:
+
+	     com.apple.developer.healthkit.access = health-records asks for CLINICAL
+	     records, lab results and medications from a healthcare provider. It
+	     needs a separate entitlement Apple has to approve, and shipping it
+	     unapproved fails provisioning and submission. Nothing here reads them.
+
+	     background-delivery wakes the app when Health gets new samples. Real,
+	     but nothing registers an HKObserverQuery yet, so it would be an
+	     entitlement claimed and unused. Add it back with the code that needs it.
+
+	     recalibrate-estimates is for correcting VO2 max and cardio fitness
+	     estimates. Not something this app does. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+</dict>
+</plist>
