@@ -20,7 +20,10 @@ create table public.plaid_items (
   access_token text not null,
 
   institution_id text,
-  institution_name text,
+  -- Never null in practice: plaid-exchange always writes a "Bank" fallback.
+  -- Constrained anyway because a NULL here would fail the decode of the
+  -- *entire* sync response on the device, taking every other bank down with it.
+  institution_name text not null default 'Bank',
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

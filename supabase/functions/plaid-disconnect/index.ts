@@ -15,13 +15,20 @@ Deno.serve(async (req: Request) => {
   if (!itemID) return json({ error: "missing_item_id" }, 400);
 
   const db = serviceClient();
-  const { data: row } = await db
+  const { data: row, error: lookupError } = await db
     .from("plaid_items")
     .select("access_token")
     .eq("user_id", userID)
     .eq("item_id", itemID)
     .maybeSingle();
 
+  // A failed lookup must not read as "no such connection". That would let the
+  // device delete its local record while the Item is still live and still
+  // billing, which is exactly the stranding this function exists to prevent.
+  if (lookupError) {
+    console.error(`plaid item lookup failed: ${lookupError.code}`);
+    return json({ error: "storage_failed" }, 500);
+  }
   if (!row) return json({ error: "not_found" }, 404);
 
   // An Item that still exists at Plaid keeps billing, so the local record is

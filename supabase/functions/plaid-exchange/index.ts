@@ -42,23 +42,33 @@ Deno.serve(async (req: Request) => {
       public_token: body.public_token,
     });
 
-    const { error } = await db.from("plaid_items").insert({
-      user_id: userID,
-      item_id: exchanged.item_id,
-      access_token: exchanged.access_token,
-      institution_id: body.institution_id ?? null,
-      institution_name: body.institution_name ?? "Bank",
-    });
-    if (error) {
-      // Never log the row: it holds the credential.
-      console.error(`plaid item insert failed: ${error.code}`);
-      // The database is the last line of defense against the check-then-insert
-      // race above: two requests can both pass the lookup and only one insert
-      // wins the unique constraint. Report that loss the same way as the guard.
-      if (error.code === "23505") {
-        return json({ error: "institution_already_connected" }, 409);
+    // Past this point the Item exists at Plaid and bills monthly. Any failure
+    // below must not strand it: without a row, plaid-disconnect has nothing to
+    // look up and the device never learns the item_id, so the Plaid dashboard
+    // becomes the only remedy. Best-effort remove it before returning.
+    try {
+      const { error } = await db.from("plaid_items").insert({
+        user_id: userID,
+        item_id: exchanged.item_id,
+        access_token: exchanged.access_token,
+        institution_id: body.institution_id ?? null,
+        institution_name: body.institution_name ?? "Bank",
+      });
+      if (error) {
+        // Never log the row: it holds the credential.
+        console.error(`plaid item insert failed: ${error.code}`);
+        await removeExchangedItem(exchanged.access_token);
+        // The database is the last line of defense against the check-then-insert
+        // race above: two requests can both pass the lookup and only one insert
+        // wins the unique constraint. Report that loss the same way as the guard.
+        if (error.code === "23505") {
+          return json({ error: "institution_already_connected" }, 409);
+        }
+        return json({ error: "storage_failed" }, 500);
       }
-      return json({ error: "storage_failed" }, 500);
+    } catch (storageError) {
+      await removeExchangedItem(exchanged.access_token);
+      throw storageError;
     }
 
     // The access token stops here. The device gets only what it needs to
@@ -72,3 +82,14 @@ Deno.serve(async (req: Request) => {
     return json({ error: kind }, 502);
   }
 });
+
+// Best-effort cleanup for a storage failure after a successful exchange. Its
+// own failure must not mask the original error, so it only logs.
+async function removeExchangedItem(accessToken: unknown): Promise<void> {
+  try {
+    await callPlaid("/item/remove", { access_token: accessToken });
+  } catch (removeError) {
+    const kind = removeError instanceof PlaidError ? removeError.kind : "upstream_failure";
+    console.error(`plaid item remove after storage failure failed: ${kind}`);
+  }
+}
