@@ -60,6 +60,9 @@ public final class SleepRecord {
     public var respiratoryRate: Double?
     public var sleepNeedMinutes: Int?
     public var sleepDebtMinutes: Int?
+    public var needFromStrainMinutes: Int?
+    /// Negative or zero: a recent nap reduces need.
+    public var needFromNapMinutes: Int?
     public var disturbanceCount: Int?
     /// Optional rather than a defaulted Bool, because a non-optional addition
     /// is what turns a lightweight migration into a store that will not open.

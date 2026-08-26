@@ -190,6 +190,8 @@ public struct WhoopDerivation {
                 if let value = sample.respiratoryRate { record.respiratoryRate = value }
                 if let value = sample.sleepNeedMinutes { record.sleepNeedMinutes = value }
                 if let value = sample.sleepDebtMinutes { record.sleepDebtMinutes = value }
+                if let value = sample.needFromStrainMinutes { record.needFromStrainMinutes = value }
+                if let value = sample.needFromNapMinutes { record.needFromNapMinutes = value }
                 if let value = sample.disturbanceCount { record.disturbanceCount = value }
                 record.isNap = sample.isNap
             }

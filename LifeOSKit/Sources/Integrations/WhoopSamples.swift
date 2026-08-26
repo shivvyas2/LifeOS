@@ -41,6 +41,9 @@ public struct WhoopSleepSample: Sendable, Equatable {
     public let respiratoryRate: Double?
     public let sleepNeedMinutes: Int?
     public let sleepDebtMinutes: Int?
+    public let needFromStrainMinutes: Int?
+    /// Negative or zero: a recent nap reduces need.
+    public let needFromNapMinutes: Int?
     /// Time actually asleep, which is not time in bed.
     public let asleepMinutes: Int?
     public let lightMinutes: Int?
@@ -56,6 +59,7 @@ public struct WhoopSleepSample: Sendable, Equatable {
                 efficiencyPercentage: Double? = nil,
                 respiratoryRate: Double? = nil, sleepNeedMinutes: Int? = nil,
                 sleepDebtMinutes: Int? = nil,
+                needFromStrainMinutes: Int? = nil, needFromNapMinutes: Int? = nil,
                 asleepMinutes: Int?, lightMinutes: Int? = nil, remMinutes: Int? = nil,
                 swsMinutes: Int? = nil, awakeMinutes: Int? = nil,
                 noDataMinutes: Int? = nil, sleepCycleCount: Int? = nil,
@@ -70,6 +74,8 @@ public struct WhoopSleepSample: Sendable, Equatable {
         self.respiratoryRate = respiratoryRate
         self.sleepNeedMinutes = sleepNeedMinutes
         self.sleepDebtMinutes = sleepDebtMinutes
+        self.needFromStrainMinutes = needFromStrainMinutes
+        self.needFromNapMinutes = needFromNapMinutes
         self.asleepMinutes = asleepMinutes
         self.lightMinutes = lightMinutes
         self.remMinutes = remMinutes

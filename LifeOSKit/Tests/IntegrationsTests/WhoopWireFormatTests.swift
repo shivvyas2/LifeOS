@@ -314,4 +314,41 @@ import Foundation
 
         #expect(sample.zoneMinutes == nil)
     }
+
+    @Test func aSleepPayloadCarriesEveryNeedComponent() throws {
+        let json = """
+        {
+          "id": "s1", "cycle_id": 1,
+          "start": "2026-08-25T23:00:00.000Z",
+          "end": "2026-08-26T06:40:00.000Z",
+          "nap": false, "score_state": "SCORED",
+          "score": {
+            "sleep_needed": {
+              "baseline_milli": 27395716,
+              "need_from_sleep_debt_milli": 1260000,
+              "need_from_recent_strain_milli": 480000,
+              "need_from_recent_nap_milli": -600000
+            },
+            "stage_summary": {
+              "total_in_bed_time_milli": 27600000,
+              "total_awake_time_milli": 1320000,
+              "total_light_sleep_time_milli": 11400000,
+              "total_rem_sleep_time_milli": 3720000,
+              "total_slow_wave_sleep_time_milli": 4800000,
+              "total_no_data_time_milli": 0,
+              "sleep_cycle_count": 4,
+              "disturbance_count": 9
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let sample = try WhoopClient.decoder
+            .decode(WhoopDTOs.SleepRecord.self, from: json).sample
+
+        #expect(sample.needFromStrainMinutes == 8)     // 480000ms
+        // Negative by definition: a recent nap reduces need. The sign is kept.
+        #expect(sample.needFromNapMinutes == -10)      // -600000ms
+        #expect(sample.sleepDebtMinutes == 21)
+    }
 }

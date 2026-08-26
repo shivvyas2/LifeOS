@@ -56,6 +56,10 @@ enum WhoopDTOs {
             struct Needed: Decodable {
                 let baseline_milli: Double?
                 let need_from_sleep_debt_milli: Double?
+                let need_from_recent_strain_milli: Double?
+                /// Negative or zero by definition: a recent nap reduces the
+                /// amount of sleep still needed. The sign is preserved.
+                let need_from_recent_nap_milli: Double?
             }
 
             struct Stages: Decodable {
@@ -166,6 +170,8 @@ extension WhoopDTOs.SleepRecord {
             respiratoryRate: score?.respiratory_rate,
             sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
             sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
+            needFromStrainMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_recent_strain_milli),
+            needFromNapMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_recent_nap_milli),
             asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
             lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
             remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
