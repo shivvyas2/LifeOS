@@ -10,11 +10,13 @@ extension CalendarEventSnapshot {
         isAllDay ? "all day" : startDate.formatted(.dateTime.hour().minute())
     }
 
-    /// "45m", "1h", "1h 30m", or "all day". Divides by 60 the same way
-    /// `TodayScreen.duration` does, but drops a leading "0h" that would
-    /// otherwise clutter every event under an hour.
+    /// "45m", "1h", "1h 30m", or "" for an all-day event. Divides by 60 the
+    /// same way `TodayScreen.duration` does, but drops a leading "0h" that
+    /// would otherwise clutter every event under an hour. Empty rather than
+    /// "all day" because the time slot already says that; a row must omit
+    /// this label entirely, not render it a second time.
     var durationLabel: String {
-        guard !isAllDay else { return "all day" }
+        guard !isAllDay else { return "" }
         let minutes = max(0, Int(endDate.timeIntervalSince(startDate) / 60))
         let hours = minutes / 60
         let mins = minutes % 60
@@ -222,9 +224,11 @@ struct AgendaCard: View {
 
             Spacer()
 
-            Text(duration)
-                .font(.system(size: 13))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            if !duration.isEmpty {
+                Text(duration)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            }
         }
         .contentShape(Rectangle())
         .padding(.vertical, 10)

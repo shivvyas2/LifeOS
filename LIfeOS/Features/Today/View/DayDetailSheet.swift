@@ -69,9 +69,11 @@ struct DayDetailSheet: View {
 
             Spacer()
 
-            Text(event.durationLabel)
-                .font(.system(size: 13))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            if !event.durationLabel.isEmpty {
+                Text(event.durationLabel)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            }
         }
         .padding(.vertical, 12)
     }
