@@ -186,10 +186,13 @@ export async function mintSession(args: {
 }
 
 async function userIDForPhone(supabaseURL: string, serviceKey: string, phone: string): Promise<string | null> {
+  // GoTrue strips the leading "+" before storing auth.users.phone, so the
+  // lookup must use that format or a returning user is never found and the
+  // create below fails as a duplicate.
   const response = await fetch(`${supabaseURL}/rest/v1/rpc/otp_user_id_for_phone`, {
     method: "POST",
     headers: restHeaders(serviceKey),
-    body: JSON.stringify({ p_phone: phone }),
+    body: JSON.stringify({ p_phone: phone.replace(/\D/g, "") }),
   });
   if (!response.ok) return null;
   const id = await response.json();
