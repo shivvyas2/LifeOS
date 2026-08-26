@@ -44,29 +44,46 @@ Deno.serve(async (req: Request) => {
   if ((usage?.tokens ?? 0) >= DAILY_TOKEN_CAP) return json({ error: "exhausted" }, 429);
 
   const started = Date.now();
-  const reply = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(openAIBody(task, prompt)),
-  });
+  let reply: Response;
+  try {
+    reply = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(openAIBody(task, prompt)),
+    });
+  } catch {
+    // DNS, timeout, connection reset: no billable call happened, so nothing
+    // to debit. Logged with a coarse reason only; never the prompt, never
+    // the key.
+    console.error(`lifo openai fetch failed`);
+    return json({ error: "upstream_failure" }, 502);
+  }
   if (!reply.ok) {
     console.error(`lifo openai failed status=${reply.status}`);
     return json({ error: classifyOpenAIFailure(reply.status) }, 502);
   }
 
+  const body = await reply.json();
+  const tokens = (body as { usage?: { total_tokens?: number } })?.usage
+    ?.total_tokens ?? 0;
+  // We charge for what the provider billed us for, not only for what we
+  // could use. A refusal or a malformed reply still consumed real OpenAI
+  // tokens; leaving those unmetered would let a user burn unlimited budget
+  // for free simply by asking off-topic questions in a loop. So this debit
+  // runs on every path that reaches here (success, refusal, and parse
+  // failure alike), before we even know whether the reply parses. The
+  // debit's own failure stays non-fatal to the response.
+  const { error: debitError } = await db.rpc("lifo_debit", {
+    p_user: userID,
+    p_tokens: tokens,
+  });
+  if (debitError) console.error(`lifo debit failed: ${debitError.code}`);
+
   try {
-    const { output, tokens } = parseOutput(task, await reply.json());
-    // Debit after a successful parse: a reply the app never saw should not
-    // spend the day's budget. The window where a crash between reply and
-    // debit under-counts is accepted; the cap is a guardrail, not a bill.
-    const { error: debitError } = await db.rpc("lifo_debit", {
-      p_user: userID,
-      p_tokens: tokens,
-    });
-    if (debitError) console.error(`lifo debit failed: ${debitError.code}`);
+    const { output } = parseOutput(task, body);
     console.log(
       `lifo task=${task} tokens=${tokens} ms=${Date.now() - started}`,
     );
