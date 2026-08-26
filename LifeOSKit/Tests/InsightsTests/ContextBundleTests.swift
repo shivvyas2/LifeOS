@@ -127,8 +127,13 @@ import Persistence
 
     // The priority order under pressure: transactions and the digest's own
     // history are what shrink first; the money summary and sector score
-    // must still be present, even against a real, multi-day digest.
-    @Test func theSummaryLinesSurviveATightBudgetEvenWithARealDigest() throws {
+    // must still be present, even against a real, multi-day digest. The
+    // length assertion is what actually pins this: the digest's own default
+    // budget (6000) comfortably fits a fortnight in full, so a render that
+    // forgot to forward the bundle's own tighter budget down to the digest
+    // would still contain both lines here -- it would just also blow past
+    // 700, which only the length check would catch.
+    @Test func theSummaryLinesSurviveAndTheTotalStaysWithinBudgetWithARealDigest() throws {
         let bundle = ContextBundle(
             digest: try fortnightDigest(),
             money: ContextBundle.Money(income: 8000, expenses: 5000, savingsRate: nil,
@@ -138,5 +143,42 @@ import Persistence
         let lines = bundle.promptLines(for: .offDevice, budget: 700)
         #expect(lines.contains("income 8000"))
         #expect(lines.contains("Body 7 (+1)"))
+        #expect(lines.count <= 700)
+    }
+
+    // The documented floor: MetricsDigest never truncates below one day, so
+    // a budget small enough to collapse the digest's own allowance to
+    // (near-)zero still gets a full day of health data back rather than
+    // nothing -- over budget by at most that one irreducible block, not by
+    // an unbounded amount. This is now a stated property of
+    // `promptLines(for:budget:)`'s doc comment, so it gets a test rather
+    // than staying an untested edge.
+    @Test func aCollapsedDigestBudgetStillEmitsOneDayRatherThanNothing() throws {
+        let digest = try singleDayDigest()
+        // With only one day in the digest to begin with, an uncapped render
+        // IS the one irreducible day block: there is nothing left to drop.
+        // That makes it the ceiling any budget can be overrun by here.
+        let oneDayBlock = digest.promptLines(for: .offDevice, budget: 100_000)
+        let bundle = ContextBundle(digest: digest)
+
+        let lines = bundle.promptLines(for: .offDevice, budget: 1)
+
+        #expect(!lines.isEmpty)
+        #expect(lines.contains("recovery 62%"))
+        #expect(lines.count > 1)                  // the floor genuinely overruns this budget
+        #expect(lines.count <= oneDayBlock.count) // but never by more than one day block
+    }
+
+    private func singleDayDigest() throws -> MetricsDigest {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = MetricsStore(context: ModelContext(container))
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_770_000_000))
+        try store.upsert(date: day) {
+            $0.whoopRecoveryPct = 62
+            $0.steps = 8_000
+        }
+        return MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
     }
 }
