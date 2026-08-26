@@ -50,6 +50,10 @@ public struct PlaidSync {
             }
             if delta.error != nil { continue }
 
+            // Plaid's /transactions/sync puts a given transaction_id in exactly
+            // one of added, modified and removed within a delta, so merging
+            // added and modified here is safe. remove runs after ingest below,
+            // so a removal wins if that assumption is ever wrong.
             let rows = try PlaidMapping.ingestRows(from: delta.added + delta.modified,
                                                    accounts: delta.accounts)
             try money.ingest(rows)
