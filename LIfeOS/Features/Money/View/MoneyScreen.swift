@@ -80,26 +80,23 @@ struct MoneyScreen: View {
         }
     }
 
-    /// Above the numbers, not below them, and never dismissible. Every figure
-    /// on this screen is invented while it shows, and a reader who scrolls
-    /// straight to their net for the month must meet this first.
+    /// Sample data is a state this screen is in, not a fault, so it reads as a
+    /// label in the app's own vocabulary rather than as a warning: the amber
+    /// alert bar it replaced looked like something had gone wrong.
+    ///
+    /// It stays above the numbers and stays undismissable all the same. The
+    /// figures below it are invented, and a reader who scrolls straight to
+    /// their net for the month has to pass this to get there.
     private var sampleBadge: some View {
-        HStack(spacing: Space.half + 2) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12, weight: .semibold))
-            Text("Sample data. These numbers are made up.")
-                .font(.system(size: 13, weight: .semibold))
-        }
-        .foregroundStyle(Color(red: 0.55, green: 0.36, blue: 0.05))
-        .padding(.vertical, 8)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
-                .fill(Color(red: 1.0, green: 0.85, blue: 0.45).opacity(scheme == .dark ? 0.22 : 0.5))
-        )
-        .padding(.top, 20)
-        .accessibilityElement(children: .combine)
+        Text("Sample data")
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            .padding(.vertical, 5)
+            .padding(.horizontal, 12)
+            .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
+            .padding(.top, 22)
+            .accessibilityLabel("Sample data. These figures are invented.")
     }
 
     private var transactions: some View {
