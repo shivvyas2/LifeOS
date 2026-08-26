@@ -64,8 +64,15 @@ public struct ContextBundle: Sendable {
 
     /// Renders the bundle for one audience within a character budget. This is
     /// the prompt sent to a paid model on every off-device call, so `budget`
-    /// is the only thing bounding what that call costs; it must actually
-    /// bound the output, not just cap what the digest does on its own.
+    /// is the thing that actually bounds what that call costs -- with one
+    /// honest caveat: the render is bounded by `budget` plus, when the
+    /// digest is non-empty, at most one irreducible day block.
+    /// `MetricsDigest.promptLines(for:budget:)` keeps dropping days until
+    /// what remains fits or only one day is left, and it always emits that
+    /// last day even when it alone runs over budget. A digest that said
+    /// nothing at all about the user's health would undermine the call more
+    /// than one that ran slightly long, so that floor is a deliberate
+    /// property of the digest, not a gap this type silently papers over.
     ///
     /// `.onDevice` keeps the render to the digest plus one sector line: the
     /// local window is small and a transaction list would push the health
