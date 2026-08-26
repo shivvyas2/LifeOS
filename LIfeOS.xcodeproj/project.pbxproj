@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A96E559F303F84DB00789BA0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6D3302A34E0002272C5 /* LinkKit */; };
 		A985C690302A34E0002272C5 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A985C692302A34E0002272C5 /* DesignSystem */; };
 		A985C691302A34E0002272C5 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = A985C693302A34E0002272C5 /* Persistence */; };
 		A985C6A1302A34E0002272C5 /* Integrations in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6A2302A34E0002272C5 /* Integrations */; };
@@ -33,6 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A96E559F303F84DB00789BA0 /* LinkKit in Frameworks */,
 				A985C690302A34E0002272C5 /* DesignSystem in Frameworks */,
 				A985C691302A34E0002272C5 /* Persistence in Frameworks */,
 				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
@@ -301,8 +303,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Life OS";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life OS does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Life OS reads steps, sleep, weight and heart data from Apple Health so your day is complete even on the days you do not wear a strap.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life OS does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LIFO uses the microphone when you choose to talk instead of type.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LIFO listens so you can ask about your health out loud.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -342,8 +344,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Life OS";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life OS does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Life OS reads steps, sleep, weight and heart data from Apple Health so your day is complete even on the days you do not wear a strap.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Life OS does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LIFO uses the microphone when you choose to talk instead of type.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LIFO listens so you can ask about your health out loud.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -427,14 +429,14 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = Sectors;
 		};
-		A985C6E1302A34E0002272C5 /* Assistant */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Assistant;
-		};
 		A985C6D3302A34E0002272C5 /* LinkKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A985C6D2302A34E0002272C5 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
 			productName = LinkKit;
+		};
+		A985C6E1302A34E0002272C5 /* Assistant */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Assistant;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -50,8 +50,14 @@ public struct TrendStatTile: View {
             numeral
             // A week with no readings at all draws seven empty tracks and seven
             // gap markers, which is a lot of chart to say nothing. The card
-            // falls back to the plain figure until there is a week to show.
-            if series.hasAnyReading { chart }
+            // falls back to the plain figure until there is a week to show —
+            // but still holds the chart's space, so a dataless tile stands the
+            // same height as its siblings in the grid.
+            if series.hasAnyReading {
+                chart
+            } else {
+                Color.clear.frame(height: chartHeight)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,8 +110,14 @@ public struct TrendStatTile: View {
             goal: goal,
             baseline: baseline,
             spacing: layout.isRegular ? 8 : 5,
-            height: layout.isRegular ? 88 : 74
+            height: chartHeight
         )
+    }
+
+    /// `RoundedBarChart` resolves to exactly this height, bars and labels
+    /// included, so the dataless placeholder can match it to the point.
+    private var chartHeight: CGFloat {
+        layout.isRegular ? 88 : 74
     }
 
     /// One letter, because seven of them share a half-width card.
