@@ -8,12 +8,39 @@ import Foundation
 ///
 /// Every rule needs three consecutive months. Two of anything is a
 /// coincidence, and a remark that fires on a coincidence teaches the reader to
-/// ignore remarks.
+/// ignore remarks. "Consecutive" means calendar-adjacent, not merely the last
+/// three entries in `months`: a partial close can leave a sector unscored for
+/// a month, and three entries spread across a longer stretch of real time are
+/// not three months running.
 public enum SectorObservations {
     private static let run = 3
 
-    public static func all(months: [MonthEntry], questions: [QuestionTrack]) -> [String] {
-        questions.compactMap(repeatedAnswer) + [standingGap(months)].compactMap { $0 }
+    public static func all(
+        months: [MonthEntry], questions: [QuestionTrack], calendar: Calendar = .current
+    ) -> [String] {
+        guard isConsecutiveRun(months, calendar: calendar) else { return [] }
+        return questions.compactMap(repeatedAnswer) + [standingGap(months)].compactMap { $0 }
+    }
+
+    /// Whether the last three months are calendar-adjacent.
+    ///
+    /// `SectorStore.history` keeps only months with a `userScore`, and a
+    /// partial close that leaves a sector unscored one month is the ordinary
+    /// shape of a partial close, not a rare failure state. Without this
+    /// check, skipping a sector in the middle month would let three months
+    /// spread across a longer stretch of calendar time read as "three months
+    /// running". `QuestionTrack.answers` is index-aligned to `months`, so
+    /// this single check on `months` gates both rules below.
+    static func isConsecutiveRun(_ months: [MonthEntry], calendar: Calendar) -> Bool {
+        let tail = months.suffix(run)
+        guard tail.count == run else { return false }
+        let dates = Array(tail.map(\.month))
+        return zip(dates, dates.dropFirst()).allSatisfy { earlier, later in
+            guard let next = calendar.date(byAdding: .month, value: 1, to: earlier) else {
+                return false
+            }
+            return calendar.isDate(next, equalTo: later, toGranularity: .month)
+        }
     }
 
     /// The same answer, three months running, ending at the most recent month.
