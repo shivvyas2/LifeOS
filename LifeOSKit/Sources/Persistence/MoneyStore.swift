@@ -1,6 +1,59 @@
 import Foundation
 import SwiftData
 
+/// One incoming transaction, in this app's vocabulary rather than a provider's.
+///
+/// `Persistence` deliberately does not name Plaid. The mapping from a provider
+/// payload to these fields, including the sign flip, belongs to `Integrations`,
+/// so a second provider later is a new mapper and not a change down here.
+public struct MoneyIngestRow: Sendable, Equatable {
+    public let externalID: String
+    public let date: Date
+    /// Positive is money in. Already negated by the caller if it was an outflow.
+    public let amount: Double
+    public let merchant: String
+    public let category: String?
+    public let categoryCode: String?
+    public let pending: Bool
+    public let accountID: String?
+    public let accountName: String?
+    public let currencyCode: String
+
+    public init(externalID: String, date: Date, amount: Double, merchant: String,
+                category: String?, categoryCode: String?, pending: Bool,
+                accountID: String?, accountName: String?, currencyCode: String) {
+        self.externalID = externalID
+        self.date = date
+        self.amount = amount
+        self.merchant = merchant
+        self.category = category
+        self.categoryCode = categoryCode
+        self.pending = pending
+        self.accountID = accountID
+        self.accountName = accountName
+        self.currencyCode = currencyCode
+    }
+}
+
+/// One funding account and its balance.
+public struct MoneyAccountRow: Sendable, Equatable {
+    public let externalID: String
+    public let name: String
+    /// depository, credit, investment or loan.
+    public let type: String
+    public let currentBalance: Double
+    public let currencyCode: String
+
+    public init(externalID: String, name: String, type: String,
+                currentBalance: Double, currencyCode: String) {
+        self.externalID = externalID
+        self.name = name
+        self.type = type
+        self.currentBalance = currentBalance
+        self.currencyCode = currencyCode
+    }
+}
+
 @MainActor
 public struct MoneyStore {
     private let context: ModelContext
@@ -60,11 +113,10 @@ public struct MoneyStore {
         try context.save()
     }
 
-    /// Upsert keyed on Plaid's `transaction_id`, so a re-sync corrects a
+    /// Upsert keyed on the provider's transaction id, so a re-sync corrects a
     /// settled transaction instead of adding a duplicate alongside the pending
     /// one. Batched: one save for the whole page.
-    public func ingest(_ incoming: [(externalID: String, date: Date, amount: Double,
-                                     merchant: String, category: String?, pending: Bool)]) throws {
+    public func ingest(_ incoming: [MoneyIngestRow]) throws {
         for row in incoming {
             let id = row.externalID
             let existing = try context.fetch(
@@ -81,8 +133,50 @@ public struct MoneyStore {
             entry.amount = row.amount
             entry.merchant = row.merchant
             entry.category = row.category
+            entry.categoryCode = row.categoryCode
             entry.pending = row.pending
+            entry.accountID = row.accountID
+            entry.accountName = row.accountName
+            entry.currencyCode = row.currencyCode
             entry.updatedAt = .now
+        }
+        try context.save()
+    }
+
+    /// Deletes by provider id. Silent about ids it does not hold: a replayed
+    /// page can ask twice, and that is the ordinary cost of a device-owned
+    /// cursor rather than a fault.
+    public func remove(externalIDs: [String]) throws {
+        guard !externalIDs.isEmpty else { return }
+        for id in externalIDs {
+            let matches = try context.fetch(
+                FetchDescriptor<MoneyEntry>(predicate: #Predicate { $0.externalID == id })
+            )
+            for match in matches { context.delete(match) }
+        }
+        try context.save()
+    }
+
+    /// Upsert keyed on the provider's account id, so a balance moves rather
+    /// than a second copy of the account appearing and doubling net worth.
+    public func upsertAccounts(_ incoming: [MoneyAccountRow]) throws {
+        for row in incoming {
+            let id = row.externalID
+            let existing = try context.fetch(
+                FetchDescriptor<MoneyAccount>(predicate: #Predicate { $0.externalID == id })
+            ).first
+
+            let account = existing ?? MoneyAccount(
+                name: row.name, type: row.type, currentBalance: row.currentBalance,
+                currencyCode: row.currencyCode, externalID: row.externalID
+            )
+            if existing == nil { context.insert(account) }
+
+            account.name = row.name
+            account.type = row.type
+            account.currentBalance = row.currentBalance
+            account.currencyCode = row.currencyCode
+            account.updatedAt = .now
         }
         try context.save()
     }

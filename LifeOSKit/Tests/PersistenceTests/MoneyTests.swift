@@ -52,10 +52,14 @@ import SwiftData
 
     @Test func ingestUpdatesAPendingTransactionRatherThanDuplicatingIt() throws {
         let store = try makeStore()
-        try store.ingest([(externalID: "txn_1", date: day, amount: -20,
-                           merchant: "Cafe", category: nil, pending: true)])
-        try store.ingest([(externalID: "txn_1", date: day, amount: -22.5,
-                           merchant: "Cafe", category: "Food", pending: false)])
+        try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -20,
+                                         merchant: "Cafe", category: nil, categoryCode: nil,
+                                         pending: true, accountID: nil, accountName: nil,
+                                         currencyCode: "USD")])
+        try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -22.5,
+                                         merchant: "Cafe", category: "Food", categoryCode: nil,
+                                         pending: false, accountID: nil, accountName: nil,
+                                         currencyCode: "USD")])
 
         let rows = try store.entries(from: day, to: day)
         #expect(rows.count == 1)
@@ -126,5 +130,79 @@ import SwiftData
                        categoryCode: "TRANSFER_INVESTMENT_ADVISORY_FEE"),
         ])
         #expect(summary.expenses == 220)
+    }
+
+    @Test func ingestUpsertsOnTheProviderIDRatherThanDuplicating() throws {
+        let store = try makeStore()
+        let row = MoneyIngestRow(externalID: "txn_1", date: day, amount: -42,
+                                 merchant: "Cafe", category: "Food & drink",
+                                 categoryCode: "FOOD_AND_DRINK_COFFEE", pending: true,
+                                 accountID: "acc_1", accountName: "Checking",
+                                 currencyCode: "USD")
+        try store.ingest([row])
+
+        let settled = MoneyIngestRow(externalID: "txn_1", date: day, amount: -44,
+                                     merchant: "Cafe", category: "Food & drink",
+                                     categoryCode: "FOOD_AND_DRINK_COFFEE", pending: false,
+                                     accountID: "acc_1", accountName: "Checking",
+                                     currencyCode: "USD")
+        try store.ingest([settled])
+
+        let entries = try store.entries(from: day, to: day)
+        #expect(entries.count == 1)
+        #expect(entries[0].amount == -44)
+        #expect(entries[0].pending == false)
+        #expect(entries[0].accountName == "Checking")
+        #expect(entries[0].categoryCode == "FOOD_AND_DRINK_COFFEE")
+    }
+
+    @Test func removingAPendingChargeStopsItDoubleCountingOnceItSettles() throws {
+        // Plaid gives a settled charge a different transaction_id from the pending
+        // one and returns the pending id in `removed`. Ignore that and every card
+        // charge eventually exists twice.
+        let store = try makeStore()
+        try store.ingest([
+            MoneyIngestRow(externalID: "pending_1", date: day, amount: -30,
+                           merchant: "Shop", category: nil, categoryCode: nil,
+                           pending: true, accountID: nil, accountName: nil,
+                           currencyCode: "USD"),
+            MoneyIngestRow(externalID: "posted_1", date: day, amount: -30,
+                           merchant: "Shop", category: nil, categoryCode: nil,
+                           pending: false, accountID: nil, accountName: nil,
+                           currencyCode: "USD"),
+        ])
+
+        try store.remove(externalIDs: ["pending_1"])
+
+        let entries = try store.entries(from: day, to: day)
+        #expect(entries.count == 1)
+        #expect(entries[0].externalID == "posted_1")
+    }
+
+    @Test func removingAnUnknownIDIsHarmless() throws {
+        // A replayed page can ask us to delete something already gone. That is the
+        // normal cost of a device-owned cursor, not an error.
+        let store = try makeStore()
+        try store.remove(externalIDs: ["never_existed"])
+        #expect(try store.entries(from: day, to: day).isEmpty)
+    }
+
+    @Test func accountsUpsertOnTheProviderIDSoBalancesMoveInsteadOfPilingUp() throws {
+        let store = try makeStore()
+        try store.upsertAccounts([
+            MoneyAccountRow(externalID: "acc_1", name: "Checking", type: "depository",
+                            currentBalance: 2_000, currencyCode: "USD"),
+        ])
+        try store.upsertAccounts([
+            MoneyAccountRow(externalID: "acc_1", name: "Checking", type: "depository",
+                            currentBalance: 2_400, currencyCode: "USD"),
+            MoneyAccountRow(externalID: "acc_2", name: "Card", type: "credit",
+                            currentBalance: 600, currencyCode: "USD"),
+        ])
+
+        let accounts = try store.accounts()
+        #expect(accounts.count == 2)
+        // Net worth subtracts what is owed on the card.
+        #expect(summarise(entries: [], accounts: accounts).netWorth == 1_800)
     }
 }
