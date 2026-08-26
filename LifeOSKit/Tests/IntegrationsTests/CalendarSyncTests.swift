@@ -130,6 +130,19 @@ final class FakeSource: CalendarSource, @unchecked Sendable {
         #expect(eventKit.updated.isEmpty)
     }
 
+    @Test func aThrowingSourceKeepsItsPreviouslySyncedEvents() async throws {
+        let (sync, store, eventKit, google) = try make()
+        eventKit.fetchResult = .success([snapshot("Mine", source: .eventKit, sourceID: "ek-1", start: now)])
+        google.fetchResult = .success([snapshot("Theirs", source: .google, sourceID: "g-1", start: now.addingTimeInterval(3_600))])
+        await sync.sync()
+
+        eventKit.fetchResult = .failure(URLError(.notConnectedToInternet))
+        await sync.sync()
+
+        let titles = try store.events(from: now.addingTimeInterval(-86_400), to: now.addingTimeInterval(86_400)).map(\.title)
+        #expect(titles == ["Mine", "Theirs"])
+    }
+
     @Test func deleteOfAnUnknownIDThrows() async throws {
         let (sync, _, _, _) = try make()
         await #expect(throws: CalendarSyncError.unknownEvent) {

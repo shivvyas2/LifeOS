@@ -31,10 +31,19 @@ public struct CalendarStore {
     ///
     /// Matches on the natural key `(source, sourceID)`: an existing row is
     /// updated in place and keeps its local id, a new one adopts the
-    /// snapshot's. Rows overlapping `window` whose key is absent from
-    /// `fetched` are deleted, so deletions made in another app propagate.
-    /// Rows outside the window are never touched.
-    public func apply(_ fetched: [CalendarEventSnapshot], window: DateInterval, syncedAt: Date = .now) throws {
+    /// snapshot's. The fetch is only authoritative for the sources in
+    /// `authoritative` (every source by default): rows overlapping `window`
+    /// whose key is absent from `fetched` are deleted only when their source
+    /// is in that set, so deletions made in another app propagate. A source
+    /// that was not actually fetched this pass (it threw, or was skipped)
+    /// is left untouched rather than treated as having reported zero
+    /// events. Rows outside the window are never touched.
+    public func apply(
+        _ fetched: [CalendarEventSnapshot],
+        window: DateInterval,
+        authoritative: Set<CalendarEventSource> = Set(CalendarEventSource.allCases),
+        syncedAt: Date = .now
+    ) throws {
         let start = window.start
         let end = window.end
         let cached = try context.fetch(FetchDescriptor<CalendarEvent>(
@@ -56,8 +65,11 @@ public struct CalendarStore {
             }
         }
 
-        // Whatever remains was in the window but not in the fetch: deleted upstream.
-        cachedByKey.values.forEach(context.delete)
+        // Whatever remains was in the window but not in the fetch: deleted
+        // upstream, but only for a source we actually fetched this pass.
+        cachedByKey.values
+            .filter { authoritative.contains($0.source) }
+            .forEach(context.delete)
         try context.save()
     }
 

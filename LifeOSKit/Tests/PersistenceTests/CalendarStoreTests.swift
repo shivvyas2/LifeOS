@@ -132,4 +132,18 @@ import SwiftData
         #expect(wide[0].id == originalID)
         #expect(wide[0].startDate == noon)
     }
+
+    @Test func pruningOnlyTouchesAuthoritativeSources() throws {
+        let store = try makeStore()
+        try store.apply([
+            snapshot("Mine", sourceID: "ek-1", start: noon),
+            snapshot("Theirs", sourceID: "g-1", start: noon, source: .google),
+        ], window: window)
+
+        // EventKit reports fresh (empty) data; Google was not fetched at all.
+        try store.apply([], window: window, authoritative: [.eventKit])
+
+        let titles = try store.events(from: window.start, to: window.end).map(\.title)
+        #expect(titles == ["Theirs"])
+    }
 }

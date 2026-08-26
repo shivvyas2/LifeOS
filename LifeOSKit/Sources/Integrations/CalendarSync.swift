@@ -65,7 +65,7 @@ public final class CalendarSync {
             eventKit: bySource[.eventKit] ?? [],
             google: bySource[.google] ?? []
         )
-        try? store.apply(merged, window: window, syncedAt: now())
+        try? store.apply(merged, window: window, authoritative: Set(bySource.keys), syncedAt: now())
     }
 
     public func create(_ draft: CalendarEventDraft) async throws {
