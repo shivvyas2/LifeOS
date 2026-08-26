@@ -265,7 +265,7 @@ final class WhoopConnectionViewModel {
     func syncIfStale() async {
         guard context != nil, AppConfig.whoopTokenEndpoint != nil else { return }
         guard tokens.load() != nil, !isSyncing else { return }
-        guard WhoopSyncPolicy.shouldSync(lastSync: lastCompletedSync) else { return }
+        guard SyncStalenessPolicy.shouldSync(lastSync: lastCompletedSync) else { return }
 
         isSyncing = true
         defer { isSyncing = false }

@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import Integrations
 
-@Suite struct WhoopSyncPolicyTests {
+@Suite struct SyncStalenessPolicyTests {
     /// Fixed calendar so a test never depends on the machine it runs on.
     private var calendar: Calendar {
         var cal = Calendar(identifier: .gregorian)
@@ -15,17 +15,17 @@ import Foundation
     }
 
     @Test func neverHavingSyncedSyncs() {
-        #expect(WhoopSyncPolicy.shouldSync(lastSync: nil, now: date(25, 9), calendar: calendar))
+        #expect(SyncStalenessPolicy.shouldSync(lastSync: nil, now: date(25, 9), calendar: calendar))
     }
 
     @Test func aRecentSyncFromEarlierTodayDoesNotSync() {
-        #expect(WhoopSyncPolicy.shouldSync(
+        #expect(SyncStalenessPolicy.shouldSync(
             lastSync: date(25, 9, 0), now: date(25, 9, 30), calendar: calendar
         ) == false)
     }
 
     @Test func aSyncOlderThanTheStaleWindowSyncs() {
-        #expect(WhoopSyncPolicy.shouldSync(
+        #expect(SyncStalenessPolicy.shouldSync(
             lastSync: date(25, 7, 0), now: date(25, 9, 30), calendar: calendar
         ))
     }
@@ -34,7 +34,7 @@ import Foundation
     /// last sync was minutes before midnight. Staleness alone cannot see that
     /// a day boundary passed.
     @Test func aSyncFromYesterdaySyncsEvenWhenRecent() {
-        #expect(WhoopSyncPolicy.shouldSync(
+        #expect(SyncStalenessPolicy.shouldSync(
             lastSync: date(24, 23, 50), now: date(25, 0, 20), calendar: calendar
         ))
     }
@@ -42,7 +42,7 @@ import Foundation
     /// A last-sync in the future means the clock moved backwards. The record
     /// is meaningless, and syncing is the recovery that costs nothing.
     @Test func aLastSyncInTheFutureSyncs() {
-        #expect(WhoopSyncPolicy.shouldSync(
+        #expect(SyncStalenessPolicy.shouldSync(
             lastSync: date(25, 12, 0), now: date(25, 9, 0), calendar: calendar
         ))
     }
