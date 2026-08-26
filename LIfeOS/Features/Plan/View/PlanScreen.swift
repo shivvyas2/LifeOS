@@ -5,6 +5,11 @@ import Persistence
 struct PlanScreen: View {
     let snapshot: PlanSnapshot
     @Binding var section: PlanSection
+    /// False when the screen is showing one section on purpose, which is how
+    /// the notes tab hosts habits. Goals, notes and content are pages now;
+    /// habits are not, because a habit is a daily tick with a streak behind it
+    /// and Today toggles those same ticks live.
+    var showsSections = true
 
     var onAdd: () -> Void = {}
     var onAdvance: (UUID) -> Void = { _ in }
@@ -17,11 +22,13 @@ struct PlanScreen: View {
         GradientCanvas(hue: section.hue) {
             ScrollView {
                 VStack(spacing: 20) {
-                    SegmentedPill(
-                        selection: $section,
-                        options: PlanSection.allCases.map { ($0, $0.title) }
-                    )
-                    .padding(.top, 6)
+                    if showsSections {
+                        SegmentedPill(
+                            selection: $section,
+                            options: PlanSection.allCases.map { ($0, $0.title) }
+                        )
+                        .padding(.top, 6)
+                    }
 
                     let items = snapshot.items(for: section)
 

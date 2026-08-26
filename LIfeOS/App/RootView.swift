@@ -4,6 +4,13 @@ import DesignSystem
 import Persistence
 import Insights
 import Integrations
+import OSLog
+
+private let rootLog = Logger(subsystem: "com.shivvyas.lifeos", category: "root")
+
+/// `NoteSync` lives in `Integrations`, which knows nothing about the notes
+/// tab's view models. This is the one line that joins them.
+extension NoteSync: NoteSyncing {}
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
@@ -42,6 +49,7 @@ struct RootView: View {
     @State private var money = MoneyViewModel()
     @State private var plaid = PlaidConnectionViewModel()
     @State private var plan = PlanViewModel()
+    @State private var notes = NotesViewModel()
     @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
@@ -56,6 +64,10 @@ struct RootView: View {
     // `syncCalendar()`. Built in `attachAll()` because it needs the context.
     @State private var eventKitSource: EventKitSource?
     @State private var calendarSync: CalendarSync?
+    /// Built in `attachAll()` because it needs the context and a live access
+    /// token. Nil for a guest, which is not an error: notes are local first and
+    /// a signed-out person simply never pushes.
+    @State private var noteSync: NoteSync?
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -74,7 +86,7 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
-    private enum AppTab: Hashable { case today, health, money, plan, life }
+    private enum AppTab: Hashable { case today, health, money, notes, life }
 
     @State private var tab: AppTab = .today
 
@@ -147,6 +159,7 @@ struct RootView: View {
             )
         }
         .environment(\.layout, metrics)
+        .environment(\.noteSync, noteSync)
         .task {
             attachAll()
             reloadAll()
@@ -223,7 +236,7 @@ struct RootView: View {
             PillNavItem(value: AppTab.today, systemImage: "circle.grid.3x3.fill", label: "Today"),
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
-            PillNavItem(value: AppTab.plan, systemImage: "checklist", label: "Plan"),
+            PillNavItem(value: AppTab.notes, systemImage: "text.book.closed.fill", label: "Notes"),
             PillNavItem(value: AppTab.life, systemImage: "square.grid.3x3.fill", label: "Life"),
         ]
     }
@@ -283,14 +296,17 @@ struct RootView: View {
                     onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
                     onEditBudgets: { showBudgets = true }
                 )
-            case .plan:
-                PlanScreen(
-                    snapshot: plan.snapshot,
-                    section: Binding(get: { plan.section }, set: { plan.section = $0 }),
-                    onAdd: { showAddPlan = true },
-                    onAdvance: { plan.advance(id: $0) },
-                    onToggleHabit: { plan.toggleHabit(id: $0) },
-                    onDelete: { plan.delete(id: $0) }
+            case .notes:
+                NotesHubScreen(
+                    model: notes,
+                    plan: plan,
+                    onAddHabit: {
+                        // The add sheet reads `plan.section` to know what it is
+                        // adding, and habits are the only section left that
+                        // still lives here.
+                        plan.section = .habits
+                        showAddPlan = true
+                    }
                 )
             case .life:
                 // `LifeSector.ownsTab` in the Sectors package is the one
@@ -303,7 +319,7 @@ struct RootView: View {
                     switch sector {
                     case .body: tab = .health
                     case .money: tab = .money
-                    case .mission: tab = .plan
+                    case .mission: tab = .notes
                     default:
                         assertionFailure("RootView has no tab mapped for \(sector)")
                     }
@@ -396,6 +412,32 @@ struct RootView: View {
         plaid.attach(context)
         plan.attach(context)
         life.attach(context)
+
+        // Notes sync straight to Supabase, unlike the rest of the app, which
+        // is still local only. The token is read from the keychain per pass
+        // rather than captured: `AppShell` refreshes the session on launch and
+        // on every return to the foreground, so a captured token would be the
+        // stale one within the hour.
+        if noteSync == nil,
+           let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
+            let sessions = KeychainAuthSessionStore()
+            noteSync = NoteSync(
+                context: context,
+                rest: SupabaseREST(baseURL: url, anonKey: key),
+                accessToken: { sessions.load()?.accessToken }
+            )
+        }
+        notes.attach(context, sync: noteSync)
+
+        // One-time, and idempotent through the origin id on each page rather
+        // than through a flag, so a second device does not produce a second
+        // copy of everything the first one migrated.
+        do {
+            try PlanNoteMigration.seedIfEmpty(context: context)
+            try PlanNoteMigration.run(context: context)
+        } catch {
+            rootLog.error("note migration failed: \(String(describing: error), privacy: .public)")
+        }
         settings.attach(context)
         quickLog.attach(context)
         coach.attach(context)
@@ -460,6 +502,7 @@ struct RootView: View {
             money.load(connection: plaid)
         }
         plan.load()
+        notes.load()
         life.load()
         settings.load()
     }

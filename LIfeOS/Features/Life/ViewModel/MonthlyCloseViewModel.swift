@@ -64,6 +64,9 @@ final class MonthlyCloseViewModel {
     private let metricsStore: MetricsStore
     private let moneyStore: MoneyStore
     private let planStore: PlanStore
+    /// Held as well as the stores built from it, because the note evidence
+    /// helpers take a context rather than a store of their own.
+    private let context: ModelContext
     private let month: Date
     private let calendar: Calendar
     private let router: CoachRouter
@@ -77,6 +80,7 @@ final class MonthlyCloseViewModel {
         self.metricsStore = MetricsStore(context: context, calendar: calendar)
         self.moneyStore = MoneyStore(context: context, calendar: calendar)
         self.planStore = PlanStore(context: context, calendar: calendar)
+        self.context = context
         self.month = month
         self.calendar = calendar
         self.router = router
@@ -207,16 +211,24 @@ final class MonthlyCloseViewModel {
 
         let goals = try planStore.entries(kind: .goal)
         let habits = try planStore.entries(kind: .habit)
-        let goalStatuses = window.filter(goals, on: \.updatedAt).map(\.status)
-        let planStatuses = window.filter(goals + habits, on: \.updatedAt).map(\.status)
+        // Project pages carry what goals used to, so both feed the number.
+        let projectPages = try NoteEvidence.projectStatuses(context: context)
+        let pageStatuses = window.filter(projectPages, on: \.updatedAt).map(\.status)
+        let goalStatuses = window.filter(goals, on: \.updatedAt).map(\.status) + pageStatuses
+        let planStatuses = window.filter(goals + habits, on: \.updatedAt).map(\.status) + pageStatuses
 
         let perHabitTicks = try habits.map {
             try planStore.recentTicks(for: $0, days: window.daysInMonth, endingOn: window.lastDay)
         }
         let habitTickRate = SectorEvidenceFactory.habitTickRate(perHabitTicks: perHabitTicks)
 
+        // Journalling moved to note pages. Legacy plan entries are still read
+        // and summed in, because months already closed were scored against
+        // them and a migration must not silently rewrite a past score.
         let journalEntries = try planStore.entries(kind: .journal)
+        let noteJournalDates = try NoteEvidence.journalDates(context: context)
         let journalDates = window.filter(journalEntries, on: \.createdAt).map(\.createdAt)
+            + window.filter(noteJournalDates) { $0 }
 
         var previousAmounts: [Double] = []
         var previousJournalCount: Int?

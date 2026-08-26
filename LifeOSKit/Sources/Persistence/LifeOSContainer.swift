@@ -17,6 +17,8 @@ public enum LifeOSContainer {
         CheckInAnswer.self,
         CalendarEvent.self,
         ChatMessage.self,
+        NoteDocument.self,
+        NoteFolder.self,
     ])
 
     public static func make(inMemory: Bool = false) throws -> ModelContainer {

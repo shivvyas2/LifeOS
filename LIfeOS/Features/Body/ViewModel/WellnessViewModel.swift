@@ -23,15 +23,22 @@ final class WellnessViewModel {
         load()
     }
 
-    /// A journal entry is dated so it can sit on the daily spine later; the
-    /// text is the title because an entry has no separate name.
+    /// Journal entries are note pages now, one per day.
+    ///
+    /// Appended to today's page rather than filed as a second entry: a person
+    /// who writes twice in one evening means to add to what they said, and two
+    /// rows dated the same day would break the "did I write today" question
+    /// the streak is built on.
     func addJournal(_ text: String) {
         guard let context else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            try PlanStore(context: context, calendar: calendar)
-                .add(kind: .journal, title: trimmed, dueDate: .now)
+            let store = NotesStore(context: context, calendar: calendar)
+            let entry = try store.journalEntry()
+            var blocks = entry.blocks.filter { !($0.kind == .paragraph && $0.isEmpty) }
+            blocks.append(contentsOf: NoteBlockParser.blocks(fromMarkdown: trimmed))
+            try store.update(entry, blocks: blocks)
             load()
         } catch {
             assertionFailure("Journal add failed: \(error)")
@@ -53,12 +60,17 @@ final class WellnessViewModel {
             let avgExercise = exercises.isEmpty ? nil : exercises.reduce(0, +) / exercises.count
             let workoutDays = exercises.count { $0 >= 20 }
 
-            let planStore = PlanStore(context: context, calendar: calendar)
-            let entries = try planStore.entries(kind: .journal)
-            let journal = entries.compactMap { entry -> JournalEntry? in
-                guard let date = entry.dueDate else { return nil }
-                return JournalEntry(id: entry.id, text: entry.title, date: date)
-            }.sorted { $0.date > $1.date }
+            let notes = NotesStore(context: context, calendar: calendar)
+            let journal = try notes.documents(includeArchived: false)
+                .filter { $0.kind == .journal }
+                .map { document in
+                    JournalEntry(
+                        id: document.id,
+                        text: NoteBlockParser.excerpt(document.blocks, limit: 240),
+                        date: document.entryDate ?? document.createdAt
+                    )
+                }
+                .sorted { $0.date > $1.date }
 
             snapshot = WellnessSnapshot(
                 averageSleepMinutes: avgSleep,
