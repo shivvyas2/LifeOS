@@ -253,4 +253,74 @@ import Persistence
         #expect(text.contains("strain 11.4"))
         #expect(text.contains("zone 3+ 42m"))
     }
+
+    @Test func theRenderDropsWholeDaysOldestFirstToFitTheBudget() throws {
+        let store = try makeStore()
+        var dates: [Date] = []
+        for offset in 0..<14 {
+            let d = day.addingTimeInterval(Double(offset) * 86_400)
+            dates.append(d)
+            try store.upsert(date: d) {
+                $0.whoopRecoveryPct = 50 + Double(offset)
+                $0.steps = 8_000
+            }
+        }
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: dates.first!, to: dates.last!),
+            sleeps: [], workouts: []
+        )
+
+        let full = digest.promptLines(for: .onDevice, budget: 100_000)
+        let squeezed = digest.promptLines(for: .onDevice, budget: 300)
+
+        #expect(squeezed.count <= 300)
+        #expect(squeezed.count < full.count)
+        // The newest day survives; the oldest is what goes.
+        #expect(squeezed.contains("recovery 63%"))
+        #expect(squeezed.contains("recovery 50%") == false)
+    }
+
+    /// The regression pin. A fully populated fortnight must fit the real budget.
+    @Test func aFullyPopulatedFortnightFitsTheBudget() throws {
+        let store = try makeStore()
+        var dates: [Date] = []
+        var sleeps: [SleepRecord] = []
+        var workouts: [WorkoutRecord] = []
+
+        for offset in 0..<14 {
+            let d = day.addingTimeInterval(Double(offset) * 86_400)
+            dates.append(d)
+            try store.upsert(date: d) {
+                $0.whoopRecoveryPct = 51; $0.sleepMinutes = 400; $0.whoopDayStrain = 12.1
+                $0.steps = 8_420; $0.exerciseMinutes = 45; $0.hrvMs = 38; $0.restingHR = 61
+                $0.spo2Percentage = 95; $0.skinTempCelsius = 33.7; $0.respiratoryRate = 16.1
+                $0.whoopSleepPerformancePct = 82; $0.whoopSleepEfficiencyPct = 91
+                $0.whoopSleepDebtMinutes = 21
+            }
+            let night = SleepRecord(externalID: "n\(offset)", start: d, end: d.addingTimeInterval(24_000),
+                                    attributedDate: d)
+            night.remMinutes = 62; night.swsMinutes = 80; night.lightMinutes = 190
+            night.awakeMinutes = 22; night.sleepNeedMinutes = 485
+            night.needFromStrainMinutes = 8; night.isNap = false
+            sleeps.append(night)
+
+            let w = WorkoutRecord(externalID: "w\(offset)", start: d.addingTimeInterval(3_600),
+                                  durationMinutes: 92, activityName: "cycling")
+            w.strain = 11.4; w.averageHR = 141
+            w.zoneThreeMinutes = 20; w.zoneFourMinutes = 15; w.zoneFiveMinutes = 7
+            workouts.append(w)
+        }
+
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: dates.first!, to: dates.last!),
+            sleeps: sleeps, workouts: workouts
+        )
+
+        let text = digest.promptLines(for: .onDevice, budget: MetricsDigest.promptBudget)
+
+        // Nothing was dropped: all fourteen days survive at the real budget.
+        #expect(text.contains("rem 1h02m"))
+        #expect(digest.days.count == 14)
+        #expect(text.count <= MetricsDigest.promptBudget)
+    }
 }

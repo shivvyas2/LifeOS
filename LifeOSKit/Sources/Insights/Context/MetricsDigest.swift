@@ -189,13 +189,33 @@ public struct MetricsDigest: Sendable, Equatable {
     /// number from an unusual number.
     public var promptLines: String { promptLines(for: .onDevice) }
 
-    public func promptLines(for audience: Audience) -> String {
+    /// Characters, not tokens. The on-device context window is believed to be
+    /// 4096 tokens, but that figure is not verified against the SDK, and a
+    /// character budget plus a size-pinning test catches regressions without
+    /// depending on it being right. At roughly four characters per token this
+    /// leaves room for instructions, the generation schema, the question and
+    /// the output allocation.
+    public static let promptBudget = 6_000
+
+    public func promptLines(for audience: Audience, budget: Int = MetricsDigest.promptBudget) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d MMM"
 
+        // Whole days are dropped rather than fields trimmed, so a day that
+        // renders at all renders completely. Oldest goes first: the newest day
+        // is the one a brief is about.
+        var window = days
+        while true {
+            let text = assemble(window, formatter, audience)
+            if text.count <= budget || window.count <= 1 { return text }
+            window.removeFirst()
+        }
+    }
+
+    private func assemble(_ window: [Day], _ formatter: DateFormatter, _ audience: Audience) -> String {
         var blocks: [String] = []
         if let baseline = baselineLine(for: audience) { blocks.append(baseline + "\n") }
-        blocks.append(contentsOf: days.map { render($0, formatter, audience) })
+        blocks.append(contentsOf: window.map { render($0, formatter, audience) })
         return blocks.joined(separator: "\n")
     }
 
