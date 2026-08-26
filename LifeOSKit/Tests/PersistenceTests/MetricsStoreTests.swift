@@ -86,4 +86,23 @@ import SwiftData
         let second = try store.goals()
         #expect(second.stepsGoal == 12000)
     }
+
+    @Test func workoutsInARangeComeBackOldestFirstAndIncludeTheLastDay() throws {
+        let store = try makeStore()
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_770_000_000))
+        let second = day.addingTimeInterval(86_400)
+        let outside = day.addingTimeInterval(-86_400)
+
+        // Inserted newest first, to prove the sort is the query's doing.
+        for (id, start) in [("b", second), ("a", day), ("old", outside)] {
+            _ = try store.upsertWorkoutRecord(
+                externalID: id, start: start.addingTimeInterval(3_600),
+                durationMinutes: 30, activityName: "running"
+            ) { _ in }
+        }
+
+        let found = try store.workouts(from: day, to: second)
+
+        #expect(found.map(\.externalID) == ["a", "b"])
+    }
 }

@@ -100,6 +100,20 @@ public struct MetricsStore {
         )
     }
 
+    /// Workouts starting within the window, oldest first. `to` is inclusive of
+    /// the whole day, matching `sleepRecords(from:to:)`.
+    public func workouts(from: Date, to: Date) throws -> [WorkoutRecord] {
+        let start = calendar.startOfDay(for: from)
+        guard let end = calendar.date(byAdding: .day, value: 1,
+                                      to: calendar.startOfDay(for: to)) else { return [] }
+        return try context.fetch(
+            FetchDescriptor<WorkoutRecord>(
+                predicate: #Predicate { $0.start >= start && $0.start < end },
+                sortBy: [SortDescriptor(\.start)]
+            )
+        )
+    }
+
     /// Sleep records attributed to days in the window, oldest first.
     ///
     /// `includingNaps` defaults to true because the records are stored for their

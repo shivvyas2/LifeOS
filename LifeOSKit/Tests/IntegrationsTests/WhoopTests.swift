@@ -517,4 +517,58 @@ import SwiftData
 
         #expect(try context.fetch(FetchDescriptor<WorkoutRecord>()).count == 1)
     }
+
+    @Test func aCalibratingRecoveryIsRecordedAsSuch() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_770_000_000))
+
+        try derivation.derive(recoveries: [
+            WhoopRecoverySample(date: day, recoveryPercentage: 44,
+                                restingHeartRate: 64, hrvMilliseconds: 31,
+                                isCalibrating: true)
+        ])
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.whoopRecoveryIsCalibrating == true)
+        #expect(row.whoopRecoveryPct == 44)
+    }
+
+    @Test func aRederiveBackfillsTheNewFieldsFromTheArchiveAlone() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let archive = WhoopArchive(context: context)
+        let derivation = WhoopDerivation(store: store, archive: archive)
+
+        let workout = """
+        {"id":"w1","start":"2026-08-25T10:00:00.000Z","end":"2026-08-25T11:32:00.000Z",
+         "sport_name":"cycling","score_state":"SCORED",
+         "score":{"strain":11.4,"zone_durations":{"zone_zero_milli":0,"zone_one_milli":0,
+         "zone_two_milli":0,"zone_three_milli":1200000,"zone_four_milli":900000,
+         "zone_five_milli":420000}}}
+        """.data(using: .utf8)!
+        let recovery = """
+        {"created_at":"2026-08-25T11:00:00.000Z","score_state":"SCORED",
+         "score":{"recovery_score":44,"resting_heart_rate":64,"hrv_rmssd_milli":31,
+         "user_calibrating":true}}
+        """.data(using: .utf8)!
+
+        try archive.store(kind: "workout", externalID: "w1", payload: workout)
+        try archive.store(kind: "recovery", externalID: "r1", payload: recovery)
+
+        try derivation.rederive()
+
+        let dayOf = Calendar.current.startOfDay(for: ISO8601DateFormatter()
+            .date(from: "2026-08-25T11:00:00Z")!)
+        let row = try #require(try store.metrics(from: dayOf, to: dayOf).first)
+        #expect(row.whoopRecoveryIsCalibrating == true)
+
+        let found = try #require(try store.workouts(from: dayOf, to: dayOf).first)
+        #expect(found.zoneThreeMinutes == 20)
+        #expect(found.zoneFourMinutes == 15)
+        #expect(found.zoneFiveMinutes == 7)
+    }
 }

@@ -56,6 +56,10 @@ enum WhoopDTOs {
             struct Needed: Decodable {
                 let baseline_milli: Double?
                 let need_from_sleep_debt_milli: Double?
+                let need_from_recent_strain_milli: Double?
+                /// Negative or zero by definition: a recent nap reduces the
+                /// amount of sleep still needed. The sign is preserved.
+                let need_from_recent_nap_milli: Double?
             }
 
             struct Stages: Decodable {
@@ -94,10 +98,6 @@ enum WhoopDTOs {
         let score_state: String?
         let score: Score?
 
-        // `zone_durations` is deliberately not decoded. The published sample shows
-        // it as an empty object with no documented member names, so there is
-        // nothing to decode into. It is still captured in the raw archive, which
-        // is exactly the case the archive exists for.
         struct Score: Decodable {
             let strain: Double?
             let kilojoule: Double?
@@ -107,6 +107,21 @@ enum WhoopDTOs {
             let distance_meter: Double?
             let altitude_gain_meter: Double?
             let altitude_change_meter: Double?
+            /// Documented in the v2 specification as six required int64 fields.
+            /// An earlier comment here declined to decode this on the grounds
+            /// that the published sample showed an empty object with no member
+            /// names. The specification names all six, so it is decoded now.
+            /// Still optional: a payload that omits it must degrade, not fail.
+            let zone_durations: Zones?
+
+            struct Zones: Decodable {
+                let zone_zero_milli: Double?
+                let zone_one_milli: Double?
+                let zone_two_milli: Double?
+                let zone_three_milli: Double?
+                let zone_four_milli: Double?
+                let zone_five_milli: Double?
+            }
         }
     }
 
@@ -155,6 +170,8 @@ extension WhoopDTOs.SleepRecord {
             respiratoryRate: score?.respiratory_rate,
             sleepNeedMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.baseline_milli),
             sleepDebtMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_sleep_debt_milli),
+            needFromStrainMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_recent_strain_milli),
+            needFromNapMinutes: WhoopSleepMath.minutes(fromMilliseconds: need?.need_from_recent_nap_milli),
             asleepMinutes: WhoopSleepMath.asleepMinutes(from: stages),
             lightMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_light_sleep_time_milli),
             remMinutes: WhoopSleepMath.minutes(fromMilliseconds: stages?.total_rem_sleep_time_milli),
@@ -198,7 +215,19 @@ extension WhoopDTOs.WorkoutRecord {
             percentRecorded: score?.percent_recorded,
             distanceMeters: score?.distance_meter,
             altitudeGainMeters: score?.altitude_gain_meter,
-            altitudeChangeMeters: score?.altitude_change_meter
+            altitudeChangeMeters: score?.altitude_change_meter,
+            // An empty object (every member nil) means Whoop reported no zone
+            // data at all, not that every zone measured zero: `nil` here, not
+            // `[0, 0, 0, 0, 0, 0]`, which would claim a reading that was never
+            // taken. A partially populated object is a genuine reading, so a
+            // real value anywhere in it still yields an array with the
+            // untouched members as 0.
+            zoneMinutes: score?.zone_durations.flatMap { z -> [Int]? in
+                let raw = [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli,
+                           z.zone_three_milli, z.zone_four_milli, z.zone_five_milli]
+                guard raw.contains(where: { $0 != nil }) else { return nil }
+                return raw.map { WhoopSleepMath.minutes(fromMilliseconds: $0) ?? 0 }
+            }
         )
     }
 }

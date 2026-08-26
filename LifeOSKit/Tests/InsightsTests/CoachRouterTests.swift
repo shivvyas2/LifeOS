@@ -31,7 +31,10 @@ private struct StubEngine: Engine {
 
     private let empty = MetricsDigest(
         days: [],
-        averages: MetricsDigest.Averages(recoveryPct: nil, sleepMinutes: nil, steps: nil)
+        averages: MetricsDigest.Averages(
+            recoveryPct: nil, sleepMinutes: nil, steps: nil,
+            hrvMs: nil, restingHR: nil, strain: nil, sleepDebtMinutes: nil
+        )
     )
 
     private let brief = DailyBrief(headline: "Fine.", observations: ["a", "b"])
@@ -56,12 +59,29 @@ private struct StubEngine: Engine {
 
     /// With no remote engine — the shape this app ships in before the cloud
     /// tier exists — an escalating failure is unavailable, not a crash.
+    /// `assetsUnavailable` is used here rather than
+    /// `exceededContextWindowSize`, which now maps to `.tooLarge`; see
+    /// `anOversizedPromptIsReportedAsSuchRatherThanAsAMissingModel` below.
     @Test func anEscalationWithNoRemoteEngineIsUnavailable() async {
         let result = await router(
-            onDevice: { throw LanguageModelSession.GenerationError.exceededContextWindowSize(self.context) }
+            onDevice: { throw LanguageModelSession.GenerationError.assetsUnavailable(self.context) }
         ).run(BriefTask(), empty)
 
         #expect(result == .unavailable)
+    }
+
+    /// An oversized prompt is our fault and is fixed by sending less. Telling
+    /// the user their device lacks Apple Intelligence sends them to a settings
+    /// screen that will not help.
+    @Test func anOversizedPromptIsReportedAsSuchRatherThanAsAMissingModel() async throws {
+        let router = router(
+            onDevice: { throw LanguageModelSession.GenerationError.exceededContextWindowSize(self.context) },
+            remote: nil
+        )
+
+        let result = await router.run(BriefTask(), empty)
+
+        #expect(result == .tooLarge)
     }
 
     @Test func anEscalationReachesTheRemoteEngineWhenThereIsOne() async {

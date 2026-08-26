@@ -266,4 +266,118 @@ import Foundation
         #expect(body.weight_kilogram == 90.7185)
         #expect(body.max_heart_rate == 200)
     }
+
+    @Test func aWorkoutPayloadCarriesItsZoneDurations() throws {
+        let json = """
+        {
+          "id": "ecfc6a15-4661-442f-a9a4-f160dd7afae8",
+          "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:32:00.000Z",
+          "sport_name": "cycling",
+          "score_state": "SCORED",
+          "score": {
+            "strain": 11.4,
+            "kilojoule": 1569.34,
+            "average_heart_rate": 141,
+            "max_heart_rate": 172,
+            "percent_recorded": 100.0,
+            "zone_durations": {
+              "zone_zero_milli": 300000,
+              "zone_one_milli": 600000,
+              "zone_two_milli": 900000,
+              "zone_three_milli": 900000,
+              "zone_four_milli": 600000,
+              "zone_five_milli": 300000
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        // 300000ms = 5min, 600000 = 10, 900000 = 15
+        #expect(sample.zoneMinutes == [5, 10, 15, 15, 10, 5])
+    }
+
+    @Test func aWorkoutPayloadWithoutZoneDurationsDecodesToNil() throws {
+        let json = """
+        {
+          "id": "abc", "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:00:00.000Z", "sport_name": "running",
+          "score_state": "SCORED", "score": { "strain": 8.0 }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        #expect(sample.zoneMinutes == nil)
+    }
+
+    /// The fixture that exposed this pins it: an empty `zone_durations` object
+    /// means Whoop reported no zone data, not that all six zones measured
+    /// zero. `[0, 0, 0, 0, 0, 0]` would assert a reading that never happened.
+    @Test func anEmptyZoneDurationsObjectDecodesToNil() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
+        )
+        let sample = try #require(page.records.first?.sample)
+        #expect(sample.zoneMinutes == nil)
+    }
+
+    /// A partially populated object is a genuine reading: Whoop did report
+    /// zone data, so the absent members are real zeroes, not missing ones.
+    @Test func aPartiallyPopulatedZoneDurationsObjectStillReportsWithZeroesForTheRest() throws {
+        let json = """
+        {
+          "id": "partial-zone", "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:00:00.000Z", "sport_name": "running",
+          "score_state": "SCORED",
+          "score": { "zone_durations": { "zone_three_milli": 1200000 } }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        #expect(sample.zoneMinutes == [0, 0, 0, 20, 0, 0])
+    }
+
+    @Test func aSleepPayloadCarriesEveryNeedComponent() throws {
+        let json = """
+        {
+          "id": "s1", "cycle_id": 1,
+          "start": "2026-08-25T23:00:00.000Z",
+          "end": "2026-08-26T06:40:00.000Z",
+          "nap": false, "score_state": "SCORED",
+          "score": {
+            "sleep_needed": {
+              "baseline_milli": 27395716,
+              "need_from_sleep_debt_milli": 1260000,
+              "need_from_recent_strain_milli": 480000,
+              "need_from_recent_nap_milli": -600000
+            },
+            "stage_summary": {
+              "total_in_bed_time_milli": 27600000,
+              "total_awake_time_milli": 1320000,
+              "total_light_sleep_time_milli": 11400000,
+              "total_rem_sleep_time_milli": 3720000,
+              "total_slow_wave_sleep_time_milli": 4800000,
+              "total_no_data_time_milli": 0,
+              "sleep_cycle_count": 4,
+              "disturbance_count": 9
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let sample = try WhoopClient.decoder
+            .decode(WhoopDTOs.SleepRecord.self, from: json).sample
+
+        #expect(sample.needFromStrainMinutes == 8)     // 480000ms
+        // Negative by definition: a recent nap reduces need. The sign is kept.
+        #expect(sample.needFromNapMinutes == -10)      // -600000ms
+        #expect(sample.sleepDebtMinutes == 21)
+    }
 }

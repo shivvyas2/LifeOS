@@ -41,6 +41,9 @@ public struct WhoopSleepSample: Sendable, Equatable {
     public let respiratoryRate: Double?
     public let sleepNeedMinutes: Int?
     public let sleepDebtMinutes: Int?
+    public let needFromStrainMinutes: Int?
+    /// Negative or zero: a recent nap reduces need.
+    public let needFromNapMinutes: Int?
     /// Time actually asleep, which is not time in bed.
     public let asleepMinutes: Int?
     public let lightMinutes: Int?
@@ -56,6 +59,7 @@ public struct WhoopSleepSample: Sendable, Equatable {
                 efficiencyPercentage: Double? = nil,
                 respiratoryRate: Double? = nil, sleepNeedMinutes: Int? = nil,
                 sleepDebtMinutes: Int? = nil,
+                needFromStrainMinutes: Int? = nil, needFromNapMinutes: Int? = nil,
                 asleepMinutes: Int?, lightMinutes: Int? = nil, remMinutes: Int? = nil,
                 swsMinutes: Int? = nil, awakeMinutes: Int? = nil,
                 noDataMinutes: Int? = nil, sleepCycleCount: Int? = nil,
@@ -70,6 +74,8 @@ public struct WhoopSleepSample: Sendable, Equatable {
         self.respiratoryRate = respiratoryRate
         self.sleepNeedMinutes = sleepNeedMinutes
         self.sleepDebtMinutes = sleepDebtMinutes
+        self.needFromStrainMinutes = needFromStrainMinutes
+        self.needFromNapMinutes = needFromNapMinutes
         self.asleepMinutes = asleepMinutes
         self.lightMinutes = lightMinutes
         self.remMinutes = remMinutes
@@ -112,12 +118,17 @@ public struct WhoopWorkoutSample: Sendable, Equatable {
     public let distanceMeters: Double?
     public let altitudeGainMeters: Double?
     public let altitudeChangeMeters: Double?
+    /// Six entries, zone 0 through 5, in minutes. Nil when Whoop sent none.
+    /// An array rather than six properties because it is always all six or
+    /// none, and callers sum a contiguous slice of it.
+    public let zoneMinutes: [Int]?
 
     public init(externalID: String, start: Date, end: Date, sportName: String,
                 sportID: Int? = nil, strain: Double? = nil, energyKcal: Double? = nil,
                 averageHR: Double? = nil, maxHR: Double? = nil,
                 percentRecorded: Double? = nil, distanceMeters: Double? = nil,
-                altitudeGainMeters: Double? = nil, altitudeChangeMeters: Double? = nil) {
+                altitudeGainMeters: Double? = nil, altitudeChangeMeters: Double? = nil,
+                zoneMinutes: [Int]? = nil) {
         self.externalID = externalID
         self.start = start
         self.end = end
@@ -131,6 +142,7 @@ public struct WhoopWorkoutSample: Sendable, Equatable {
         self.distanceMeters = distanceMeters
         self.altitudeGainMeters = altitudeGainMeters
         self.altitudeChangeMeters = altitudeChangeMeters
+        self.zoneMinutes = zoneMinutes
     }
 
     public var durationMinutes: Int { Int(end.timeIntervalSince(start) / 60) }

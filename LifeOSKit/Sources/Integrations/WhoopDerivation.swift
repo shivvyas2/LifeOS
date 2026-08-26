@@ -78,6 +78,7 @@ public struct WhoopDerivation {
             if let value = recovery?.hrvMilliseconds { row.hrvMs = value }
             if let value = recovery?.spo2Percentage { row.spo2Percentage = value }
             if let value = recovery?.skinTempCelsius { row.skinTempCelsius = value }
+            if let value = recovery?.isCalibrating { row.whoopRecoveryIsCalibrating = value }
 
             if let value = sleep?.performancePercentage { row.whoopSleepPerformancePct = value }
             if let value = sleep?.asleepMinutes { row.sleepMinutes = value }
@@ -189,6 +190,8 @@ public struct WhoopDerivation {
                 if let value = sample.respiratoryRate { record.respiratoryRate = value }
                 if let value = sample.sleepNeedMinutes { record.sleepNeedMinutes = value }
                 if let value = sample.sleepDebtMinutes { record.sleepDebtMinutes = value }
+                if let value = sample.needFromStrainMinutes { record.needFromStrainMinutes = value }
+                if let value = sample.needFromNapMinutes { record.needFromNapMinutes = value }
                 if let value = sample.disturbanceCount { record.disturbanceCount = value }
                 record.isNap = sample.isNap
             }
@@ -214,6 +217,14 @@ public struct WhoopDerivation {
                 if let value = sample.altitudeGainMeters { record.altitudeGainMeters = value }
                 if let value = sample.altitudeChangeMeters { record.altitudeChangeMeters = value }
                 if let value = sample.sportID { record.sportID = value }
+                if let zones = sample.zoneMinutes, zones.count == 6 {
+                    record.zoneZeroMinutes = zones[0]
+                    record.zoneOneMinutes = zones[1]
+                    record.zoneTwoMinutes = zones[2]
+                    record.zoneThreeMinutes = zones[3]
+                    record.zoneFourMinutes = zones[4]
+                    record.zoneFiveMinutes = zones[5]
+                }
             }
         }
     }

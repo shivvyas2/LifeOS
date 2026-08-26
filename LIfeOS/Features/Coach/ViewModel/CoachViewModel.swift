@@ -126,8 +126,13 @@ final class CoachViewModel {
         do {
             let end = Calendar.current.startOfDay(for: .now)
             let start = Calendar.current.date(byAdding: .day, value: -13, to: end) ?? end
-            let rows = try MetricsStore(context: context).metrics(from: start, to: end)
-            let digest = MetricsDigest.from(rows)
+            let metricsStore = MetricsStore(context: context)
+            let rows = try metricsStore.metrics(from: start, to: end)
+            let digest = MetricsDigest.from(
+                metrics: rows,
+                sleeps: try metricsStore.sleepRecords(from: start, to: end),
+                workouts: try metricsStore.workouts(from: start, to: end)
+            )
             let result = await router.run(AnswerTask(question: question), digest)
             switch result {
             case .answered(let output), .degraded(let output):
@@ -141,6 +146,8 @@ final class CoachViewModel {
                 fail("LIFO cannot reach further right now.")
             case .unavailable:
                 fail("LIFO needs Apple Intelligence on this device. You can still type — try again after it is on.")
+            case .tooLarge:
+                fail("That covered too much at once. Try asking about a shorter stretch.")
             }
         } catch {
             fail("Could not load your metrics.")

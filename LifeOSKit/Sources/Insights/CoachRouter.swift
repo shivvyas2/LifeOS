@@ -22,6 +22,11 @@ public enum CoachResult<Output: Sendable>: Sendable {
     /// The cloud path cannot run right now. Transient; retry is the right
     /// affordance, and the allowance is never mentioned.
     case unavailable
+    /// The prompt did not fit and there is no larger tier to send it to.
+    /// Distinct from `unavailable`, which means no model could run at all:
+    /// this one is our fault and is fixed by sending less, not by the user
+    /// changing a device setting.
+    case tooLarge
 }
 
 extension CoachResult: Equatable where Output: Equatable {}
@@ -76,6 +81,9 @@ public actor CoachRouter {
         } catch let error as LanguageModelSession.GenerationError {
             switch EscalationPolicy.disposition(for: error) {
             case .escalate:
+                if case .exceededContextWindowSize = error {
+                    return await runRemote(task, context, fallback: .tooLarge)
+                }
                 return await runRemote(task, context)
 
             case .retryLocally:
@@ -105,16 +113,17 @@ public actor CoachRouter {
 
     private func runRemote<T: CoachTask>(
         _ task: T,
-        _ context: T.Context
+        _ context: T.Context,
+        fallback: CoachResult<T.Output> = .unavailable
     ) async -> CoachResult<T.Output> {
         // Until Plan 2 lands there is no remote engine, and that is a real
         // shipping state rather than a stub: the coach works on-device and
         // says so when it cannot reach further.
-        guard let remote else { return .unavailable }
+        guard let remote else { return fallback }
         do {
             return .answered(try await remote.run(task, context))
         } catch {
-            return .unavailable
+            return fallback
         }
     }
 
