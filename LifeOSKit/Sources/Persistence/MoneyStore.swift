@@ -219,6 +219,69 @@ public struct MoneyStore {
         }
         try context.save()
     }
+
+    // MARK: - Spend buckets
+
+    public func buckets() throws -> [SpendBucket] {
+        try context.fetch(
+            FetchDescriptor<SpendBucket>(
+                sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]
+            )
+        )
+    }
+
+    @discardableResult
+    public func addBucket(name: String, monthlyLimit: Double) throws -> SpendBucket {
+        guard monthlyLimit > 0 else { throw SpendBucketError.limitNotPositive }
+        let bucket = SpendBucket(
+            name: name,
+            monthlyLimit: monthlyLimit,
+            sortOrder: (try buckets().last?.sortOrder ?? -1) + 1
+        )
+        context.insert(bucket)
+        try context.save()
+        return bucket
+    }
+
+    public func updateBucket(_ bucket: SpendBucket, name: String, monthlyLimit: Double) throws {
+        guard monthlyLimit > 0 else { throw SpendBucketError.limitNotPositive }
+        bucket.name = name
+        bucket.monthlyLimit = monthlyLimit
+        bucket.updatedAt = .now
+        try context.save()
+    }
+
+    public func deleteBucket(_ bucket: SpendBucket) throws {
+        context.delete(bucket)
+        try context.save()
+    }
+
+    /// Claims `key` for `bucket`. A key another bucket holds moves rather
+    /// than being held twice, and the previous holder's name comes back so
+    /// the UI can say so.
+    @discardableResult
+    public func claim(_ key: String, for bucket: SpendBucket) throws -> String? {
+        var movedFrom: String?
+        for other in try buckets() where other.id != bucket.id {
+            if let index = other.claimedRaw.firstIndex(of: key) {
+                other.claimedRaw.remove(at: index)
+                other.updatedAt = .now
+                movedFrom = other.name
+            }
+        }
+        if !bucket.claimedRaw.contains(key) {
+            bucket.claimedRaw.append(key)
+            bucket.updatedAt = .now
+        }
+        try context.save()
+        return movedFrom
+    }
+
+    public func unclaim(_ key: String, from bucket: SpendBucket) throws {
+        bucket.claimedRaw.removeAll { $0 == key }
+        bucket.updatedAt = .now
+        try context.save()
+    }
 }
 
 extension MoneyStore: MoneyIngesting {}

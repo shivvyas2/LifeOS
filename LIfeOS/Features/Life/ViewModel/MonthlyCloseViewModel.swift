@@ -197,9 +197,13 @@ final class MonthlyCloseViewModel {
         let readings = try metricsStore.metrics(from: window.start, to: window.lastDay).map(\.reading)
         let targets = try metricsStore.goals().targets
 
-        let amounts = try moneyStore.entries(from: window.start, to: window.lastDay)
-            .filter { !$0.pending }
-            .map(\.amount)
+        let monthEntries = try moneyStore.entries(from: window.start, to: window.lastDay)
+        let amounts = monthEntries.filter { !$0.pending }.map(\.amount)
+
+        let buckets = try moneyStore.buckets().map(BudgetBucket.init)
+        let budget = buckets.isEmpty
+            ? nil
+            : BudgetPeriod.assess(buckets: buckets, lines: BudgetPeriod.lines(from: monthEntries))
 
         let goals = try planStore.entries(kind: .goal)
         let habits = try planStore.entries(kind: .habit)
@@ -226,7 +230,7 @@ final class MonthlyCloseViewModel {
 
         return MonthInputs(
             readings: readings, targets: targets,
-            amounts: amounts, previousAmounts: previousAmounts,
+            amounts: amounts, previousAmounts: previousAmounts, budget: budget,
             planStatuses: planStatuses, goalStatuses: goalStatuses,
             habitTickRate: habitTickRate,
             journalDates: journalDates, previousJournalCount: previousJournalCount,

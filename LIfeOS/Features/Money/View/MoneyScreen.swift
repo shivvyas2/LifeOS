@@ -6,6 +6,7 @@ struct MoneyScreen: View {
     var onAdd: () -> Void = {}
     var onConnect: () -> Void = {}
     var onSync: () -> Void = {}
+    var onEditBudgets: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
@@ -40,6 +41,8 @@ struct MoneyScreen: View {
                                 }
                             }
                         }
+
+                        budgetsBand
 
                         transactions
                     } else {
@@ -103,6 +106,73 @@ struct MoneyScreen: View {
                     }
                 }
             }
+        }
+    }
+
+    private var budgetsBand: some View {
+        SoftCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("BUDGETS")
+                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                    Spacer()
+                    Button(snapshot.budgets.isEmpty ? "Set budgets" : "Edit", action: onEditBudgets)
+                        .font(.system(size: 13, weight: .semibold))
+                        .tint(LifeOSTokens.accent)
+                }
+
+                if snapshot.budgets.isEmpty {
+                    Text("Set a monthly limit for the spending you care about.")
+                        .font(.footnote)
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+
+                ForEach(snapshot.budgets) { row in
+                    VStack(spacing: 4) {
+                        HStack {
+                            Text(row.name).font(.system(size: 15, weight: .medium))
+                            Spacer()
+                            Text("\(Self.money(row.spent) ?? "—") / \(Self.money(row.limit) ?? "—")")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(row.isOver ? .orange : LifeOSTokens.primaryText.resolve(scheme))
+                        }
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme))
+                                Capsule()
+                                    .fill(row.isOver ? Color.orange : LifeOSTokens.accent)
+                                    .frame(width: proxy.size.width * row.progress)
+                            }
+                        }
+                        .frame(height: 4)
+                    }
+                }
+
+                if !snapshot.unclaimed.isEmpty { unclaimedRows }
+            }
+        }
+    }
+
+    /// Spend no bucket claims. Always rendered when present: the point of
+    /// buckets is that nothing stops counting quietly.
+    private var unclaimedRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("UNCLAIMED")
+                .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                .padding(.top, 4)
+            ForEach(snapshot.unclaimed) { row in
+                HStack {
+                    Text(row.count > 1 ? "\(row.label) ×\(row.count)" : row.label)
+                        .font(.system(size: 14))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    Spacer()
+                    Text(Self.money(row.amount) ?? "—")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+            }
+            Button("Assign to a bucket", action: onEditBudgets)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.accent)
         }
     }
 
@@ -186,6 +256,11 @@ struct MoneyScreen: View {
             MoneyRow(id: UUID(), merchant: "Rent", category: "Housing", amount: -1_500, date: .now, pending: false),
             MoneyRow(id: UUID(), merchant: "Groceries", category: "Food", amount: -650, date: .now, pending: true),
         ],
+        budgets: [
+            BudgetBandRow(id: UUID(), name: "Eating out", limit: 300, spent: 210),
+            BudgetBandRow(id: UUID(), name: "Groceries", limit: 450, spent: 480),
+        ],
+        unclaimed: [UnclaimedBandRow(id: "GENERAL_MERCHANDISE", label: "Shopping", amount: 210, count: 4)],
         monthLabel: "August 2026", isConnected: true
     ))
 }
