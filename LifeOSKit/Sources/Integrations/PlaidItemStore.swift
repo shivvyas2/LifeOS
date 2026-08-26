@@ -32,21 +32,28 @@ public protocol PlaidItemStoring: Sendable {
 /// data it describes, so it lives in the app container.
 public struct UserDefaultsPlaidItemStore: PlaidItemStoring {
     nonisolated(unsafe) private let defaults: UserDefaults
+    private let lock = NSLock()
     private let key = "plaid.items"
+
+    // Each public method performs a read-modify-write sequence on the stored items array.
+    // The type is Sendable, so callers may hold it across concurrency domains. The lock
+    // makes each whole sequence atomic, even though every individual UserDefaults access
+    // already is. items() also takes the lock to prevent observing a half-written array.
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     public func items() -> [PlaidStoredItem] {
-        guard let data = defaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([PlaidStoredItem].self, from: data)
-        else { return [] }
-        return decoded
+        lock.lock()
+        defer { lock.unlock() }
+        return loadItems()
     }
 
     public func upsert(_ item: PlaidStoredItem) {
-        var current = items()
+        lock.lock()
+        defer { lock.unlock() }
+        var current = loadItems()
         if let index = current.firstIndex(where: { $0.itemID == item.itemID }) {
             // The cursor is ours, not the caller's. A sync response re-states the
             // institution name, and letting that reset the cursor would replay
@@ -62,18 +69,31 @@ public struct UserDefaultsPlaidItemStore: PlaidItemStoring {
     }
 
     public func setCursor(_ cursor: String, for itemID: String) {
-        var current = items()
+        lock.lock()
+        defer { lock.unlock() }
+        var current = loadItems()
         guard let index = current.firstIndex(where: { $0.itemID == itemID }) else { return }
         current[index].cursor = cursor
         write(current)
     }
 
     public func remove(itemID: String) {
-        write(items().filter { $0.itemID != itemID })
+        lock.lock()
+        defer { lock.unlock() }
+        write(loadItems().filter { $0.itemID != itemID })
     }
 
     public func clear() {
+        lock.lock()
+        defer { lock.unlock() }
         defaults.removeObject(forKey: key)
+    }
+
+    private func loadItems() -> [PlaidStoredItem] {
+        guard let data = defaults.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([PlaidStoredItem].self, from: data)
+        else { return [] }
+        return decoded
     }
 
     private func write(_ items: [PlaidStoredItem]) {

@@ -54,4 +54,29 @@ import Foundation
         store.setCursor("orphan", for: "item_missing")
         #expect(store.items().isEmpty)
     }
+
+    @Test func concurrentCursorSetsDoNotLoseUpdates() {
+        // Each setCursor call is a read-modify-write. Without locking, two concurrent
+        // calls can both read the same starting state, each mutate it, and each write
+        // back a version missing the other's change. This test seeds several items
+        // and sets a distinct cursor on each concurrently, then verifies every item
+        // ended up with its own cursor.
+        let store = makeStore()
+        let itemCount = 10
+        for i in 0 ..< itemCount {
+            store.upsert(PlaidStoredItem(itemID: "item_\(i)", institutionName: "Bank \(i)", cursor: nil))
+        }
+
+        // Concurrently set a cursor on each item.
+        DispatchQueue.concurrentPerform(iterations: itemCount) { i in
+            store.setCursor("cursor_\(i)", for: "item_\(i)")
+        }
+
+        // Verify every item has its own cursor and no updates were lost.
+        let items = store.items()
+        #expect(items.count == itemCount)
+        for i in 0 ..< itemCount {
+            #expect(items.first { $0.itemID == "item_\(i)" }?.cursor == "cursor_\(i)")
+        }
+    }
 }
