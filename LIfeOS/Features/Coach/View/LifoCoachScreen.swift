@@ -7,7 +7,9 @@ import DesignSystem
 struct LifoCoachScreen: View {
     @Bindable var model: CoachViewModel
     var onDismiss: () -> Void
-    @Environment(\.colorScheme) private var scheme
+    /// The aurora backdrop is dark in both appearances, so every token on
+    /// this screen resolves dark regardless of the system scheme.
+    private let scheme: ColorScheme = .dark
     @Environment(\.dismiss) private var dismiss
     @FocusState private var typingFocused: Bool
     @State private var showHistory = false
@@ -15,7 +17,7 @@ struct LifoCoachScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
+                SlateAurora().ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     Spacer(minLength: 12)
@@ -59,6 +61,8 @@ struct LifoCoachScreen: View {
             }
             .navigationTitle("LIFO")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .environment(\.colorScheme, .dark)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: close) {
