@@ -315,6 +315,35 @@ import Foundation
         #expect(sample.zoneMinutes == nil)
     }
 
+    /// The fixture that exposed this pins it: an empty `zone_durations` object
+    /// means Whoop reported no zone data, not that all six zones measured
+    /// zero. `[0, 0, 0, 0, 0, 0]` would assert a reading that never happened.
+    @Test func anEmptyZoneDurationsObjectDecodesToNil() throws {
+        let page = try WhoopClient.decoder.decode(
+            WhoopDTOs.Page<WhoopDTOs.WorkoutRecord>.self, from: Data(workoutJSON.utf8)
+        )
+        let sample = try #require(page.records.first?.sample)
+        #expect(sample.zoneMinutes == nil)
+    }
+
+    /// A partially populated object is a genuine reading: Whoop did report
+    /// zone data, so the absent members are real zeroes, not missing ones.
+    @Test func aPartiallyPopulatedZoneDurationsObjectStillReportsWithZeroesForTheRest() throws {
+        let json = """
+        {
+          "id": "partial-zone", "start": "2026-08-25T10:00:00.000Z",
+          "end": "2026-08-25T11:00:00.000Z", "sport_name": "running",
+          "score_state": "SCORED",
+          "score": { "zone_durations": { "zone_three_milli": 1200000 } }
+        }
+        """.data(using: .utf8)!
+
+        let record = try WhoopClient.decoder.decode(WhoopDTOs.WorkoutRecord.self, from: json)
+        let sample = try #require(record.sample)
+
+        #expect(sample.zoneMinutes == [0, 0, 0, 20, 0, 0])
+    }
+
     @Test func aSleepPayloadCarriesEveryNeedComponent() throws {
         let json = """
         {

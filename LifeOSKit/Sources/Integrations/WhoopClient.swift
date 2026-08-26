@@ -216,10 +216,17 @@ extension WhoopDTOs.WorkoutRecord {
             distanceMeters: score?.distance_meter,
             altitudeGainMeters: score?.altitude_gain_meter,
             altitudeChangeMeters: score?.altitude_change_meter,
-            zoneMinutes: score?.zone_durations.map { z in
-                [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli,
-                 z.zone_three_milli, z.zone_four_milli, z.zone_five_milli]
-                    .map { WhoopSleepMath.minutes(fromMilliseconds: $0) ?? 0 }
+            // An empty object (every member nil) means Whoop reported no zone
+            // data at all, not that every zone measured zero: `nil` here, not
+            // `[0, 0, 0, 0, 0, 0]`, which would claim a reading that was never
+            // taken. A partially populated object is a genuine reading, so a
+            // real value anywhere in it still yields an array with the
+            // untouched members as 0.
+            zoneMinutes: score?.zone_durations.flatMap { z -> [Int]? in
+                let raw = [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli,
+                           z.zone_three_milli, z.zone_four_milli, z.zone_five_milli]
+                guard raw.contains(where: { $0 != nil }) else { return nil }
+                return raw.map { WhoopSleepMath.minutes(fromMilliseconds: $0) ?? 0 }
             }
         )
     }
