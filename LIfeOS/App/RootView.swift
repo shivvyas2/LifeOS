@@ -82,6 +82,16 @@ struct RootView: View {
     @State private var showWhoop = false
     @State private var eventSheet: EventSheetPresentation?
 
+    /// Wide panes only. The rail floats over the content rather than taking
+    /// layout room from it, so on an iPad in landscape it sits on top of the
+    /// thing being read or written. It withdraws while the pane is being worked
+    /// with and comes back when that stops.
+    ///
+    /// Compact width never hides it: the bar lies along the bottom there, where
+    /// it overlaps nothing that is being read.
+    @State private var isRailVisible = true
+    @State private var railReturnTask: Task<Void, Never>?
+
     /// The tab bar's selection, stated rather than inferred from ordering.
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
@@ -160,6 +170,26 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        // Typing is the other way of working with the pane, and the one where
+        // the rail is most in the way: on a landscape iPad the keyboard takes
+        // half the height and the note being written is what is left.
+        .task {
+            for await _ in NotificationCenter.default.notifications(
+                named: UIResponder.keyboardWillShowNotification
+            ) {
+                guard metrics.isRegular else { continue }
+                withdrawRail()
+            }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(
+                named: UIResponder.keyboardWillHideNotification
+            ) {
+                showRail()
+            }
+        }
+        // A tab change is navigation, not content work, so the rail is wanted.
+        .onChange(of: tab) { _, _ in showRail() }
         .task {
             attachAll()
             reloadAll()
@@ -213,9 +243,40 @@ struct RootView: View {
     private var wideShell: some View {
         ZStack {
             content
+                // Scrolling or dragging anywhere in the pane counts as working
+                // with the content, so the rail steps aside. Simultaneous, not
+                // exclusive: it observes the touch rather than claiming it, so
+                // scroll views, text selection and Pencil strokes all still see
+                // it. Minimum distance keeps a plain tap from tripping it.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12)
+                        .onChanged { _ in withdrawRail() }
+                        .onEnded { _ in scheduleRailReturn() }
+                )
                 .overlay(alignment: .leading) {
                     PillNavBar(selection: $tab, items: navItems, axis: .vertical)
                         .padding(.leading, metrics.gutter)
+                        .opacity(isRailVisible ? 1 : 0)
+                        // Slid out rather than only faded, so the eye reads it
+                        // as parked off the edge and knows where it went.
+                        .offset(x: isRailVisible ? 0 : -(metrics.gutter + 76))
+                        .allowsHitTesting(isRailVisible)
+                        .animation(.easeInOut(duration: 0.22), value: isRailVisible)
+                }
+                // The strip the rail parks behind. Bringing it back has to be
+                // possible without first scrolling something, or a person who
+                // hid it on a full-screen page has no way back to the tabs.
+                .overlay(alignment: .leading) {
+                    if !isRailVisible {
+                        Color.clear
+                            .frame(width: 28)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(.rect)
+                            .onTapGesture { showRail() }
+                            .accessibilityLabel("Show navigation")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { showRail() }
+                    }
                 }
                 .overlay(alignment: .bottomTrailing) {
                     VStack(spacing: 14) {
@@ -400,6 +461,32 @@ struct RootView: View {
         weight.select(date)
         recovery.select(date)
         wellness.select(date)
+    }
+
+    /// Parks the rail off the leading edge. Cancels any pending return so a
+    /// long scroll does not have it reappear mid-gesture.
+    private func withdrawRail() {
+        railReturnTask?.cancel()
+        railReturnTask = nil
+        guard isRailVisible else { return }
+        isRailVisible = false
+    }
+
+    /// Brings it back a beat after the interaction ends. The delay is what
+    /// stops it flickering between the flicks of a fast scroll.
+    private func scheduleRailReturn() {
+        railReturnTask?.cancel()
+        railReturnTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1400))
+            guard !Task.isCancelled else { return }
+            isRailVisible = true
+        }
+    }
+
+    private func showRail() {
+        railReturnTask?.cancel()
+        railReturnTask = nil
+        isRailVisible = true
     }
 
     private func attachAll() {
