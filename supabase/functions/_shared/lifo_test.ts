@@ -76,3 +76,40 @@ Deno.test("a malformed body throws rather than shipping garbage to the app", () 
 Deno.test("the cap matches the spec's ceiling arithmetic", () => {
   assertEquals(DAILY_TOKEN_CAP, 150_000);
 });
+
+// parseOutput is its own entry point, separate from openAIBody, so it cannot
+// assume a caller already validated the task name. Without this guard, an
+// unrecognized task would skip shape validation and hand back whatever JSON
+// the model returned, unchecked.
+Deno.test("an unknown task name throws rather than returning unvalidated JSON", () => {
+  assertThrows(() =>
+    parseOutput("exfiltrate", {
+      choices: [{ message: { content: `{"anything":"goes"}` } }],
+      usage: { total_tokens: 1 },
+    })
+  );
+});
+
+// Validation must be derived from the task's own schema, not a hardcoded
+// field name, so a reply that is well-formed JSON but missing a
+// schema-required property is still rejected rather than passed through.
+Deno.test("a reply missing a schema-required property throws", () => {
+  assertThrows(() =>
+    parseOutput("answer", {
+      choices: [{ message: { content: `{}` } }],
+      usage: { total_tokens: 1 },
+    })
+  );
+});
+
+// The schema declares a type for each required property, not just its
+// presence. A reply that has the key but the wrong type is exactly the kind
+// of wrong-shaped output a hardcoded check would have let through.
+Deno.test("a reply whose required property has the wrong type throws", () => {
+  assertThrows(() =>
+    parseOutput("answer", {
+      choices: [{ message: { content: `{"answer":123}` } }],
+      usage: { total_tokens: 1 },
+    })
+  );
+});

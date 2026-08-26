@@ -59,10 +59,39 @@ export function classifyOpenAIFailure(status: number): "rate_limited" | "upstrea
   return status === 429 ? "rate_limited" : "upstream_failure";
 }
 
+// Validates the parsed reply against the task's own schema, rather than a
+// literal field name, so a later task with a different output shape is
+// checked against its real schema instead of being rubber-stamped by one
+// written for "answer". Only handles the property types this project's
+// schemas actually declare (string); anything else throws loudly, so a
+// future schema addition can't silently skip validation.
+function validateShape(schema: Record<string, unknown>, output: Record<string, unknown>): void {
+  const inner = schema.schema as {
+    properties?: Record<string, { type?: string }>;
+    required?: string[];
+  };
+  const required = inner.required ?? [];
+  const properties = inner.properties ?? {};
+  for (const key of required) {
+    const declaredType = properties[key]?.type;
+    const value = output[key];
+    if (declaredType === "string") {
+      if (typeof value !== "string") {
+        throw new Error(`output missing required property "${key}"`);
+      }
+    } else {
+      throw new Error(`unsupported schema type "${declaredType}" for property "${key}"`);
+    }
+  }
+}
+
 export function parseOutput(
   task: string,
   body: unknown,
 ): { output: Record<string, unknown>; tokens: number } {
+  const config = taskConfig(task);
+  if (!config) throw new Error(`unknown task: ${task}`);
+
   const reply = body as {
     choices?: { message?: { content?: string; refusal?: string } }[];
     usage?: { total_tokens?: number };
@@ -72,8 +101,6 @@ export function parseOutput(
   if (message.refusal) throw new LifoRefusal(message.refusal);
   if (!message.content) throw new Error("empty content");
   const output = JSON.parse(message.content) as Record<string, unknown>;
-  if (taskConfig(task) && typeof output.answer !== "string") {
-    throw new Error("output missing answer");
-  }
+  validateShape(config.schema, output);
   return { output, tokens: reply.usage?.total_tokens ?? 0 };
 }
