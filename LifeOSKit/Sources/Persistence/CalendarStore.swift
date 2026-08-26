@@ -90,3 +90,48 @@ public struct CalendarStore {
         let sourceID: String
     }
 }
+
+extension CalendarStore {
+    /// Open intervals of at least `durationMinutes` inside `[from, to)`.
+    /// All-day events do not block time: "Anniversary" is context, not a
+    /// meeting, and treating it as busy would zero out the whole day.
+    public func freeSlots(from: Date, to: Date, durationMinutes: Int) throws -> [DateInterval] {
+        let busy = try events(from: from, to: to)
+            .filter { !$0.isAllDay }
+            .map { DateInterval(start: $0.startDate, end: $0.endDate) }
+        return Self.freeSlots(
+            in: DateInterval(start: from, end: to),
+            busy: busy,
+            durationMinutes: durationMinutes
+        )
+    }
+
+    /// Pure core: merge busy intervals, subtract from the window, drop gaps
+    /// shorter than the requested duration.
+    nonisolated static func freeSlots(in window: DateInterval, busy: [DateInterval], durationMinutes: Int) -> [DateInterval] {
+        let minimum = TimeInterval(durationMinutes * 60)
+        var merged: [DateInterval] = []
+        for interval in busy.sorted(by: { $0.start < $1.start }) {
+            if let last = merged.last, interval.start <= last.end {
+                merged[merged.count - 1] = DateInterval(start: last.start, end: max(last.end, interval.end))
+            } else {
+                merged.append(interval)
+            }
+        }
+
+        var slots: [DateInterval] = []
+        var cursor = window.start
+        for interval in merged {
+            let gapEnd = min(interval.start, window.end)
+            if gapEnd.timeIntervalSince(cursor) >= minimum {
+                slots.append(DateInterval(start: cursor, end: gapEnd))
+            }
+            cursor = max(cursor, interval.end)
+            if cursor >= window.end { return slots }
+        }
+        if window.end.timeIntervalSince(cursor) >= minimum {
+            slots.append(DateInterval(start: cursor, end: window.end))
+        }
+        return slots
+    }
+}
