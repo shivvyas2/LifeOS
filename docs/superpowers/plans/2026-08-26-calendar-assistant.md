@@ -1360,7 +1360,7 @@ Design notes binding this task:
 - The EventKit permission prompt fires only from the sheet's connect button, never at launch or on sheet open.
 - The sheet syncs on open when already authorized, so the assistant reads fresh data.
 - The model-availability guard reuses `ModelAvailability`/`SystemLanguageModel` the way `CoachViewModel` does; when unavailable the sheet shows one sentence and no composer.
-- Find the trigger site by running `grep -rn "showCoach = true" LIfeOS/` and place a `sparkles` button beside that control, presenting `.sheet(isPresented: $showAssistant)` from `RootView` alongside the existing covers. Match the surrounding button styling exactly (same shape, same materials).
+- Find the trigger site by running `grep -rn "showCoach = true" LIfeOS/` and place a `calendar` button beside that control, presenting `.sheet(isPresented: $showAssistant)` from `RootView` alongside the existing covers. Match the surrounding button styling exactly (same shape, same materials).
 - Styling follows the app's design system (`LifeOSTokens`, `SoftCard`, capsule composer like `LifoCoachScreen`'s typing field).
 
 - [ ] **Step 1: Write the view model**
@@ -1657,7 +1657,7 @@ Adjust token names to what `DesignSystem` actually exposes (`LifeOSTokens.canvas
 
 - [ ] **Step 3: Wire the entry point**
 
-In `LIfeOS/App/RootView.swift`: add `@State private var showAssistant = false`, present `.sheet(isPresented: $showAssistant) { AssistantSheet(model: assistantModel) }` alongside the existing covers, holding `@State private var assistantModel: AssistantViewModel` created with the same `ModelContext` the other view models use (find how `RootView` obtains its context — grep `modelContext` or the container — and follow that exact pattern). Then find the coach trigger (`grep -rn "showCoach = true" LIfeOS/`) and add a `sparkles` button beside it with the same styling, setting `showAssistant = true`. Accessibility label "Calendar assistant".
+In `LIfeOS/App/RootView.swift`: add `@State private var showAssistant = false`, present `.sheet(isPresented: $showAssistant) { AssistantSheet(model: assistantModel) }` alongside the existing covers, holding `@State private var assistantModel: AssistantViewModel` created with the same `ModelContext` the other view models use (find how `RootView` obtains its context — grep `modelContext` or the container — and follow that exact pattern). Then find the coach trigger (`grep -rn "showCoach = true" LIfeOS/`) and add a `calendar` button beside it with the same styling, setting `showAssistant = true`. Accessibility label "Calendar assistant".
 
 - [ ] **Step 4: Build and test**
 
