@@ -25,9 +25,32 @@ extension MoneySnapshot {
             savingsRate: net / income,
             netWorth: 48_260.14,
             recent: sampleRows,
+            budgets: sampleBudgets,
+            unclaimed: sampleUnclaimed,
             monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
             isConnected: true
         )
+    }
+
+    /// One bucket comfortably inside its limit, one just under, and one over.
+    /// A sample where every bucket is healthy would never show the band's
+    /// over-budget treatment, which is the state most worth looking at.
+    private static var sampleBudgets: [BudgetBandRow] {
+        [
+            BudgetBandRow(id: UUID(), name: "Groceries", limit: 600, spent: 412.87),
+            BudgetBandRow(id: UUID(), name: "Eating out", limit: 250, spent: 238.40),
+            BudgetBandRow(id: UUID(), name: "Transport", limit: 120, spent: 163.15),
+        ]
+    }
+
+    /// Spend no bucket claims. Present deliberately: the band exists to prove
+    /// nothing stops being counted quietly, and a sample with nothing unclaimed
+    /// would hide the one row that makes that point.
+    private static var sampleUnclaimed: [UnclaimedBandRow] {
+        [
+            UnclaimedBandRow(id: "subscriptions", label: "Subscriptions", amount: -47.97, count: 3),
+            UnclaimedBandRow(id: "uncategorised", label: "Uncategorised", amount: -88.20, count: 2),
+        ]
     }
 
     /// Dated backwards from today rather than pinned to fixed dates, so the rows
