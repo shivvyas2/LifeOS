@@ -84,10 +84,9 @@ struct AssistantSheet: View {
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 .multilineTextAlignment(.center)
             if !model.isAuthorized {
-                Button("Connect calendar") {
+                CapsuleButton(title: "Connect calendar") {
                     Task { await model.connectCalendar() }
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .frame(maxWidth: .infinity)
@@ -128,11 +127,12 @@ struct AssistantSheet: View {
                     .font(.system(size: 13))
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             }
-            HStack(spacing: 12) {
-                Button("Confirm") { model.confirm(write.id) }
-                    .buttonStyle(.borderedProminent)
+            HStack(spacing: 14) {
+                CapsuleButton(title: "Confirm", prominent: true) { model.confirm(write.id) }
                 Button("Cancel") { model.cancel(write.id) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
         .padding(14)

@@ -45,37 +45,16 @@ struct DayDetailSheet: View {
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
             SoftCard {
-                VStack(spacing: 0) {
-                    ForEach(Array(snapshot.events.enumerated()), id: \.element.id) { index, event in
-                        if index > 0 { Divider() }
-                        scheduleRow(event)
+                VStack(spacing: 6) {
+                    // The same journey rows the agenda card draws, so an
+                    // event looks identical wherever it appears. No tap:
+                    // this sheet is a reading surface, edits live on Today.
+                    ForEach(snapshot.events) { event in
+                        EventJourneyRow(event: event)
                     }
                 }
             }
         }
-    }
-
-    private func scheduleRow(_ event: CalendarEventSnapshot) -> some View {
-        HStack(spacing: 12) {
-            Text(event.timeLabel)
-                .font(.system(size: 14))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                .frame(width: 56, alignment: .leading)
-
-            Text(event.title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .lineLimit(1)
-
-            Spacer()
-
-            if !event.durationLabel.isEmpty {
-                Text(event.durationLabel)
-                    .font(.system(size: 13))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            }
-        }
-        .padding(.vertical, 12)
     }
 
     private var metrics: some View {

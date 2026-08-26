@@ -169,9 +169,7 @@ struct AgendaCard: View {
                 Text("See your day's schedule here.")
                     .font(.system(size: 15))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                Button("Connect calendar", action: onConnect)
-                    .buttonStyle(.borderedProminent)
-                    .tint(LifeOSTokens.accent)
+                CapsuleButton(title: "Connect calendar", action: onConnect)
             }
             .padding(.vertical, 4)
 
@@ -180,13 +178,11 @@ struct AgendaCard: View {
                 Text("Calendar access is off.")
                     .font(.system(size: 15))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                Button("Open Settings") {
+                CapsuleButton(title: "Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         openURL(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(LifeOSTokens.accent)
             }
             .padding(.vertical, 4)
 
@@ -222,12 +218,9 @@ struct AgendaCard: View {
         return VStack(alignment: .leading, spacing: 10) {
             ForEach(grouped, id: \.0.id) { part, events in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(part.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .tracking(0.4)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    eyebrow(part.title)
                     ForEach(events) { event in
-                        eventRow(event, part: DayPart.of(event, calendar: calendar))
+                        EventJourneyRow(event: event, onTap: onTapEvent)
                     }
                 }
             }
@@ -263,12 +256,9 @@ struct AgendaCard: View {
         return VStack(alignment: .leading, spacing: 10) {
             ForEach(groups, id: \.label) { group in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(group.label)
-                        .font(.system(size: 12, weight: .semibold))
-                        .tracking(0.4)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    eyebrow(group.label)
                     ForEach(group.rows) { row in
-                        eventRow(row.event, part: DayPart.of(row.event, calendar: calendar))
+                        EventJourneyRow(event: row.event, onTap: onTapEvent)
                     }
                 }
             }
@@ -283,42 +273,66 @@ struct AgendaCard: View {
 
     // MARK: Row building blocks
 
-    /// One event, journey-style: pastel icon bubble, title over a time span,
-    /// a quiet chevron to say the row opens.
-    private func eventRow(_ event: CalendarEventSnapshot, part: DayPart) -> some View {
-        Button {
-            onTapEvent(event)
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill((scheme == .dark ? part.hue.pastelDark : part.hue.pastel))
-                    Image(systemName: part.icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(scheme == .dark ? part.hue.pastel : part.hue.top)
-                }
-                .frame(width: 36, height: 36)
+    /// Small caps label above a run of rows: the same eyebrow vocabulary the
+    /// Money bands use, so every card's sections read alike.
+    private func eyebrow(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 12, weight: .semibold))
+            .tracking(0.8)
+            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+    }
+}
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(event.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .lineLimit(1)
-                    Text(event.spanLabel)
-                        .font(.system(size: 13))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
+/// One event in the journey vocabulary: a pastel icon bubble sized like
+/// `IconBubbleTile`'s, the title over its time span, and a quiet chevron
+/// when the row opens somewhere. Shared with `DayDetailSheet`'s schedule so
+/// an event looks the same wherever it appears.
+struct EventJourneyRow: View {
+    let event: CalendarEventSnapshot
+    var onTap: ((CalendarEventSnapshot) -> Void)?
 
-                Spacer()
+    @Environment(\.colorScheme) private var scheme
+    private let calendar = Calendar.current
 
+    var body: some View {
+        if let onTap {
+            Button { onTap(event) } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(event.title), \(event.spanLabel)")
+        } else {
+            label
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var label: some View {
+        let part = DayPart.of(event, calendar: calendar)
+        return HStack(spacing: 12) {
+            Image(systemName: part.icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(scheme == .dark ? part.hue.pastelDark : part.hue.pastel))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .lineLimit(1)
+                Text(event.spanLabel)
+                    .font(.system(size: 13))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            }
+
+            Spacer()
+
+            if onTap != nil {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
             }
-            .contentShape(Rectangle())
-            .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(event.title), \(event.spanLabel)")
+        .contentShape(Rectangle())
+        .padding(.vertical, 4)
     }
 }
