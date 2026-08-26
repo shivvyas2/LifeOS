@@ -57,6 +57,15 @@ public struct MoneyAccountRow: Sendable, Equatable {
     }
 }
 
+/// The write side of the store, as a protocol, so a sync runner can be tested
+/// against a store that fails on demand. Failure is the interesting case: the
+/// cursor must not move when the ingest did not happen.
+@MainActor public protocol MoneyIngesting {
+    func ingest(_ incoming: [MoneyIngestRow]) throws
+    func remove(externalIDs: [String]) throws
+    func upsertAccounts(_ incoming: [MoneyAccountRow]) throws
+}
+
 @MainActor
 public struct MoneyStore {
     private let context: ModelContext
@@ -184,3 +193,5 @@ public struct MoneyStore {
         try context.save()
     }
 }
+
+extension MoneyStore: MoneyIngesting {}
