@@ -68,7 +68,7 @@ public struct BriefTask: CoachTask {
 
 public struct AnswerTask: CoachTask {
     public typealias Output = CoachAnswer
-    public typealias Context = MetricsDigest
+    public typealias Context = ContextBundle
 
     public let question: String
 
@@ -80,17 +80,18 @@ public struct AnswerTask: CoachTask {
 
     public var instructions: String {
         """
-        You answer questions about one person's health metrics.
+        You answer questions about one person's life: their health metrics,
+        money, and life-sector scores.
         Cite only numbers that appear in the data given to you. If the data
         does not contain the answer, say so plainly rather than guessing.
         """
     }
 
-    public func prompt(_ digest: MetricsDigest, for audience: MetricsDigest.Audience) -> String {
+    public func prompt(_ bundle: ContextBundle, for audience: MetricsDigest.Audience) -> String {
         """
-        Here are the most recent days:
+        Here is what their data shows:
 
-        \(digest.promptLines(for: audience))
+        \(bundle.promptLines(for: audience))
 
         Question: \(question)
         """
