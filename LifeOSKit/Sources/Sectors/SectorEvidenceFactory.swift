@@ -17,7 +17,8 @@ public enum SectorEvidenceFactory {
 
         case .money:
             return MoneyScorer(
-                amounts: inputs.amounts, previousAmounts: inputs.previousAmounts
+                amounts: inputs.amounts, previousAmounts: inputs.previousAmounts,
+                budget: inputs.budget
             ).evidence()
 
         case .mission:
