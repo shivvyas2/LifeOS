@@ -52,7 +52,7 @@ struct AssistantSheet: View {
                         bubble(message).id(message.id)
                     }
                     ForEach(model.pending) { write in
-                        confirmationCard(write)
+                        confirmationCard(write).id(write.id)
                     }
                     if model.isThinking && model.pending.isEmpty {
                         Text("Thinking…")
@@ -64,6 +64,11 @@ struct AssistantSheet: View {
             }
             .onChange(of: model.messages.count) {
                 if let last = model.messages.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+            .onChange(of: model.pending.count) {
+                if let last = model.pending.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
