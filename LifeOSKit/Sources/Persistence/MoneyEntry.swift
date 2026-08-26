@@ -150,10 +150,12 @@ public enum MoneyCategoryRule {
     public static func isTransferLike(_ code: String?) -> Bool {
         guard let code else { return false }
         if code == "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" { return true }
-        // Plaid's detailed codes extend the primary, e.g.
-        // TRANSFER_IN_ACCOUNT_TRANSFER, so match the prefix rather than listing
-        // every detail Plaid may add later.
-        return code.hasPrefix("TRANSFER_IN") || code.hasPrefix("TRANSFER_OUT")
+        // Plaid's detailed codes extend the primary with an underscore, e.g.
+        // TRANSFER_IN_ACCOUNT_TRANSFER. Match the underscore-delimited prefix
+        // rather than listing every detail Plaid may add; without the underscore
+        // a code that merely starts with the same letters would be excluded as if
+        // it were a transfer.
+        return code.hasPrefix("TRANSFER_IN_") || code.hasPrefix("TRANSFER_OUT_")
     }
 }
 

@@ -116,4 +116,15 @@ import SwiftData
         ])
         #expect(summary.expenses == 450)
     }
+
+    @Test func aCategoryThatMerelyStartsLikeATransferIsStillSpending() {
+        // TRANSFER_IN is a primary category, and its detail codes extend it with an
+        // underscore. Matching the bare prefix would swallow any future code that
+        // happens to begin with the same letters and quietly erase real spending.
+        let summary = summarise(entries: [
+            MoneyEntry(date: day, amount: -220, merchant: "Advisory fee",
+                       categoryCode: "TRANSFER_INVESTMENT_ADVISORY_FEE"),
+        ])
+        #expect(summary.expenses == 220)
+    }
 }
