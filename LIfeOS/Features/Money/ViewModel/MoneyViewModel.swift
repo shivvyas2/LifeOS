@@ -25,12 +25,16 @@ final class MoneyViewModel {
     }
 
     func load(connection: PlaidConnectionViewModel? = nil) {
-        // Off unless deliberately switched on in Settings. This now applies in
-        // release builds too, so that a TestFlight tester can see the screen
-        // while bank connection is broken. The snapshot it returns carries
-        // `isSample`, and the screen says so on itself: nothing here may look
-        // like the reader's real money.
-        if UserDefaults.standard.bool(forKey: Self.sampleDataKey) {
+        // On by default (registered in LIfeOSApp), so a fresh TestFlight
+        // install has a Money tab worth showing before any bank exists. An
+        // attached bank always wins over the flag: invented figures may never
+        // sit in front of real ones, and the screen badges the month as
+        // sample whenever they show.
+        let bankAttached: Bool = switch connection?.state {
+        case .connected, .needsReconnect: true
+        default: false
+        }
+        if UserDefaults.standard.bool(forKey: Self.sampleDataKey), !bankAttached {
             snapshot = .sample
             return
         }

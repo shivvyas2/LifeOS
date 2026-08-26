@@ -60,7 +60,7 @@ struct SettingsScreen: View {
                     Text("Use sample finance data")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text("Invented numbers, for looking at the layout. The Money screen marks the month as sample while this is on.")
+                    Text("Invented numbers, on by default so there is something to show. A connected bank replaces them, and the Money screen marks the month as sample while they show.")
                         .font(.system(size: 13))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
