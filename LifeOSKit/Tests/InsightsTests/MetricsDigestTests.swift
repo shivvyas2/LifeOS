@@ -65,9 +65,14 @@ import Persistence
         #expect(digest.averages.steps == nil)
     }
 
-    /// The privacy rule made mechanical: whatever else changes about the
-    /// digest, the raw Whoop surface must not appear in what we send.
-    @Test func thePromptTextCarriesNoRawWhoopFields() throws {
+    /// The privacy rule, scoped to where it bites. HRV, SpO2, skin temperature
+    /// and respiratory rate are fine on-device, where nothing leaves the phone.
+    /// They must not appear in a render destined for a provider.
+    ///
+    /// Revised 2026-08-26. The blanket version of this test predated any
+    /// off-device path and blocked the on-device coach from data already on
+    /// the device.
+    @Test func anOffDeviceRenderCarriesNoRawWhoopSeries() throws {
         let store = try makeStore()
         try store.upsert(date: day) {
             $0.steps = 8_000
@@ -77,16 +82,31 @@ import Persistence
             $0.skinTempCelsius = 33.4
             $0.respiratoryRate = 14.2
         }
-
-        let text = MetricsDigest.from(
+        let digest = MetricsDigest.from(
             metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
-        ).promptLines
+        )
 
-        #expect(text.contains("62"))              // the aggregate is wanted
-        #expect(text.contains("41.2") == false)   // HRV series is not
-        #expect(text.contains("97.5") == false)
-        #expect(text.contains("33.4") == false)
-        #expect(text.contains("14.2") == false)
+        let offDevice = digest.promptLines(for: .offDevice)
+
+        #expect(offDevice.contains("62"))              // the aggregate is wanted
+        #expect(offDevice.contains("41.2") == false)   // HRV series is not
+        #expect(offDevice.contains("97.5") == false)
+        #expect(offDevice.contains("33.4") == false)
+        #expect(offDevice.contains("14.2") == false)
+    }
+
+    @Test func anOnDeviceRenderCarriesTheSeries() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) {
+            $0.hrvMs = 41.2
+            $0.spo2Percentage = 97.5
+        }
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
+
+        #expect(digest.promptLines(for: .onDevice).contains("41.2"))
+        #expect(digest.promptLines.contains("97.5"))   // the property defaults to on-device
     }
 
     @Test func aDayCarriesTheWiderWhoopSurface() throws {

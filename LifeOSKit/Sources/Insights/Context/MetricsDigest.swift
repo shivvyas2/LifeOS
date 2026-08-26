@@ -70,6 +70,14 @@ public struct MetricsDigest: Sendable, Equatable {
         public let sleepDebtMinutes: Int?
     }
 
+    /// Who the render is for. The distinction exists because the raw Whoop
+    /// series stays on the phone: on-device inference sends nothing anywhere,
+    /// and a provider call does.
+    public enum Audience: Sendable {
+        case onDevice
+        case offDevice
+    }
+
     public let days: [Day]
     public let averages: Averages
 
@@ -179,21 +187,23 @@ public struct MetricsDigest: Sendable, Equatable {
     /// missing rather than writing "nil": a blank costs no tokens and says the
     /// same thing. Deltas against the baseline are what let the model tell a
     /// number from an unusual number.
-    public var promptLines: String {
+    public var promptLines: String { promptLines(for: .onDevice) }
+
+    public func promptLines(for audience: Audience) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d MMM"
 
         var blocks: [String] = []
-        if let baseline = baselineLine { blocks.append(baseline + "\n") }
-        blocks.append(contentsOf: days.map { render($0, formatter) })
+        if let baseline = baselineLine(for: audience) { blocks.append(baseline + "\n") }
+        blocks.append(contentsOf: days.map { render($0, formatter, audience) })
         return blocks.joined(separator: "\n")
     }
 
-    private var baselineLine: String? {
+    private func baselineLine(for audience: Audience) -> String? {
         var parts: [String] = []
         if let v = averages.recoveryPct { parts.append("recovery \(v)%") }
         if let v = averages.sleepMinutes { parts.append("sleep \(duration(v))") }
-        if let v = averages.hrvMs { parts.append("hrv \(number(v))ms") }
+        if audience == .onDevice, let v = averages.hrvMs { parts.append("hrv \(number(v))ms") }
         if let v = averages.restingHR { parts.append("rhr \(number(v))") }
         if let v = averages.strain { parts.append("strain \(number(v))") }
         if let v = averages.steps { parts.append("steps \(v)") }
@@ -201,7 +211,7 @@ public struct MetricsDigest: Sendable, Equatable {
         return "\(days.count)-day baseline: " + parts.joined(separator: ", ")
     }
 
-    private func render(_ day: Day, _ formatter: DateFormatter) -> String {
+    private func render(_ day: Day, _ formatter: DateFormatter, _ audience: Audience) -> String {
         var parts: [String] = [formatter.string(from: day.date)]
 
         if let v = day.recoveryPct {
@@ -227,11 +237,13 @@ public struct MetricsDigest: Sendable, Equatable {
         if let v = day.awakeMinutes { parts.append("awake \(duration(v))") }
         if let v = day.napMinutes { parts.append("nap \(duration(v))") }
         if let v = day.strain { parts.append("strain \(number(v))\(delta(v, averages.strain))") }
-        if let v = day.hrvMs { parts.append("hrv \(number(v))ms\(delta(v, averages.hrvMs))") }
+        if audience == .onDevice {
+            if let v = day.hrvMs { parts.append("hrv \(number(v))ms\(delta(v, averages.hrvMs))") }
+            if let v = day.spo2Pct { parts.append("spo2 \(number(v))%") }
+            if let v = day.skinTempCelsius { parts.append("skin \(number(v))C") }
+            if let v = day.respiratoryRate { parts.append("resp \(number(v))") }
+        }
         if let v = day.restingHR { parts.append("rhr \(number(v))\(delta(v, averages.restingHR))") }
-        if let v = day.spo2Pct { parts.append("spo2 \(number(v))%") }
-        if let v = day.skinTempCelsius { parts.append("skin \(number(v))C") }
-        if let v = day.respiratoryRate { parts.append("resp \(number(v))") }
         if let v = day.steps { parts.append("steps \(v)") }
         if let v = day.exerciseMinutes { parts.append("exercise \(v)m") }
 
