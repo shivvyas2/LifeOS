@@ -14,7 +14,9 @@ public struct CalendarEventSnapshot: Equatable, Identifiable, Sendable {
     /// only adopts this one for genuinely new events.
     public let id: UUID
     public let source: CalendarEventSource
-    /// EKEvent.eventIdentifier, or the Google event id. Unique within a source.
+    /// EKEvent.eventIdentifier, or the Google event id, qualified with the
+    /// occurrence start for recurring rows because EventKit reuses one
+    /// identifier across a series.
     public let sourceID: String
     public let calendarTitle: String
     public let title: String
@@ -75,6 +77,9 @@ public final class CalendarEvent {
     public var id: UUID
     /// Stored raw so the enum can gain cases without a migration.
     public var sourceRaw: String
+    /// EKEvent.eventIdentifier, or the Google event id, qualified with the
+    /// occurrence start for recurring rows because EventKit reuses one
+    /// identifier across a series.
     public var sourceID: String
     public var calendarTitle: String
     public var title: String

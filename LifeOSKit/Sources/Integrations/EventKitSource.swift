@@ -66,18 +66,29 @@ public actor EventKitSource: CalendarSource {
     /// has no natural key and is dropped rather than cached unmatchable.
     private func snapshot(of event: EKEvent) -> CalendarEventSnapshot? {
         guard let identifier = event.eventIdentifier else { return nil }
+        let isRecurring = event.hasRecurrenceRules || event.isDetached
         return CalendarEventSnapshot(
             id: UUID(),
             source: .eventKit,
-            sourceID: identifier,
+            sourceID: Self.sourceID(identifier: identifier, startDate: event.startDate, isRecurring: isRecurring),
             calendarTitle: event.calendar?.title ?? "",
             title: event.title ?? "",
             startDate: event.startDate,
             endDate: event.endDate,
             isAllDay: event.isAllDay,
-            isRecurring: event.hasRecurrenceRules || event.isDetached,
+            isRecurring: isRecurring,
             location: event.location,
             notes: event.notes
         )
+    }
+
+    /// Occurrences of a recurring series share one EKEvent identifier, so a
+    /// recurring row's natural key is qualified with its occurrence start.
+    /// A qualified id never resolves through `event(withIdentifier:)`, which
+    /// makes writes against occurrences fail with `unknownEvent` instead of
+    /// silently editing the wrong occurrence; the tool layer refuses recurring
+    /// writes with a real explanation before that can happen.
+    static func sourceID(identifier: String, startDate: Date, isRecurring: Bool) -> String {
+        isRecurring ? "\(identifier)#\(Int(startDate.timeIntervalSince1970))" : identifier
     }
 }
