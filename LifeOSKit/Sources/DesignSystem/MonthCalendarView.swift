@@ -30,7 +30,7 @@ public struct WeekdayHeader: View {
         HStack(spacing: spacing) {
             ForEach(Array(symbols.enumerated()), id: \.offset) { index, symbol in
                 Text(symbol)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(LifeOSType.caption.weight(.semibold))
                     .foregroundStyle(
                         index == todayColumn
                             ? LifeOSTokens.accent
@@ -61,7 +61,7 @@ public struct DateHeadline: View {
 
         VStack(alignment: .leading, spacing: 0) {
             Text(date.formatted(.dateTime.day().locale(.current)))
-                .font(.system(size: 104, weight: .bold))
+                .font(LifeOSType.display)
                 .tracking(-5)
                 .foregroundStyle(primary)
                 .lineLimit(1)
@@ -70,17 +70,17 @@ public struct DateHeadline: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(date.formatted(.dateTime.month(.wide)).uppercased())
-                        .font(.system(size: 27, weight: .bold))
+                        .font(LifeOSType.screenTitle)
                         .foregroundStyle(primary)
                     Text(date.formatted(.dateTime.year()))
-                        .font(.system(size: 27, weight: .regular))
+                        .font(LifeOSType.screenTitle.weight(.regular))
                         .foregroundStyle(secondary)
                 }
 
                 Spacer(minLength: 12)
 
                 Text(date.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(.system(size: 22, weight: .medium))
+                    .font(LifeOSType.sectionTitle.weight(.medium))
                     .foregroundStyle(secondary)
             }
         }

@@ -71,11 +71,11 @@ public struct TrendStatTile: View {
     private var header: some View {
         HStack {
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             Spacer(minLength: 4)
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
@@ -85,12 +85,12 @@ public struct TrendStatTile: View {
     private var numeral: some View {
         HStack(alignment: .lastTextBaseline, spacing: 4) {
             Text(value ?? "—")
-                .font(.system(size: 32, weight: .semibold))
+                .font(LifeOSType.numeral)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .opacity(value == nil ? 0.4 : 1)
             if let unit, value != nil {
                 Text(unit)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(LifeOSType.label)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }

@@ -15,14 +15,14 @@ public struct AlertBanner: View {
         if !messages.isEmpty {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .padding(10)
                     .background(Circle().fill(LifeOSTokens.alertText.resolve(scheme).opacity(0.12)))
 
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(messages, id: \.self) { message in
                         Text(message)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

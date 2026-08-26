@@ -44,7 +44,7 @@ struct MoneyFlowSection: View {
                 Text("Net · \(snapshot.monthLabel)").moneyEyebrow(scheme)
                 MoneyFigure(amount: snapshot.net, size: 46, showsSign: snapshot.net < 0)
                 Text(snapshot.verdict)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(MoneyPalette.quietInk(scheme))
             }
 
@@ -63,7 +63,7 @@ struct MoneyFlowSection: View {
                         .frame(height: 26)
                         .padding(.top, Space.half)
                     Text("\(Int((snapshot.expenses / snapshot.income) * 100))% of what you earned")
-                        .font(.system(size: 12))
+                        .font(LifeOSType.caption)
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                 }
             }
@@ -73,9 +73,9 @@ struct MoneyFlowSection: View {
                     Text("Kept").moneyEyebrow(scheme)
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("\(Int(rate * 100))")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(LifeOSType.numeral(34))
                             .monospacedDigit()
-                        Text("%").font(.system(size: 18, weight: .semibold))
+                        Text("%").font(LifeOSType.body.weight(.semibold))
                             .foregroundStyle(MoneyPalette.quietInk(scheme))
                     }
                     .foregroundStyle(MoneyPalette.ink.resolve(scheme))
@@ -115,7 +115,7 @@ struct MoneyCategoriesSection: View {
                     MoneyBand(tone: MoneyPalette.stone) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(row.name)
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(LifeOSType.body.weight(.semibold))
                                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                             Spacer(minLength: Space.x1)
                             MoneyFigure(amount: row.amount, size: 20)
@@ -123,7 +123,7 @@ struct MoneyCategoriesSection: View {
                         Pinstripes(fraction: row.share)
                             .frame(height: 18)
                         Text("\(Int(row.share * 100))% of spending")
-                            .font(.system(size: 11))
+                            .font(LifeOSType.eyebrow.weight(.regular))
                             .foregroundStyle(MoneyPalette.quietInk(scheme))
                     }
                 }
@@ -150,7 +150,7 @@ struct MoneyRecurringSection: View {
                 Text(snapshot.recurring.isEmpty
                      ? "No repeating payments found yet"
                      : "\(snapshot.recurring.count) repeating payment\(snapshot.recurring.count == 1 ? "" : "s")")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(MoneyPalette.quietInk(scheme))
             }
 
@@ -165,7 +165,7 @@ struct MoneyRecurringSection: View {
                         HStack(alignment: .firstTextBaseline) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.merchant)
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(LifeOSType.body.weight(.semibold))
                                     .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                                 Text(row.category ?? "Uncategorised")
                                     .moneyEyebrow(scheme)
@@ -174,7 +174,7 @@ struct MoneyRecurringSection: View {
                             VStack(alignment: .trailing, spacing: 2) {
                                 MoneyFigure(amount: row.amount, size: 20)
                                 Text("\(row.months) months")
-                                    .font(.system(size: 11))
+                                    .font(LifeOSType.eyebrow.weight(.regular))
                                     .foregroundStyle(MoneyPalette.quietInk(scheme))
                             }
                         }
@@ -188,7 +188,7 @@ struct MoneyRecurringSection: View {
                     // anything: a monthly number small enough to ignore is
                     // rarely small enough to ignore twelve times.
                     Text("What these cost if nothing changes")
-                        .font(.system(size: 12))
+                        .font(LifeOSType.caption)
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                 }
             }
@@ -210,7 +210,7 @@ struct MoneyGoalSection: View {
                     Text(goal.name).moneyEyebrow(scheme)
                     MoneyFigure(amount: goal.saved, size: 46)
                     HStack(alignment: .firstTextBaseline) {
-                        Text("of").font(.system(size: 13))
+                        Text("of").font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(MoneyPalette.quietInk(scheme))
                         MoneyFigure(amount: goal.target, size: 18)
                     }
@@ -220,7 +220,7 @@ struct MoneyGoalSection: View {
                     Text(goal.isMet
                          ? "Reached. Anything more is ahead of plan."
                          : "\(Int(goal.progress * 100))% there")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                 }
 
@@ -233,13 +233,13 @@ struct MoneyGoalSection: View {
                             Text(months <= 1
                                  ? "About a month at this month's pace"
                                  : "About \(months) months at this month's pace")
-                                .font(.system(size: 12))
+                                .font(LifeOSType.caption)
                                 .foregroundStyle(MoneyPalette.quietInk(scheme))
                         } else {
                             // Honest rather than encouraging: a month that
                             // kept nothing gets no arrival date.
                             Text("No date while the month is not keeping anything")
-                                .font(.system(size: 12))
+                                .font(LifeOSType.caption)
                                 .foregroundStyle(MoneyPalette.quietInk(scheme))
                         }
                     }
@@ -248,14 +248,14 @@ struct MoneyGoalSection: View {
                 MoneyBand(tone: MoneyPalette.butter, minHeight: 180) {
                     Text("Saving for").moneyEyebrow(scheme)
                     Text("No goal set")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(LifeOSType.numeral)
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     Text("Name a target and this becomes the month's scoreboard.")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Set a goal", action: onEdit)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                         .padding(.vertical, 8)
                         .padding(.horizontal, Space.x2)
@@ -281,10 +281,10 @@ struct MoneyPressureSection: View {
                 MoneyBand(tone: MoneyPalette.mint, minHeight: 200) {
                     Text("What hurts").moneyEyebrow(scheme)
                     Text("Nothing right now")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(LifeOSType.numeral)
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     Text("No bucket is over and nothing is quietly repeating. This band fills itself when that changes.")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -293,7 +293,7 @@ struct MoneyPressureSection: View {
                     Text("What hurts").moneyEyebrow(scheme)
                     MoneyFigure(amount: points.reduce(0) { $0 + $1.amount }, size: 40)
                     Text("across \(points.count) thing\(points.count == 1 ? "" : "s")")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                 }
 
@@ -301,13 +301,13 @@ struct MoneyPressureSection: View {
                     MoneyBand(tone: MoneyPalette.stone) {
                         HStack(alignment: .firstTextBaseline) {
                             Text(point.title)
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(LifeOSType.body.weight(.semibold))
                                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                             Spacer(minLength: Space.x1)
                             MoneyFigure(amount: point.amount, size: 20)
                         }
                         Text(point.detail)
-                            .font(.system(size: 12))
+                            .font(LifeOSType.caption)
                             .foregroundStyle(MoneyPalette.quietInk(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -315,7 +315,7 @@ struct MoneyPressureSection: View {
 
                 MoneyBand(tone: MoneyPalette.sage) {
                     Button("Edit budgets", action: onEditBudgets)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                         .padding(.vertical, 8)
                         .padding(.horizontal, Space.x2)
@@ -341,12 +341,12 @@ struct MoneyLedgerSection: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Recent").moneyEyebrow(scheme)
                         Text("\(snapshot.recent.count) transactions")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(LifeOSType.sectionTitle.weight(.bold))
                             .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     }
                     Spacer()
                     Button("Add", action: onAdd)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                 }
             }
@@ -360,7 +360,7 @@ struct MoneyLedgerSection: View {
                     // rows the eye can run down.
                     HStack(spacing: 0) {
                         Image(systemName: MoneyLedgerSection.glyph(for: row.category))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.75))
                             .frame(width: 52, height: 62)
                             .background(MoneyPalette.sage.resolve(scheme))
@@ -368,7 +368,7 @@ struct MoneyLedgerSection: View {
                         HStack(alignment: .center) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(row.merchant)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(LifeOSType.rowTitle)
                                     .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                                 Text(row.category ?? "Uncategorised").moneyEyebrow(scheme)
                             }
@@ -412,7 +412,7 @@ struct MoneyEmptyBand: View {
     var body: some View {
         MoneyBand(tone: tone, minHeight: 120) {
             Text(line)
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
                 .fixedSize(horizontal: false, vertical: true)
         }

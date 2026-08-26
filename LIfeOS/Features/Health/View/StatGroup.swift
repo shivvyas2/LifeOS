@@ -19,7 +19,7 @@ struct StatGroup: View {
         if rows.contains(where: { $0.value != nil }) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(title.uppercased())
-                    .font(.system(size: 11, weight: .bold))
+                    .font(LifeOSType.eyebrow.weight(.bold))
                     .tracking(1)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .padding(.bottom, 8)
@@ -27,16 +27,16 @@ struct StatGroup: View {
                 ForEach(rows) { row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.label)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(LifeOSType.label)
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         Spacer(minLength: 8)
                         if let delta = row.delta, row.value != nil {
                             Text(delta)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(LifeOSType.caption.weight(.semibold))
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                         Text(row.value ?? "—")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .opacity(row.value == nil ? 0.4 : 1)
                     }

@@ -114,7 +114,7 @@ struct AgendaCard: View {
                 SoftCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Upcoming")
-                            .font(.system(size: 19, weight: .bold))
+                            .font(LifeOSType.body.weight(.bold))
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         upcomingRows
                     }
@@ -129,11 +129,11 @@ struct AgendaCard: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Today")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(LifeOSType.body.weight(.bold))
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 if access == .authorized, !agenda.isEmpty {
                     Text(agenda.count == 1 ? "1 event on your day" : "\(agenda.count) events on your day")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }
@@ -144,9 +144,9 @@ struct AgendaCard: View {
                 Button(action: onOpenToday) {
                     HStack(spacing: 4) {
                         Text(Date.now.formatted(.dateTime.month(.abbreviated).day()))
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(LifeOSType.eyebrow)
                     }
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.horizontal, 12)
@@ -167,7 +167,7 @@ struct AgendaCard: View {
         case .notDetermined:
             VStack(alignment: .leading, spacing: 12) {
                 Text("See your day's schedule here.")
-                    .font(.system(size: 15))
+                    .font(LifeOSType.secondary)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 CapsuleButton(title: "Connect calendar", action: onConnect)
             }
@@ -176,7 +176,7 @@ struct AgendaCard: View {
         case .denied:
             VStack(alignment: .leading, spacing: 12) {
                 Text("Calendar access is off.")
-                    .font(.system(size: 15))
+                    .font(LifeOSType.secondary)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 CapsuleButton(title: "Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -190,7 +190,7 @@ struct AgendaCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 if agenda.isEmpty {
                     Text("Nothing scheduled today.")
-                        .font(.system(size: 15))
+                        .font(LifeOSType.secondary)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .padding(.vertical, 2)
                 } else {
@@ -199,7 +199,7 @@ struct AgendaCard: View {
 
                 Button("+ Add event", action: onAddEvent)
                     .buttonStyle(.plain)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(LifeOSType.secondary.weight(.medium))
                     .foregroundStyle(LifeOSTokens.accent)
             }
         }
@@ -228,7 +228,7 @@ struct AgendaCard: View {
             if agenda.count > Self.maxAgendaRows {
                 Button(action: onOpenToday) {
                     Text("+\(agenda.count - Self.maxAgendaRows) more")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -265,7 +265,7 @@ struct AgendaCard: View {
 
             if upcoming.count > Self.maxUpcomingRows {
                 Text("+\(upcoming.count - Self.maxUpcomingRows) more")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(LifeOSType.label)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
@@ -277,7 +277,7 @@ struct AgendaCard: View {
     /// Money bands use, so every card's sections read alike.
     private func eyebrow(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 12, weight: .semibold))
+            .font(LifeOSType.caption.weight(.semibold))
             .tracking(0.8)
             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
     }
@@ -309,18 +309,18 @@ struct EventJourneyRow: View {
         let part = DayPart.of(event, calendar: calendar)
         return HStack(spacing: 12) {
             Image(systemName: part.icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(scheme == .dark ? part.hue.pastelDark : part.hue.pastel))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(event.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .lineLimit(1)
                 Text(event.spanLabel)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
 
@@ -328,7 +328,7 @@ struct EventJourneyRow: View {
 
             if onTap != nil {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(LifeOSType.caption.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
             }
         }

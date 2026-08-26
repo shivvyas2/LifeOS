@@ -58,9 +58,9 @@ public struct InlineStatusView: View {
             Image(systemName: status.severity == .error
                   ? "exclamationmark.circle.fill"
                   : "info.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(LifeOSType.caption.weight(.semibold))
             Text(status.message)
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(tint)
@@ -103,7 +103,7 @@ public struct SegmentedPills<Value: Hashable>: View {
                     }
                 } label: {
                     Text(option.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .frame(maxWidth: .infinity)
                         .frame(height: Space.x5)
                         .background {
@@ -225,7 +225,7 @@ public struct CodeField: View {
             .overlay {
                 if let digit {
                     Text(String(digit))
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .font(LifeOSType.numeral(24, weight: .semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .transition(.scale(scale: 0.7).combined(with: .opacity))
                 }
@@ -251,7 +251,7 @@ public struct FocusableField: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .font(.system(size: 17))
+            .font(LifeOSType.body)
             .padding(.horizontal, Space.x2)
             .frame(height: Space.x6 + Space.half)
             .background {

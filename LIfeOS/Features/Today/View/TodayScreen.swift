@@ -138,10 +138,10 @@ struct TodayScreen: View {
     private var streakLine: some View {
         HStack(spacing: 6) {
             Text("\(snapshot.streak)")
-                .font(.system(size: 15, weight: .bold))
+                .font(LifeOSType.rowTitle.weight(.bold))
                 .foregroundStyle(LifeOSTokens.accent)
             Text(snapshot.streak == 1 ? "day streak" : "day streak")
-                .font(.system(size: 15, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         }
     }

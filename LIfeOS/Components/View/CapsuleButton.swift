@@ -15,7 +15,7 @@ struct CapsuleButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(prominent ? .white : LifeOSTokens.primaryText.resolve(scheme))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 11)

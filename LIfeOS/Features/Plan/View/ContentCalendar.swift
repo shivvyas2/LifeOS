@@ -33,7 +33,7 @@ struct ContentCalendar: View {
                 VStack(spacing: 12) {
                     HStack {
                         Text(month.formatted(.dateTime.month(.wide).year()))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                         Spacer()
                     }
 
@@ -56,22 +56,22 @@ struct ContentCalendar: View {
                                 .fill(Self.color(for: group.status))
                                 .frame(width: 8, height: 8)
                             Text(group.status.title.uppercased())
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(LifeOSType.eyebrow)
                                 .tracking(0.6)
                                 .opacity(0.55)
                         }
                         ForEach(group.items) { item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.title).font(.system(size: 15, weight: .medium))
+                                    Text(item.title).font(LifeOSType.secondary.weight(.medium))
                                     if let due = item.dueDate {
                                         Text(due.formatted(.dateTime.month().day()))
-                                            .font(.system(size: 12)).opacity(0.5)
+                                            .font(LifeOSType.caption).opacity(0.5)
                                     }
                                 }
                                 Spacer()
                                 Button("Advance") { onAdvance(item.id) }
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(LifeOSType.label.weight(.semibold))
                                     .tint(LifeOSTokens.accent)
                             }
                             .contextMenu {
@@ -99,7 +99,7 @@ struct ContentCalendar: View {
             let statuses = marks[calendar.startOfDay(for: date)] ?? []
             VStack(spacing: 3) {
                 Text(date.formatted(.dateTime.day()))
-                    .font(.system(size: 12, weight: calendar.isDateInToday(date) ? .bold : .regular))
+                    .font(LifeOSType.caption.weight(calendar.isDateInToday(date) ? .bold : .regular))
                     .foregroundStyle(calendar.isDateInToday(date) ? LifeOSTokens.accent : .primary)
                 HStack(spacing: 2) {
                     ForEach(Array(statuses.prefix(3).enumerated()), id: \.offset) { _, status in

@@ -55,7 +55,7 @@ struct PlanScreen: View {
                         onAdd()
                     } label: {
                         Label(section.addPrompt, systemImage: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .padding(.vertical, 13)
                             .frame(maxWidth: .infinity)
@@ -81,14 +81,14 @@ struct PlanScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .strikethrough(item.status == .done, color: .secondary)
                 Spacer()
                 statusChip(item)
             }
 
             if let detail = item.detail {
-                Text(detail).font(.system(size: 13)).opacity(0.6)
+                Text(detail).font(LifeOSType.label.weight(.regular)).opacity(0.6)
             }
 
             switch section {
@@ -97,10 +97,10 @@ struct PlanScreen: View {
                     ProgressView(value: fraction)
                         .tint(fraction >= 1 ? LifeOSTokens.accent : LifeOSTokens.primaryText.resolve(scheme))
                     HStack {
-                        Text(milestoneLabel(item)).font(.system(size: 12)).opacity(0.55)
+                        Text(milestoneLabel(item)).font(LifeOSType.caption).opacity(0.55)
                         Spacer()
                         Button("Advance") { onAdvance(item.id) }
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                             .tint(LifeOSTokens.accent)
                     }
                 }
@@ -116,7 +116,7 @@ struct PlanScreen: View {
                         onToggleHabit(item.id)
                     } label: {
                         Image(systemName: item.recentTicks.last == true ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 26))
+                            .font(LifeOSType.screenTitle.weight(.regular))
                             .foregroundStyle(item.recentTicks.last == true
                                              ? LifeOSTokens.accent
                                              : LifeOSTokens.secondaryText.resolve(scheme))
@@ -127,7 +127,7 @@ struct PlanScreen: View {
             case .notes, .content:
                 if let due = item.dueDate {
                     Text(due.formatted(.dateTime.month().day()))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(LifeOSType.caption.weight(.medium))
                         .opacity(0.55)
                 }
             }
@@ -141,11 +141,11 @@ struct PlanScreen: View {
     private func statusChip(_ item: PlanItemSnapshot) -> some View {
         if section == .habits {
             Text("\(snapshot.streaks[item.id] ?? 0) day streak")
-                .font(.system(size: 12, weight: .semibold))
+                .font(LifeOSType.caption.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.accent)
         } else {
             Text(item.status.title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(LifeOSType.eyebrow)
                 .opacity(0.6)
         }
     }
@@ -167,10 +167,10 @@ struct PlanScreen: View {
     private var empty: some View {
         VStack(spacing: 8) {
             Text("Nothing here yet")
-                .font(.system(size: 17, weight: .semibold))
+                .font(LifeOSType.body.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Text("Add your first \(section.title.lowercased().dropLast(section.title.hasSuffix("s") ? 1 : 0))")
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         }
         .padding(.vertical, 50)

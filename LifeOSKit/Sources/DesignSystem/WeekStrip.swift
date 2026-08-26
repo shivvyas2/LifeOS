@@ -37,7 +37,7 @@ public struct WeekStrip: View {
 
                 VStack(spacing: 6) {
                     Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                        .font(LifeOSType.caption.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
                     ZStack {
@@ -51,7 +51,7 @@ public struct WeekStrip: View {
                                 .rotationEffect(.degrees(-90))
                         }
                         Text(day.formatted(.dateTime.day()))
-                            .font(.system(size: 14, weight: isSelected ? .bold : .medium))
+                            .font(LifeOSType.label.weight(isSelected ? .bold : .medium))
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     }
                     .frame(width: 36, height: 36)

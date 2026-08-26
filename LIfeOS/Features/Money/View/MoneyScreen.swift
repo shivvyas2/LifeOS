@@ -105,7 +105,7 @@ struct MoneyScreen: View {
     /// It stays undismissable all the same: every figure below it is invented.
     private var sampleBadge: some View {
         Text("Sample data")
-            .font(.system(size: 11, weight: .semibold))
+            .font(LifeOSType.eyebrow)
             .tracking(0.6)
             .foregroundStyle(MoneyPalette.quietInk(scheme))
             .padding(.vertical, 5)
@@ -121,22 +121,22 @@ struct MoneyScreen: View {
             Spacer(minLength: Space.x8)
             Text("Money").moneyEyebrow(scheme)
             Text("Nothing here yet")
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(LifeOSType.screenTitle)
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
             Text("Connect a bank, or log a transaction by hand to get started.")
-                .font(.system(size: 14))
+                .font(LifeOSType.label.weight(.regular))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
 
             Button("Connect your bank", action: onConnect)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                 .padding(.vertical, 12)
                 .padding(.horizontal, Space.x3)
                 .background(Capsule().fill(MoneyPalette.butter.resolve(scheme)))
 
             Button("Add a transaction", action: onAdd)
-                .font(.system(size: 14, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
             Spacer()
         }
@@ -152,14 +152,14 @@ struct MoneyScreen: View {
         VStack(spacing: Space.x2) {
             ProgressView()
             Text("Fetching your transactions")
-                .font(.system(size: 17, weight: .semibold))
+                .font(LifeOSType.body.weight(.semibold))
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
             Text("Your bank is sending the last few months. This usually takes a minute.")
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
             Button("Check again", action: onSync)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         }
         .padding(.horizontal, Space.x3)
@@ -168,12 +168,12 @@ struct MoneyScreen: View {
     private var reconnectBanner: some View {
         HStack(spacing: Space.x1) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(snapshot.reconnectPrompt ?? "Your bank") needs you to sign in again")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                 Text("Figures below are from your last sync.")
-                    .font(.system(size: 12))
+                    .font(LifeOSType.caption)
                     .foregroundStyle(MoneyPalette.quietInk(scheme))
             }
             Spacer(minLength: 0)

@@ -55,7 +55,7 @@ public struct PastelFillCard: View {
     public var body: some View {
         VStack(spacing: 0) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
@@ -63,7 +63,7 @@ public struct PastelFillCard: View {
             Spacer(minLength: 16)
 
             Text(label)
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.72))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -71,12 +71,12 @@ public struct PastelFillCard: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text(value ?? "—")
-                    .font(.system(size: 44, weight: .bold))
+                    .font(LifeOSType.display)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .opacity(value == nil ? 0.4 : 1)
                 if let unit, value != nil {
                     Text(unit)
-                        .font(.system(size: 18, weight: .medium))
+                        .font(LifeOSType.body.weight(.medium))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.45))
                 }
             }
@@ -85,7 +85,7 @@ public struct PastelFillCard: View {
 
             if let caption {
                 Text(caption)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(LifeOSType.eyebrow.weight(.bold))
                     .tracking(1.1)
                     .foregroundStyle(captionColor ?? LifeOSTokens.secondaryText.resolve(scheme))
                     .padding(.top, 6)

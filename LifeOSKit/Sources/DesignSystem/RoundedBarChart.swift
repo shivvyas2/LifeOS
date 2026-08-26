@@ -110,7 +110,7 @@ public struct RoundedBarChart: View {
                     }
 
                     Text(bar.label)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(LifeOSType.eyebrow.weight(.medium))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }

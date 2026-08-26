@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 import UIKit
 import Persistence
 
@@ -8,14 +9,18 @@ import Persistence
 /// numbers, and a heading whose bullet gutter is sized off a different font
 /// than its text is a misalignment nobody can find later.
 enum BlockStyle {
+    /// Every step comes from `LifeOSType`, so a note's text is the same size as
+    /// the same text anywhere else in the app. Three heading levels fit under
+    /// the page title without inventing sizes: the third is reading text set
+    /// bold, which is what a fourth-level heading is in any document.
     static func font(_ kind: NoteBlockKind) -> UIFont {
         switch kind {
-        case .heading1: .systemFont(ofSize: 30, weight: .bold)
-        case .heading2: .systemFont(ofSize: 24, weight: .bold)
-        case .heading3: .systemFont(ofSize: 20, weight: .semibold)
-        case .code:     .monospacedSystemFont(ofSize: 15, weight: .regular)
-        case .quote:    .systemFont(ofSize: 18, weight: .regular)
-        default:        .systemFont(ofSize: 18, weight: .regular)
+        case .heading1: LifeOSType.UIKitScale.screenTitle
+        case .heading2: LifeOSType.UIKitScale.sectionTitle
+        case .heading3: LifeOSType.UIKitScale.bodyStrong
+        case .code:     LifeOSType.UIKitScale.mono
+        case .quote:    LifeOSType.UIKitScale.body
+        default:        LifeOSType.UIKitScale.body
         }
     }
 

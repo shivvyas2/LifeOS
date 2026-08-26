@@ -80,12 +80,12 @@ struct LifeBoardScreen: View {
         VStack(alignment: .leading, spacing: Space.half) {
             if let lowest = model.summary.lowest {
                 Text("Lowest: \(lowest.title)")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(LifeOSType.sectionTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             }
             if let mover = model.summary.biggestMover {
                 Text("Biggest move: \(mover.sector.title) \(mover.delta > 0 ? "+" : "")\(mover.delta)")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(LifeOSType.secondary.weight(.medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }

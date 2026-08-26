@@ -92,7 +92,7 @@ struct SectorDetailScreen: View {
     private var emptyState: some View {
         SoftCard {
             Text("Close a month on the board to start this sector's history.")
-                .font(.callout)
+                .font(LifeOSType.secondary)
                 .foregroundStyle(.secondary)
         }
     }
@@ -100,9 +100,9 @@ struct SectorDetailScreen: View {
     private func observations(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Observations").font(.subheadline).foregroundStyle(.secondary)
+                Text("Observations").font(LifeOSType.secondary).foregroundStyle(.secondary)
                 ForEach(history.observations, id: \.self) { observation in
-                    Text(observation).font(.callout)
+                    Text(observation).font(LifeOSType.secondary)
                 }
             }
         }
@@ -120,7 +120,7 @@ struct SectorDetailScreen: View {
     private func trend(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Trend").font(.subheadline).foregroundStyle(.secondary)
+                Text("Trend").font(LifeOSType.secondary).foregroundStyle(.secondary)
                 RoundedBarChart(
                     bars: history.months.map {
                         RoundedBarChart.Bar(
@@ -144,14 +144,14 @@ struct SectorDetailScreen: View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x1) {
                 Text("Why \(entry.month.formatted(.dateTime.month(.wide)))")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(LifeOSType.secondary).foregroundStyle(.secondary)
                 ForEach(entry.evidenceRows, id: \.label) { row in
                     HStack {
                         Text(row.label)
                         Spacer()
                         Text(row.value).foregroundStyle(.secondary)
                     }
-                    .font(.callout)
+                    .font(LifeOSType.secondary)
                 }
             }
         }
@@ -172,7 +172,7 @@ struct SectorDetailScreen: View {
     private func answers(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x2) {
-                Text("Answers over time").font(.subheadline).foregroundStyle(.secondary)
+                Text("Answers over time").font(LifeOSType.secondary).foregroundStyle(.secondary)
                 ForEach(visibleTracks(history), id: \.questionID) { track in
                     questionTrackRow(track, months: history.months)
                 }
@@ -184,14 +184,14 @@ struct SectorDetailScreen: View {
         let entries: [MonthAnswer] = Array(zip(months, track.answers).suffix(answerWindow))
             .map { MonthAnswer(month: $0.0.month, answer: $0.1) }
         return VStack(alignment: .leading, spacing: Space.half) {
-            Text(track.prompt).font(.footnote)
+            Text(track.prompt).font(LifeOSType.label.weight(.regular))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Space.x1) {
                     ForEach(entries) { entry in
                         VStack(spacing: Space.half) {
                             Text(entry.month.formatted(.dateTime.month(.narrow)))
-                                .font(.caption2).foregroundStyle(.secondary)
-                            Text(entry.answer ?? "—").font(.callout)
+                                .font(LifeOSType.caption).foregroundStyle(.secondary)
+                            Text(entry.answer ?? "—").font(LifeOSType.secondary)
                         }
                     }
                 }
@@ -210,12 +210,12 @@ struct SectorDetailScreen: View {
     private func notes(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x2) {
-                Text("Notes").font(.subheadline).foregroundStyle(.secondary)
+                Text("Notes").font(LifeOSType.secondary).foregroundStyle(.secondary)
                 ForEach(Array(history.notes.enumerated()), id: \.offset) { _, note in
                     VStack(alignment: .leading, spacing: Space.half) {
                         Text(note.month.formatted(.dateTime.month(.wide).year()))
-                            .font(.caption2).foregroundStyle(.secondary)
-                        Text(note.text).font(.callout)
+                            .font(LifeOSType.caption).foregroundStyle(.secondary)
+                        Text(note.text).font(LifeOSType.secondary)
                     }
                 }
             }
@@ -226,7 +226,7 @@ struct SectorDetailScreen: View {
         SoftCard {
             Button(action: action) {
                 Text("Open \(sector.title)")
-                    .font(.callout.weight(.medium))
+                    .font(LifeOSType.secondary.weight(.medium))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }

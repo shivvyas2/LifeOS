@@ -37,18 +37,18 @@ struct IntroScreen: View {
                     }
                     if let onSignIn {
                         Button("I already have an account") { onSignIn() }
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.accent)
                             .frame(height: Space.x5)
                     }
                     if let onSkipAuth {
                         Button("Skip for now") { onSkipAuth() }
-                            .font(.system(size: 15, weight: .medium))
+                            .font(LifeOSType.secondary.weight(.medium))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .frame(height: Space.x5)
                     } else {
                         Button("Skip") { onStart() }
-                            .font(.system(size: 15, weight: .medium))
+                            .font(LifeOSType.secondary.weight(.medium))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .frame(height: Space.x5)
                     }
@@ -89,13 +89,13 @@ struct IntroScreen: View {
             VStack(alignment: .leading, spacing: Space.x2) {
                 StaggeredAppear(index: 1) {
                     Text(item.headline)
-                        .font(.system(size: 32, weight: .bold))
+                        .font(LifeOSType.display)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 StaggeredAppear(index: 2) {
                     Text(item.body)
-                        .font(.system(size: 16))
+                        .font(LifeOSType.secondary)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }

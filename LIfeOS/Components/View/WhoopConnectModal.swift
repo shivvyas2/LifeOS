@@ -24,22 +24,22 @@ struct WhoopConnectModal: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Image(systemName: "bolt.heart.fill")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(LifeOSType.body.weight(.semibold))
                                 .foregroundStyle(LifeOSTokens.accent)
                                 .frame(width: 40, height: 40)
                                 .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Whoop")
-                                    .font(.system(size: 20, weight: .bold))
+                                    .font(LifeOSType.sectionTitle.weight(.bold))
                                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                                 Text(model.statusDetail)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(LifeOSType.label)
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             }
                             Spacer()
                             Button(action: onDismiss) {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(LifeOSType.label.weight(.bold))
                                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                                     .frame(width: 36, height: 36)
                                     .contentShape(Circle())
@@ -50,7 +50,7 @@ struct WhoopConnectModal: View {
                         }
 
                         Text("Recovery, sleep, strain and workouts land here once Whoop is connected. Sync pulls the last fortnight.")
-                            .font(.system(size: 14))
+                            .font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -75,25 +75,25 @@ struct WhoopConnectModal: View {
             HStack(spacing: 10) {
                 ProgressView()
                 Text("Finish signing in with Whoop in Safari.")
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 Spacer(minLength: 0)
             }
 
             if hasWaited {
                 Text("Still here? Whoop's page sometimes stalls behind a VPN, Private Relay or a content blocker.")
-                    .font(.system(size: 12))
+                    .font(LifeOSType.caption)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Button("Sign in on a computer instead") { model.beginManual() }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(maxWidth: .infinity)
 
                 Button("Cancel") { model.cancelConnect() }
-                    .font(.system(size: 14, weight: .medium))
+                    .font(LifeOSType.label)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .frame(maxWidth: .infinity)
             }
@@ -113,12 +113,12 @@ struct WhoopConnectModal: View {
         switch model.state {
         case .unconfigured:
             Text("Add the Whoop client ID and deploy whoop-token to enable.")
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         case .disconnected, .failed:
             PrimaryButton("Connect Whoop") { model.connect() }
             Button("Sign in on another device") { model.beginManual() }
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(LifeOSTokens.accent)
                 .frame(maxWidth: .infinity)
         case .connecting:
@@ -132,7 +132,7 @@ struct WhoopConnectModal: View {
             Button("Disconnect", role: .destructive) {
                 model.disconnect()
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(LifeOSType.label)
             .frame(maxWidth: .infinity)
         }
     }
@@ -141,32 +141,32 @@ struct WhoopConnectModal: View {
     private func manualSteps(url: URL) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("1. Open this link on a computer and sign in to Whoop.")
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             Button {
                 UIPasteboard.general.string = url.absoluteString
             } label: {
                 Label("Copy sign-in link", systemImage: "doc.on.doc")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
             }
             .tint(LifeOSTokens.accent)
 
             Text("2. Paste the code it shows you:")
-                .font(.system(size: 13))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             TextField("Code", text: $model.manualCode)
                 .textFieldStyle(.roundedBorder)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .font(.system(size: 14, design: .monospaced))
+                .font(LifeOSType.mono())
 
             HStack(spacing: 16) {
                 Button("Connect") { Task { await model.submitManualCode() } }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .disabled(model.manualCode.trimmingCharacters(in: .whitespaces).isEmpty)
                     .tint(LifeOSTokens.accent)
                 Button("Cancel", role: .cancel) { model.cancelManual() }
-                    .font(.system(size: 14))
+                    .font(LifeOSType.label.weight(.regular))
             }
         }
     }

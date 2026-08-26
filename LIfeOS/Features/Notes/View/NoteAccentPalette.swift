@@ -64,16 +64,3 @@ enum NoteAccentPalette {
         }
     }
 }
-
-/// The serif the notes surface titles in.
-///
-/// The rest of the app is system sans throughout, on purpose: it is a
-/// dashboard, and a dashboard reads better in one neutral face. Notes are the
-/// one place someone writes prose, and a serif at display sizes is what makes
-/// the shelf feel like a library rather than another settings screen. It is
-/// used for titles only, never for body text or controls.
-extension Font {
-    static func noteSerif(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .serif)
-    }
-}

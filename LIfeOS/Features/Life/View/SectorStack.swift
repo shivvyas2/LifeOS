@@ -131,11 +131,11 @@ private struct SectorDeckCard: View {
     private var band: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(card.sector.title)
-                .font(.system(size: 30, weight: .bold))
+                .font(LifeOSType.display)
                 .tracking(-0.6)
             Spacer(minLength: Space.x1)
             Text(scoreText)
-                .font(.system(size: 30, weight: .bold))
+                .font(LifeOSType.display)
                 .monospacedDigit()
                 .foregroundStyle(ink.opacity(card.score == nil ? 0.35 : 1))
         }
@@ -148,7 +148,7 @@ private struct SectorDeckCard: View {
     @ViewBuilder
     private var openBody: some View {
         Text(trendLine)
-            .font(.system(size: 15, weight: .medium))
+            .font(LifeOSType.secondary.weight(.medium))
             .foregroundStyle(ink.opacity(0.65))
 
         if card.history.count > 1 {
@@ -173,7 +173,7 @@ private struct SectorDeckCard: View {
                 Text("Open")
                 Image(systemName: "arrow.right")
             }
-            .font(.system(size: 14, weight: .semibold))
+            .font(LifeOSType.label.weight(.semibold))
             .foregroundStyle(ink)
             .padding(.horizontal, Space.x2)
             .padding(.vertical, Space.x1)

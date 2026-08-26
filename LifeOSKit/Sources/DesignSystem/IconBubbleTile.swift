@@ -23,12 +23,12 @@ public struct IconBubbleTile: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(LifeOSType.label)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .lineLimit(2, reservesSpace: true)
                 Spacer(minLength: 4)
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .frame(width: 38, height: 38)
                     .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
@@ -36,12 +36,12 @@ public struct IconBubbleTile: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
                 Text(value ?? "—")
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(LifeOSType.numeral)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .opacity(value == nil ? 0.4 : 1)
                 if let unit, value != nil {
                     Text(unit)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }

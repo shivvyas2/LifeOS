@@ -25,7 +25,7 @@ struct SignupScaffold<Content: View, Action: View>: View {
                 if let onBack {
                     Button(action: onBack) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(LifeOSType.body.weight(.semibold))
                             .frame(width: Space.x5, height: Space.x5)
                             .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
                     }
@@ -35,13 +35,13 @@ struct SignupScaffold<Content: View, Action: View>: View {
                 VStack(alignment: .leading, spacing: Space.x1) {
                     StaggeredAppear(index: 0) {
                         Text(title)
-                            .font(.system(size: 30, weight: .bold))
+                            .font(LifeOSType.display)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     StaggeredAppear(index: 1) {
                         Text(subtitle)
-                            .font(.system(size: 15))
+                            .font(LifeOSType.secondary)
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -93,8 +93,8 @@ struct IdentityScreen: View {
                         Button { showCountries = true } label: {
                             HStack(spacing: Space.half) {
                                 Text(model.draft.dialCode)
-                                    .font(.system(size: 17, weight: .medium))
-                                Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
+                                    .font(LifeOSType.body.weight(.medium))
+                                Image(systemName: "chevron.down").font(LifeOSType.eyebrow.weight(.bold))
                             }
                             .frame(height: Space.x6 + Space.half)
                             .padding(.horizontal, Space.x2)
@@ -139,7 +139,7 @@ struct IdentityScreen: View {
                 // action the user can take, not another thing going wrong.
                 if model.phoneSendFailed {
                     Button("Use email instead") { model.useEmailInstead() }
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.accent)
                         .frame(height: Space.x5)
                 }
@@ -152,7 +152,7 @@ struct IdentityScreen: View {
                 .disabled(!model.draft.canSendCode || !model.isConfigured)
 
                 Button(model.modeSwitchTitle) { model.toggleMode() }
-                    .font(.system(size: 14, weight: .medium))
+                    .font(LifeOSType.label)
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(height: Space.x5)
 
@@ -232,7 +232,7 @@ struct CodeScreen: View {
                 Button(model.resendIn > 0 ? "Resend in \(model.resendIn)s" : "Resend code") {
                     Task { await model.sendCode() }
                 }
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(LifeOSTokens.accent)
                 .disabled(model.resendIn > 0)
             }
@@ -293,10 +293,10 @@ struct ProfileScreen: View {
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         Spacer()
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(LifeOSType.caption.weight(.bold))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
-                    .font(.system(size: 17))
+                    .font(LifeOSType.body)
                     .padding(.horizontal, Space.x2)
                     .frame(height: Space.x6 + Space.half)
                     .background(
@@ -325,7 +325,7 @@ private struct FieldStyle: ViewModifier {
     let scheme: ColorScheme
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 17))
+            .font(LifeOSType.body)
             .padding(.horizontal, Space.x2)
             .frame(height: Space.x6 + Space.half)
             .background(

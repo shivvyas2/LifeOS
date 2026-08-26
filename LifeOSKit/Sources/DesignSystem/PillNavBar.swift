@@ -67,7 +67,7 @@ public struct PillNavBar<Tab: Hashable>: View {
             selection = item.value
         } label: {
             Image(systemName: item.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+                .font(LifeOSType.body.weight(.semibold))
                 .foregroundStyle(isSelected
                     ? LifeOSTokens.canvas.resolve(scheme)
                     : LifeOSTokens.secondaryText.resolve(scheme))

@@ -32,7 +32,7 @@ struct FitnessSegmentView: View {
             if !activity.workouts.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("WORKOUTS")
-                        .font(.system(size: 11, weight: .bold)).tracking(1)
+                        .font(LifeOSType.eyebrow.weight(.bold)).tracking(1)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     ForEach(activity.workouts) { WorkoutRow(workout: $0) }
                 }
@@ -46,8 +46,8 @@ struct FitnessSegmentView: View {
                     WhoopDetailScreen(snapshot: recovery)
                 } label: {
                     HStack(spacing: 6) {
-                        Text("14-day trends").font(.system(size: 14, weight: .semibold))
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                        Text("14-day trends").font(LifeOSType.label.weight(.semibold))
+                        Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold))
                     }
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 12)
@@ -64,14 +64,14 @@ struct FitnessSegmentView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Calories Burnt").font(.system(size: 16, weight: .semibold))
-                        Text("Last 7 days").font(.system(size: 12))
+                        Text("Calories Burnt").font(LifeOSType.rowTitle)
+                        Text("Last 7 days").font(LifeOSType.caption)
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                     Spacer()
                     let total = activity.weekCalories.compactMap(\.value).reduce(0, +)
                     Text(total > 0 ? "\(Int(total).formatted()) kcal" : "—")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                 }
                 RoundedBarChart(bars: activity.weekCalories.map {
                     RoundedBarChart.Bar(
@@ -88,16 +88,16 @@ struct FitnessSegmentView: View {
         SoftCard {
             VStack(alignment: .leading, spacing: 8) {
                 Text("TRAINING")
-                    .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                    .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
                 HStack {
-                    Text(wellness.trainingVerdict ?? "—").font(.system(size: 22, weight: .semibold))
+                    Text(wellness.trainingVerdict ?? "—").font(LifeOSType.sectionTitle)
                     Spacer()
                     Text("\(wellness.workoutDays)/\(wellness.workoutTarget) days")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.accent)
                 }
                 if let avg = wellness.averageExerciseMinutes {
-                    Text("Avg session \(avg) min").font(.system(size: 13))
+                    Text("Avg session \(avg) min").font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }
@@ -119,20 +119,20 @@ struct WorkoutRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(workout.displaySport)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     if workout.isPartlyRecorded {
                         // Named, not silently dropped: a partly captured session
                         // has a misleadingly low strain, and the reader needs to
                         // know that before comparing it with anything.
                         Text("partial")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(LifeOSType.eyebrow.weight(.medium))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                 }
 
                 Text(detailLine)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(LifeOSType.caption.weight(.medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -143,10 +143,10 @@ struct WorkoutRow: View {
             if let strain = workout.strain {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(format: "%.1f", strain))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.accent)
                     Text("strain")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(LifeOSType.eyebrow.weight(.medium))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }

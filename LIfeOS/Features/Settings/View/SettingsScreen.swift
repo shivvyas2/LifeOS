@@ -58,10 +58,10 @@ struct SettingsScreen: View {
             Toggle(isOn: $useSampleFinanceData) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Use sample finance data")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Text("Invented numbers, on by default so there is something to show. A connected bank replaces them, and the Money screen marks the month as sample while they show.")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -74,7 +74,7 @@ struct SettingsScreen: View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Appearance")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
                 HStack(spacing: 10) {
@@ -83,9 +83,9 @@ struct SettingsScreen: View {
                         Button { appearance = option } label: {
                             VStack(spacing: 8) {
                                 Image(systemName: Self.icon(for: option))
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(LifeOSType.body.weight(.semibold))
                                 Text(option.title)
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(LifeOSType.caption.weight(.semibold))
                             }
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .frame(maxWidth: .infinity)
@@ -154,22 +154,22 @@ struct SettingsScreen: View {
             } label: {
                 HStack(spacing: 14) {
                     Image(systemName: "link")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Whoop, Health, banks")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         Text(whoop.statusDetail)
-                            .font(.system(size: 13))
+                            .font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
                 .padding(16)
@@ -193,9 +193,9 @@ struct SettingsScreen: View {
         } label: {
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                 Text("Log out")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                 Spacer()
             }
             .foregroundStyle(Color(red: 0.86, green: 0.22, blue: 0.22))
@@ -215,7 +215,7 @@ struct SettingsScreen: View {
 
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .bold))
+            .font(LifeOSType.label.weight(.bold))
             .tracking(0.8)
             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
     }
@@ -231,15 +231,15 @@ struct SettingsScreen: View {
                          @ViewBuilder control: () -> some View) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(ModuleHue.habits.top)
                 .frame(width: 28)
             Text(label)
-                .font(.system(size: 15, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Spacer()
             Text(value)
-                .font(.system(size: 15, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             control()
         }

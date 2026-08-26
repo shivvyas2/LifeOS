@@ -22,19 +22,19 @@ public struct MetricTile: View {
     public var body: some View {
         VStack(spacing: 5) {
             Text(label)
-                .font(.system(size: 13, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(value ?? "—")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .opacity(value == nil ? 0.4 : 1)
                 if let unit, value != nil {
                     Text(unit)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }
@@ -68,7 +68,7 @@ public struct SegmentedPill<Value: Hashable>: View {
             ForEach(options, id: \.value) { option in
                 let isSelected = option.value == selection
                 Text(option.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     // One line, always. Four titles at this size overflow a
                     // narrow phone, and an unconstrained Text answers that by
                     // wrapping, which makes one segment two lines tall and

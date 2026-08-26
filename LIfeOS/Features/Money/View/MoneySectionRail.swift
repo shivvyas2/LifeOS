@@ -102,12 +102,12 @@ struct MoneySectionRail: View {
                     Button { select(section) } label: {
                         HStack(spacing: Space.half + 2) {
                             Image(systemName: section.systemImage)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(LifeOSType.label.weight(.semibold))
                             // The full title here, not the rail's clipped one:
                             // a horizontal chip has the room, and "Where it
                             // went" says what "Spend" only gestures at.
                             Text(section.title)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(LifeOSType.label.weight(.semibold))
                         }
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme)
                             .opacity(isSelected ? 1 : 0.45))
@@ -156,9 +156,9 @@ struct MoneySectionRail: View {
                 Button { select(section) } label: {
                     VStack(spacing: 5) {
                         Image(systemName: section.systemImage)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                         Text(section.shortTitle)
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(LifeOSType.eyebrow)
                             .tracking(0.3)
                     }
                     .foregroundStyle(MoneyPalette.ink.resolve(scheme)

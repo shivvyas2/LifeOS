@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 
 /// Free-text entry. A journal has no title and no fields to fill in. Asking
 /// for either is friction on the one thing that has to stay effortless.
@@ -12,14 +13,14 @@ struct JournalEntrySheet: View {
     var body: some View {
         NavigationStack {
             TextEditor(text: $text)
-                .font(.system(size: 17))
+                .font(LifeOSType.body)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
                 .focused($focused)
                 .overlay(alignment: .topLeading) {
                     if text.isEmpty {
                         Text("How did today feel?")
-                            .font(.system(size: 17))
+                            .font(LifeOSType.body)
                             .foregroundStyle(.tertiary)
                             .padding(.horizontal, 21)
                             .padding(.top, 20)

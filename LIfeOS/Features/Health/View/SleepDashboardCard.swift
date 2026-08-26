@@ -27,17 +27,17 @@ struct SleepDashboardCard: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Sleep scores")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Spacer()
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text(recovery.sleepPerformancePct.map { "\(Int($0))" } ?? "—")
-                            .font(.system(size: 34, weight: .bold))
+                            .font(LifeOSType.numeral)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .opacity(recovery.sleepPerformancePct == nil ? 0.4 : 1)
                         if recovery.sleepPerformancePct != nil {
                             Text("%")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(LifeOSType.rowTitle)
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                     }
@@ -47,7 +47,7 @@ struct SleepDashboardCard: View {
                     SleepStageBar(segments: night.scoreBarSegments, height: 18)
                 } else if recovery.sleepMinutes != nil {
                     Text("Stages not recorded for this night")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
 
@@ -56,10 +56,10 @@ struct SleepDashboardCard: View {
                         ForEach(detailChips, id: \.label) { chip in
                             VStack(spacing: 2) {
                                 Text(chip.label)
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(LifeOSType.eyebrow)
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                                 Text(chip.value)
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(LifeOSType.label.weight(.bold))
                                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             }
                             .frame(maxWidth: .infinity)
@@ -75,9 +75,9 @@ struct SleepDashboardCard: View {
                 if let verdict = wellness.sleepVerdict {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                         Text(verdict)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -96,7 +96,7 @@ struct SleepDashboardCard: View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 Text("This week")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
                 HStack(spacing: 0) {
@@ -108,10 +108,10 @@ struct SleepDashboardCard: View {
                                       ?? LifeOSTokens.primaryText.resolve(scheme).opacity(0.08))
                                 .frame(width: 28, height: 28)
                             Text(day, format: .dateTime.weekday(.narrow))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(LifeOSType.eyebrow)
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             Text(day, format: .dateTime.day())
-                                .font(.system(size: 11, weight: .medium))
+                                .font(LifeOSType.eyebrow.weight(.medium))
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                         .frame(maxWidth: .infinity)
@@ -125,7 +125,7 @@ struct SleepDashboardCard: View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Sleep duration")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
                 durationRow(
@@ -152,11 +152,11 @@ struct SleepDashboardCard: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(LifeOSType.rowTitle.weight(.bold))
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .opacity(minutes == nil ? 0.45 : 1)
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(LifeOSType.caption.weight(.medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
             Spacer(minLength: 8)

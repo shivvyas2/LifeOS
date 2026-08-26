@@ -53,7 +53,7 @@ struct ConnectionsScreen: View {
                 PrimaryButton(isWhoopConnected ? "Done" : "Continue") { onFinish() }
                 if !isWhoopConnected {
                     Text("You can connect everything later.")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
             }
@@ -84,7 +84,7 @@ struct ConnectionsScreen: View {
     ) -> some View {
         HStack(spacing: Space.x2) {
             Image(systemName: systemImage)
-                .font(.system(size: 18))
+                .font(LifeOSType.body)
                 .frame(width: Space.x5, height: Space.x5)
                 .background(
                     RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
@@ -93,9 +93,9 @@ struct ConnectionsScreen: View {
                 .foregroundStyle(isConnected ? LifeOSTokens.accent : LifeOSTokens.primaryText.resolve(scheme))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 16, weight: .semibold))
+                Text(title).font(LifeOSType.rowTitle)
                 Text(detail)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -104,11 +104,11 @@ struct ConnectionsScreen: View {
 
             if isConnected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(LifeOSType.sectionTitle.weight(.regular))
                     .foregroundStyle(LifeOSTokens.accent)
             } else {
                 Button("Connect", action: action)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .tint(LifeOSTokens.accent)
                     .disabled(!isAvailable)
                     .opacity(isAvailable ? 1 : 0.4)

@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 import Persistence
 
 /// Which flavor of `EventSheet` is on screen. `Identifiable` so RootView can
@@ -96,7 +97,7 @@ struct EventSheet: View {
                 if isRecurring {
                     Section {
                         Text("This repeats. Edit the series in your calendar app.")
-                            .font(.footnote)
+                            .font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(.secondary)
                     }
                 }

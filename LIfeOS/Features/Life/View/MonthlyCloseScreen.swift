@@ -70,11 +70,11 @@ struct MonthlyCloseScreen: View {
                         ForEach(model.evidence.rows, id: \.label) { row in
                             HStack {
                                 Text(row.label.capitalized)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(LifeOSType.label)
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                                 Spacer()
                                 Text(row.value)
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(LifeOSType.label.weight(.semibold))
                                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             }
                         }
@@ -83,14 +83,14 @@ struct MonthlyCloseScreen: View {
 
                 if let note = model.note {
                     Text(note)
-                        .font(.system(size: 14))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let previous = model.previousUserScore {
                     Text("Last month you said \(previous).")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
 
@@ -127,13 +127,13 @@ struct MonthlyCloseScreen: View {
     private func header(_ sector: LifeSector) -> some View {
         HStack(spacing: Space.x2) {
             Image(systemName: SectorPalette.icon(sector))
-                .font(.system(size: 18, weight: .semibold))
+                .font(LifeOSType.body.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
 
             Text(sector.title)
-                .font(.system(size: 26, weight: .semibold))
+                .font(LifeOSType.screenTitle.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
         }
     }
@@ -142,7 +142,7 @@ struct MonthlyCloseScreen: View {
     private func questionView(_ question: CheckInQuestion, model: MonthlyCloseViewModel) -> some View {
         VStack(alignment: .leading, spacing: Space.x1) {
             Text(question.prompt)
-                .font(.system(size: 15, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
             if question.isFreeText {
@@ -158,7 +158,7 @@ struct MonthlyCloseScreen: View {
                             model.answer(question, with: option.label)
                         } label: {
                             Text(option.label)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(LifeOSType.label)
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
@@ -176,10 +176,10 @@ struct MonthlyCloseScreen: View {
     private var doneView: some View {
         VStack(spacing: Space.x2) {
             Text("Month closed")
-                .font(.system(size: 22, weight: .semibold))
+                .font(LifeOSType.sectionTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Text("Every sector you scored this pass is on the board.")
-                .font(.system(size: 14))
+                .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 .multilineTextAlignment(.center)
             PrimaryButton("Done") {

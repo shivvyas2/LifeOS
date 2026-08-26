@@ -34,7 +34,7 @@ struct WeightSection: View {
             SoftCard {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("LAST 14 DAYS")
-                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                        .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
                     WeightBars(points: snapshot.recentWeights)
                 }
             }

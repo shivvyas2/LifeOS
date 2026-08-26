@@ -21,16 +21,16 @@ struct HealthSegmentView: View {
                 Button(action: onConnectWhoop) {
                     HStack(spacing: 14) {
                         Image(systemName: "bolt.heart.fill")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(LifeOSType.body.weight(.semibold))
                             .foregroundStyle(LifeOSTokens.accent)
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Connect Whoop")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(LifeOSType.rowTitle)
                                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             Text("Recovery, sleep and strain")
-                                .font(.system(size: 13))
+                                .font(LifeOSType.label.weight(.regular))
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                         Spacer()
@@ -101,8 +101,8 @@ struct HealthSegmentView: View {
                     WhoopDetailScreen(snapshot: recovery)
                 } label: {
                     HStack(spacing: 6) {
-                        Text("14-day trends").font(.system(size: 14, weight: .semibold))
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+                        Text("14-day trends").font(LifeOSType.label.weight(.semibold))
+                        Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold))
                     }
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 12)
@@ -113,7 +113,7 @@ struct HealthSegmentView: View {
 
             if let synced = recovery.syncedAt {
                 Text("Synced \(Self.relative.localizedString(for: synced, relativeTo: .now))")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(LifeOSType.eyebrow.weight(.medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
@@ -153,21 +153,21 @@ struct HealthSegmentView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("JOURNAL")
-                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
+                        .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
                     Spacer()
                     Button(wellness.hasEntryToday ? "Add another" : "Write today") { onAddJournal() }
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .tint(LifeOSTokens.accent)
                 }
                 if wellness.journal.isEmpty {
                     Text("Nothing written yet. How did today feel?")
-                        .font(.system(size: 14)).opacity(0.5)
+                        .font(LifeOSType.label.weight(.regular)).opacity(0.5)
                 } else {
                     ForEach(wellness.journal.prefix(4)) { entry in
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.text).font(.system(size: 15)).lineLimit(3)
+                            Text(entry.text).font(LifeOSType.secondary).lineLimit(3)
                             Text(entry.date.formatted(.dateTime.weekday(.abbreviated).month().day()))
-                                .font(.system(size: 12)).opacity(0.45)
+                                .font(LifeOSType.caption).opacity(0.45)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }

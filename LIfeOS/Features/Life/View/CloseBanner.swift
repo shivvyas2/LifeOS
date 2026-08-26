@@ -31,10 +31,10 @@ struct CloseBanner: View {
             } label: {
                 HStack(spacing: Space.x1) {
                     Text("Close \(monthName)")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                     Spacer(minLength: Space.x1)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(LifeOSType.caption.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .foregroundStyle(ink)
@@ -44,12 +44,12 @@ struct CloseBanner: View {
 
             if isExpanded {
                 Text("Score your nine sectors for the month.")
-                    .font(.system(size: 14, weight: .regular))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(ink.opacity(0.7))
 
                 Button(action: onScore) {
                     Text("Score now")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(ink)
                         .padding(.horizontal, Space.x2)
                         .padding(.vertical, Space.x1)

@@ -111,7 +111,7 @@ struct NotesHubScreen: View {
         NavigationStack(path: $path) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Library")
-                    .font(.noteSerif(32))
+                    .font(LifeOSType.display)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.horizontal, layout.gutter)
                     .padding(.top, 4)
@@ -229,7 +229,7 @@ struct NoteFolderSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
                 TextField("Folder name", text: $name)
-                    .font(.system(size: 18))
+                    .font(LifeOSType.body)
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .padding(.vertical, 12)
@@ -246,9 +246,9 @@ struct NoteFolderSheet: View {
                         } label: {
                             Group {
                                 if candidate.isEmpty {
-                                    Image(systemName: "circle.dashed").font(.system(size: 20))
+                                    Image(systemName: "circle.dashed").font(LifeOSType.sectionTitle.weight(.regular))
                                 } else {
-                                    Text(candidate).font(.system(size: 22))
+                                    Text(candidate).font(LifeOSType.sectionTitle.weight(.regular))
                                 }
                             }
                             .frame(width: 40, height: 40)

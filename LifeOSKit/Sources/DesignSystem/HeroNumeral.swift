@@ -16,14 +16,14 @@ public struct HeroNumeral: View {
         VStack(spacing: 2) {
             HStack(alignment: .lastTextBaseline, spacing: 5) {
                 Text(value)
-                    .font(.system(size: 84, weight: .regular, design: .default))
+                    .font(LifeOSType.numeral(84, weight: .regular))
                     .tracking(-2)
                 if let unit {
-                    Text(unit).font(.system(size: 26, weight: .regular)).opacity(0.85)
+                    Text(unit).font(LifeOSType.screenTitle.weight(.regular)).opacity(0.85)
                 }
             }
             Text(label)
-                .font(.system(size: 15, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .opacity(0.75)
         }
         .minimumScaleFactor(0.5)
@@ -45,10 +45,10 @@ public struct HeroEmptyState: View {
     public var body: some View {
         VStack(spacing: 6) {
             Text("—")
-                .font(.system(size: 96, weight: .semibold))
+                .font(LifeOSType.numeral(84, weight: .semibold))
                 .opacity(0.35)
-            Text(label).font(.system(size: 15, weight: .medium)).opacity(0.7)
-            Text(reason).font(.footnote).opacity(0.5)
+            Text(label).font(LifeOSType.secondary.weight(.medium)).opacity(0.7)
+            Text(reason).font(LifeOSType.label.weight(.regular)).opacity(0.5)
         }
     }
 }

@@ -28,7 +28,7 @@ struct LifoCoachScreen: View {
                         .allowsHitTesting(false)
 
                     Text(headline)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(LifeOSType.screenTitle.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         .padding(.horizontal, 28)
@@ -36,7 +36,7 @@ struct LifoCoachScreen: View {
 
                     if !bodyCopy.isEmpty {
                         Text(bodyCopy)
-                            .font(.system(size: 15))
+                            .font(LifeOSType.secondary)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .padding(.horizontal, 32)
@@ -67,7 +67,7 @@ struct LifoCoachScreen: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(action: close) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .frame(width: 44, height: 44)
                             .background(.ultraThinMaterial, in: Circle())
@@ -79,7 +79,7 @@ struct LifoCoachScreen: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showHistory = true } label: {
                         Image(systemName: "clock")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(LifeOSType.rowTitle)
                             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .frame(width: 44, height: 44)
                             .background(.ultraThinMaterial, in: Circle())
@@ -132,9 +132,9 @@ struct LifoCoachScreen: View {
     private var statusPill: some View {
         HStack(spacing: 10) {
             Image(systemName: model.phase == .listening ? "waveform" : "message.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
             Text(model.status)
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .lineLimit(2)
         }
         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
@@ -150,7 +150,7 @@ struct LifoCoachScreen: View {
     private var typingField: some View {
         HStack(spacing: 10) {
             TextField("Ask LIFO…", text: $model.draft, axis: .vertical)
-                .font(.system(size: 16))
+                .font(LifeOSType.secondary)
                 .focused($typingFocused)
                 .autocorrectionDisabled()
                 .writingToolsBehavior(.disabled)
@@ -160,7 +160,7 @@ struct LifoCoachScreen: View {
                 Task { await model.sendTyped() }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
+                    .font(LifeOSType.screenTitle.weight(.regular))
                     .foregroundStyle(LifeOSTokens.fabFill.resolve(scheme))
             }
             .disabled(model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -202,9 +202,9 @@ struct LifoCoachScreen: View {
             List(model.history) { turn in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(turn.question)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                     Text(turn.answer)
-                        .font(.system(size: 15))
+                        .font(LifeOSType.secondary)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)

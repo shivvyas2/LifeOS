@@ -37,24 +37,24 @@ struct ConnectionsSettingsScreen: View {
         Button { showWhoop = true } label: {
             HStack(spacing: 14) {
                 Image(systemName: "bolt.heart.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Whoop")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Text(whoop.statusDetail)
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
 
                 Spacer()
 
                 Text(whoopActionTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
             }
             .padding(16)
@@ -78,17 +78,17 @@ struct ConnectionsSettingsScreen: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Apple Health")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Text(health.statusDetail)
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -96,7 +96,7 @@ struct ConnectionsSettingsScreen: View {
                 Spacer()
 
                 Text(healthActionTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
             }
             .padding(16)
@@ -131,24 +131,24 @@ struct ConnectionsSettingsScreen: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "dollarsign.circle.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Bank accounts")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Text(plaid.statusDetail)
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
 
                 Spacer()
 
                 Text(bankActionTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.accent)
             }
             .padding(16)

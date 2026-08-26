@@ -78,7 +78,7 @@ public struct PrimaryButton: View {
         Button(action: action) {
             ZStack {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(LifeOSType.body.weight(.semibold))
                     .opacity(isLoading ? 0 : 1)
                 if isLoading {
                     ProgressView().tint(LifeOSTokens.canvas.resolve(scheme))
@@ -110,7 +110,7 @@ public struct SecondaryButton: View {
     public var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 .frame(maxWidth: .infinity)
                 .frame(height: Space.x6)

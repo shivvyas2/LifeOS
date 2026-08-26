@@ -19,7 +19,7 @@ struct AssistantSheet: View {
                     if !model.modelAvailable {
                         Spacer()
                         Text("The assistant needs Apple Intelligence, which isn't available on this device.")
-                            .font(.system(size: 15))
+                            .font(LifeOSType.secondary)
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
@@ -56,7 +56,7 @@ struct AssistantSheet: View {
                     }
                     if model.isThinking && model.pending.isEmpty {
                         Text("Thinking…")
-                            .font(.system(size: 13))
+                            .font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                 }
@@ -80,7 +80,7 @@ struct AssistantSheet: View {
             Text(model.isAuthorized
                  ? "Ask about your schedule, or tell me to move something."
                  : "Connect your calendar so I can see your schedule.")
-                .font(.system(size: 15))
+                .font(LifeOSType.secondary)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 .multilineTextAlignment(.center)
             if !model.isAuthorized {
@@ -95,7 +95,7 @@ struct AssistantSheet: View {
     private func bubble(_ message: ChatMessageSnapshot) -> some View {
         VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
             Text(message.text)
-                .font(.system(size: 15))
+                .font(LifeOSType.secondary)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -109,7 +109,7 @@ struct AssistantSheet: View {
                 HStack(spacing: 6) {
                     ForEach(message.toolSummaries, id: \.self) { summary in
                         Text(summary)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(LifeOSType.eyebrow.weight(.medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Capsule().fill(.ultraThinMaterial))
@@ -124,14 +124,14 @@ struct AssistantSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(write.preview, id: \.self) { line in
                 Text(line)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             }
             HStack(spacing: 14) {
                 CapsuleButton(title: "Confirm", prominent: true) { model.confirm(write.id) }
                 Button("Cancel") { model.cancel(write.id) }
                     .buttonStyle(.plain)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(LifeOSType.secondary.weight(.medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
@@ -142,14 +142,14 @@ struct AssistantSheet: View {
     private var composer: some View {
         HStack(spacing: 10) {
             TextField("Ask about your calendar…", text: Bindable(model).draft, axis: .vertical)
-                .font(.system(size: 16))
+                .font(LifeOSType.secondary)
                 .focused($composing)
                 .lineLimit(1...4)
             Button {
                 Task { await model.send() }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
+                    .font(LifeOSType.screenTitle.weight(.regular))
                     .foregroundStyle(LifeOSTokens.fabFill.resolve(scheme))
             }
             .disabled(model.isThinking || model.draft.trimmingCharacters(in: .whitespaces).isEmpty)

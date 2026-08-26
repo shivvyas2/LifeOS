@@ -79,7 +79,7 @@ struct NoteEditorScreen: View {
                     showEmojiPicker = true
                 } label: {
                     Text(model.icon.isEmpty ? "\u{1F4C4}" : model.icon)
-                        .font(.system(size: 32))
+                        .font(LifeOSType.display.weight(.regular))
                         .opacity(model.icon.isEmpty ? 0.35 : 1)
                 }
                 .buttonStyle(.plain)
@@ -89,7 +89,7 @@ struct NoteEditorScreen: View {
             }
 
             TextField("Untitled", text: $model.title, axis: .vertical)
-                .font(.noteSerif(layout.isRegular ? 36 : 30))
+                .font(layout.isRegular ? LifeOSType.display : LifeOSType.screenTitle)
                 .foregroundStyle(primary)
                 .textFieldStyle(.plain)
                 .lineLimit(1...3)
@@ -129,7 +129,7 @@ struct NoteEditorScreen: View {
                         .frame(width: 9, height: 9)
                     Text(model.accent.title)
                 }
-                .font(.system(size: 13, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -142,7 +142,7 @@ struct NoteEditorScreen: View {
 
     private func chip(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(.system(size: 13, weight: .medium))
+            .font(LifeOSType.label)
             .foregroundStyle(secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -208,7 +208,7 @@ struct NoteEditorScreen: View {
 
             Label("\(model.backlinks.count) \(model.backlinks.count == 1 ? "page links" : "pages link") here",
                   systemImage: "arrow.turn.up.left")
-                .font(.system(size: 14, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(secondary)
 
             ForEach(model.backlinks) { link in
@@ -222,10 +222,10 @@ struct NoteEditorScreen: View {
                             .padding(.top, 6)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(link.title)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(LifeOSType.secondary.weight(.medium))
                                 .foregroundStyle(primary)
                             Text(link.context)
-                                .font(.system(size: 13))
+                                .font(LifeOSType.label.weight(.regular))
                                 .foregroundStyle(secondary)
                                 .lineLimit(2)
                         }
@@ -313,7 +313,7 @@ struct NoteIconPicker: View {
                             dismiss()
                         } label: {
                             Text(icon)
-                                .font(.system(size: 28))
+                                .font(LifeOSType.screenTitle.weight(.regular))
                                 .frame(width: 44, height: 44)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)

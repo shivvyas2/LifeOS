@@ -114,7 +114,7 @@ public struct SleepStageBar: View {
                 ForEach(segments) { segment in
                     VStack(spacing: 6) {
                         Text(segment.stage.label)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(LifeOSType.eyebrow)
                             .foregroundStyle(segment.stage.color)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
@@ -150,7 +150,7 @@ public struct SleepNightStrip: View {
                 VStack(spacing: 6) {
                     SleepNightColumn(night: night, scale: scale)
                     Text(night.date, format: .dateTime.weekday(.narrow))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(LifeOSType.eyebrow.weight(.medium))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
                 .frame(maxWidth: .infinity)

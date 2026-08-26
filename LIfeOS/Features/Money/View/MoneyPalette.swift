@@ -63,7 +63,7 @@ extension View {
     /// The tiny tracked uppercase label the reference screens hang everything
     /// from. Always paired with a numeral; never used as body text.
     func moneyEyebrow(_ scheme: ColorScheme) -> some View {
-        self.font(.system(size: 10, weight: .semibold))
+        self.font(LifeOSType.eyebrow)
             .tracking(1.2)
             .textCase(.uppercase)
             .foregroundStyle(MoneyPalette.quietInk(scheme))
@@ -98,7 +98,7 @@ struct MoneyFigure: View {
             Text(".\(tenth)")
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.35))
         }
-        .font(.system(size: size, weight: .bold, design: .rounded))
+        .font(LifeOSType.numeral(size))
         .monospacedDigit()
         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         .lineLimit(1)

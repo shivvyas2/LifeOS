@@ -41,7 +41,7 @@ struct DayDetailSheet: View {
     private var schedule: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Schedule")
-                .font(.system(size: 13, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
             SoftCard {
@@ -89,7 +89,7 @@ struct DayDetailSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             if snapshot.habits.isEmpty {
                 Text("No habits yet. Add one on the Plan tab.")
-                    .font(.system(size: 15))
+                    .font(LifeOSType.secondary)
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             } else {
                 // A bare count, never a percentage or a grade. This list
@@ -98,7 +98,7 @@ struct DayDetailSheet: View {
                 // entirely above when there are no habits — "0 of 0 habits"
                 // is noise above "No habits yet."
                 Text("\(snapshot.habits.filter(\.isDone).count) of \(snapshot.habits.count) \(snapshot.habits.count == 1 ? "habit" : "habits")")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
 
                 SoftCard {
@@ -132,7 +132,7 @@ struct DayDetailSheet: View {
     private func habitLabel(_ habit: HabitRow) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon(for: habit))
-                .font(.system(size: snapshot.isToday ? 22 : 16, weight: .semibold))
+                .font(snapshot.isToday ? LifeOSType.sectionTitle : LifeOSType.rowTitle)
                 .foregroundStyle(
                     habit.isDone
                         ? LifeOSTokens.accent
@@ -141,7 +141,7 @@ struct DayDetailSheet: View {
                 .frame(width: 24)
 
             Text(habit.title)
-                .font(.system(size: 16, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
             Spacer()
@@ -178,19 +178,19 @@ private struct MetricRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 16, weight: .medium))
+                .font(LifeOSType.secondary.weight(.medium))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
             Spacer()
 
             Text(value ?? "—")
-                .font(.system(size: 16, weight: .semibold))
+                .font(LifeOSType.rowTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
             // The target is context for a number. With no number it is noise.
             if let detail, value != nil {
                 Text(detail)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }

@@ -407,7 +407,7 @@ struct RootView: View {
             showCoach = true
         } label: {
             Image(systemName: "message.fill")
-                .font(.system(size: 20, weight: .semibold))
+                .font(LifeOSType.sectionTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 52, height: 52)
                 .background(
@@ -431,7 +431,7 @@ struct RootView: View {
             showAssistant = true
         } label: {
             Image(systemName: "calendar")
-                .font(.system(size: 20, weight: .semibold))
+                .font(LifeOSType.sectionTitle)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .frame(width: 52, height: 52)
                 .background(
@@ -455,7 +455,7 @@ struct RootView: View {
             showQuickLog = true
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 22, weight: .semibold))
+                .font(LifeOSType.sectionTitle)
                 .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
                 .frame(width: 56, height: 56)
                 .background(

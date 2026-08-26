@@ -54,7 +54,7 @@ struct SleepCompositionChart: View {
             GlassPanel {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Sleep composition")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
 
                     HStack(spacing: 12) {
@@ -69,7 +69,7 @@ struct SleepCompositionChart: View {
                                     .fill(stage.color)
                                     .frame(width: 10, height: 8)
                                 Text(stage.label)
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(LifeOSType.eyebrow)
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             }
                         }

@@ -53,10 +53,10 @@ struct NotesSidebar: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(LifeOSType.label)
                 .foregroundStyle(secondary)
             TextField("Search notes", text: $query)
-                .font(.system(size: 15))
+                .font(LifeOSType.secondary)
                 .textFieldStyle(.plain)
                 .submitLabel(.search)
             if !query.isEmpty {
@@ -64,7 +64,7 @@ struct NotesSidebar: View {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(secondary)
                 }
                 .buttonStyle(.plain)
@@ -85,17 +85,17 @@ struct NotesSidebar: View {
         Button(action: onOpenHabits) {
             HStack(spacing: 10) {
                 Image(systemName: "flame")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(LifeOSType.label)
                     .frame(width: 14)
                 Text("Habits")
-                    .font(.system(size: 15))
+                    .font(LifeOSType.secondary)
                 Spacer(minLength: 8)
                 if habitCount > 0 {
                     Text("\(habitCount)")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                 }
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(LifeOSType.eyebrow)
             }
             .foregroundStyle(secondary)
             .padding(.horizontal, 14)
@@ -110,14 +110,14 @@ struct NotesSidebar: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(LifeOSType.label)
                     .frame(width: 14)
                 Text(title)
-                    .font(.system(size: 15, weight: selection == target ? .semibold : .regular))
+                    .font(LifeOSType.rowTitle.weight(selection == target ? .semibold : .regular))
                 Spacer(minLength: 8)
                 if count > 0 {
                     Text("\(count)")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(secondary)
                 }
             }
@@ -145,11 +145,11 @@ struct NotesSidebar: View {
                 } label: {
                     HStack(spacing: 8) {
                         Text(bucket.title.uppercased())
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(LifeOSType.caption.weight(.semibold))
                             .tracking(0.6)
                         Spacer(minLength: 4)
                         Text("\(snapshot.count(in: bucket))")
-                            .font(.system(size: 12))
+                            .font(LifeOSType.caption)
                     }
                     .foregroundStyle(selection == .bucket(bucket) ? primary : secondary)
                 }
@@ -162,7 +162,7 @@ struct NotesSidebar: View {
                         }
                     } label: {
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(LifeOSType.eyebrow.weight(.bold))
                             .rotationEffect(.degrees(isOpen ? 0 : -90))
                             .foregroundStyle(secondary)
                             .frame(width: 16, height: 16)
@@ -195,10 +195,10 @@ struct NotesSidebar: View {
                         HStack(spacing: 8) {
                             Text("New folder")
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(LifeOSType.eyebrow)
                             Spacer()
                         }
-                        .font(.system(size: 14))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(secondary.opacity(0.8))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -252,15 +252,15 @@ private struct NoteFolderRow: View {
                             .fill(NoteAccentPalette.dot(folder.accent, scheme))
                             .frame(width: 9, height: 9)
                     } else {
-                        Text(folder.icon).font(.system(size: 13))
+                        Text(folder.icon).font(LifeOSType.label.weight(.regular))
                     }
                     Text(folder.name)
-                        .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+                        .font(LifeOSType.rowTitle.weight(isSelected ? .semibold : .regular))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if folder.count > 0 {
                         Text("\(folder.count)")
-                            .font(.system(size: 13))
+                            .font(LifeOSType.label.weight(.regular))
                             .foregroundStyle(secondary)
                     }
                 }

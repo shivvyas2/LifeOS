@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignSystem
 import Persistence
 
 /// Budgets: the bucket list, and one bucket's name, limit and claims.
@@ -108,7 +109,7 @@ private struct BucketForm: View {
                                     if let holder = category.holder,
                                        !bucket.claimed.contains(category.id) {
                                         Text("Held by \(holder), saving moves it here")
-                                            .font(.footnote)
+                                            .font(LifeOSType.label.weight(.regular))
                                             .foregroundStyle(.secondary)
                                     }
                                 }

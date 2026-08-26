@@ -47,7 +47,7 @@ struct TrendChart: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(LifeOSType.label.weight(.semibold))
                 .tracking(0.4)
                 .textCase(.uppercase)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
@@ -57,12 +57,12 @@ struct TrendChart: View {
             if let latest = series.latest {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(formatted(latest))
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(LifeOSType.numeral)
                         .monospacedDigit()
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     if let unit {
                         Text(unit)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(LifeOSType.caption.weight(.semibold))
                             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     }
                 }
@@ -164,7 +164,7 @@ struct TrendChart: View {
                 Text(last, format: .dateTime.day().month(.abbreviated))
             }
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(LifeOSType.eyebrow.weight(.medium))
         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.7))
     }
 
