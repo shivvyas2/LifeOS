@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let plaidItemStoreLog = Logger(subsystem: "com.shivvyas.lifeos", category: "plaid-item-store")
 
 /// One connected bank, and where its last sync left off.
 public struct PlaidStoredItem: Codable, Sendable, Equatable {
@@ -90,9 +93,15 @@ public struct UserDefaultsPlaidItemStore: PlaidItemStoring {
     }
 
     private func loadItems() -> [PlaidStoredItem] {
-        guard let data = defaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([PlaidStoredItem].self, from: data)
-        else { return [] }
+        guard let data = defaults.data(forKey: key) else { return [] }
+        guard let decoded = try? JSONDecoder().decode([PlaidStoredItem].self, from: data) else {
+            // The item list self-heals from the next sync, but every cursor
+            // resets to nil when this happens, silently replaying full history
+            // for every connected bank. Log it so a mystery full resync has a
+            // cause to find.
+            plaidItemStoreLog.error("plaid item store decode failed; item list resets to empty")
+            return []
+        }
         return decoded
     }
 
