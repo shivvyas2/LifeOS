@@ -52,6 +52,12 @@ daily.
 
 ### A fifth tab, board as hub
 
+> **Amended by `2026-08-25-sector-screens-design.md`.** That project defines a
+> sector screen as score history and past answers, which the Health, Money and
+> Plan tabs do not show. All nine cards now open the same shape of screen, and
+> Body, Money and Mission carry a link through to their full tab. The paragraph
+> below records the original reasoning.
+
 A Life tab holds the board. Tapping a sector opens its screen. For Body, Money
 and Mission that screen **is** the existing Health, Money and Plan surface, not
 a second copy of it. No sector has two homes.
