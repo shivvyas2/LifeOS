@@ -62,51 +62,79 @@ public struct ContextBundle: Sendable {
         self.firstName = firstName
     }
 
-    /// Renders the bundle for one audience within a character budget.
+    /// Renders the bundle for one audience within a character budget. This is
+    /// the prompt sent to a paid model on every off-device call, so `budget`
+    /// is the only thing bounding what that call costs; it must actually
+    /// bound the output, not just cap what the digest does on its own.
     ///
     /// `.onDevice` keeps the render to the digest plus one sector line: the
     /// local window is small and a transaction list would push the health
-    /// data out of it. `.offDevice` carries everything, and trims the
-    /// cheapest-to-lose detail first: transactions, oldest last.
+    /// data out of it. `.offDevice` carries everything, apportioned so the
+    /// whole render honours one budget rather than each section trusting its
+    /// own: the user, sector, and money-summary lines are small, dense, and
+    /// worth more per character than anything else here, so they are built
+    /// first and never trimmed. The digest claims what is left of the budget
+    /// next -- it already drops its oldest days first to fit whatever it is
+    /// given, so handing it a smaller number just makes that existing
+    /// truncation bite sooner. Transactions get only what neither of the
+    /// above used, which is why they are the first thing to disappear under
+    /// a tight budget.
     public func promptLines(for audience: MetricsDigest.Audience, budget: Int = 8_000) -> String {
-        var blocks: [String] = []
-        if let firstName { blocks.append("User: \(firstName)") }
-        blocks.append(digest.promptLines(for: audience))
+        let userLine = firstName.map { "User: \($0)" }
 
-        if !sectors.isEmpty {
-            let scores = sectors.map { sector in
+        let sectorLine: String? = sectors.isEmpty ? nil : {
+            let scores = sectors.map { sector -> String in
                 guard let score = sector.score else { return "\(sector.name) unscored" }
                 let delta = sector.delta.map { $0 >= 0 ? " (+\($0))" : " (\($0))" } ?? ""
                 return "\(sector.name) \(score)\(delta)"
             }
-            blocks.append("Life sectors: " + scores.joined(separator: ", "))
-        }
+            return "Life sectors: " + scores.joined(separator: ", ")
+        }()
 
-        if let money {
+        let moneyLine: String? = money.map { money in
             var line = "Money this month: income \(Int(money.income)), expenses \(Int(money.expenses))"
             if let rate = money.savingsRate { line += ", saved \(Int(rate * 100))%" }
             if let netWorth = money.netWorth { line += ", net worth \(Int(netWorth))" }
-            blocks.append(line)
+            return line
+        }
 
-            // Raw transaction rows are the cheapest, least dense line in the
-            // bundle, so they are the only thing trimmed for budget. Everything
-            // above this point renders unconditionally.
-            if audience == .offDevice {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "MMM d"
-                var rows: [String] = []
-                var spent = blocks.joined(separator: "\n").count
-                for transaction in money.recent {
-                    let row = "\(formatter.string(from: transaction.date)) \(transaction.merchant)"
-                        + (transaction.category.map { " (\($0))" } ?? "")
-                        + " \(String(format: "%.2f", transaction.amount))"
-                    guard spent + row.count + 1 <= budget else { break }
-                    rows.append(row)
-                    spent += row.count + 1
-                }
-                if !rows.isEmpty {
-                    blocks.append("Recent transactions:\n" + rows.joined(separator: "\n"))
-                }
+        // These three survive any budget untouched, so they are reserved
+        // before the digest sees a number; the digest gets whatever budget
+        // is left, minus the separator that will join it to them.
+        let summaryLines = [userLine, sectorLine, moneyLine].compactMap { $0 }
+        let summaryText = summaryLines.joined(separator: "\n")
+        let digestBudget = max(0, budget - summaryText.count - (summaryLines.isEmpty ? 0 : 1))
+        let digestText = digest.promptLines(for: audience, budget: digestBudget)
+
+        var blocks: [String] = []
+        if let userLine { blocks.append(userLine) }
+        // An empty digest (no days, no baseline) contributes nothing; append
+        // it anyway and the render carries a stray blank line for no reason.
+        if !digestText.isEmpty { blocks.append(digestText) }
+        if let sectorLine { blocks.append(sectorLine) }
+        if let moneyLine { blocks.append(moneyLine) }
+
+        if let money, audience == .offDevice {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            let header = "Recent transactions:"
+            // `spent` has to account for the header and the separator ahead
+            // of it before the loop starts, not just the blocks built so
+            // far -- otherwise every render that keeps at least one row
+            // overshoots `budget` by exactly the header's length.
+            var spent = blocks.joined(separator: "\n").count
+                + (blocks.isEmpty ? 0 : 1) + header.count
+            var rows: [String] = []
+            for transaction in money.recent {
+                let row = "\(formatter.string(from: transaction.date)) \(transaction.merchant)"
+                    + (transaction.category.map { " (\($0))" } ?? "")
+                    + " \(String(format: "%.2f", transaction.amount))"
+                guard spent + row.count + 1 <= budget else { break }
+                rows.append(row)
+                spent += row.count + 1
+            }
+            if !rows.isEmpty {
+                blocks.append(header + "\n" + rows.joined(separator: "\n"))
             }
         }
 
