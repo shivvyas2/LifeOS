@@ -2300,6 +2300,10 @@ private struct StubAPI: PlaidAPI {
 
         _ = try? await sync.run()
 
+        // Both halves matter. The cursor staying nil is the invariant, but an
+        // empty store would satisfy that too through optional chaining, so the
+        // count is what makes this test able to fail for the right reason.
+        #expect(items.items().count == 1)
         #expect(items.items().first?.cursor == nil)
     }
 
