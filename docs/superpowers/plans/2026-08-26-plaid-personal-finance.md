@@ -3066,13 +3066,45 @@ supabase functions deploy plaid-link-token plaid-exchange plaid-sync plaid-disco
 supabase db push
 ```
 
-- [ ] **Step 2: Connect a fake bank and confirm the numbers**
+- [ ] **Step 2: Prove the credential is unreachable, against the deployed project**
+
+This is the live RLS check from Task 7 and the auth-boundary check from Task 9, neither of which ran during implementation because Docker was down. They run here, **before** a bank is connected. A credential-protection check that runs after the credential is already in the table has verified the wrong thing.
+
+Confirm an unauthenticated call cannot reach the credential lookup:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://<project>.supabase.co/functions/v1/plaid-sync \
+  -H "Content-Type: application/json" -d '{"cursors":{}}'
+```
+
+Expected: `401`.
+
+Then confirm the table denies the client. Against the deployed database, with at least one row in `auth.users`:
+
+```sql
+insert into public.plaid_items (user_id, item_id, access_token)
+select id, 'item_rls_probe', 'probe' from auth.users limit 1;
+
+begin;
+  set local role authenticated;
+  select count(*) as visible_to_client from public.plaid_items;
+commit;
+
+select count(*) as visible_to_owner from public.plaid_items;
+
+delete from public.plaid_items where item_id = 'item_rls_probe';
+```
+
+Expected: `visible_to_client` is `0` and `visible_to_owner` is `1`. Both halves matter, since a zero from an empty table proves nothing. Do not proceed to Step 3 unless both hold.
+
+- [ ] **Step 3: Connect a fake bank and confirm the numbers**
 
 Run the app on a simulator, sign in, then Settings > Connections > Bank accounts. Choose "First Platypus Bank" and log in with `user_good` / `pass_good`.
 
 Expected, in order: the row shows "Connecting…", the Money tab shows "Fetching your transactions", and within a minute real Sandbox transactions appear with income positive and spending negative. Confirm specifically that **the largest deposit reads as income, not as an expense.** That is the sign convention, and it is the one failure that looks plausible.
 
-- [ ] **Step 3: Force the expired-login path**
+- [ ] **Step 4: Force the expired-login path**
 
 ```bash
 curl -s -X POST https://sandbox.plaid.com/sandbox/item/reset_login \
@@ -3083,12 +3115,12 @@ curl -s -X POST https://sandbox.plaid.com/sandbox/item/reset_login \
 Then background and reopen the app.
 Expected: the reconnect banner appears over the previous numbers, and the numbers themselves are still there.
 
-- [ ] **Step 4: Disconnect, and confirm history survives by default**
+- [ ] **Step 5: Disconnect, and confirm history survives by default**
 
 In Settings, disconnect the bank without ticking the delete option.
 Expected: the row returns to "Not connected", the transactions remain on the Money tab, and the row is gone from `plaid_items`.
 
-- [ ] **Step 5: Switch to production and connect the real account**
+- [ ] **Step 6: Switch to production and connect the real account**
 
 ```bash
 supabase secrets set PLAID_SECRET=<the production secret> PLAID_ENV=production
@@ -3097,7 +3129,7 @@ supabase functions deploy plaid-link-token plaid-exchange plaid-sync plaid-disco
 
 Connect the real bank and confirm the month's income, expenses, savings rate, and net worth against the bank's own app. Check the savings rate in particular: if a transfer between accounts is leaking into the totals, this is where it shows.
 
-- [ ] **Step 6: Retire the sample data**
+- [ ] **Step 7: Retire the sample data**
 
 Only once real transactions render correctly.
 
@@ -3107,17 +3139,17 @@ git rm LIfeOS/Features/Money/Model/SampleMoneyData.swift
 
 In `LIfeOS/Features/Money/ViewModel/MoneyViewModel.swift`, delete the `#if DEBUG` block holding `sampleDataKey` and the `#if DEBUG` branch at the top of `load`. In `LIfeOS/Features/Settings/View/SettingsScreen.swift`, delete the `@AppStorage(MoneyViewModel.sampleDataKey)` property on line 10 and the toggle and its comment around line 56.
 
-- [ ] **Step 7: Verify nothing still refers to it**
+- [ ] **Step 8: Verify nothing still refers to it**
 
 Run: `grep -rn "SampleMoneyData\|sampleDataKey\|useSampleFinanceData" LIfeOS LifeOSKit/Sources`
 Expected: no output.
 
-- [ ] **Step 8: Full build and test**
+- [ ] **Step 9: Full build and test**
 
 Run: `swift test --package-path LifeOSKit && xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS -destination 'generic/platform=iOS Simulator' build`
 Expected: PASS and BUILD SUCCEEDED.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add -A LIfeOS/Features/Money LIfeOS/Features/Settings/View/SettingsScreen.swift
