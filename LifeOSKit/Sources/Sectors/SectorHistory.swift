@@ -46,6 +46,17 @@ public struct QuestionTrack: Sendable, Equatable {
     public let questionID: String
     public let prompt: String
     public let answers: [String?]
+
+    /// Whether this track has an answer within its last `count` months.
+    ///
+    /// A track qualifies for `SectorHistory.questions` if it has any answer
+    /// across all fetched months, but the answers band only ever renders the
+    /// most recent `count` of them. Without this check, a question last
+    /// answered outside that window would render its prompt above nothing
+    /// but em dashes, contradicting "bands with no data are omitted".
+    public func hasAnswer(inLastMonths count: Int) -> Bool {
+        answers.suffix(count).contains { $0 != nil }
+    }
 }
 
 /// One free-text answer, kept apart from the comparable tracks because it sits
@@ -118,7 +129,7 @@ public struct SectorHistory: Sendable, Equatable {
             months: decided,
             questions: tracks,
             notes: notes,
-            observations: SectorObservations.all(months: decided, questions: tracks)
+            observations: SectorObservations.all(months: decided, questions: tracks, calendar: calendar)
         )
     }
 }
