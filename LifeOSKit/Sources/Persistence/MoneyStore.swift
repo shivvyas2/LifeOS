@@ -4,8 +4,11 @@ import SwiftData
 /// One incoming transaction, in this app's vocabulary rather than a provider's.
 ///
 /// `Persistence` deliberately does not name Plaid. The mapping from a provider
-/// payload to these fields, including the sign flip, belongs to `Integrations`,
-/// so a second provider later is a new mapper and not a change down here.
+/// payload to these fields, including the sign flip, belongs to `Integrations`.
+///
+/// The neutrality stops at `source`, which `ingest` records as `.plaid` because
+/// bulk sync has exactly one provider today. A second one would need a `source`
+/// on this struct; that field is left off until something actually needs it.
 public struct MoneyIngestRow: Sendable, Equatable {
     public let externalID: String
     public let date: Date
