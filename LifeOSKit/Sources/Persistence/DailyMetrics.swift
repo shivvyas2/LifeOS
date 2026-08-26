@@ -39,6 +39,12 @@ public final class DailyMetrics {
     public var whoopSleepEfficiencyPct: Double?
     public var whoopSleepDebtMinutes: Int?
 
+    /// True while Whoop is still calibrating to the user. A recovery score
+    /// produced during calibration is not a score that supports a comparison,
+    /// and presenting it unqualified is the same class of error as a false
+    /// zero. Optional, so an existing store migrates.
+    public var whoopRecoveryIsCalibrating: Bool?
+
     public var updatedAt: Date
     public var syncedAt: Date?
 

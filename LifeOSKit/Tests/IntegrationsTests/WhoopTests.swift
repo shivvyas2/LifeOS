@@ -517,4 +517,22 @@ import SwiftData
 
         #expect(try context.fetch(FetchDescriptor<WorkoutRecord>()).count == 1)
     }
+
+    @Test func aCalibratingRecoveryIsRecordedAsSuch() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let store = MetricsStore(context: context)
+        let derivation = WhoopDerivation(store: store, archive: WhoopArchive(context: context))
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_770_000_000))
+
+        try derivation.derive(recoveries: [
+            WhoopRecoverySample(date: day, recoveryPercentage: 44,
+                                restingHeartRate: 64, hrvMilliseconds: 31,
+                                isCalibrating: true)
+        ])
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.whoopRecoveryIsCalibrating == true)
+        #expect(row.whoopRecoveryPct == 44)
+    }
 }

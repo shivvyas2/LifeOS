@@ -78,6 +78,7 @@ public struct WhoopDerivation {
             if let value = recovery?.hrvMilliseconds { row.hrvMs = value }
             if let value = recovery?.spo2Percentage { row.spo2Percentage = value }
             if let value = recovery?.skinTempCelsius { row.skinTempCelsius = value }
+            if let value = recovery?.isCalibrating { row.whoopRecoveryIsCalibrating = value }
 
             if let value = sleep?.performancePercentage { row.whoopSleepPerformancePct = value }
             if let value = sleep?.asleepMinutes { row.sleepMinutes = value }
