@@ -83,7 +83,10 @@ final class OTPStubURLProtocol: URLProtocol {
         }
     }
 
-    @Test func anUnverifiedTwilioTrialNumberIsNamedAsSuch() async {
+    /// The deployed Edge Function is upgraded separately from the app, so an
+    /// old server still sending `sms_unverified` must not regress to a bare
+    /// status code in a new build.
+    @Test func theLegacyUnverifiedKindStillReads() async {
         let auth = makeAuth()
         OTPStubURLProtocol.replies = [
             .status(502, #"{"error":"sms_unverified"}"#)
@@ -93,7 +96,71 @@ final class OTPStubURLProtocol: URLProtocol {
             try await auth.sendCode(to: "+14155552671", channel: .phone)
             Issue.record("expected sendCode to throw")
         } catch let error as AuthError {
-            #expect(error.readable == "That number isn't verified for SMS yet. Add it in Twilio, then try again")
+            #expect(error.readable == "We can't text this number yet. The SMS account is still in trial mode")
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    @Test func aTrialAccountFailureBlamesTheAccountNotTheNumber() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, #"{"error":"sms_trial_unverified"}"#)
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "We can't text this number yet. The SMS account is still in trial mode")
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    @Test func anOptedOutNumberIsGivenTheRemedy() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, #"{"error":"sms_opted_out"}"#)
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "That number opted out of our texts. Text START to our number to opt back in")
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    @Test func anUnregisteredCampaignIsNamedRatherThanGeneric() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, #"{"error":"sms_unregistered_campaign"}"#)
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "Our SMS sender isn't registered with that carrier yet")
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    @Test func aCarrierBlockIsNamedRatherThanGeneric() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, #"{"error":"sms_blocked"}"#)
+        ]
+
+        do {
+            try await auth.sendCode(to: "+14155552671", channel: .phone)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "The carrier blocked that text")
         } catch {
             Issue.record("expected AuthError, got \(error)")
         }
@@ -109,10 +176,28 @@ final class OTPStubURLProtocol: URLProtocol {
             try await auth.sendCode(to: "+14155552671", channel: .phone)
             Issue.record("expected sendCode to throw")
         } catch let error as AuthError {
-            #expect(error.readable == "Couldn't send the text. Check the number and try again")
+            #expect(error.readable == "Couldn't send your code. Try again")
             if case .server(_, let message) = error {
                 #expect(message != nil)
             }
+        } catch {
+            Issue.record("expected AuthError, got \(error)")
+        }
+    }
+
+    /// The generic 502 fallback is reachable on the email path too (email is
+    /// the default channel now), so it must not name a phone number.
+    @Test func anEmptyGateway502OnEmailIsChannelNeutral() async {
+        let auth = makeAuth()
+        OTPStubURLProtocol.replies = [
+            .status(502, "")
+        ]
+
+        do {
+            try await auth.sendCode(to: "person@example.com", channel: .email)
+            Issue.record("expected sendCode to throw")
+        } catch let error as AuthError {
+            #expect(error.readable == "Couldn't send your code. Try again")
         } catch {
             Issue.record("expected AuthError, got \(error)")
         }

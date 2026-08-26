@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import DesignSystem
+import Persistence
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
@@ -16,6 +17,7 @@ import DesignSystem
 /// actions into its foot. The screens themselves are identical in both.
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var health: HealthConnectionViewModel
     var onSignOut: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -37,6 +39,7 @@ struct RootView: View {
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
     @State private var plan = PlanViewModel()
+    @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
     @State private var coach = CoachViewModel()
@@ -55,7 +58,7 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
-    private enum AppTab: Hashable { case today, health, money, plan }
+    private enum AppTab: Hashable { case today, health, money, plan, life }
 
     @State private var tab: AppTab = .today
 
@@ -79,7 +82,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop, onSignOut: onSignOut)
+            SettingsScreen(model: settings, whoop: whoop, health: health, onSignOut: onSignOut)
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
@@ -173,6 +176,7 @@ struct RootView: View {
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
             PillNavItem(value: AppTab.plan, systemImage: "checklist", label: "Plan"),
+            PillNavItem(value: AppTab.life, systemImage: "square.grid.3x3.fill", label: "Life"),
         ]
     }
 
@@ -227,6 +231,22 @@ struct RootView: View {
                     onToggleHabit: { plan.toggleHabit(id: $0) },
                     onDelete: { plan.delete(id: $0) }
                 )
+            case .life:
+                // `LifeSector.ownsTab` in the Sectors package is the one
+                // decision about which three sectors get this row at all;
+                // `LifeBoardScreen` only ever calls this closure for those
+                // three. `default` below is reachable only if this switch
+                // has drifted out of sync with that decision, which should
+                // fail loudly rather than swallow the tap.
+                LifeBoardScreen(model: life) { sector in
+                    switch sector {
+                    case .body: tab = .health
+                    case .money: tab = .money
+                    case .mission: tab = .plan
+                    default:
+                        assertionFailure("RootView has no tab mapped for \(sector)")
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -289,6 +309,7 @@ struct RootView: View {
         wellness.attach(context)
         money.attach(context)
         plan.attach(context)
+        life.attach(context)
         settings.attach(context)
         quickLog.attach(context)
         coach.attach(context)
@@ -302,6 +323,7 @@ struct RootView: View {
         wellness.load()
         money.load()
         plan.load()
+        life.load()
         settings.load()
     }
 }

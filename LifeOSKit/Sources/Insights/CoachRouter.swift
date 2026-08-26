@@ -55,28 +55,28 @@ public actor CoachRouter {
 
     public func run<T: CoachTask>(
         _ task: T,
-        _ digest: MetricsDigest
+        _ context: T.Context
     ) async -> CoachResult<T.Output> {
         if case .cloud = task.floor {
-            return await runRemote(task, digest)
+            return await runRemote(task, context)
         }
         guard currentAvailability() == .available else {
-            return await runRemote(task, digest)
+            return await runRemote(task, context)
         }
-        return await runLocal(task, digest, retriesLeft: 1)
+        return await runLocal(task, context, retriesLeft: 1)
     }
 
     private func runLocal<T: CoachTask>(
         _ task: T,
-        _ digest: MetricsDigest,
+        _ context: T.Context,
         retriesLeft: Int
     ) async -> CoachResult<T.Output> {
         do {
-            return .answered(try await onDevice.run(task, digest))
+            return .answered(try await onDevice.run(task, context))
         } catch let error as LanguageModelSession.GenerationError {
             switch EscalationPolicy.disposition(for: error) {
             case .escalate:
-                return await runRemote(task, digest)
+                return await runRemote(task, context)
 
             case .retryLocally:
                 // Never reaches the cloud, however many times it fails. This
@@ -85,11 +85,11 @@ public actor CoachRouter {
                 // second local attempt, once the contending request has
                 // finished, is the only thing that can help.
                 guard retriesLeft > 0 else { return .unavailable }
-                return await runLocal(task, digest, retriesLeft: retriesLeft - 1)
+                return await runLocal(task, context, retriesLeft: retriesLeft - 1)
 
             case .retryThenEscalate:
-                guard retriesLeft > 0 else { return await runRemote(task, digest) }
-                return await runLocal(task, digest, retriesLeft: retriesLeft - 1)
+                guard retriesLeft > 0 else { return await runRemote(task, context) }
+                return await runLocal(task, context, retriesLeft: retriesLeft - 1)
 
             case .surface:
                 return .refused(error.localizedDescription)
@@ -105,14 +105,14 @@ public actor CoachRouter {
 
     private func runRemote<T: CoachTask>(
         _ task: T,
-        _ digest: MetricsDigest
+        _ context: T.Context
     ) async -> CoachResult<T.Output> {
         // Until Plan 2 lands there is no remote engine, and that is a real
         // shipping state rather than a stub: the coach works on-device and
         // says so when it cannot reach further.
         guard let remote else { return .unavailable }
         do {
-            return .answered(try await remote.run(task, digest))
+            return .answered(try await remote.run(task, context))
         } catch {
             return .unavailable
         }

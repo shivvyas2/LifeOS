@@ -72,7 +72,8 @@ extension AuthSession {
             expiresAt: expiresAt,
             userID: userID.isEmpty ? previous.userID : userID,
             phone: phone ?? previous.phone,
-            email: email ?? previous.email
+            email: email ?? previous.email,
+            hasProfile: hasProfile || previous.hasProfile
         )
     }
 }

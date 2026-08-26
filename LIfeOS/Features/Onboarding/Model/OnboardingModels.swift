@@ -7,10 +7,20 @@ import Integrations
 enum OnboardingStep: Equatable {
     case intro
     case identity            // phone or email
-    case code                // OTP (phone)
-    case linkSent            // magic link (email)
+    case code                // OTP (phone or email)
     case profile             // name, country
     case connections         // Whoop and Health, all optional
+    case signedIn            // returning user; nothing left to ask
+}
+
+/// Which door the user came through. With OTP there is no password, so signing
+/// in and signing up are the same three steps; this changes copy and nothing
+/// else. Picking the wrong door is harmless by design: the branch after verify
+/// is what actually routes, so a "Sign in" tap with no account creates one and
+/// a "Get started" tap with an account skips the profile step.
+enum AuthMode: Equatable {
+    case signUp
+    case signIn
 }
 
 /// One page of the intro. Kept as data so the pager is a loop, not five
@@ -51,7 +61,10 @@ extension IntroPage {
 
 /// What the user types during signup, before any of it is trusted.
 struct SignupDraft: Equatable {
-    var channel: SupabaseAuthChannel = .phone
+    /// Email first: it is free through Resend to 3,000 a month, needs no A2P
+    /// registration, and carries none of the SMS failure modes. An SMS costs
+    /// about $0.05 and can fail four different ways.
+    var channel: SupabaseAuthChannel = .email
     var phone = ""
     var dialCode = "+1"
     var email = ""

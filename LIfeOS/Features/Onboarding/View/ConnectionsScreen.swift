@@ -8,6 +8,7 @@ import Integrations
 struct ConnectionsScreen: View {
     @Bindable var model: OnboardingViewModel
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var health: HealthConnectionViewModel
     let onFinish: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -31,11 +32,13 @@ struct ConnectionsScreen: View {
 
                 connectionRow(
                     title: "Apple Health",
-                    detail: "Steps, sleep and weight. Arrives in the next release.",
+                    detail: health.statusDetail,
                     systemImage: "heart.fill",
-                    isConnected: false,
-                    isAvailable: false
-                ) {}
+                    isConnected: health.isConnected,
+                    isAvailable: health.state != .unavailable
+                ) {
+                    Task { await health.connect() }
+                }
 
                 connectionRow(
                     title: "Bank accounts",
@@ -123,6 +126,7 @@ struct ConnectionsScreen: View {
 struct OnboardingFlow: View {
     @Bindable var model: OnboardingViewModel
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var health: HealthConnectionViewModel
     let onFinish: () -> Void
     /// TEMPORARY: enters the app without an account so the rest of it can be
     /// tested while email delivery is still being sorted out. Signup is meant
@@ -133,15 +137,26 @@ struct OnboardingFlow: View {
     var body: some View {
         Group {
             switch model.step {
-            case .intro:       IntroScreen(onStart: { model.beginSignup() }, onSkipAuth: onSkipAuth)
+            case .intro:
+                IntroScreen(
+                    onStart: { model.beginSignup() },
+                    onSignIn: { model.beginSignIn() },
+                    onSkipAuth: onSkipAuth
+                )
             case .identity:    IdentityScreen(model: model, onSkipAuth: onSkipAuth)
             case .code:        CodeScreen(model: model)
-            case .linkSent:    LinkSentScreen(model: model)
             case .profile:     ProfileScreen(model: model)
-            case .connections: ConnectionsScreen(model: model, whoop: whoop, onFinish: onFinish)
+            case .connections: ConnectionsScreen(model: model, whoop: whoop, health: health, onFinish: onFinish)
+            case .signedIn:    ProgressView().controlSize(.large)
             }
         }
         .animation(.easeInOut(duration: 0.28), value: model.step)
         .transition(.opacity)
+        // Called from onChange rather than the `.signedIn` view body: a body can
+        // run more than once for a single state, and onFinish flips persisted
+        // app state.
+        .onChange(of: model.step) { _, step in
+            if step == .signedIn { onFinish() }
+        }
     }
 }

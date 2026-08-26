@@ -9,20 +9,20 @@ private let authLog = Logger(subsystem: "com.shivvyas.lifeos", category: "auth")
 @MainActor @Observable
 final class OnboardingViewModel {
     private(set) var step: OnboardingStep = .intro
+    private(set) var mode: AuthMode = .signUp
     var draft = SignupDraft()
 
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// Set when a code could not be sent over SMS. Every Twilio failure the
+    /// classifier knows about is one the user cannot fix from inside the app,
+    /// so the only useful next move is the other channel.
+    private(set) var phoneSendFailed = false
     /// Seconds until the code can be requested again; 0 means it can be now.
     private(set) var resendIn = 0
     /// Empty until checked; the identity screen waits rather than offering a
     /// channel that cannot deliver.
     private(set) var availableChannels: Set<SupabaseAuthChannel> = []
-
-    /// Email uses a magic link because the free tier cannot send a six-digit
-    /// code, whose template is fixed to a link. Flip this once custom SMTP is
-    /// configured and the OTP screen comes back with no other changes.
-    let emailUsesMagicLink = true
 
     /// Stored rather than computed from the keychain on each read, so that
     /// SwiftUI is told when it changes. A computed `store.load() != nil` is
@@ -51,14 +51,15 @@ final class OnboardingViewModel {
         }
     }
 
-    /// Picks a channel the project can actually deliver on. Phone stays the
-    /// default when SMS is configured, and quietly falls back when it is not.
+    /// Picks a channel the project can actually deliver on. Email stays the
+    /// default when it is configured, and quietly falls back to phone when
+    /// it is not.
     func loadChannels() async {
         guard let auth else { return }
         let channels = await auth.availableChannels()
         availableChannels = channels
-        if !channels.contains(.phone), channels.contains(.email) {
-            draft.channel = .email
+        if !channels.contains(.email), channels.contains(.phone) {
+            draft.channel = .phone
         }
     }
 
@@ -71,15 +72,18 @@ final class OnboardingViewModel {
     /// whose button silently fails.
     var isConfigured: Bool { auth != nil }
 
-    var sendButtonTitle: String {
-        draft.channel == .email && emailUsesMagicLink ? "Send link" : "Send code"
+    var identitySubtitle: String {
+        draft.channel == .phone
+            ? "We'll text you a six-digit code."
+            : "We'll email you a six-digit code."
     }
 
-    var identitySubtitle: String {
-        if draft.channel == .phone { return "We'll text you a six-digit code." }
-        return emailUsesMagicLink
-            ? "We'll email you a link that signs you straight in."
-            : "We'll email you a six-digit code."
+    var identityTitle: String {
+        mode == .signUp ? "Create your account" : "Welcome back"
+    }
+
+    var modeSwitchTitle: String {
+        mode == .signUp ? "Already have an account? Sign in" : "New here? Create an account"
     }
 
     var destinationLabel: String {
@@ -88,21 +92,48 @@ final class OnboardingViewModel {
 
     // MARK: - Navigation
 
-    func beginSignup() { step = .identity }
+    func beginSignup() {
+        mode = .signUp
+        step = .identity
+    }
+
+    func beginSignIn() {
+        mode = .signIn
+        step = .identity
+    }
+
+    func toggleMode() {
+        mode = mode == .signUp ? .signIn : .signUp
+        errorMessage = nil
+        phoneSendFailed = false
+    }
 
     func back() {
         errorMessage = nil
         switch step {
-        case .intro, .identity: step = .intro
-        case .code, .linkSent:  step = .identity
+        case .intro, .identity:
+            // Only cleared here: a failure surfaced on CodeScreen (e.g. a
+            // "Resend code" retry) must survive the .code -> .identity leg so
+            // IdentityScreen can still offer the email escape.
+            phoneSendFailed = false
+            step = .intro
+        case .code:             step = .identity
         case .profile:          step = .code
         case .connections:      step = .profile
+        case .signedIn:         break
         }
     }
 
     func switchChannel(to channel: SupabaseAuthChannel) {
         draft.channel = channel
         errorMessage = nil
+        phoneSendFailed = false
+    }
+
+    /// The one move that gets a user past a Twilio failure. Nothing in the app
+    /// can make SMS deliver, so the escape has to be the other channel.
+    func useEmailInstead() {
+        switchChannel(to: .email)
     }
 
     // MARK: - Session
@@ -144,23 +175,21 @@ final class OnboardingViewModel {
         guard let auth, draft.canSendCode else { return }
         isBusy = true
         errorMessage = nil
+        phoneSendFailed = false
         defer { isBusy = false }
 
         do {
-            if draft.channel == .email && emailUsesMagicLink {
-                try await auth.sendMagicLink(to: draft.destination, redirectTo: Self.authCallback)
-                step = .linkSent
-            } else {
-                try await auth.sendCode(to: draft.destination, channel: draft.channel)
-                draft.code = ""
-                step = .code
-            }
+            try await auth.sendCode(to: draft.destination, channel: draft.channel)
+            draft.code = ""
+            step = .code
             startResendCountdown()
         } catch let error as AuthError {
             authLog.error("sendCode failed: \(error.readable, privacy: .public)")
             errorMessage = error.readable
+            phoneSendFailed = draft.channel == .phone
         } catch {
             errorMessage = "Couldn't send the code"
+            phoneSendFailed = draft.channel == .phone
         }
     }
 
@@ -178,7 +207,10 @@ final class OnboardingViewModel {
             )
             try store.save(session)
             isSignedIn = true
-            step = .profile
+            // The only thing that separates a returning user from a new one,
+            // and it is known only now. The door they came through does not
+            // decide this; the account does.
+            step = session.hasProfile ? .signedIn : .profile
         } catch let error as AuthError {
             authLog.error("verify failed: \(String(describing: error), privacy: .public)")
             errorMessage = error.readable
@@ -212,45 +244,20 @@ final class OnboardingViewModel {
         }
     }
 
-    /// Where the magic link returns. Must match an allow-listed redirect URL on
-    /// the project, or Supabase drops the user on its own page instead.
-    static let authCallback = "lifeos://auth-callback"
-
-    /// Handles the magic-link redirect.
-    func handleAuthCallback(_ url: URL) {
-        guard url.scheme == AppConfig.appURLScheme, url.host == "auth-callback" else { return }
-
-        if let failure = AuthSession.errorDescription(in: url) {
-            authLog.error("magic link failed: \(failure, privacy: .public)")
-            errorMessage = failure
-            step = .identity
-            return
-        }
-        guard let session = AuthSession(callback: url) else {
-            errorMessage = "That link didn't work. Request a new one"
-            step = .identity
-            return
-        }
-
-        do {
-            try store.save(session)
-            isSignedIn = true
-            errorMessage = nil
-            step = .profile
-        } catch {
-            errorMessage = "Couldn't save your session"
-        }
-    }
-
     func signOut() {
         store.clear()
         isSignedIn = false
         draft = SignupDraft()
+        mode = .signUp
         step = .intro
     }
 
     private func startResendCountdown() {
-        resendIn = 45
+        // 60s, not 45: phone's Edge Function cooldown (otp_guard.ts) is 45s,
+        // but email posts straight to /auth/v1/otp, governed by GoTrue's
+        // auth.email.max_frequency, which is 60s. The countdown has to clear
+        // the stricter of the two or "Resend code" invites a 429.
+        resendIn = 60
         Task {
             while resendIn > 0 {
                 try? await Task.sleep(for: .seconds(1))

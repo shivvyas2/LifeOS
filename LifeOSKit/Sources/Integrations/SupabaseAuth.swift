@@ -54,19 +54,6 @@ public struct SupabaseAuth: Sendable {
         _ = try await post("otp", body: ["email": destination, "create_user": true])
     }
 
-    /// Sends a magic link that returns to `redirectTo`.
-    ///
-    /// Used for email because the free tier will not let the template be
-    /// changed to include a six-digit token. The stock template only ever
-    /// sends a link. Swap back to `sendCode` once custom SMTP is configured.
-    public func sendMagicLink(to email: String, redirectTo: String) async throws {
-        _ = try await post("otp", body: [
-            "email": email,
-            "create_user": true,
-            "email_redirect_to": redirectTo,
-        ])
-    }
-
     /// Exchanges the code for a session.
     public func verify(code: String, destination: String, channel: Channel) async throws -> AuthSession {
         if channel == .phone {
@@ -141,16 +128,24 @@ public struct SupabaseAuth: Sendable {
             let refresh_token: String?
             let expires_in: Double?
             let user: User?
-            struct User: Decodable { let id: String; let phone: String?; let email: String? }
+            struct User: Decodable {
+                let id: String
+                let phone: String?
+                let email: String?
+                let user_metadata: Metadata?
+                struct Metadata: Decodable { let first_name: String? }
+            }
         }
         let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let firstName = decoded.user?.user_metadata?.first_name ?? ""
         return AuthSession(
             accessToken: decoded.access_token,
             refreshToken: decoded.refresh_token,
             expiresAt: .now.addingTimeInterval(decoded.expires_in ?? 3_600),
             userID: decoded.user?.id ?? "",
             phone: decoded.user?.phone,
-            email: decoded.user?.email
+            email: decoded.user?.email,
+            hasProfile: !firstName.trimmingCharacters(in: .whitespaces).isEmpty
         )
     }
 }
@@ -162,65 +157,40 @@ public struct AuthSession: Codable, Sendable, Equatable {
     public let userID: String
     public let phone: String?
     public let email: String?
+    /// Whether this account has already been through the profile step. With OTP
+    /// there is no password, so this is the only thing that tells a returning
+    /// user apart from a new one after the code is accepted.
+    public let hasProfile: Bool
 
     public init(accessToken: String, refreshToken: String?, expiresAt: Date,
-                userID: String, phone: String?, email: String?) {
+                userID: String, phone: String?, email: String?, hasProfile: Bool = false) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.expiresAt = expiresAt
         self.userID = userID
         self.phone = phone
         self.email = email
+        self.hasProfile = hasProfile
+    }
+
+    /// Written by hand rather than synthesised: sessions already in the keychain
+    /// have no `hasProfile` key, and a synthesised decoder would throw on them
+    /// and sign every existing user out on upgrade. Defaulting to false is safe
+    /// because the flag is only read immediately after `verify`; a restored
+    /// session goes straight to the app on `hasFinishedOnboarding`.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accessToken = try container.decode(String.self, forKey: .accessToken)
+        refreshToken = try container.decodeIfPresent(String.self, forKey: .refreshToken)
+        expiresAt = try container.decode(Date.self, forKey: .expiresAt)
+        userID = try container.decode(String.self, forKey: .userID)
+        phone = try container.decodeIfPresent(String.self, forKey: .phone)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        hasProfile = try container.decodeIfPresent(Bool.self, forKey: .hasProfile) ?? false
     }
 
     public func isExpired(now: Date = .now) -> Bool {
         expiresAt.addingTimeInterval(-60) <= now
-    }
-}
-
-public extension AuthSession {
-    /// Builds a session from a magic-link redirect.
-    ///
-    /// Supabase returns the tokens in the URL *fragment* rather than the query,
-    /// so `URLComponents.queryItems` finds nothing and the callback looks empty
-    /// until the fragment is parsed by hand.
-    init?(callback url: URL) {
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        var pairs: [String: String] = [:]
-
-        for source in [components?.fragment, components?.query].compactMap({ $0 }) {
-            for part in source.split(separator: "&") {
-                let bits = part.split(separator: "=", maxSplits: 1)
-                guard bits.count == 2 else { continue }
-                pairs[String(bits[0])] = String(bits[1])
-                    .replacingOccurrences(of: "+", with: " ")
-                    .removingPercentEncoding ?? String(bits[1])
-            }
-        }
-
-        guard let access = pairs["access_token"], !access.isEmpty else { return nil }
-        let seconds = pairs["expires_in"].flatMap(Double.init) ?? 3_600
-        self.init(
-            accessToken: access,
-            refreshToken: pairs["refresh_token"],
-            expiresAt: .now.addingTimeInterval(seconds),
-            userID: "",
-            phone: nil,
-            email: nil
-        )
-    }
-
-    /// Supabase reports a failed link the same way, in the fragment.
-    static func errorDescription(in url: URL) -> String? {
-        guard let fragment = URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment
-        else { return nil }
-        for part in fragment.split(separator: "&") {
-            let bits = part.split(separator: "=", maxSplits: 1)
-            if bits.count == 2, bits[0] == "error_description" {
-                return String(bits[1]).replacingOccurrences(of: "+", with: " ").removingPercentEncoding
-            }
-        }
-        return nil
     }
 }
 
@@ -244,11 +214,29 @@ public enum AuthError: Error, Equatable {
             return .server(status: 502, message: "Couldn't send the text. Check the number and try again")
         case "sms_region":
             return .server(status: 502, message: "SMS isn't available for that country yet")
-        case "sms_unverified":
+        // Twilio 21608. Cannot happen on a paid account, so the reader can do
+        // nothing about it and the copy must not send them off to fix a number
+        // that is not the problem.
+        case "sms_trial_unverified", "sms_unverified":
             return .server(
                 status: 502,
-                message: "That number isn't verified for SMS yet. Add it in Twilio, then try again"
+                message: "We can't text this number yet. The SMS account is still in trial mode"
             )
+        // Twilio 21610. Per number, and the user is the only one who can undo it.
+        case "sms_opted_out":
+            return .server(
+                status: 502,
+                message: "That number opted out of our texts. Text START to our number to opt back in"
+            )
+        // Twilio 30034.
+        case "sms_unregistered_campaign":
+            return .server(
+                status: 502,
+                message: "Our SMS sender isn't registered with that carrier yet"
+            )
+        // Twilio 60410.
+        case "sms_blocked":
+            return .server(status: 502, message: "The carrier blocked that text")
         case "check_failed", "session_failed":
             return .server(status: status, message: "Couldn't finish sign-in. Try again")
         default:
@@ -260,9 +248,12 @@ public enum AuthError: Error, Equatable {
             return .server(status: status, message: message)
         }
         if status == 502 {
+            // Channel-neutral: an empty- or HTML-bodied 502 with no msg/
+            // error_description/message can come from the email path too
+            // (email is now the default channel), so this cannot assume SMS.
             return .server(
                 status: 502,
-                message: "Couldn't send the text. Check the number and try again"
+                message: "Couldn't send your code. Try again"
             )
         }
         return .server(status: status, message: nil)

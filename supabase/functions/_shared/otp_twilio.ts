@@ -34,6 +34,21 @@ export async function twilioStart(args: {
   return { ok: false, kind: classifyTwilioFailure(response.status, text) };
 }
 
+/// The HTTP status each failure kind is reported with. A map rather than an
+/// if-chain in the function, so a new kind cannot be added in one place and
+/// silently dropped to `send_failed` in the other.
+export const SEND_FAILURE_STATUS: Record<string, number> = {
+  rate_limited: 429,
+  invalid_phone: 400,
+  server_not_configured: 500,
+  sms_region: 502,
+  sms_trial_unverified: 502,
+  sms_opted_out: 502,
+  sms_unregistered_campaign: 502,
+  sms_blocked: 502,
+  send_failed: 502,
+};
+
 export function classifyTwilioFailure(status: number, body: string): string {
   let code: number | undefined;
   try {
@@ -45,7 +60,12 @@ export function classifyTwilioFailure(status: number, body: string): string {
 
   if (status === 429 || code === 60203 || code === 20429) return "rate_limited";
   if (code === 21408 || code === 21612) return "sms_region";
-  if (code === 21608 || code === 21610) return "sms_unverified";
+  // 21608 cannot fire on a paid account, so it is a credentials problem the
+  // user cannot fix. 21610 is per number and the user can undo it themselves.
+  if (code === 21608) return "sms_trial_unverified";
+  if (code === 21610) return "sms_opted_out";
+  if (code === 30034) return "sms_unregistered_campaign";
+  if (code === 60410) return "sms_blocked";
   if (code === 21211 || code === 21614 || code === 60200) return "invalid_phone";
   if (code === 20003 || code === 20404) return "server_not_configured";
   return "send_failed";

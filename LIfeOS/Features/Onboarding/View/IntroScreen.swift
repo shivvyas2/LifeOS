@@ -6,6 +6,7 @@ import Integrations
 /// rest of the app uses, so the product explains itself by looking like itself.
 struct IntroScreen: View {
     let onStart: () -> Void
+    var onSignIn: (() -> Void)?
     var onSkipAuth: (() -> Void)?
     @State private var page = 0
     @Environment(\.colorScheme) private var scheme
@@ -34,6 +35,12 @@ struct IntroScreen: View {
                             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { page += 1 }
                         }
                     }
+                    if let onSignIn {
+                        Button("I already have an account") { onSignIn() }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(LifeOSTokens.accent)
+                            .frame(height: Space.x5)
+                    }
                     if let onSkipAuth {
                         Button("Skip for now") { onSkipAuth() }
                             .font(.system(size: 15, weight: .medium))
@@ -59,9 +66,25 @@ struct IntroScreen: View {
 
             // The dot grid is the app's central motif, so the intro animates it
             // rather than showing an unrelated illustration.
-            DotBloom(accentEvery: item.id + 5)
-                .id(item.id)          // restart the bloom on each page
-                .frame(maxHeight: 180)
+            //
+            // The first page adds the cat in front of it: the grid is the
+            // product, but a screen that opens on a bare grid opens on a
+            // spreadsheet. The cat greets, the grid explains, and putting the
+            // grid behind rather than beside keeps the page to one focal point.
+            Group {
+                if item.id == 0 {
+                    // The cat IS the grid on this page: it is drawn from the
+                    // same dots at the same pitch, waving. A `DotBloom` behind
+                    // it was two dot fields on different pitches fighting, and
+                    // the loose dots read as artefacts on the cat's body.
+                    ScanlineCat(style: .dots)
+                        .frame(maxWidth: 232)
+                } else {
+                    DotBloom(accentEvery: item.id + 5)
+                        .id(item.id)      // restart the bloom on each page
+                }
+            }
+            .frame(maxHeight: item.id == 0 ? 224 : 180)
 
             VStack(alignment: .leading, spacing: Space.x2) {
                 StaggeredAppear(index: 1) {
@@ -90,7 +113,7 @@ struct IntroScreen: View {
                 Capsule()
                     .fill(index == page
                           ? LifeOSTokens.primaryText.resolve(scheme)
-                          : LifeOSTokens.dotFuture.resolve(scheme))
+                          : LifeOSTokens.dotMissed.resolve(scheme))
                     .frame(width: index == page ? Space.x3 : Space.x1, height: Space.x1)
                     .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
             }
@@ -99,5 +122,5 @@ struct IntroScreen: View {
 }
 
 #Preview {
-    IntroScreen(onStart: {})
+    IntroScreen(onStart: {}, onSignIn: {})
 }

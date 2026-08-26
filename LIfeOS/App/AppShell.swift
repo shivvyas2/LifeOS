@@ -12,6 +12,7 @@ private let shellLog = Logger(subsystem: "com.shivvyas.lifeos", category: "shell
 struct AppShell: View {
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
+    @State private var health = HealthConnectionViewModel()
     /// Persisted, but the win is narrower than the name suggests: `isSignedIn`
     /// resolves synchronously (a keychain read), so on a relaunch that restores
     /// a session this flag is already true on the first render, instead of
@@ -31,7 +32,7 @@ struct AppShell: View {
     var body: some View {
         Group {
             if (onboarding.isSignedIn && hasFinishedOnboarding) || isGuest {
-                RootView(whoop: whoop, onSignOut: {
+                RootView(whoop: whoop, health: health, onSignOut: {
                     isGuest = false
                     hasFinishedOnboarding = false
                     onboarding.signOut()
@@ -40,6 +41,7 @@ struct AppShell: View {
                 OnboardingFlow(
                     model: onboarding,
                     whoop: whoop,
+                    health: health,
                     onFinish: { withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true } },
                     onSkipAuth: { withAnimation(.easeInOut(duration: 0.35)) { isGuest = true } }
                 )
@@ -48,10 +50,15 @@ struct AppShell: View {
         .preferredColorScheme(appearance.colorScheme)
         .task {
             whoop.attach(context)
+            health.attach(context)
             // A returning user has a session already; renew it and skip past
             // signup rather than making them prove themselves on every launch.
             if await onboarding.restoreSession() { hasFinishedOnboarding = true }
             await whoop.syncIfStale()
+            // After Whoop, not before: Health fills the gaps Whoop leaves, so
+            // running it second means it sees the strap's numbers already in
+            // place and writes only where they are missing.
+            await health.syncIfConnected()
         }
         // Nothing awaits the sync: screens render local data immediately and
         // repaint through the ModelContext.didSave reload when it lands. The
@@ -75,18 +82,15 @@ struct AppShell: View {
                     hasFinishedOnboarding = false
                 }
                 await whoop.syncIfStale()
+                await health.syncIfConnected()
             }
         }
         .onOpenURL { url in
-            // Two callbacks share the scheme; the host decides which owns it.
             // Logged at the door: if nothing appears here, the redirect never
             // reached the app at all and the problem is upstream of our code.
+            // Only Whoop uses the scheme now that email is a code, not a link.
             shellLog.info("opened url host=\(url.host ?? "?", privacy: .public)")
-            if url.host == "auth-callback" {
-                onboarding.handleAuthCallback(url)
-            } else {
-                whoop.handleCallback(url)
-            }
+            whoop.handleCallback(url)
         }
     }
 }

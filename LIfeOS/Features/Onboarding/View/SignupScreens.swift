@@ -1,6 +1,9 @@
 import SwiftUI
+import OSLog
 import DesignSystem
 import Integrations
+
+private let signupLog = Logger(subsystem: "com.shivvyas.lifeos", category: "signup")
 
 /// Shared chrome for every signup step: neutral canvas, back affordance,
 /// title block, content, and one primary action pinned to the bottom.
@@ -60,26 +63,30 @@ struct SignupScaffold<Content: View, Action: View>: View {
 /// Step 1. Phone first, email as the alternative, because a phone number is
 /// the identity most people can recall and keep.
 struct IdentityScreen: View {
+    /// Which field owns the keyboard. Drives the focus ring: before this the
+    /// screen gave no visual answer to "where am I typing".
+    private enum Field { case phone, email }
+
     @Bindable var model: OnboardingViewModel
     var onSkipAuth: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
     @State private var showCountries = false
+    @FocusState private var focus: Field?
 
     var body: some View {
         SignupScaffold(
-            title: "Create your account",
+            title: model.identityTitle,
             subtitle: model.identitySubtitle,
             onBack: { model.back() }
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
-                Picker("", selection: Binding(
-                    get: { model.draft.channel },
-                    set: { model.switchChannel(to: $0) }
-                )) {
-                    Text("Phone").tag(SupabaseAuthChannel.phone)
-                    Text("Email").tag(SupabaseAuthChannel.email)
-                }
-                .pickerStyle(.segmented)
+                SegmentedPills(
+                    selection: Binding(
+                        get: { model.draft.channel },
+                        set: { model.switchChannel(to: $0) }
+                    ),
+                    options: [(.email, "Email"), (.phone, "Phone")]
+                )
 
                 if model.draft.channel == .phone {
                     HStack(spacing: Space.x1) {
@@ -100,10 +107,10 @@ struct IdentityScreen: View {
                             .textContentType(.telephoneNumber)
                             .autocorrectionDisabled()
                             .writingToolsBehavior(.disabled)
-                            .font(.system(size: 17))
-                            .padding(.horizontal, Space.x2)
-                            .frame(height: Space.x6 + Space.half)
-                            .background(field)
+                            .focused($focus, equals: .phone)
+                            .submitLabel(.continue)
+                            .onSubmit(send)
+                            .focusableField(isFocused: focus == .phone)
                     }
                 } else {
                     TextField("you@example.com", text: $model.draft.email)
@@ -112,37 +119,56 @@ struct IdentityScreen: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .writingToolsBehavior(.disabled)
-                        .font(.system(size: 17))
-                        .padding(.horizontal, Space.x2)
-                        .frame(height: Space.x6 + Space.half)
-                        .background(field)
+                        .focused($focus, equals: .email)
+                        .submitLabel(.continue)
+                        .onSubmit(send)
+                        .focusableField(isFocused: focus == .email)
                 }
 
-                if let error = model.errorMessage {
-                    Text(error).font(.system(size: 13)).foregroundStyle(.red)
+                // One complaint at a time. Three stacked coloured lines read as
+                // a broken app rather than as one thing to fix.
+                if let status = InlineStatus.resolve(
+                    error: model.errorMessage,
+                    configuration: model.isConfigured ? nil : Self.unavailableCopy,
+                    warning: model.phoneUnavailableNote
+                ) {
+                    InlineStatusView(status)
                 }
-                if let note = model.phoneUnavailableNote {
-                    Text(note).font(.system(size: 13)).foregroundStyle(.orange)
-                }
-                if !model.isConfigured {
-                    Text("Sign-in isn't configured yet. SUPABASE_ANON_KEY is missing.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.orange)
+
+                // Kept below the status rather than folded into it: this is an
+                // action the user can take, not another thing going wrong.
+                if model.phoneSendFailed {
+                    Button("Use email instead") { model.useEmailInstead() }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.accent)
+                        .frame(height: Space.x5)
                 }
             }
         } action: {
             VStack(spacing: Space.half) {
-                PrimaryButton(model.sendButtonTitle, isLoading: model.isBusy) {
+                PrimaryButton("Send code", isLoading: model.isBusy) {
                     Task { await model.sendCode() }
                 }
                 .disabled(!model.draft.canSendCode || !model.isConfigured)
+
+                Button(model.modeSwitchTitle) { model.toggleMode() }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(height: Space.x5)
 
                 if let onSkipAuth {
                     SecondaryButton("Continue without an account") { onSkipAuth() }
                 }
             }
         }
-        .task { await model.loadChannels() }
+        .task {
+            await model.loadChannels()
+            // The key name is a fact for whoever reads the log, not for whoever
+            // is trying to sign in.
+            if !model.isConfigured {
+                signupLog.error("sign-in unavailable: SUPABASE_ANON_KEY is missing")
+            }
+        }
         .sheet(isPresented: $showCountries) {
             CountryPicker(
                 selection: $model.draft.country,
@@ -152,17 +178,35 @@ struct IdentityScreen: View {
         }
     }
 
+    /// What a user can act on. The missing key goes to the log instead.
+    private static let unavailableCopy = "Sign-in is unavailable right now. Please try again in a moment."
+
     private var field: some View {
         RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
             .fill(LifeOSTokens.cardSurface.resolve(scheme))
     }
+
+    /// Return on the keyboard does what the button does, when the button would
+    /// have been enabled.
+    private func send() {
+        guard model.draft.canSendCode, model.isConfigured else { return }
+        Task { await model.sendCode() }
+    }
 }
 
 /// Step 2. Six digits.
+///
+/// This is the screen people fail on, so it does the work instead of asking for
+/// it: six boxes rather than one tracked field, verification fired the moment
+/// the sixth digit lands, and a wrong code that shakes and buzzes rather than
+/// quietly turning a line of text red.
 struct CodeScreen: View {
     @Bindable var model: OnboardingViewModel
     @Environment(\.colorScheme) private var scheme
-    @FocusState private var focused: Bool
+    /// Bumped on every new error, which is what drives the shake and the
+    /// haptic. A counter rather than a Bool: two bad codes in a row must play
+    /// twice, and a Bool that is already `true` animates nothing.
+    @State private var wrongAttempts = 0
 
     var body: some View {
         SignupScaffold(
@@ -171,23 +215,18 @@ struct CodeScreen: View {
             onBack: { model.back() }
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
-                TextField("000000", text: $model.draft.code)
-                    .keyboardType(.numberPad)
-                    .textContentType(.oneTimeCode)
-                    .writingToolsBehavior(.disabled)
-                    .font(.system(size: 28, weight: .semibold, design: .monospaced))
-                    .tracking(8)
-                    .multilineTextAlignment(.center)
-                    .frame(height: Space.x8)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
-                            .fill(LifeOSTokens.cardSurface.resolve(scheme))
-                    )
-                    .focused($focused)
+                CodeField(text: $model.draft.code, count: 6) {
+                    verify()
+                }
+                .shake(wrongAttempts)
+                .animation(.spring(response: 0.28, dampingFraction: 0.4), value: wrongAttempts)
 
-                if let error = model.errorMessage {
-                    Text(error).font(.system(size: 13)).foregroundStyle(.red)
+                if let status = InlineStatus.resolve(
+                    error: model.errorMessage,
+                    configuration: nil,
+                    warning: nil
+                ) {
+                    InlineStatusView(status)
                 }
 
                 Button(model.resendIn > 0 ? "Resend in \(model.resendIn)s" : "Resend code") {
@@ -197,21 +236,36 @@ struct CodeScreen: View {
                 .foregroundStyle(LifeOSTokens.accent)
                 .disabled(model.resendIn > 0)
             }
-            .onAppear { focused = true }
+            .onChange(of: model.errorMessage) { _, new in
+                guard new?.isEmpty == false else { return }
+                wrongAttempts += 1
+            }
+            .sensoryFeedback(.error, trigger: wrongAttempts)
         } action: {
+            // Kept even though the sixth digit auto-verifies: autofill can land
+            // a full code without a keystroke, and a screen with no button
+            // leaves that user nothing to press.
             PrimaryButton("Verify", isLoading: model.isBusy) {
-                Task { await model.verifyCode() }
+                verify()
             }
             .disabled(!model.draft.canVerify)
         }
+    }
+
+    private func verify() {
+        guard model.draft.canVerify, !model.isBusy else { return }
+        Task { await model.verifyCode() }
     }
 }
 
 /// Step 3. Name and country.
 struct ProfileScreen: View {
+    private enum Field { case first, last }
+
     @Bindable var model: OnboardingViewModel
     @Environment(\.colorScheme) private var scheme
     @State private var showCountries = false
+    @FocusState private var focus: Field?
 
     var body: some View {
         SignupScaffold(
@@ -222,10 +276,16 @@ struct ProfileScreen: View {
             VStack(spacing: Space.x2) {
                 TextField("First name", text: $model.draft.firstName)
                     .textContentType(.givenName)
-                    .modifier(FieldStyle(scheme: scheme))
+                    .focused($focus, equals: .first)
+                    .submitLabel(.next)
+                    .onSubmit { focus = .last }
+                    .focusableField(isFocused: focus == .first)
                 TextField("Last name", text: $model.draft.lastName)
                     .textContentType(.familyName)
-                    .modifier(FieldStyle(scheme: scheme))
+                    .focused($focus, equals: .last)
+                    .submitLabel(.done)
+                    .onSubmit { focus = nil }
+                    .focusableField(isFocused: focus == .last)
 
                 Button { showCountries = true } label: {
                     HStack {
@@ -308,60 +368,6 @@ struct CountryPicker: View {
             .searchable(text: $search)
             .navigationTitle("Country")
             .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
-
-/// Shown after a magic link is sent. There is nothing to type, so the screen's
-/// only job is to say what happens next and offer a way out if it does not.
-struct LinkSentScreen: View {
-    @Bindable var model: OnboardingViewModel
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        SignupScaffold(
-            title: "Check your email",
-            subtitle: "We sent a sign-in link to \(model.destinationLabel). Open it on this device and you'll come straight back here.",
-            onBack: { model.back() }
-        ) {
-            VStack(alignment: .leading, spacing: Space.x2) {
-                HStack(spacing: Space.x2) {
-                    Image(systemName: "envelope.fill")
-                        .font(.system(size: 20))
-                        .frame(width: Space.x6, height: Space.x6)
-                        .background(
-                            RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
-                                .fill(LifeOSTokens.canvas.resolve(scheme))
-                        )
-                        .foregroundStyle(LifeOSTokens.accent)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Waiting for you to tap the link")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("It expires shortly.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    }
-                }
-                .padding(Space.x2)
-                .background(
-                    RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
-                        .fill(LifeOSTokens.cardSurface.resolve(scheme))
-                )
-
-                if let error = model.errorMessage {
-                    Text(error).font(.system(size: 13)).foregroundStyle(.red)
-                }
-
-                Button(model.resendIn > 0 ? "Resend in \(model.resendIn)s" : "Send another link") {
-                    Task { await model.sendCode() }
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(LifeOSTokens.accent)
-                .disabled(model.resendIn > 0)
-            }
-        } action: {
-            SecondaryButton("Use a different address") { model.back() }
         }
     }
 }

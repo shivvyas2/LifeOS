@@ -1628,9 +1628,10 @@ final class BodyViewModel {
 
 <h4>Flow anatomy</h4>
 <ul>
-  <li><code>IntroScreen</code>: four pages, one per domain, each carrying its own hue.</li>
+  <li><code>IntroScreen</code>: four pages, one per domain, each carrying its own hue, plus an
+    "I already have an account" door straight into sign-in for a returning user.</li>
   <li><code>IdentityScreen</code>: channel switcher, dial-code picker, destination field.</li>
-  <li><code>CodeScreen</code> (phone) or <code>LinkSentScreen</code> (email).</li>
+  <li><code>CodeScreen</code>: six-digit code, phone or email.</li>
   <li><code>ProfileScreen</code>: first name, last name, country.</li>
   <li><code>ConnectionsScreen</code>: Whoop now, Health and Plaid marked as next release.</li>
 </ul>
@@ -1641,10 +1642,10 @@ final class BodyViewModel {
 ├── Model/
 │   └── OnboardingModels.swift       step enum, draft, intro pages, dial codes
 ├── ViewModel/
-│   └── OnboardingViewModel.swift    send, verify, profile, callback handling
+│   └── OnboardingViewModel.swift    send, verify, profile, session restore
 └── View/
-    ├── IntroScreen.swift            the four-page pager
-    ├── SignupScreens.swift          scaffold, identity, code, profile, link sent
+    ├── IntroScreen.swift            the four-page pager, plus the sign-in door
+    ├── SignupScreens.swift          scaffold, identity, code, profile
     └── ConnectionsScreen.swift      Whoop and Health, plus OnboardingFlow
 </code></pre>
 
@@ -1660,10 +1661,10 @@ final class BodyViewModel {
 <pre><code>enum OnboardingStep: Equatable {
     case intro
     case identity            // phone or email
-    case code                // OTP (phone)
-    case linkSent            // magic link (email)
+    case code                // OTP (phone or email)
     case profile             // name, country
     case connections         // Whoop and Health, all optional
+    case signedIn            // returning user; nothing left to ask
 }</code></pre>
 
 <div class="note">
@@ -1671,11 +1672,14 @@ final class BodyViewModel {
   <code>OnboardingStep</code> is a single value because the alternative,
   <code>hasSentCode &amp;&amp; !hasVerified &amp;&amp; isEmail</code>, can represent states that do
   not exist. A user cannot be on the code screen and the profile screen at once, and the type should
-  say so.
+  say so. <code>.signedIn</code> exists for the same reason: the branch after verify reads
+  <code>AuthSession.hasProfile</code>, decided only then, rather than the door the user came through,
+  so a "Sign in" tap with no account still creates one and a "Get started" tap on an existing account
+  skips straight past the profile step it already has answers for.
 </div>
 
 <pre><code>struct SignupDraft: Equatable {
-    var channel: SupabaseAuthChannel = .phone
+    var channel: SupabaseAuthChannel = .email
     var phone = ""
     var dialCode = "+1"
     var email = ""
@@ -1725,7 +1729,6 @@ final class OnboardingViewModel {
     func sendCode() async
     func verifyCode() async
     func saveProfile() async
-    func handleAuthCallback(_ url: URL)
     func signOut()
 }</code></pre>
 
@@ -1735,16 +1738,21 @@ final class OnboardingViewModel {
   <li><strong>Channel availability is asked, not assumed.</strong> <code>loadChannels()</code> reads
     <code>auth/v1/settings</code> and switches the default to email when SMS is off. The identity
     screen shows a note explaining why rather than leaving a dead button on screen.</li>
-  <li><strong>Email uses a magic link, deliberately and temporarily.</strong> The free tier will not
-    let the email template carry a six-digit token, so <code>emailUsesMagicLink</code> is
-    <code>true</code> and the flow diverts to <code>.linkSent</code>. Flip that one constant once
-    custom SMTP is configured and the OTP screen returns with no other change.</li>
+  <li><strong>Email sends a six-digit code, not a magic link.</strong> Supabase's stock templates send
+    a link, which cannot be typed into the app; including <code>{{ .Token }}</code> in
+    <code>[auth.email.template]</code> is what makes GoTrue send a code instead, and
+    <code>verifyCode()</code> posts it to <code>auth/v1/verify</code> exactly as phone does, no
+    per-channel branch required. It still needs the Resend SMTP block in <code>config.toml</code>
+    pushed to the hosted project; until then the built-in sender delivers only to project team
+    members and caps at two emails an hour.</li>
   <li><strong>A failed profile write does not strand the user.</strong> The account already exists by
     then, so <code>saveProfile()</code> records the error and advances to
     <code>.connections</code> anyway. Blocking the last step of signup on a metadata write would
     trade a cosmetic failure for an unusable app.</li>
-  <li><strong>Resend is rate-limited in the UI.</strong> A thirty-second countdown starts on every
-    send, because the server's own limit answers with a 429 the user cannot interpret.</li>
+  <li><strong>Resend is rate-limited in the UI.</strong> A sixty-second countdown starts on every send,
+    tuned to the stricter of the two server-side cooldowns: the phone Edge Function's is 45s, and
+    email's <code>auth.email.max_frequency</code> is 60s. Anything shorter would let a tap on
+    "Resend code" clear the client's countdown and still draw a 429 from the server.</li>
   <li><strong><code>isSignedIn</code> is stored, not computed.</strong> It was a computed
     <code>store.load() != nil</code>, which <code>@Observable</code> cannot see: nothing told SwiftUI
     the value had changed, so the shell could keep showing the app after a sign-out until some
@@ -1757,11 +1765,13 @@ final class OnboardingViewModel {
 </ul>
 
 <div class="note">
-  <b>The tokens arrive in the fragment, not the query</b>
-  Supabase returns a magic-link session in the URL <em>fragment</em>. <code>queryItems</code> finds
-  nothing there, so the callback looks empty until the fragment is parsed by hand.
-  <code>AuthSession(callback:)</code> reads both, and <code>AuthSession.errorDescription(in:)</code>
-  pulls <code>error_description</code> out of the same place so an expired link says so.
+  <b><code>hasProfile</code> defaults to false on decode, by hand</b>
+  A session already in the Keychain from before this field existed has no <code>hasProfile</code> key
+  at all. A synthesised <code>Decodable</code> would throw on it and sign every existing user out on
+  the upgrade, so <code>AuthSession</code> writes its own initializer and defaults the missing key to
+  <code>false</code>. That default is safe only because the flag is read once, immediately after
+  <code>verify()</code>, to route <code>.profile</code> vs. <code>.signedIn</code>; a restored session
+  never consults it again.
 </div>
 
 <h3 id="s4-5"><span class="num">4.5</span><span>View</span></h3>
@@ -1801,8 +1811,8 @@ final class OnboardingViewModel {
   <tbody>
     <tr><td>No <code>SUPABASE_ANON_KEY</code> in the build</td><td><code>isConfigured</code> is false; the screen says sign-in is not configured instead of failing on tap</td></tr>
     <tr><td>SMS not enabled on the project</td><td>Channel defaults to email; a note explains why phone is unavailable. Phone is enabled on the project today, so the live app opens on the phone tab</td></tr>
-    <tr><td>Magic link opened on a different device</td><td>No session arrives on this device; the user stays on <code>.linkSent</code> and can resend</td></tr>
-    <tr><td>Expired or reused link</td><td><code>error_description</code> from the fragment is shown verbatim; flow returns to <code>.identity</code></td></tr>
+    <tr><td>Wrong or expired code entered</td><td>Verify's error is shown inline on <code>CodeScreen</code>; the step stays <code>.code</code> so the code can be retried without resending</td></tr>
+    <tr><td>Email or SMS send fails</td><td>Error shown inline. A phone failure also offers "Use email instead"; that offer survives backing out to <code>IdentityScreen</code>, including a failure raised from <code>CodeScreen</code>'s own "Resend code"</td></tr>
     <tr><td>Profile write fails</td><td>Error recorded, flow advances to connections; the account is already valid</td></tr>
     <tr><td>Returning user, session in Keychain</td><td><code>AppShell</code> skips signup entirely on launch, after <code>restoreSession()</code> renews the session; see <a href="#s11-3">11.3</a></td></tr>
     <tr><td>Returning user, session expired</td><td>Refreshed before the shell decides anything. Only a refusal sends the user back to signup, with "Your session expired. Sign in again"</td></tr>
@@ -1825,25 +1835,27 @@ final class OnboardingViewModel {
 <p>
   Session restoration is covered: <code>SessionRefreshTests</code> drives every branch of
   <code>SessionRefresher</code> against a stub <code>URLProtocol</code>, which is what pins down the
-  rule that only a refusal signs a user out. The rest of auth is still the largest untested surface
-  in the app, and the three below are the ones worth writing next, because each covers a parsing
-  rule that fails silently.
+  rule that only a refusal signs a user out. <code>AuthSessionProfileTests</code> covers the
+  <code>hasProfile</code> decode-and-carry-forward rules above, and <code>AuthErrorMappingTests</code>
+  pins every Edge Function failure kind, plus the generic-502 fallback, to a specific sentence. The
+  rest of auth is still an untested surface, and the two below are worth writing next, because each
+  covers a rule that fails silently rather than loudly.
 </p>
 <ul>
   <li><code>SignupDraft</code> validation: a six-digit code with spaces verifies, a five-digit one
     does not; an email without a dot does not send.</li>
-  <li><code>AuthSession(callback:)</code> against a real Supabase fragment: tokens parsed, expiry
-    derived from <code>expires_in</code>, and a fragment with no <code>access_token</code> returns
-    <code>nil</code> rather than an empty session.</li>
-  <li><code>AuthSession.errorDescription(in:)</code> decodes <code>+</code> as a space, so
-    "Email link is invalid or has expired" reads as a sentence.</li>
+  <li><code>OnboardingViewModel.back()</code>: <code>phoneSendFailed</code> survives the
+    <code>.code -&gt; .identity</code> leg but is cleared on <code>.identity -&gt; .intro</code>, so a
+    failure raised from <code>CodeScreen</code>'s "Resend code" still surfaces the email escape one
+    screen back.</li>
 </ul>
 
 <div class="note">
   <b>The signup flow is exercisable without sending an SMS</b>
   The project keeps a test-number map, so <code>+1 123-456-7890</code> with code
   <code>123123</code> returns a real session and never reaches Twilio. That is what makes the phone
-  path runnable in the simulator, where the magic-link round trip cannot be.
+  path runnable in the simulator without a live provider; email has no equivalent bypass and depends
+  on the Resend SMTP block actually being pushed to the hosted project.
 </div>
 </section>
 
@@ -3437,7 +3449,7 @@ case .unsupported(let reason):
 
 <p>
   <code>SupabaseAuth</code> talks to <code>auth/v1</code> over REST with no SDK. The five calls the
-  app makes (ask which channels are enabled, request a code or link, verify, refresh, update the
+  app makes (ask which channels are enabled, request a code, verify, refresh, update the
   user record) are small enough that a dependency would pull in far more surface than it removes.
   The anon key goes in the <code>apikey</code> header; it is public by design, and RLS is what
   protects rows.
@@ -3448,27 +3460,17 @@ case .unsupported(let reason):
   <thead><tr><th>Endpoint</th><th>Used for</th><th>Note</th></tr></thead>
   <tbody>
     <tr><td><code>GET auth/v1/settings</code></td><td>Which channels the project can deliver on</td><td>Falls back to email-only if the call fails</td></tr>
-    <tr><td><code>POST auth/v1/otp</code></td><td>Six-digit code (phone) or magic link (email)</td><td><code>create_user: true</code>; this is the signup path</td></tr>
-    <tr><td><code>POST auth/v1/verify</code></td><td>Exchange the code for a session</td><td>Phone only, while email uses the link</td></tr>
+    <tr><td><code>POST auth/v1/otp</code></td><td>Six-digit code, phone or email</td><td><code>create_user: true</code>; this is the signup path. <code>{{ .Token }}</code> in the email template is what keeps this a code rather than a link</td></tr>
+    <tr><td><code>POST auth/v1/verify</code></td><td>Exchange the code for a session</td><td>Same call for both channels; the response body carries the session directly, no callback URL involved</td></tr>
     <tr><td><code>POST auth/v1/token</code></td><td>Renew an expired session</td><td><code>grant_type=refresh_token</code>. Rotates the token; an invalid one answers 400</td></tr>
     <tr><td><code>PUT auth/v1/user</code></td><td>Name and country into <code>user_metadata</code></td><td>Avoids a profiles table before there is anything else to put in one</td></tr>
   </tbody>
 </table>
 </div>
 
-<div class="note caution">
-  <b>The magic-link session arrives in the fragment</b>
-  Supabase puts <code>access_token</code> in the URL <em>fragment</em>, not the query.
-  <code>URLComponents.queryItems</code> returns nothing, so the callback reads as empty and the user
-  appears to have signed in to nothing. <code>AuthSession(callback:)</code> parses both fragment and
-  query by hand. The same is true of failures, which arrive as <code>error_description</code> in the
-  fragment.
-</div>
-
 <p>
   The session is held in the Keychain by <code>KeychainAuthSessionStore</code>, which is what lets
-  <code>AppShell</code> skip signup on relaunch. Email currently signs in by magic link rather than a
-  code because the free tier will not let the email template carry a token; see
+  <code>AppShell</code> skip signup on relaunch. Both channels sign in by code now; see
   <a href="#s4-4">4.4</a>.
 </p>
 
@@ -3499,9 +3501,9 @@ case .unsupported(let reason):
   token the first has already retired and is refused, which would sign a user out for doing nothing
   but foregrounding the app while it launched. <code>OnboardingViewModel</code> therefore coalesces
   callers onto a single in-flight <code>Task</code>. And a refreshed session
-  <strong>inherits what the old one knew</strong>: a response that omits the user, or the magic-link
-  path that never had a user id to begin with, must not erase an identity already on file, nor drop
-  a refresh token and leave the next launch with nothing to present.
+  <strong>inherits what the old one knew</strong>: a sparse refresh response, one that omits the user
+  or the refresh token itself, must not erase an identity already on file, nor drop a refresh token
+  and leave the next launch with nothing to present.
 </p>
 
 <h4>Edge Functions</h4>
@@ -4409,7 +4411,8 @@ supabase functions deploy whoop-webhook</code></pre>
     <tr><td>Tab bar</td><td>Four tabs: Today, Body, Money, Plan</td><td>Four body domains behind one tab; the bar is the scarcest surface in the app</td></tr>
     <tr><td>Settings placement</td><td>Sheet from a gear on Today</td><td>Spends no tab slot on a screen opened once a month</td></tr>
     <tr><td>Sign-in</td><td>One-time code, no password</td><td>No secret at rest and no reset flow to build</td></tr>
-    <tr><td>Email sign-in</td><td>Magic link, temporarily</td><td>Free tier cannot put a six-digit token in the template; one constant flips it back</td></tr>
+    <tr><td>Email sign-in</td><td>Six-digit code, same as phone</td><td><code>{{ .Token }}</code> in the template beats the stock magic link, which cannot be typed into the app; needs custom SMTP (Resend) pushed to the hosted project</td></tr>
+    <tr><td>Returning-user routing</td><td><code>AuthSession.hasProfile</code>, not the door taken</td><td>With OTP there is no password, so sign-in and signup are the same three steps; only the account, checked after verify, tells them apart</td></tr>
     <tr><td>Whoop redirect</td><td>https Edge Function bridging to <code>lifeos://</code></td><td>Whoop requires https; the hop holds no secret and PKCE still runs in the app</td></tr>
     <tr><td>Whoop sign-in browser</td><td>Safari via <code>UIApplication.open</code></td><td>Cloudflare's bot challenge never clears inside <code>ASWebAuthenticationSession</code></td></tr>
     <tr><td>Whoop ingestion order</td><td>Archive raw, then derive</td><td>A payload never stored cannot be re-derived from; a derivation bug six months out must be fixable without re-fetching against a rate limit</td></tr>
