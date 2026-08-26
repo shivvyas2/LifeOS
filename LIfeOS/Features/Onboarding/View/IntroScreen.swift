@@ -66,9 +66,25 @@ struct IntroScreen: View {
 
             // The dot grid is the app's central motif, so the intro animates it
             // rather than showing an unrelated illustration.
-            DotBloom(accentEvery: item.id + 5)
-                .id(item.id)          // restart the bloom on each page
-                .frame(maxHeight: 180)
+            //
+            // The first page adds the cat in front of it: the grid is the
+            // product, but a screen that opens on a bare grid opens on a
+            // spreadsheet. The cat greets, the grid explains, and putting the
+            // grid behind rather than beside keeps the page to one focal point.
+            Group {
+                if item.id == 0 {
+                    // The cat IS the grid on this page: it is drawn from the
+                    // same dots at the same pitch, waving. A `DotBloom` behind
+                    // it was two dot fields on different pitches fighting, and
+                    // the loose dots read as artefacts on the cat's body.
+                    ScanlineCat(style: .dots)
+                        .frame(maxWidth: 232)
+                } else {
+                    DotBloom(accentEvery: item.id + 5)
+                        .id(item.id)      // restart the bloom on each page
+                }
+            }
+            .frame(maxHeight: item.id == 0 ? 224 : 180)
 
             VStack(alignment: .leading, spacing: Space.x2) {
                 StaggeredAppear(index: 1) {
