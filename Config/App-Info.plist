@@ -2,27 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Values come from Config/Secrets.xcconfig at build time. Neither is a
-	     secret: an OAuth client ID is public by design, and the Supabase URL is
-	     a public endpoint. The Whoop client secret is never here. It lives
-	     only in the Edge Function environment. -->
-	<key>WHOOPClientID</key>
-	<string>$(WHOOP_CLIENT_ID)</string>
-	<key>SupabaseURL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SupabaseAnonKey</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>WhoopRedirectURI</key>
-	<string>$(WHOOP_REDIRECT_URI)</string>
-	<!-- Injected from gitignored Secrets.xcconfig. Never commit a live value. -->
-	<key>ElevenLabsAPIKey</key>
-	<string>$(ELEVENLABS_API_KEY)</string>
-	<!-- The app uses only standard HTTPS. That is exempt encryption, and saying
-	     so here stops App Store Connect prompting on every TestFlight upload. -->
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>LIFO listens so you can ask about your health out loud.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>LIFO uses the microphone when you choose to talk instead of type.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -34,5 +13,15 @@
 			</array>
 		</dict>
 	</array>
+	<key>ElevenLabsAPIKey</key>
+	<string>$(ELEVENLABS_API_KEY)</string>
+	<key>SupabaseAnonKey</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SupabaseURL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>WHOOPClientID</key>
+	<string>$(WHOOP_CLIENT_ID)</string>
+	<key>WhoopRedirectURI</key>
+	<string>$(WHOOP_REDIRECT_URI)</string>
 </dict>
 </plist>

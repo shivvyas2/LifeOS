@@ -148,6 +148,8 @@ struct LifoCoachScreen: View {
             TextField("Ask LIFO…", text: $model.draft, axis: .vertical)
                 .font(.system(size: 16))
                 .focused($typingFocused)
+                .autocorrectionDisabled()
+                .writingToolsBehavior(.disabled)
                 .lineLimit(1...4)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             Button {
