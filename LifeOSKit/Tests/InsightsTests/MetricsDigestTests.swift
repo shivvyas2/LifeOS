@@ -165,4 +165,72 @@ import Persistence
         #expect(digest.days[1].workouts[0].name == "cycling")
         #expect(digest.days[1].workouts[0].zoneMinutes == [0, 0, 0, 20, 15, 7])
     }
+
+    @Test func theRenderCarriesEveryPopulatedFieldAndOmitsTheRest() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) {
+            $0.whoopRecoveryPct = 51
+            $0.hrvMs = 38
+            $0.whoopDayStrain = 12.1
+            // steps deliberately absent
+        }
+
+        let text = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        ).promptLines
+
+        #expect(text.contains("recovery 51%"))
+        #expect(text.contains("hrv 38ms"))
+        #expect(text.contains("strain 12.1"))
+        #expect(text.contains("steps") == false)   // absent, not "steps 0"
+    }
+
+    @Test func aCalibratingRecoveryIsMarkedInTheRender() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) {
+            $0.whoopRecoveryPct = 44
+            $0.whoopRecoveryIsCalibrating = true
+        }
+
+        let text = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        ).promptLines
+
+        #expect(text.contains("recovery 44% (calibrating)"))
+    }
+
+    @Test func aDeltaAppearsOnlyWhereAnAverageExists() throws {
+        let store = try makeStore()
+        let second = day.addingTimeInterval(86_400)
+        try store.upsert(date: day) { $0.whoopRecoveryPct = 60 }
+        try store.upsert(date: second) { $0.whoopRecoveryPct = 40 }
+
+        let text = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: second), sleeps: [], workouts: []
+        ).promptLines
+
+        #expect(text.contains("2-day baseline"))
+        #expect(text.contains("recovery 60% (+10)"))
+        #expect(text.contains("recovery 40% (-10)"))
+    }
+
+    @Test func aWorkoutRendersItsHighZoneTime() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) { $0.steps = 100 }
+        let record = WorkoutRecord(externalID: "w", start: day.addingTimeInterval(3_600),
+                                   durationMinutes: 92, activityName: "cycling")
+        record.strain = 11.4
+        record.averageHR = 141
+        record.zoneThreeMinutes = 20
+        record.zoneFourMinutes = 15
+        record.zoneFiveMinutes = 7
+
+        let text = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: [record]
+        ).promptLines
+
+        #expect(text.contains("workout: cycling 92m"))
+        #expect(text.contains("strain 11.4"))
+        #expect(text.contains("zone 3+ 42m"))
+    }
 }
