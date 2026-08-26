@@ -1307,7 +1307,14 @@ create table public.plaid_items (
   updated_at timestamptz not null default now(),
 
   -- Composite, so a second bank is a second row rather than a schema change.
-  primary key (user_id, item_id)
+  primary key (user_id, item_id),
+
+  -- Connecting one institution twice creates two Items whose transactions
+  -- overlap under different transaction ids, which the device cannot
+  -- deduplicate. The function checks for this too, but a check-then-insert is a
+  -- race; this is what actually enforces it. Postgres allows multiple NULLs in a
+  -- unique constraint, so rows with no institution_id are deliberately exempt.
+  unique (user_id, institution_id)
 );
 
 -- Deliberately no policies. RLS with zero policies denies every client,
@@ -1660,13 +1667,21 @@ Deno.serve(async (req: Request) => {
   // transactions under different transaction ids, which the device cannot
   // deduplicate. Refuse before spending the exchange.
   if (body.institution_id) {
-    const { data: existing } = await db
+    const { data: existing, error: lookupError } = await db
       .from("plaid_items")
       .select("item_id")
       .eq("user_id", userID)
       .eq("institution_id", body.institution_id)
-      .maybeSingle();
-    if (existing) return json({ error: "institution_already_connected" }, 409);
+      .limit(1);
+    // A failed lookup must not read as "no duplicate". Refusing costs the user a
+    // retry; passing spends an exchange and creates an Item that bills monthly.
+    if (lookupError) {
+      console.error(`plaid duplicate check failed: ${lookupError.code}`);
+      return json({ error: "storage_failed" }, 500);
+    }
+    if (existing && existing.length > 0) {
+      return json({ error: "institution_already_connected" }, 409);
+    }
   }
 
   try {
@@ -1778,15 +1793,26 @@ async function syncItem(
     pages += 1;
   }
 
-  const balances = await callPlaid("/accounts/balance/get", {
-    access_token: row.access_token,
-  });
+  // Balances are refreshed opportunistically. A failure here must not discard
+  // transaction pages already fetched: the device would re-fetch them on the next
+  // sync for a reason that has nothing to do with them, and the user would see a
+  // failed sync because a balance lookup blinked.
+  let accounts: unknown[] = [];
+  try {
+    const balances = await callPlaid("/accounts/balance/get", {
+      access_token: row.access_token,
+    });
+    accounts = (balances.accounts as unknown[]) ?? [];
+  } catch (failure) {
+    const kind = failure instanceof PlaidError ? failure.kind : "upstream_failure";
+    console.error(`plaid balance fetch failed for item: ${kind}`);
+  }
 
   return {
     item_id: row.item_id,
     institution_name: row.institution_name,
     added, modified, removed,
-    accounts: balances.accounts ?? [],
+    accounts,
     next_cursor: nextCursor,
     has_more: hasMore,
     error: null,
@@ -1825,14 +1851,19 @@ Deno.serve(async (req: Request) => {
 
   if (!row) return json({ error: "not_found" }, 404);
 
+  // The local row is the only handle left for retrying a removal, so it stays
+  // until the Item is really gone at Plaid. Deleting it on a genuine failure
+  // would leave an Item billing monthly with no way to reach it.
   try {
     await callPlaid("/item/remove", { access_token: row.access_token });
   } catch (error) {
-    // Plaid refusing the removal must not strand the row. A connected Item
-    // bills monthly, so the local record going and the remote staying is the
-    // worse failure: the user would have no way left to reach it.
     const kind = error instanceof PlaidError ? error.kind : "upstream_failure";
     console.error(`plaid item remove failed: ${kind}`);
+    // An Item Plaid has never heard of is already gone; keeping a local record
+    // of it helps nobody, so that case falls through to the delete.
+    if (!isItemNotFound(error)) {
+      return json({ error: kind }, 502);
+    }
   }
 
   await db.from("plaid_items").delete().eq("user_id", userID).eq("item_id", itemID);
@@ -1872,9 +1903,10 @@ the sync for the other banks. It stops after three pages and says has_more,
 so an initial pull of years of history cannot run past the function's wall
 clock.
 
-Disconnect deletes the row even when Plaid refuses the removal. A connected
-item bills monthly, and a local record that vanished while the remote one
-survived would leave the user no way to reach it."
+Disconnect keeps the row when Plaid refuses the removal, and deletes it when
+Plaid confirms the removal or reports an item it has never heard of. A
+connected item bills monthly, and the local record is the only handle left
+for retrying, so deleting it on a genuine failure would strand the Item."
 ```
 
 ---
