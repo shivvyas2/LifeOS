@@ -37,6 +37,7 @@ struct RootView: View {
     @State private var recovery = RecoveryViewModel()
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
+    @State private var plaid = PlaidConnectionViewModel()
     @State private var plan = PlanViewModel()
     @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
@@ -81,7 +82,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop, onSignOut: onSignOut)
+            SettingsScreen(model: settings, whoop: whoop, plaid: plaid, onSignOut: onSignOut)
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
@@ -307,6 +308,7 @@ struct RootView: View {
         recovery.attach(context)
         wellness.attach(context)
         money.attach(context)
+        plaid.attach(context)
         plan.attach(context)
         life.attach(context)
         settings.attach(context)

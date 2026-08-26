@@ -4,6 +4,7 @@ import DesignSystem
 struct SettingsScreen: View {
     @Bindable var model: SettingsViewModel
     var whoop: WhoopConnectionViewModel?
+    var plaid: PlaidConnectionViewModel?
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     #if DEBUG
@@ -152,9 +153,9 @@ struct SettingsScreen: View {
 
     @ViewBuilder
     private var connectionsRow: some View {
-        if let whoop {
+        if let whoop, let plaid {
             NavigationLink {
-                ConnectionsSettingsScreen(whoop: whoop)
+                ConnectionsSettingsScreen(whoop: whoop, plaid: plaid)
             } label: {
                 HStack(spacing: 14) {
                     Image(systemName: "link")

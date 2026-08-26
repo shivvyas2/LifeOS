@@ -39,7 +39,7 @@ struct ConnectionsScreen: View {
 
                 connectionRow(
                     title: "Bank accounts",
-                    detail: "Income and spending via Plaid. Arrives in the next release.",
+                    detail: "Income and spending, straight from your bank.",
                     systemImage: "dollarsign.circle.fill",
                     isConnected: false,
                     isAvailable: false
