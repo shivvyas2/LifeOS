@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
 import Persistence
+import Sectors
 
 @MainActor @Observable
 final class MoneyViewModel {
     private(set) var snapshot = MoneySnapshot()
+    private(set) var buckets: [SpendBucket] = []
 
     private var context: ModelContext?
     private let calendar: Calendar
@@ -40,6 +42,27 @@ final class MoneyViewModel {
             let accounts = try store.accounts()
             let summary = summarise(entries: entries, accounts: accounts)
 
+            buckets = try store.buckets()
+            var budgetRows: [BudgetBandRow] = []
+            var unclaimedRows: [UnclaimedBandRow] = []
+            if !buckets.isEmpty {
+                let budget = BudgetPeriod.assess(
+                    buckets: buckets.map(BudgetBucket.init),
+                    lines: BudgetPeriod.lines(from: entries)
+                )
+                budgetRows = budget.rows.map {
+                    BudgetBandRow(id: $0.id, name: $0.name, limit: $0.limit, spent: $0.spent)
+                }
+                unclaimedRows = budget.unclaimed.map {
+                    UnclaimedBandRow(
+                        id: $0.key ?? "uncategorised",
+                        label: $0.label ?? $0.key ?? "Uncategorised",
+                        amount: $0.amount,
+                        count: $0.count
+                    )
+                }
+            }
+
             let bankNames: [String]
             var reconnect: String?
             switch connection?.state {
@@ -58,6 +81,8 @@ final class MoneyViewModel {
                     MoneyRow(id: $0.id, merchant: $0.merchant, category: $0.category,
                              amount: $0.amount, date: $0.date, pending: $0.pending)
                 },
+                budgets: budgetRows,
+                unclaimed: unclaimedRows,
                 monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
                 // A bank linked seconds ago has no transactions yet. Falling back
                 // to the empty state there tells the user the connection failed
