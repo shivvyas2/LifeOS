@@ -5,6 +5,7 @@ import DesignSystem
 /// the others are named so the empty slots are honest rather than hidden.
 struct ConnectionsSettingsScreen: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var health: HealthConnectionViewModel
     @Environment(\.colorScheme) private var scheme
     @State private var showWhoop = false
 
@@ -14,11 +15,7 @@ struct ConnectionsSettingsScreen: View {
                 VStack(spacing: 14) {
                     whoopCard
 
-                    comingSoon(
-                        title: "Apple Health",
-                        detail: "Steps, sleep and weight. Arrives in the next release.",
-                        systemImage: "heart.fill"
-                    )
+                    healthCard
                     comingSoon(
                         title: "Bank accounts",
                         detail: "Income and spending via Plaid. Arrives in the next release.",
@@ -74,6 +71,61 @@ struct ConnectionsSettingsScreen: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// Health has no modal of its own: there is nothing to configure and no
+    /// account to enter. The row either opens the system prompt or re-reads.
+    private var healthCard: some View {
+        Button {
+            Task { await health.connect() }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Apple Health")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Text(health.statusDetail)
+                        .font(.system(size: 13))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Text(healthActionTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.accent)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5), lineWidth: 1)
+                    }
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(health.state == .unavailable)
+    }
+
+    private var healthActionTitle: String {
+        switch health.state {
+        case .unavailable: ""
+        case .notAsked:    "Connect"
+        case .syncing:     "…"
+        // "Sync" rather than "Connect" once asked: iOS shows the permission
+        // sheet exactly once, so offering to connect again would be a button
+        // that visibly does nothing.
+        case .synced, .noData, .failed: "Sync"
+        }
     }
 
     private var whoopActionTitle: String {
