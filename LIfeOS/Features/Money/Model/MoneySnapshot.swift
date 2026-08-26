@@ -10,6 +10,14 @@ struct MoneySnapshot: Equatable {
     var recent: [MoneyRow] = []
     var monthLabel: String = ""
     var isConnected = false
+    /// A bank is linked, whether or not any transaction has arrived yet.
+    var hasConnectedBank = false
+    /// Linked, but Plaid is still assembling the history. Distinct from an
+    /// empty month, and the screen must not present it as one.
+    var isFetchingHistory = false
+    /// Set when a bank has invalidated its stored login.
+    var reconnectPrompt: String?
+    var lastSyncedAt: Date?
 
     var verdict: String {
         guard let savingsRate else { return "No income logged" }

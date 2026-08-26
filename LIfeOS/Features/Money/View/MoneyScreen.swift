@@ -4,6 +4,8 @@ import DesignSystem
 struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
+    var onConnect: () -> Void = {}
+    var onSync: () -> Void = {}
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
@@ -13,7 +15,11 @@ struct MoneyScreen: View {
                 VStack(spacing: 22) {
                     header
 
-                    if snapshot.isConnected {
+                    if snapshot.reconnectPrompt != nil { reconnectBanner }
+
+                    if snapshot.isFetchingHistory && snapshot.recent.isEmpty {
+                        fetchingState
+                    } else if snapshot.isConnected {
                         HStack(spacing: 10) {
                             MetricTile(label: "Income", value: Self.money(snapshot.income))
                             MetricTile(label: "Expenses", value: Self.money(snapshot.expenses))
@@ -110,11 +116,52 @@ struct MoneyScreen: View {
                 .padding(.vertical, 12)
                 .padding(.horizontal, 22)
                 .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
-            Text("Plaid sync arrives in a later slice.")
-                .font(.footnote)
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            Button("Connect your bank", action: onConnect)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.accent)
         }
         .padding(.top, 40)
+    }
+
+    /// Connected, but Plaid is still assembling the history.
+    ///
+    /// Plaid fetches transactions asynchronously after the login completes, so
+    /// the first sync can honestly come back with nothing. Rendering that as an
+    /// empty month would state, as fact, that the user spent nothing.
+    private var fetchingState: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+            Text("Fetching your transactions")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            Text("Your bank is sending the last few months. This usually takes a minute.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            Button("Check again", action: onSync)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.accent)
+        }
+        .padding(.top, 40)
+        .padding(.horizontal, 24)
+    }
+
+    private var reconnectBanner: some View {
+        SoftCard {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(snapshot.reconnectPrompt ?? "Your bank") needs you to sign in again")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Text("Numbers below are from your last sync.")
+                        .font(.footnote)
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+                Spacer()
+            }
+        }
     }
 
     static func money(_ value: Double) -> String? {

@@ -23,7 +23,7 @@ final class MoneyViewModel {
         self.context = context
     }
 
-    func load() {
+    func load(connection: PlaidConnectionViewModel? = nil) {
         #if DEBUG
         // Off unless deliberately switched on in Settings. Release builds do not
         // compile `SampleMoneyData` at all, so this branch cannot exist there.
@@ -40,6 +40,14 @@ final class MoneyViewModel {
             let accounts = try store.accounts()
             let summary = summarise(entries: entries, accounts: accounts)
 
+            let bankNames: [String]
+            var reconnect: String?
+            switch connection?.state {
+            case .connected(let names): bankNames = names
+            case .needsReconnect(let name): bankNames = [name]; reconnect = name
+            default: bankNames = []
+            }
+
             snapshot = MoneySnapshot(
                 income: summary.income,
                 expenses: summary.expenses,
@@ -51,7 +59,14 @@ final class MoneyViewModel {
                              amount: $0.amount, date: $0.date, pending: $0.pending)
                 },
                 monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
-                isConnected: !entries.isEmpty || !accounts.isEmpty
+                // A bank linked seconds ago has no transactions yet. Falling back
+                // to the empty state there tells the user the connection failed
+                // when it did not.
+                isConnected: !entries.isEmpty || !accounts.isEmpty || !bankNames.isEmpty,
+                hasConnectedBank: !bankNames.isEmpty,
+                isFetchingHistory: connection?.isFetchingHistory ?? false,
+                reconnectPrompt: reconnect,
+                lastSyncedAt: connection?.lastSyncedAt
             )
         } catch {
             assertionFailure("Money load failed: \(error)")

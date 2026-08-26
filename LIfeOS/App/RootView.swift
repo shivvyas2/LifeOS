@@ -221,7 +221,12 @@ struct RootView: View {
                     )
                 }
             case .money:
-                MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }
+                MoneyScreen(
+                    snapshot: money.snapshot,
+                    onAdd: { showAddMoney = true },
+                    onConnect: { plaid.connect() },
+                    onSync: { Task { await plaid.sync(); money.load(connection: plaid) } }
+                )
             case .plan:
                 PlanScreen(
                     snapshot: plan.snapshot,
@@ -322,7 +327,11 @@ struct RootView: View {
         activity.load()
         recovery.load()
         wellness.load()
-        money.load()
+        money.load(connection: plaid)
+        Task {
+            await plaid.syncIfDue()
+            money.load(connection: plaid)
+        }
         plan.load()
         life.load()
         settings.load()
