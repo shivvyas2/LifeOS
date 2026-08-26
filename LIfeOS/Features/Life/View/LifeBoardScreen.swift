@@ -25,26 +25,24 @@ struct LifeBoardScreen: View {
 
     @State private var showClose = false
     @State private var closeMonth = Date.now
+    @State private var openSector: LifeSector?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x3) {
                     if let month = model.monthAwaitingClose {
-                        Button {
+                        CloseBanner(month: month) {
                             closeMonth = month
                             showClose = true
-                        } label: {
-                            AlertBanner(messages: [
-                                "Close \(month.formatted(.dateTime.month(.wide).year())): score your nine sectors for the month."
-                            ])
                         }
-                        .buttonStyle(.plain)
                     }
 
                     header
 
-                    SectorStack(cards: model.cards)
+                    SectorStack(cards: model.cards) { sector in
+                        openSector = sector
+                    }
                 }
                 .frame(maxWidth: layout.maxContentWidth)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -54,7 +52,7 @@ struct LifeBoardScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
             }
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-            .navigationDestination(for: LifeSector.self) { sector in
+            .navigationDestination(item: $openSector) { sector in
                 SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
             }
             .sheet(isPresented: $showClose) {
