@@ -44,6 +44,11 @@ struct RootView: View {
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
     @State private var coach = CoachViewModel()
+    // Unlike the other view models, `AssistantViewModel` takes its
+    // `ModelContext` in `init`, so it cannot be default-constructed before
+    // the environment context is available; it is created once in
+    // `attachAll()` instead of at property declaration.
+    @State private var assistantModel: AssistantViewModel?
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -53,6 +58,7 @@ struct RootView: View {
     @State private var showAddMoney = false
     @State private var showJournal = false
     @State private var showCoach = false
+    @State private var showAssistant = false
     @State private var showWhoop = false
 
     /// The tab bar's selection, stated rather than inferred from ordering.
@@ -87,6 +93,11 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
+        }
+        .sheet(isPresented: $showAssistant) {
+            if let assistantModel {
+                AssistantSheet(model: assistantModel)
+            }
         }
         .sheet(isPresented: $showAddPlan) {
             AddPlanEntrySheet(
@@ -133,6 +144,7 @@ struct RootView: View {
                 .padding(.bottom, 12)
 
             VStack(spacing: 14) {
+                assistantButton
                 coachButton
                 quickLogButton
             }
@@ -160,6 +172,7 @@ struct RootView: View {
                 }
                 .overlay(alignment: .bottomTrailing) {
                     VStack(spacing: 14) {
+                        assistantButton
                         coachButton
                         quickLogButton
                     }
@@ -282,6 +295,30 @@ struct RootView: View {
         .accessibilityLabel("LIFO")
     }
 
+    private var assistantButton: some View {
+        Button {
+            showAssistant = true
+        } label: {
+            Image(systemName: "calendar")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Circle().strokeBorder(
+                                Color.white.opacity(scheme == .dark ? 0.2 : 0.55),
+                                lineWidth: 1
+                            )
+                        }
+                        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16),
+                                radius: 10, y: 4)
+                )
+        }
+        .accessibilityLabel("Calendar assistant")
+    }
+
     private var quickLogButton: some View {
         Button {
             showQuickLog = true
@@ -320,6 +357,9 @@ struct RootView: View {
         settings.attach(context)
         quickLog.attach(context)
         coach.attach(context)
+        if assistantModel == nil {
+            assistantModel = AssistantViewModel(context: context)
+        }
     }
 
     private func reloadAll() {
