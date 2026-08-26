@@ -55,10 +55,13 @@ struct LifeBoardScreen: View {
             .navigationDestination(item: $openSector) { sector in
                 SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
             }
-            .sheet(isPresented: $showClose) {
+            // Reload on dismissal, not on completion. `MonthlyCloseScreen`
+            // calls `onFinish` only after all nine sectors are walked, so
+            // scoring three and swiping the sheet away used to leave the deck
+            // showing em dashes for scores that were already saved.
+            .sheet(isPresented: $showClose, onDismiss: { model.load() }) {
                 MonthlyCloseScreen(month: closeMonth) {
                     showClose = false
-                    model.load()
                 }
             }
         }
