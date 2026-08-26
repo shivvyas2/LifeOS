@@ -42,6 +42,7 @@ Deno.serve(async (req: Request) => {
         added: [], modified: [], removed: [], accounts: [],
         next_cursor: null, has_more: false,
         error: kind,
+        balance_error: null,
       });
     }
   }
@@ -73,8 +74,14 @@ async function syncItem(
 
   // Balances are refreshed opportunistically. A failure here must not discard
   // transaction pages already fetched: the device would re-fetch them next sync
-  // for a reason that has nothing to do with them.
+  // for a reason that has nothing to do with them. But /transactions/sync
+  // serves cached data and succeeds even with an expired bank login, while this
+  // call does a live fetch and is the one that actually throws
+  // ITEM_LOGIN_REQUIRED. That kind still needs to reach the device to raise the
+  // reconnect banner, so it travels separately from `error` instead of being
+  // swallowed with it.
   let accounts: unknown[] = [];
+  let balanceError: string | null = null;
   try {
     const balances = await callPlaid("/accounts/balance/get", {
       access_token: row.access_token,
@@ -83,6 +90,7 @@ async function syncItem(
   } catch (failure) {
     const kind = failure instanceof PlaidError ? failure.kind : "upstream_failure";
     console.error(`plaid balance fetch failed for item: ${kind}`);
+    balanceError = kind;
   }
 
   return {
@@ -93,5 +101,6 @@ async function syncItem(
     next_cursor: nextCursor,
     has_more: hasMore,
     error: null,
+    balance_error: balanceError,
   };
 }

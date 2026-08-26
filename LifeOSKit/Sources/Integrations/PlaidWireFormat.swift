@@ -19,9 +19,14 @@ public struct PlaidItemDelta: Decodable, Sendable {
     public let next_cursor: String?
     public let has_more: Bool
     /// Set when this one Item failed while others succeeded, so one expired
-    /// bank login does not fail the whole sync. `ITEM_LOGIN_REQUIRED` here is
-    /// what raises the reconnect banner.
+    /// bank login does not fail the whole sync.
     public let error: String?
+    /// Set when the balance fetch failed even though the transaction sync
+    /// above succeeded. `/transactions/sync` serves cached data and can
+    /// succeed with an expired bank login; `/accounts/balance/get` does a live
+    /// fetch and is the call that actually throws `ITEM_LOGIN_REQUIRED`. That
+    /// is what raises the reconnect banner, not `error`.
+    public let balance_error: String?
 }
 
 public struct PlaidTransaction: Decodable, Sendable {

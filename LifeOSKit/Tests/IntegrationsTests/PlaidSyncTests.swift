@@ -98,4 +98,57 @@ private struct StubAPI: PlaidAPI {
         #expect(items.items().count == 1)
         #expect(items.items().first?.cursor == nil)
     }
+
+    @Test func aBalanceLoginFailureRaisesReconnectWithoutLosingTheTransactions() async throws {
+        // /transactions/sync serves cached data and can succeed with an expired
+        // bank login; /accounts/balance/get does a live fetch and is the call
+        // that actually throws ITEM_LOGIN_REQUIRED. The transactions already
+        // fetched must still land, and the banner must still show.
+        let payload = #"""
+        {"items":[{"item_id":"item_1","institution_name":"Chase","added":[
+          {"transaction_id":"txn_1","account_id":"acc_1","amount":-10.00,
+           "iso_currency_code":"USD","date":"2026-08-14","name":"Coffee Shop",
+           "merchant_name":null,"pending":false,"personal_finance_category":null}
+        ],"modified":[],"removed":[],"accounts":[],"next_cursor":"cursor_1",
+        "has_more":false,"error":null,"balance_error":"item_login_required"}]}
+        """#
+        let money = StubMoney()
+        let items = makeItems()
+        let sync = PlaidSync(
+            api: StubAPI(response: try JSONDecoder().decode(
+                PlaidSyncResponse.self, from: Data(payload.utf8))),
+            money: money, items: items
+        )
+
+        let outcome = try await sync.run()
+
+        #expect(outcome.needsReconnect == ["Chase"])
+        #expect(outcome.itemsSynced == 1)
+        #expect(money.ingested.count == 1)
+        #expect(items.items().first?.cursor == "cursor_1")
+    }
+
+    @Test func aNonLoginItemFailureIsReportedInFailedItemsNotReconnect() async throws {
+        // A transient failure on one bank must not vanish into a sync that
+        // otherwise reports clean, and reconnecting would not fix it, so it
+        // must not raise the reconnect banner either.
+        let failing = #"""
+        {"items":[{"item_id":"item_1","institution_name":"Ally","added":[],
+        "modified":[],"removed":[],"accounts":[],"next_cursor":null,
+        "has_more":false,"error":"rate_limited"}]}
+        """#
+        let money = StubMoney()
+        let items = makeItems()
+        let sync = PlaidSync(
+            api: StubAPI(response: try JSONDecoder().decode(
+                PlaidSyncResponse.self, from: Data(failing.utf8))),
+            money: money, items: items
+        )
+
+        let outcome = try await sync.run()
+
+        #expect(outcome.failedItems == ["Ally"])
+        #expect(outcome.needsReconnect.isEmpty)
+        #expect(outcome.itemsSynced == 0)
+    }
 }

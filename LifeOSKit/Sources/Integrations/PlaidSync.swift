@@ -7,6 +7,10 @@ public struct PlaidSyncOutcome: Sendable, Equatable {
     /// Institution names whose stored login the bank has invalidated. These
     /// need the user to sign in again; nothing about them is retryable.
     public var needsReconnect: [String] = []
+    /// Institution names whose sync failed for a reason other than an expired
+    /// login (those go to `needsReconnect` instead). Kept so a caller does not
+    /// stamp a clean "last synced" timestamp on a sync that partly failed.
+    public var failedItems: [String] = []
     /// Plaid has more pages waiting. The caller should run again straight away.
     public var hasMore = false
 }
@@ -48,7 +52,12 @@ public struct PlaidSync {
                 outcome.needsReconnect.append(delta.institution_name)
                 continue
             }
-            if delta.error != nil { continue }
+            if delta.error != nil {
+                // Not item_login_required: reconnecting would not fix this, and
+                // it must not vanish into a sync that otherwise looks clean.
+                outcome.failedItems.append(delta.institution_name)
+                continue
+            }
 
             // Plaid's /transactions/sync puts a given transaction_id in exactly
             // one of added, modified and removed within a delta, so merging
@@ -64,6 +73,14 @@ public struct PlaidSync {
             // the next run replays this page into an idempotent upsert.
             if let cursor = delta.next_cursor {
                 items.setCursor(cursor, for: delta.item_id)
+            }
+
+            // The balance fetch can fail on its own even though the
+            // transactions above ingested cleanly, and an expired login shows
+            // up here rather than on `delta.error`. Transactions still ingest
+            // and the cursor still advances; only the banner is added.
+            if delta.balance_error == "item_login_required" {
+                outcome.needsReconnect.append(delta.institution_name)
             }
 
             outcome.itemsSynced += 1
