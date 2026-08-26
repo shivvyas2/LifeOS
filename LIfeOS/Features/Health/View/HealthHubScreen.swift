@@ -2,7 +2,7 @@ import SwiftUI
 import DesignSystem
 
 /// The Health tab: one week strip, two halves. Health is how the body is
-/// doing; Fitness is what it did. Life OS is still not a fitness app.
+/// doing; Fitness is what it did. Almanac is still not a fitness app.
 struct HealthHubScreen: View {
     let activity: ActivitySnapshot
     let weight: BodySnapshot

@@ -82,7 +82,7 @@ final class HealthConnectionViewModel {
         case .notAsked:         "Steps, sleep, weight and heart data"
         case .syncing:          "Reading…"
         case .synced(let days): days > 0 ? "Read \(days) days" : "Connected"
-        case .noData:           "No data yet. Check Life OS in Health > Sharing"
+        case .noData:           "No data yet. Check Almanac in Health > Sharing"
         case .failed(let why):  why
         }
     }

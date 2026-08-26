@@ -1,6 +1,6 @@
 import Foundation
 
-/// A field Life OS can read out of Apple Health.
+/// A field Almanac can read out of Apple Health.
 ///
 /// Deliberately its own enum rather than a set of HealthKit types: this file
 /// carries the merge rules and must stay importable, testable and buildable

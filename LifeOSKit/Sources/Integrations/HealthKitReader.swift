@@ -30,7 +30,7 @@ import HealthKit
 /// entered from a launch task and a foreground transition at the same time.
 ///
 /// Read-only on purpose: the app never writes back, so there is no
-/// `NSHealthUpdateUsageDescription` and nothing Life OS can do to a user's
+/// `NSHealthUpdateUsageDescription` and nothing Almanac can do to a user's
 /// Health data.
 public actor HealthKitReader {
     private static let log = Logger(subsystem: "com.shivvyas.lifeos", category: "healthkit")
