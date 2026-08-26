@@ -74,12 +74,9 @@ public struct MetricsDigest: Sendable, Equatable {
     /// series stays on the phone: on-device inference sends nothing anywhere,
     /// and a provider call does.
     ///
-    /// Nothing in production selects `.offDevice` today. `CoachTask.prompt`
-    /// has no audience parameter and reaches this type through
-    /// `promptLines`, which defaults to `.onDevice`, so this case is
-    /// exercised only by tests. It is a mechanism waiting to be wired, not
-    /// one currently protecting anything: a remote engine built before the
-    /// wiring exists would still get the on-device render.
+    /// `CoachTask.prompt(_:for:)` takes this as a parameter and passes it
+    /// straight through to `promptLines(for:)`, so a remote engine can only
+    /// ever request `.offDevice` and never the on-device render.
     public enum Audience: Sendable {
         case onDevice
         case offDevice

@@ -18,7 +18,7 @@ import Persistence
         let context = SectorEvidenceContext(
             sectorTitle: "Soul", rows: evidence.rows, previousUserScore: 7
         )
-        let prompt = SectorNoteTask(sectorTitle: "Soul").prompt(context)
+        let prompt = SectorNoteTask(sectorTitle: "Soul").prompt(context, for: .onDevice)
 
         #expect(prompt.contains("days written"))
         #expect(prompt.contains("5/30"))
@@ -37,7 +37,7 @@ import Persistence
         )
         #expect(!context.promptLines.contains("7"))
         #expect(!context.promptLines.lowercased().contains("you scored"))
-        #expect(!SectorNoteTask(sectorTitle: "Soul").prompt(context).lowercased().contains("you scored"))
+        #expect(!SectorNoteTask(sectorTitle: "Soul").prompt(context, for: .onDevice).lowercased().contains("you scored"))
     }
 
     @Test func aFirstMonthMentionsNoPreviousScore() {
@@ -62,6 +62,6 @@ import Persistence
         let context = SectorEvidenceContext(
             sectorTitle: "Romance", rows: [], previousUserScore: nil
         )
-        #expect(!SectorNoteTask(sectorTitle: "Romance").prompt(context).isEmpty)
+        #expect(!SectorNoteTask(sectorTitle: "Romance").prompt(context, for: .onDevice).isEmpty)
     }
 }
