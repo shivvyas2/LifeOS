@@ -219,6 +219,17 @@ struct RootView: View {
             PillNavBar(selection: $tab, items: navItems)
                 .frame(maxWidth: .infinity)          // centers the pill
                 .padding(.bottom, 12)
+                // Stay put when the keyboard opens, and let it cover them.
+                //
+                // Without this the whole stack is lifted by the keyboard's
+                // safe area, so the bar and the buttons ride up and sit on top
+                // of the note being written. On a phone that is the worst
+                // possible place for them: the keyboard already takes half the
+                // screen, and the strip left over is the part someone is
+                // actually looking at. Neither control is reachable while
+                // typing anyway, so hiding behind the keyboard costs nothing
+                // and hands the space back.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
 
             VStack(spacing: 14) {
                 assistantButton
@@ -227,6 +238,7 @@ struct RootView: View {
             }
             .padding(.trailing, metrics.gutter)
             .padding(.bottom, metrics.fabBottomInset)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
 
             whoopModal
         }

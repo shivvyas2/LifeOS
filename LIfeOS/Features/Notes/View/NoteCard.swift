@@ -25,7 +25,7 @@ struct NoteCard: View {
                 title
                 if !card.excerpt.isEmpty {
                     Text(card.excerpt)
-                        .font(.system(size: 13))
+                        .font(.system(size: 14))
                         .foregroundStyle(ink.opacity(0.68))
                         .lineLimit(4)
                         .multilineTextAlignment(.leading)
@@ -65,7 +65,7 @@ struct NoteCard: View {
         HStack(spacing: 8) {
             if let entryDate = card.entryDate {
                 Text(entryDate.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(ink.opacity(0.10)))
@@ -73,7 +73,7 @@ struct NoteCard: View {
             }
 
             Text(card.folderName ?? card.bucket.title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(ink.opacity(0.6))
                 .lineLimit(1)
 
@@ -81,7 +81,7 @@ struct NoteCard: View {
 
             if card.isFavorite {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
                     .foregroundStyle(ink.opacity(0.7))
             }
         }
@@ -90,10 +90,10 @@ struct NoteCard: View {
     private var title: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if !card.icon.isEmpty {
-                Text(card.icon).font(.system(size: 16))
+                Text(card.icon).font(.system(size: 17))
             }
             Text(card.title)
-                .font(.noteSerif(19))
+                .font(.noteSerif(21))
                 .foregroundStyle(ink)
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
@@ -116,7 +116,7 @@ struct NoteCard: View {
             Text(card.updatedAt.formatted(.relative(presentation: .numeric)))
                 .lineLimit(1)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(.system(size: 12, weight: .medium))
         .foregroundStyle(ink.opacity(0.62))
     }
 }

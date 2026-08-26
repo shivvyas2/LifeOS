@@ -229,7 +229,7 @@ struct NoteFolderSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
                 TextField("Folder name", text: $name)
-                    .font(.system(size: 17))
+                    .font(.system(size: 18))
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .padding(.vertical, 12)
@@ -246,7 +246,7 @@ struct NoteFolderSheet: View {
                         } label: {
                             Group {
                                 if candidate.isEmpty {
-                                    Image(systemName: "circle.dashed").font(.system(size: 18))
+                                    Image(systemName: "circle.dashed").font(.system(size: 20))
                                 } else {
                                     Text(candidate).font(.system(size: 22))
                                 }

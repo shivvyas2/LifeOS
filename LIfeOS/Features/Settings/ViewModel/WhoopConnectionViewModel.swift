@@ -111,6 +111,21 @@ final class WhoopConnectionViewModel {
         }
     }
 
+    /// Abandons a sign-in the user is done waiting on.
+    ///
+    /// Whoop's page is behind a Cloudflare check that stalls indefinitely
+    /// behind a VPN, Private Relay or a content blocker, with no error and no
+    /// callback. Without this the only way out of the spinner is to force-quit
+    /// the app, because leaving for Safari is not something the app is told
+    /// about either way.
+    func cancelConnect() {
+        guard case .connecting = state else { return }
+        tokens.clearPending()
+        manualURL = nil
+        manualCode = ""
+        state = .disconnected
+    }
+
     func cancelManual() {
         manualURL = nil
         manualCode = ""
@@ -255,6 +270,34 @@ final class WhoopConnectionViewModel {
     /// cold start, coalesce into one sync instead of racing Whoop's rate
     /// limit with duplicate requests.
     private var isSyncing = false
+
+    /// Clears a sign-in that was started and then abandoned.
+    ///
+    /// Connecting hands off to Safari, and Whoop only calls back when someone
+    /// finishes. Walk away, swipe the browser shut, or fail a Cloudflare
+    /// challenge, and nothing tells the app: the card is left on `.connecting`
+    /// and spins for the rest of the install, which is the "always loading"
+    /// this fixes. It cannot be resolved at the point of departure, because
+    /// leaving for Safari looks identical whether or not the user comes back.
+    ///
+    /// The wait is the whole subtlety. The redirect usually lands a moment
+    /// AFTER the app becomes active, so resolving immediately would cancel
+    /// sign-ins that were about to succeed. Two seconds is long enough for the
+    /// callback to win the race, and short enough that a real abandonment does
+    /// not read as a hang.
+    func resolveStalledConnect() async {
+        guard case .connecting = state else { return }
+        // The manual desktop flow is still on screen with a code to paste, so
+        // it is not abandoned: it is waiting on the user, deliberately.
+        guard manualURL == nil else { return }
+
+        try? await Task.sleep(for: .seconds(2))
+
+        guard case .connecting = state, manualURL == nil, tokens.load() == nil else { return }
+        whoopLog.info("sign-in was left unfinished; returning the card to disconnected")
+        tokens.clearPending()
+        state = .disconnected
+    }
 
     /// Automatic sync, on launch and on every return to the foreground.
     /// Silent by design: the screens already show correct, if stale, local

@@ -70,13 +70,13 @@ struct NoteBlockRow: View {
                 .frame(width: 18, height: lineHeight, alignment: .center)
         case .numbered:
             Text("\(ordinal ?? 1).")
-                .font(.system(size: 16))
+                .font(.system(size: 17))
                 .foregroundStyle(secondary)
                 .frame(width: 18, height: lineHeight, alignment: .trailing)
         case .todo:
             Button(action: onToggleCheck) {
                 Image(systemName: block.isChecked ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(block.isChecked ? LifeOSTokens.accent : secondary)
                     .frame(width: 18, height: lineHeight, alignment: .center)
             }
@@ -90,7 +90,7 @@ struct NoteBlockRow: View {
                 .padding(.trailing, 4)
         case .callout:
             Text("\u{1F4A1}")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .frame(width: 18, height: lineHeight, alignment: .center)
         default:
             EmptyView()

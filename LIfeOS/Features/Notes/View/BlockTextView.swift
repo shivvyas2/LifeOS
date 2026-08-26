@@ -10,12 +10,12 @@ import Persistence
 enum BlockStyle {
     static func font(_ kind: NoteBlockKind) -> UIFont {
         switch kind {
-        case .heading1: .systemFont(ofSize: 26, weight: .bold)
-        case .heading2: .systemFont(ofSize: 21, weight: .bold)
-        case .heading3: .systemFont(ofSize: 18, weight: .semibold)
-        case .code:     .monospacedSystemFont(ofSize: 14, weight: .regular)
-        case .quote:    .systemFont(ofSize: 17, weight: .regular)
-        default:        .systemFont(ofSize: 17, weight: .regular)
+        case .heading1: .systemFont(ofSize: 30, weight: .bold)
+        case .heading2: .systemFont(ofSize: 24, weight: .bold)
+        case .heading3: .systemFont(ofSize: 20, weight: .semibold)
+        case .code:     .monospacedSystemFont(ofSize: 15, weight: .regular)
+        case .quote:    .systemFont(ofSize: 18, weight: .regular)
+        default:        .systemFont(ofSize: 18, weight: .regular)
         }
     }
 

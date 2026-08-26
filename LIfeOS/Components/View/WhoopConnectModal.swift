@@ -5,6 +5,7 @@ import DesignSystem
 /// Glass overlay for connecting or syncing Whoop. Replaces the cramped
 /// Settings row so the OAuth round-trip has a surface of its own.
 struct WhoopConnectModal: View {
+    @State private var hasWaited = false
     @Bindable var model: WhoopConnectionViewModel
     var onDismiss: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -61,6 +62,52 @@ struct WhoopConnectModal: View {
         }
     }
 
+    /// What a bare `ProgressView` used to be.
+    ///
+    /// Connecting hands off to Safari, and Whoop's login sits behind a
+    /// Cloudflare check that stalls indefinitely behind a VPN, Private Relay
+    /// or a content blocker: no error, no callback, nothing to tap. A spinner
+    /// alone tells someone in that state to keep waiting for something that is
+    /// never going to happen. So it says where the sign-in actually is, and
+    /// after a few seconds offers the two ways out.
+    private var waitingForSafari: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Finish signing in with Whoop in Safari.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                Spacer(minLength: 0)
+            }
+
+            if hasWaited {
+                Text("Still here? Whoop's page sometimes stalls behind a VPN, Private Relay or a content blocker.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button("Sign in on a computer instead") { model.beginManual() }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(maxWidth: .infinity)
+
+                Button("Cancel") { model.cancelConnect() }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, 4)
+        .task(id: model.statusDetail) {
+            // Long enough that a sign-in going normally never shows it, short
+            // enough that someone staring at a stalled page is not left there.
+            hasWaited = false
+            try? await Task.sleep(for: .seconds(6))
+            hasWaited = true
+        }
+    }
+
     @ViewBuilder
     private var actions: some View {
         switch model.state {
@@ -78,9 +125,7 @@ struct WhoopConnectModal: View {
             if let url = model.manualURL {
                 manualSteps(url: url)
             } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                waitingForSafari
             }
         case .connected:
             PrimaryButton("Sync now") { Task { await model.sync() } }

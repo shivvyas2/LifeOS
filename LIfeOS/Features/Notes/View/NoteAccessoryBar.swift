@@ -61,7 +61,7 @@ struct NoteAccessoryBar: View {
         VStack(alignment: .leading, spacing: 0) {
             if matches.isEmpty {
                 Text("No block matches that")
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundStyle(secondary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
@@ -72,7 +72,7 @@ struct NoteAccessoryBar: View {
                             Button { onPickBlock(kind) } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: kind.systemImage)
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.system(size: 15, weight: .medium))
                                         .foregroundStyle(primary)
                                         .frame(width: 30, height: 30)
                                         .background(
@@ -81,10 +81,10 @@ struct NoteAccessoryBar: View {
                                         )
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(kind.title)
-                                            .font(.system(size: 14, weight: .medium))
+                                            .font(.system(size: 15, weight: .medium))
                                             .foregroundStyle(primary)
                                         Text(kind.subtitle)
-                                            .font(.system(size: 11))
+                                            .font(.system(size: 12))
                                             .foregroundStyle(secondary)
                                     }
                                     Spacer(minLength: 0)
@@ -111,18 +111,18 @@ struct NoteAccessoryBar: View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 Text("Link to")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(secondary)
 
                 if linkSuggestions.isEmpty {
                     Text("no page by that name yet, keep typing to make one")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundStyle(secondary.opacity(0.8))
                 } else {
                     ForEach(linkSuggestions, id: \.self) { title in
                         Button { onPickLink(title) } label: {
                             Text(title)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 14, weight: .medium))
                                 .lineLimit(1)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
@@ -148,7 +148,7 @@ struct NoteAccessoryBar: View {
                     ForEach(NoteBlockKind.menuOrder) { kind in
                         Button { onPickBlock(kind) } label: {
                             Image(systemName: kind.systemImage)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundStyle(kind == currentKind ? LifeOSTokens.accent : primary)
                                 .frame(width: 34, height: 34)
                                 .background(
@@ -184,7 +184,7 @@ struct NoteAccessoryBar: View {
                     }
                     .accessibilityLabel(isInking ? "Stop drawing" : "Draw")
                 }
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
@@ -193,7 +193,7 @@ struct NoteAccessoryBar: View {
 
             Button(action: onDismissKeyboard) {
                 Image(systemName: "keyboard.chevron.compact.down")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(primary)
                     .frame(width: 44, height: 44)
             }

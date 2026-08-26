@@ -81,7 +81,7 @@ struct NoteShelfScreen: View {
                     .foregroundStyle(index == model.breadcrumb.count - 1 ? primary : secondary)
             }
         }
-        .font(.system(size: 13, weight: .medium))
+        .font(.system(size: 14, weight: .medium))
         .lineLimit(1)
     }
 
@@ -94,7 +94,7 @@ struct NoteShelfScreen: View {
 
     private var blurb: some View {
         Text(model.headerBlurb)
-            .font(.system(size: 15))
+            .font(.system(size: 16))
             .foregroundStyle(secondary)
             .lineSpacing(3)
             .frame(maxWidth: 620, alignment: .leading)
@@ -114,9 +114,9 @@ struct NoteShelfScreen: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: filter.systemImage)
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                             Text(filter.title)
-                                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                                .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
                         }
                         .foregroundStyle(isSelected ? primary : secondary)
                         .padding(.horizontal, 14)
@@ -145,7 +145,7 @@ struct NoteShelfScreen: View {
     private var controls: some View {
         HStack(spacing: 12) {
             Text("\(model.cards.count) \(model.cards.count == 1 ? "page" : "pages")")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(primary)
 
             Spacer(minLength: 0)
@@ -158,7 +158,7 @@ struct NoteShelfScreen: View {
                 Button("New folder", systemImage: "folder.badge.plus") { onNewFolder(model.activeBucket) }
             } label: {
                 Label("New", systemImage: "plus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
                     .background(Capsule().fill(LifeOSTokens.accent))
@@ -173,7 +173,7 @@ struct NoteShelfScreen: View {
                 }
             } label: {
                 Label(model.sort.title, systemImage: "arrow.up.arrow.down")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(secondary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
@@ -187,21 +187,21 @@ struct NoteShelfScreen: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: model.selection.bucket?.systemImage ?? "doc.text")
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 32, weight: .light))
                 .foregroundStyle(secondary.opacity(0.6))
             Text(model.isSearching ? "No matches" : "Nothing here yet")
-                .font(.noteSerif(20))
+                .font(.noteSerif(22))
                 .foregroundStyle(primary)
             Text(model.isSearching
                  ? "Try a shorter phrase, or a word from the body of the page."
                  : "Start a page and it will show up here.")
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundStyle(secondary)
                 .multilineTextAlignment(.center)
 
             if !model.isSearching {
                 Button("New page") { open(model.createNote()) }
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
                     .background(Capsule().fill(LifeOSTokens.accent))

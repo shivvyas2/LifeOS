@@ -100,6 +100,10 @@ struct AppShell: View {
                 if await onboarding.restoreSession() == false, !isGuest {
                     hasFinishedOnboarding = false
                 }
+                // Before syncing: a sign-in abandoned in Safari leaves the
+                // card spinning, and coming back is the only moment we learn
+                // it was abandoned.
+                await whoop.resolveStalledConnect()
                 await whoop.syncIfStale()
                 await health.syncIfConnected()
             }
