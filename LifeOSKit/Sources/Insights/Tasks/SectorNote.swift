@@ -38,6 +38,10 @@ public struct SectorEvidenceContext: Sendable {
 }
 
 public struct SectorNoteTask: CoachTask {
+    /// On-device only: the note is written against evidence that never leaves
+    /// the phone, so there is no server-side name for it.
+    public let remoteName: String? = nil
+
     public typealias Output = SectorNote
     public typealias Context = SectorEvidenceContext
 
@@ -68,3 +72,8 @@ public struct SectorNoteTask: CoachTask {
         """
     }
 }
+
+/// Decoded from the Edge Function's JSON as well as generated on-device.
+/// The conformance is declared in this file so Swift can synthesise it from
+/// the stored properties; an extension in another file cannot.
+extension SectorNote: Decodable {}

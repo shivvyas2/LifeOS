@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Insights
+import Integrations
 import Persistence
 
 enum LifoPhase: Equatable {
@@ -36,7 +37,22 @@ final class CoachViewModel {
     var level: CGFloat = 0
 
     private var context: ModelContext?
-    private let router = CoachRouter(onDevice: OnDeviceEngine(), remote: nil)
+    /// The cloud tier, when the project is configured for it.
+    ///
+    /// `nil` is a real shipping state, not a stub: with no Supabase URL the
+    /// coach still answers on-device and says so when it cannot reach
+    /// further. The token is read per call rather than captured, because the
+    /// session is refreshed while the app runs and a copy taken at launch
+    /// would go stale within the hour.
+    private let router: CoachRouter = {
+        var remote: (any Engine)?
+        if let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
+            remote = RemoteEngine(baseURL: url, anonKey: key, accessToken: {
+                KeychainAuthSessionStore().load()?.accessToken
+            })
+        }
+        return CoachRouter(onDevice: OnDeviceEngine(), remote: remote)
+    }()
     private let speech = SpeechListener()
 
     /// Set by RootView; pulls the money and sector context that live in other

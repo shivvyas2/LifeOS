@@ -22,12 +22,23 @@ public enum Tier: Sendable, Equatable {
 /// serve both the on-device model and a cloud provider: the same type yields
 /// a schema to send and decodes the reply that comes back.
 public protocol CoachTask: Sendable {
-    associatedtype Output: Generable
+    /// `Decodable` as well as `Generable`, because the same declaration has to
+    /// serve two very different callers: the on-device model, which yields a
+    /// schema and decodes through `Generable`, and the cloud function, which
+    /// returns plain JSON. Constraining it here rather than casting at the
+    /// call site is what lets `RemoteEngine.run` stay generic.
+    associatedtype Output: Generable & Decodable
     /// What this task needs to see. Was fixed at `MetricsDigest`, which made
     /// any task about something other than health metrics inexpressible.
     associatedtype Context: Sendable
 
     var floor: Tier { get }
+
+    /// The server-side name of this task, or nil when it never leaves the
+    /// device. The model and schema behind a name live in the Edge Function,
+    /// so changing which model answers a task is a deploy rather than a
+    /// release.
+    var remoteName: String? { get }
 
     /// Stable across requests. Anything that varies belongs in `prompt`.
     var instructions: String { get }
@@ -45,6 +56,8 @@ public struct BriefTask: CoachTask {
     public init() {}
 
     public let floor: Tier = .onDevice
+    // The brief is a later slice; nothing serves it in the cloud yet.
+    public let remoteName: String? = nil
 
     public var instructions: String {
         """
@@ -77,6 +90,7 @@ public struct AnswerTask: CoachTask {
     }
 
     public let floor: Tier = .onDevice
+    public let remoteName: String? = "answer"
 
     public var instructions: String {
         """

@@ -122,6 +122,14 @@ public actor CoachRouter {
         guard let remote else { return fallback }
         do {
             return .answered(try await remote.run(task, context))
+        } catch RemoteEngineError.exhausted {
+            // Distinct from unavailable on purpose: the allowance is spent, so
+            // the UI must not offer a retry that cannot succeed today.
+            return .exhausted
+        } catch RemoteEngineError.refused(let reason) {
+            // The model answered; it declined. Surfacing that as a failure
+            // would invite a retry of a question it will decline again.
+            return .refused(reason)
         } catch {
             return fallback
         }

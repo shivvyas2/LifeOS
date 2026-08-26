@@ -17,3 +17,8 @@ public struct DailyBrief: Equatable, Sendable {
     )
     public var observations: [String]
 }
+
+/// Decoded from the Edge Function's JSON as well as generated on-device.
+/// The conformance is declared in this file so Swift can synthesise it from
+/// the stored properties; an extension in another file cannot.
+extension DailyBrief: Decodable {}
