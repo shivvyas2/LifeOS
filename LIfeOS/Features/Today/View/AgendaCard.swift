@@ -24,11 +24,64 @@ extension CalendarEventSnapshot {
         if mins == 0 { return "\(hours)h" }
         return "\(hours)h \(mins)m"
     }
+
+    /// "8:00 to 8:45" or "All day": the row subtitle, reference-style.
+    var spanLabel: String {
+        guard !isAllDay else { return "All day" }
+        let start = startDate.formatted(date: .omitted, time: .shortened)
+        let end = endDate.formatted(date: .omitted, time: .shortened)
+        return "\(start) to \(end)"
+    }
 }
 
-/// Today's schedule, plus what's coming after it. Two `SoftCard`s: the
-/// agenda always renders (it carries the permission states), Upcoming only
-/// when there is something to show and access is granted.
+/// The stretch of day an event belongs to. Groups the agenda the way the
+/// reference design groups its journey: a quiet label per part of the day,
+/// each with its own bubble colour, so a glance says when things cluster.
+private enum DayPart: Int, CaseIterable, Identifiable {
+    case allDay, morning, afternoon, evening
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .allDay:    "All day"
+        case .morning:   "Morning"
+        case .afternoon: "Afternoon"
+        case .evening:   "Evening"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .allDay:    "calendar"
+        case .morning:   "sunrise.fill"
+        case .afternoon: "sun.max.fill"
+        case .evening:   "moon.fill"
+        }
+    }
+
+    var hue: ModuleHue {
+        switch self {
+        case .allDay:    .habits
+        case .morning:   .activity
+        case .afternoon: .recovery
+        case .evening:   .nutrition
+        }
+    }
+
+    static func of(_ event: CalendarEventSnapshot, calendar: Calendar) -> DayPart {
+        guard !event.isAllDay else { return .allDay }
+        let hour = calendar.component(.hour, from: event.startDate)
+        if hour < 12 { return .morning }
+        if hour < 17 { return .afternoon }
+        return .evening
+    }
+}
+
+/// Today's schedule, plus what's coming after it, in the journey style: a
+/// titled card with a date chip, icon-bubble rows, and day-part groupings.
+/// The agenda card always renders (it carries the permission states);
+/// Upcoming only when there is something to show and access is granted.
 ///
 /// A pure function of the snapshot, like every other Today subview: the
 /// EventKit prompt itself lives behind `onConnect`, never fired from here.
@@ -43,6 +96,7 @@ struct AgendaCard: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openURL) private var openURL
+    private let calendar = Calendar.current
 
     private static let maxAgendaRows = 4
     private static let maxUpcomingRows = 5
@@ -50,7 +104,7 @@ struct AgendaCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SoftCard {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
                     body(for: access)
                 }
@@ -58,8 +112,10 @@ struct AgendaCard: View {
 
             if access == .authorized, !upcoming.isEmpty {
                 SoftCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        sectionHeader("UPCOMING")
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Upcoming")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         upcomingRows
                     }
                 }
@@ -70,23 +126,37 @@ struct AgendaCard: View {
     // MARK: Header
 
     private var header: some View {
-        HStack {
-            sectionHeader("TODAY")
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Today")
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                if access == .authorized, !agenda.isEmpty {
+                    Text(agenda.count == 1 ? "1 event on your day" : "\(agenda.count) events on your day")
+                        .font(.system(size: 13))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+            }
+
             Spacer()
-            if access == .authorized, !agenda.isEmpty {
-                Text(agenda.count == 1 ? "1 event" : "\(agenda.count) events")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+
+            if access == .authorized {
+                Button(action: onOpenToday) {
+                    HStack(spacing: 4) {
+                        Text(Date.now.formatted(.dateTime.month(.abbreviated).day()))
+                            .font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open today's day view")
             }
         }
-        .padding(.bottom, 4)
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .tracking(0.8)
-            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
     }
 
     // MARK: Agenda body, by access state
@@ -121,116 +191,134 @@ struct AgendaCard: View {
             .padding(.vertical, 4)
 
         case .authorized:
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
                 if agenda.isEmpty {
                     Text("Nothing scheduled today.")
                         .font(.system(size: 15))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 2)
                 } else {
-                    ForEach(Array(agenda.prefix(Self.maxAgendaRows).enumerated()), id: \.element.id) { index, event in
-                        if index > 0 { Divider() }
-                        agendaRow(event)
-                    }
-
-                    if agenda.count > Self.maxAgendaRows {
-                        Divider()
-                        Button {
-                            onOpenToday()
-                        } label: {
-                            Text("+\(agenda.count - Self.maxAgendaRows) more")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    agendaGroups
                 }
 
                 Button("+ Add event", action: onAddEvent)
                     .buttonStyle(.plain)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(LifeOSTokens.accent)
-                    .padding(.top, 8)
             }
         }
     }
 
-    private func agendaRow(_ event: CalendarEventSnapshot) -> some View {
-        Button {
-            onTapEvent(event)
-        } label: {
-            eventRow(time: event.timeLabel, title: event.title, duration: event.durationLabel)
+    /// The first `maxAgendaRows` events, grouped by part of day in order.
+    /// Capped before grouping so the card's height budget stays the same
+    /// whatever shape the day has.
+    private var agendaGroups: some View {
+        let visible = Array(agenda.prefix(Self.maxAgendaRows))
+        let grouped = DayPart.allCases.compactMap { part -> (DayPart, [CalendarEventSnapshot])? in
+            let events = visible.filter { DayPart.of($0, calendar: calendar) == part }
+            return events.isEmpty ? nil : (part, events)
         }
-        .buttonStyle(.plain)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            ForEach(grouped, id: \.0.id) { part, events in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(part.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .tracking(0.4)
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    ForEach(events) { event in
+                        eventRow(event, part: DayPart.of(event, calendar: calendar))
+                    }
+                }
+            }
+
+            if agenda.count > Self.maxAgendaRows {
+                Button(action: onOpenToday) {
+                    Text("+\(agenda.count - Self.maxAgendaRows) more")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // MARK: Upcoming
 
+    /// Rows grouped under their day label, consecutive runs preserved in
+    /// order, so a stacked week reads as short day sections rather than a
+    /// table of columns.
     private var upcomingRows: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(upcoming.prefix(Self.maxUpcomingRows).enumerated()), id: \.element.id) { index, row in
-                if index > 0 { Divider() }
-                Button {
-                    onTapEvent(row.event)
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(row.dayLabel)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            .frame(width: 64, alignment: .leading)
+        let visible = Array(upcoming.prefix(Self.maxUpcomingRows))
+        var groups: [(label: String, rows: [UpcomingEvent])] = []
+        for row in visible {
+            if groups.last?.label == row.dayLabel {
+                groups[groups.count - 1].rows.append(row)
+            } else {
+                groups.append((row.dayLabel, [row]))
+            }
+        }
 
-                        Text(row.event.timeLabel)
-                            .font(.system(size: 13))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            .frame(width: 56, alignment: .leading)
-
-                        Text(row.event.title)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                            .lineLimit(1)
-
-                        Spacer()
+        return VStack(alignment: .leading, spacing: 10) {
+            ForEach(groups, id: \.label) { group in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(group.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .tracking(0.4)
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    ForEach(group.rows) { row in
+                        eventRow(row.event, part: DayPart.of(row.event, calendar: calendar))
                     }
-                    .contentShape(Rectangle())
-                    .padding(.vertical, 10)
                 }
-                .buttonStyle(.plain)
             }
 
             if upcoming.count > Self.maxUpcomingRows {
                 Text("+\(upcoming.count - Self.maxUpcomingRows) more")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    .padding(.top, 8)
             }
         }
     }
 
     // MARK: Row building blocks
 
-    private func eventRow(time: String, title: String, duration: String) -> some View {
-        HStack(spacing: 12) {
-            Text(time)
-                .font(.system(size: 14))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                .frame(width: 56, alignment: .leading)
+    /// One event, journey-style: pastel icon bubble, title over a time span,
+    /// a quiet chevron to say the row opens.
+    private func eventRow(_ event: CalendarEventSnapshot, part: DayPart) -> some View {
+        Button {
+            onTapEvent(event)
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill((scheme == .dark ? part.hue.pastelDark : part.hue.pastel))
+                    Image(systemName: part.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(scheme == .dark ? part.hue.pastel : part.hue.top)
+                }
+                .frame(width: 36, height: 36)
 
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .lineLimit(1)
+                    Text(event.spanLabel)
+                        .font(.system(size: 13))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
 
-            Spacer()
+                Spacer()
 
-            if !duration.isEmpty {
-                Text(duration)
-                    .font(.system(size: 13))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
             }
+            .contentShape(Rectangle())
+            .padding(.vertical, 4)
         }
-        .contentShape(Rectangle())
-        .padding(.vertical, 10)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(event.title), \(event.spanLabel)")
     }
 }
