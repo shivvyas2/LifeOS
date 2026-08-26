@@ -69,11 +69,27 @@ public struct PlaidClient: PlaidAPI {
     }
 
     public func disconnect(itemID: String) async throws {
-        struct Response: Decodable { let ok: Bool }
-        let _: Response = try await post("plaid-disconnect", body: ["item_id": itemID])
+        // Discards the body deliberately: the status already establishes
+        // success, and reading a field that carries no further information
+        // only creates a way for a disconnect that actually worked to be
+        // reported as a failure. Disconnect is what stops an item billing
+        // every month, so a false failure here is the one most worth avoiding.
+        _ = try await send("plaid-disconnect", body: ["item_id": itemID])
     }
 
     private func post<T: Decodable>(_ function: String, body: [String: Any]) async throws -> T {
+        let (data, status) = try await send(function, body: body)
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw PlaidClientError.upstream(status)
+        }
+    }
+
+    /// Builds the request, sends it, and maps a non-2xx response to a named
+    /// error. Shared by the decoding and body-discarding call sites so the
+    /// signed-out guard and error mapping live in exactly one place.
+    private func send(_ function: String, body: [String: Any]) async throws -> (data: Data, status: Int) {
         // Signed out there is no user to scope a credential to, so this fails
         // before the request rather than sending one that cannot succeed.
         guard let token = accessToken(), !token.isEmpty else { throw PlaidClientError.unauthorized }
@@ -95,11 +111,7 @@ public struct PlaidClient: PlaidAPI {
         guard (200..<300).contains(status) else {
             throw Self.error(status: status, body: data)
         }
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw PlaidClientError.upstream(status)
-        }
+        return (data, status)
     }
 
     /// The functions return their own status with a named kind in the body.

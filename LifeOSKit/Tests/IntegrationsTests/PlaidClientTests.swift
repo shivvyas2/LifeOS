@@ -101,4 +101,23 @@ final class PlaidStubURLProtocol: URLProtocol {
         let cursors = try #require(decoded?["cursors"] as? [String: String])
         #expect(cursors == ["item_a": "cursor_a"])
     }
+
+    @Test func disconnectSucceedsOnTheStatusAloneWhateverTheBodySays() async throws {
+        // The status is the outcome. Reading a field out of the body would let a
+        // disconnect that actually worked be reported as a failure, and disconnect
+        // is what stops an item billing every month.
+        let client = makeClient([.ok("{}")])
+        try await client.disconnect(itemID: "item_a")
+
+        let body = try #require(PlaidStubURLProtocol.lastBody)
+        let decoded = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+        #expect(decoded?["item_id"] as? String == "item_a")
+    }
+
+    @Test func disconnectStillSurfacesARealFailure() async throws {
+        let client = makeClient([.status(502, #"{"error":"upstream_failure"}"#)])
+        await #expect(throws: PlaidClientError.upstream(502)) {
+            try await client.disconnect(itemID: "item_a")
+        }
+    }
 }
