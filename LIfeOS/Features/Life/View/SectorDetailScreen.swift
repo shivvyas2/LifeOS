@@ -11,7 +11,7 @@ import Sectors
 /// view model fetches and maps, `SectorHistory.build` decides everything, and
 /// this screen only renders what it is handed. A band with nothing to show is
 /// omitted rather than rendered empty, so a sector never closed still renders
-/// cleanly with just its header.
+/// cleanly with just its header and a one-line nudge to close a month.
 struct SectorDetailScreen: View {
     let sector: LifeSector
     /// Called to open the sector's full tab. Non-nil only for the three
@@ -21,32 +21,52 @@ struct SectorDetailScreen: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.layout) private var layout
+    @Environment(\.scenePhase) private var scenePhase
     @State private var model = SectorDetailViewModel()
+
+    /// How many recent months the answers band renders. Shared with
+    /// `QuestionTrack.hasAnswer(inLastMonths:)` so a track that qualifies
+    /// for `history.questions` but has nothing inside this window is
+    /// filtered out rather than rendered as a prompt over bare em dashes.
+    private let answerWindow = 6
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
                 if let history = model.history {
                     header(history)
+                    if history.months.isEmpty { emptyState }
                     if !history.observations.isEmpty { observations(history) }
                     if !history.months.isEmpty { trend(history) }
                     if let latest = history.months.last, !latest.evidenceRows.isEmpty {
                         reasoning(latest)
                     }
-                    if !history.questions.isEmpty { answers(history) }
+                    if !visibleTracks(history).isEmpty { answers(history) }
                     if !history.notes.isEmpty { notes(history) }
                     if let onOpenTab { openTabRow(onOpenTab) }
                 } else {
                     ProgressView()
                 }
             }
-            .padding(Space.x2)
+            .frame(maxWidth: layout.maxContentWidth)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, layout.gutter)
+            .padding(.leading, layout.railInset)
+            .padding(.top, Space.x3)
+            .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
         .navigationTitle(sector.title)
         .task {
             model.attach(context)
             model.load(sector: sector)
+        }
+        // Matches `RootView.reloadAll()`'s `scenePhase == .active` refresh on
+        // every other surface, so this screen does not go stale across a
+        // background/foreground cycle while it happens to be on screen.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.load(sector: sector) }
         }
     }
 
@@ -67,6 +87,16 @@ struct SectorDetailScreen: View {
         )
     }
 
+    /// The state every sector starts in on a fresh install: no month closed
+    /// yet, so there is nothing to plot, reason about, or list answers for.
+    private var emptyState: some View {
+        SoftCard {
+            Text("Close a month on the board to start this sector's history.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func observations(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x1) {
@@ -78,10 +108,15 @@ struct SectorDetailScreen: View {
         }
     }
 
-    /// `baseline: .zero` is correct here and its consequence is intended: the
-    /// chart scales within its own window, so a flat year of 4s renders as
-    /// steady half-height bars rather than a flat line at 40%. The absolute
-    /// value is carried by the header numeral, not by bar height.
+    /// `baseline: .windowMinimum` is correct here, not `.zero`: a sector
+    /// score is a rating on a 0...10 scale, never a count building up from
+    /// nought, which is exactly the case `Baseline.windowMinimum`'s own doc
+    /// describes for body weight. Under it a flat year draws as steady
+    /// half-height bars and a real swing draws as one; under `.zero`,
+    /// `RoundedBarChart.fraction` divides by the window's own peak, so a
+    /// flat year of 4s and a flat year of 9s both draw as full-height bars,
+    /// indistinguishable from each other. The absolute value is carried by
+    /// the header numeral, not by bar height.
     private func trend(_ history: SectorHistory) -> some View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x1) {
@@ -95,7 +130,7 @@ struct SectorDetailScreen: View {
                         )
                     },
                     hue: SectorPalette.hue(sector),
-                    baseline: .zero,
+                    baseline: .windowMinimum,
                     height: 120
                 )
             }
@@ -122,6 +157,14 @@ struct SectorDetailScreen: View {
         }
     }
 
+    /// A track qualifies for `history.questions` on any answer across all
+    /// twelve fetched months, but this band only ever renders the last
+    /// `answerWindow` of them, so a track last answered outside that window
+    /// is filtered here rather than rendering its prompt over bare em dashes.
+    private func visibleTracks(_ history: SectorHistory) -> [QuestionTrack] {
+        history.questions.filter { $0.hasAnswer(inLastMonths: answerWindow) }
+    }
+
     /// One row per question, the last six months across it, oldest to newest,
     /// horizontally scrollable. An unanswered month renders an em dash,
     /// matching how the board shows an unscored sector: never a blank or a
@@ -130,7 +173,7 @@ struct SectorDetailScreen: View {
         SoftCard {
             VStack(alignment: .leading, spacing: Space.x2) {
                 Text("Answers over time").font(.subheadline).foregroundStyle(.secondary)
-                ForEach(history.questions, id: \.questionID) { track in
+                ForEach(visibleTracks(history), id: \.questionID) { track in
                     questionTrackRow(track, months: history.months)
                 }
             }
@@ -138,7 +181,7 @@ struct SectorDetailScreen: View {
     }
 
     private func questionTrackRow(_ track: QuestionTrack, months: [MonthEntry]) -> some View {
-        let entries: [MonthAnswer] = Array(zip(months, track.answers).suffix(6))
+        let entries: [MonthAnswer] = Array(zip(months, track.answers).suffix(answerWindow))
             .map { MonthAnswer(month: $0.0.month, answer: $0.1) }
         return VStack(alignment: .leading, spacing: Space.half) {
             Text(track.prompt).font(.footnote)
