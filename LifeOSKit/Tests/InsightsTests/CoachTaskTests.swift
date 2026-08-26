@@ -14,7 +14,9 @@ import Persistence
             $0.steps = 8_000
             $0.whoopRecoveryPct = 62
         }
-        return MetricsDigest.from(try store.metrics(from: day, to: day))
+        return MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
     }
 
     @Test func theBriefRunsOnDeviceByDefault() {

@@ -31,7 +31,10 @@ private struct StubEngine: Engine {
 
     private let empty = MetricsDigest(
         days: [],
-        averages: MetricsDigest.Averages(recoveryPct: nil, sleepMinutes: nil, steps: nil)
+        averages: MetricsDigest.Averages(
+            recoveryPct: nil, sleepMinutes: nil, steps: nil,
+            hrvMs: nil, restingHR: nil, strain: nil, sleepDebtMinutes: nil
+        )
     )
 
     private let brief = DailyBrief(headline: "Fine.", observations: ["a", "b"])

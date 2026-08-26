@@ -17,7 +17,9 @@ import Persistence
         let store = try makeStore()
         try store.upsert(date: day) { $0.steps = 8_000 }
 
-        let digest = MetricsDigest.from(try store.metrics(from: day, to: day))
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
 
         #expect(digest.days.count == 1)
         #expect(digest.days[0].steps == 8_000)
@@ -29,7 +31,9 @@ import Persistence
         let store = try makeStore()
         try store.upsert(date: day) { $0.steps = 8_000 }
 
-        let digest = MetricsDigest.from(try store.metrics(from: day, to: day))
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
 
         #expect(digest.days[0].steps == 8_000)
         #expect(digest.days[0].sleepMinutes == nil)
@@ -42,7 +46,9 @@ import Persistence
         try store.upsert(date: day) { $0.steps = 10_000 }
         try store.upsert(date: second) { $0.weightKg = 78 }   // no steps
 
-        let digest = MetricsDigest.from(try store.metrics(from: day, to: second))
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: second), sleeps: [], workouts: []
+        )
 
         // 10_000 over one contributing day, not 5_000 over two.
         #expect(digest.averages.steps == 10_000)
@@ -52,7 +58,9 @@ import Persistence
         let store = try makeStore()
         try store.upsert(date: day) { $0.weightKg = 78 }
 
-        let digest = MetricsDigest.from(try store.metrics(from: day, to: day))
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
 
         #expect(digest.averages.steps == nil)
     }
@@ -70,12 +78,91 @@ import Persistence
             $0.respiratoryRate = 14.2
         }
 
-        let text = MetricsDigest.from(try store.metrics(from: day, to: day)).promptLines
+        let text = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        ).promptLines
 
         #expect(text.contains("62"))              // the aggregate is wanted
         #expect(text.contains("41.2") == false)   // HRV series is not
         #expect(text.contains("97.5") == false)
         #expect(text.contains("33.4") == false)
         #expect(text.contains("14.2") == false)
+    }
+
+    @Test func aDayCarriesTheWiderWhoopSurface() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) {
+            $0.whoopRecoveryPct = 51
+            $0.hrvMs = 38
+            $0.restingHR = 61
+            $0.spo2Percentage = 95
+            $0.skinTempCelsius = 33.7
+            $0.whoopRecoveryIsCalibrating = true
+        }
+
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
+
+        #expect(digest.days[0].hrvMs == 38)
+        #expect(digest.days[0].restingHR == 61)
+        #expect(digest.days[0].spo2Pct == 95)
+        #expect(digest.days[0].skinTempCelsius == 33.7)
+        #expect(digest.days[0].recoveryIsCalibrating == true)
+    }
+
+    @Test func nightSleepAndNapsStaySeparate() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) { _ in }
+        let night = SleepRecord(externalID: "n", start: day.addingTimeInterval(-3_600),
+                                end: day.addingTimeInterval(21_600), attributedDate: day)
+        night.remMinutes = 62
+        night.swsMinutes = 80
+        night.isNap = false
+        let nap = SleepRecord(externalID: "p", start: day.addingTimeInterval(50_000),
+                              end: day.addingTimeInterval(52_280), attributedDate: day)
+        nap.isNap = true
+
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day),
+            sleeps: [night, nap], workouts: []
+        )
+
+        #expect(digest.days[0].remMinutes == 62)
+        #expect(digest.days[0].swsMinutes == 80)
+        #expect(digest.days[0].napMinutes == 38)   // 2280s
+    }
+
+    @Test func aDayWithNoNapReportsNilRatherThanZero() throws {
+        let store = try makeStore()
+        try store.upsert(date: day) { $0.steps = 100 }
+
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: day), sleeps: [], workouts: []
+        )
+
+        #expect(digest.days[0].napMinutes == nil)
+    }
+
+    @Test func workoutsAttachToTheDayTheyStarted() throws {
+        let store = try makeStore()
+        let second = day.addingTimeInterval(86_400)
+        try store.upsert(date: day) { _ in }
+        try store.upsert(date: second) { _ in }
+        let record = WorkoutRecord(externalID: "w", start: second.addingTimeInterval(3_600),
+                                   durationMinutes: 92, activityName: "cycling")
+        record.strain = 11.4
+        record.zoneThreeMinutes = 20
+        record.zoneFourMinutes = 15
+        record.zoneFiveMinutes = 7
+
+        let digest = MetricsDigest.from(
+            metrics: try store.metrics(from: day, to: second), sleeps: [], workouts: [record]
+        )
+
+        #expect(digest.days[0].workouts.isEmpty)
+        #expect(digest.days[1].workouts.count == 1)
+        #expect(digest.days[1].workouts[0].name == "cycling")
+        #expect(digest.days[1].workouts[0].zoneMinutes == [0, 0, 0, 20, 15, 7])
     }
 }
