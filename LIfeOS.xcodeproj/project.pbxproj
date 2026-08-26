@@ -93,6 +93,7 @@
 				A985C6A2302A34E0002272C5 /* Integrations */,
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
+				A985C6D3302A34E0002272C5 /* LinkKit */,
 			);
 			productName = LIfeOS;
 			productReference = A985C672302A34E0002272C5 /* LIfeOS.app */;
@@ -124,6 +125,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */,
+				A985C6D2302A34E0002272C5 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A985C673302A34E0002272C5 /* Products */;
@@ -388,6 +390,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A985C6D2302A34E0002272C5 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/plaid/plaid-link-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		A985C692302A34E0002272C5 /* DesignSystem */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -408,6 +421,11 @@
 		A985C6C2302A34E0002272C5 /* Sectors */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Sectors;
+		};
+		A985C6D3302A34E0002272C5 /* LinkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A985C6D2302A34E0002272C5 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
+			productName = LinkKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
