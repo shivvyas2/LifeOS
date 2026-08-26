@@ -12,6 +12,7 @@
 		A985C6A1302A34E0002272C5 /* Integrations in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6A2302A34E0002272C5 /* Integrations */; };
 		A985C6B1302A34E0002272C5 /* Insights in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6B2302A34E0002272C5 /* Insights */; };
 		A985C6C1302A34E0002272C5 /* Sectors in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6C2302A34E0002272C5 /* Sectors */; };
+		A985C6E0302A34E0002272C5 /* Assistant in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6E1302A34E0002272C5 /* Assistant */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
 				A985C6B1302A34E0002272C5 /* Insights in Frameworks */,
 				A985C6C1302A34E0002272C5 /* Sectors in Frameworks */,
+				A985C6E0302A34E0002272C5 /* Assistant in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,6 +96,7 @@
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
 				A985C6D3302A34E0002272C5 /* LinkKit */,
+				A985C6E1302A34E0002272C5 /* Assistant */,
 			);
 			productName = LIfeOS;
 			productReference = A985C672302A34E0002272C5 /* LIfeOS.app */;
@@ -423,6 +426,10 @@
 		A985C6C2302A34E0002272C5 /* Sectors */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Sectors;
+		};
+		A985C6E1302A34E0002272C5 /* Assistant */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Assistant;
 		};
 		A985C6D3302A34E0002272C5 /* LinkKit */ = {
 			isa = XCSwiftPackageProductDependency;

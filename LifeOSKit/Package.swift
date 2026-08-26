@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "Integrations", targets: ["Integrations"]),
         .library(name: "Insights", targets: ["Insights"]),
         .library(name: "Sectors", targets: ["Sectors"]),
+        .library(name: "Assistant", targets: ["Assistant"]),
     ],
     targets: [
         .target(name: "DesignSystem"),
@@ -17,10 +18,12 @@ let package = Package(
         .target(name: "Integrations", dependencies: ["Persistence"]),
         .target(name: "Insights", dependencies: ["Persistence"]),
         .target(name: "Sectors", dependencies: ["Persistence"]),
+        .target(name: "Assistant", dependencies: ["Insights", "Persistence"]),
         .testTarget(name: "DesignSystemTests", dependencies: ["DesignSystem"]),
         .testTarget(name: "PersistenceTests", dependencies: ["Persistence"]),
         .testTarget(name: "IntegrationsTests", dependencies: ["Integrations"]),
         .testTarget(name: "InsightsTests", dependencies: ["Insights"]),
         .testTarget(name: "SectorsTests", dependencies: ["Sectors"]),
+        .testTarget(name: "AssistantTests", dependencies: ["Assistant"]),
     ]
 )
