@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import Persistence
 import Sectors
+import Insights
 
 @MainActor @Observable
 final class MoneyViewModel {
@@ -82,6 +83,9 @@ final class MoneyViewModel {
                 },
                 budgets: budgetRows,
                 unclaimed: unclaimedRows,
+                categories: Self.categories(from: entries, expenses: summary.expenses),
+                recurring: Self.recurring(from: entries, calendar: calendar),
+                goal: Self.goal(saved: summary.net),
                 monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
                 // A bank linked seconds ago has no transactions yet. Falling back
                 // to the empty state there tells the user the connection failed
@@ -183,6 +187,55 @@ final class MoneyViewModel {
             assertionFailure("Bucket delete failed: \(error)")
         }
     }
+
+    // MARK: - Derived views of the month
+
+    /// Spending grouped by category, largest first.
+    ///
+    /// Uncategorised spend is kept rather than dropped: a category list whose
+    /// parts do not add up to the total shown above it is the screen arguing
+    /// with itself, and the gap is exactly the spend nobody has labelled.
+    static func categories(from entries: [MoneyEntry], expenses: Double) -> [CategoryRow] {
+        guard expenses > 0 else { return [] }
+        let spend = entries.filter { $0.amount < 0 }
+        let grouped = Dictionary(grouping: spend) { $0.category ?? "Uncategorised" }
+
+        return grouped.map { name, rows in
+            let amount = rows.reduce(0) { $0 + abs($1.amount) }
+            return CategoryRow(id: name, name: name, amount: amount,
+                               share: amount / expenses)
+        }
+        .sorted { ($0.amount, $1.name) > ($1.amount, $0.name) }
+    }
+
+    /// Merchants billing every month, detected from history by `RecurringSpend`.
+    static func recurring(from entries: [MoneyEntry], calendar: Calendar) -> [RecurringRow] {
+        let lines = entries.map {
+            RecurringSpend.Line(merchant: $0.merchant, category: $0.category,
+                                amount: $0.amount, date: $0.date)
+        }
+        return RecurringSpend.charges(in: lines, calendar: calendar).map {
+            RecurringRow(id: $0.merchant, merchant: $0.merchant, category: $0.category,
+                         amount: $0.typicalAmount, months: $0.months)
+        }
+    }
+
+    /// The saving target, when one has been named.
+    ///
+    /// Progress is this month's net rather than a running balance: the app has
+    /// no account history to total, and claiming a lifetime figure it cannot
+    /// see would be inventing one. A month that kept nothing shows zero saved,
+    /// which is the honest reading.
+    static func goal(saved: Double) -> SavingsGoal? {
+        let defaults = UserDefaults.standard
+        let target = defaults.double(forKey: goalTargetKey)
+        guard target > 0 else { return nil }
+        let name = defaults.string(forKey: goalNameKey) ?? "Savings goal"
+        return SavingsGoal(name: name, target: target, saved: max(saved, 0))
+    }
+
+    static let goalTargetKey = "savingsGoalTarget"
+    static let goalNameKey = "savingsGoalName"
 }
 
 struct ClaimableCategory: Equatable, Identifiable {

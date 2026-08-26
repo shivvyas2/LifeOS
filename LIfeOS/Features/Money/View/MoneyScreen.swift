@@ -1,6 +1,18 @@
 import SwiftUI
 import DesignSystem
 
+/// The Money tab.
+///
+/// Six questions, one per side tab, rather than one long scroll: what came in
+/// and went out, where it went, what repeats every month, what it is being
+/// saved towards, what is hurting, and the ledger itself. They are separate
+/// visits, and stacking them into a single column made every one of them a
+/// scroll past the other five.
+///
+/// Built as full-bleed colour bands on pure white rather than as cards on the
+/// app's warm canvas. That is a deliberate departure from the rest of the app:
+/// money is the one domain here that is mostly figures, and a figure wants a
+/// block of colour behind it, not a card with a margin.
 struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
@@ -10,212 +22,100 @@ struct MoneyScreen: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
-    var body: some View {
-        GradientCanvas(hue: .money) {
-            ScrollView {
-                VStack(spacing: 22) {
-                    header
+    /// Not persisted: the tab a visit starts on should be the summary, not
+    /// wherever the last visit happened to end up.
+    @State private var section: MoneySection = .flow
 
+    var body: some View {
+        ZStack {
+            MoneyPalette.paper.resolve(scheme).ignoresSafeArea()
+
+            if snapshot.isFetchingHistory && snapshot.recent.isEmpty {
+                fetchingState
+            } else if snapshot.isConnected {
+                loaded
+            } else {
+                emptyState
+            }
+        }
+    }
+
+    private var loaded: some View {
+        HStack(alignment: .top, spacing: Space.x1) {
+            MoneySectionRail(selection: $section)
+                .padding(.leading, Space.x1)
+                .padding(.top, Space.x2)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    if snapshot.isSample { sampleBadge }
                     if snapshot.reconnectPrompt != nil { reconnectBanner }
 
-                    if snapshot.isFetchingHistory && snapshot.recent.isEmpty {
-                        fetchingState
-                    } else if snapshot.isConnected {
-                        HStack(spacing: 10) {
-                            MetricTile(label: "Income", value: Self.money(snapshot.income))
-                            MetricTile(label: "Expenses", value: Self.money(snapshot.expenses))
-                            MetricTile(
-                                label: "Saved",
-                                value: snapshot.savingsRate.map { "\(Int($0 * 100))" },
-                                unit: "%"
-                            )
+                    Group {
+                        switch section {
+                        case .flow:       MoneyFlowSection(snapshot: snapshot)
+                        case .categories: MoneyCategoriesSection(snapshot: snapshot)
+                        case .repeating:  MoneyRecurringSection(snapshot: snapshot)
+                        case .goal:       MoneyGoalSection(snapshot: snapshot, onEdit: onEditBudgets)
+                        case .pressure:   MoneyPressureSection(points: snapshot.pressurePoints,
+                                                               onEditBudgets: onEditBudgets)
+                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd)
                         }
-
-                        if let netWorth = snapshot.netWorth {
-                            SoftCard {
-                                HStack {
-                                    Text("Net worth").font(.system(size: 15, weight: .medium))
-                                    Spacer()
-                                    Text(Self.money(netWorth) ?? "—")
-                                        .font(.system(size: 17, weight: .semibold))
-                                }
-                            }
-                        }
-
-                        budgetsBand
-
-                        transactions
-                    } else {
-                        emptyState
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
                 }
-                .frame(maxWidth: layout.maxContentWidth)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, layout.gutter)
-                .padding(.leading, layout.railInset)
+                .padding(.top, Space.x2)
+                .padding(.trailing, Space.x2)
                 .padding(.bottom, layout.contentBottomInset)
             }
+            .scrollIndicators(.hidden)
         }
+        .frame(maxWidth: layout.maxContentWidth)
+        .frame(maxWidth: .infinity)
+        .padding(.leading, layout.railInset)
     }
 
-    private var header: some View {
-        VStack(spacing: 6) {
-            if snapshot.isSample { sampleBadge }
-
-            if snapshot.isConnected {
-                HeroNumeral(
-                    value: Self.money(snapshot.net) ?? "—",
-                    label: "Net · \(snapshot.monthLabel)"
-                )
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .padding(.top, 26)
-
-                Text(snapshot.verdict)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 14)
-                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
-            }
-        }
-    }
-
-    /// Sample data is a state this screen is in, not a fault, so it reads as a
-    /// label in the app's own vocabulary rather than as a warning: the amber
-    /// alert bar it replaced looked like something had gone wrong.
-    ///
-    /// It stays above the numbers and stays undismissable all the same. The
-    /// figures below it are invented, and a reader who scrolls straight to
-    /// their net for the month has to pass this to get there.
+    /// Quiet by design. Sample data is a state this screen is in, not a fault,
+    /// and the amber alert bar this replaced looked like something had broken.
+    /// It stays undismissable all the same: every figure below it is invented.
     private var sampleBadge: some View {
         Text("Sample data")
             .font(.system(size: 11, weight: .semibold))
             .tracking(0.6)
-            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            .foregroundStyle(MoneyPalette.quietInk(scheme))
             .padding(.vertical, 5)
             .padding(.horizontal, 12)
-            .background(Capsule().fill(LifeOSTokens.tileSurface.resolve(scheme)))
-            .padding(.top, 22)
+            .background(Capsule().fill(MoneyPalette.ink.resolve(scheme).opacity(0.07)))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, Space.x1)
             .accessibilityLabel("Sample data. These figures are invented.")
     }
 
-    private var transactions: some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("RECENT")
-                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
-                    Spacer()
-                    Button("Add", action: onAdd)
-                        .font(.system(size: 13, weight: .semibold))
-                        .tint(LifeOSTokens.accent)
-                }
-
-                ForEach(snapshot.recent) { row in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.merchant).font(.system(size: 15, weight: .medium))
-                            if let category = row.category {
-                                Text(category).font(.system(size: 12)).opacity(0.5)
-                            }
-                        }
-                        Spacer()
-                        Text(Self.signed(row.amount))
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(row.amount >= 0 ? Color.green : Color.primary)
-                            .opacity(row.pending ? 0.45 : 1)
-                    }
-                }
-            }
-        }
-    }
-
-    private var budgetsBand: some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("BUDGETS")
-                        .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
-                    Spacer()
-                    Button(snapshot.budgets.isEmpty ? "Set budgets" : "Edit", action: onEditBudgets)
-                        .font(.system(size: 13, weight: .semibold))
-                        .tint(LifeOSTokens.accent)
-                }
-
-                if snapshot.budgets.isEmpty {
-                    Text("Set a monthly limit for the spending you care about.")
-                        .font(.footnote)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-
-                ForEach(snapshot.budgets) { row in
-                    VStack(spacing: 4) {
-                        HStack {
-                            Text(row.name).font(.system(size: 15, weight: .medium))
-                            Spacer()
-                            Text("\(Self.money(row.spent) ?? "—") / \(Self.money(row.limit) ?? "—")")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(row.isOver ? .orange : LifeOSTokens.primaryText.resolve(scheme))
-                        }
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme))
-                                Capsule()
-                                    .fill(row.isOver ? Color.orange : LifeOSTokens.accent)
-                                    .frame(width: proxy.size.width * row.progress)
-                            }
-                        }
-                        .frame(height: 4)
-                    }
-                }
-
-                if !snapshot.unclaimed.isEmpty { unclaimedRows }
-            }
-        }
-    }
-
-    /// Spend no bucket claims. Always rendered when present: the point of
-    /// buckets is that nothing stops counting quietly.
-    private var unclaimedRows: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("UNCLAIMED")
-                .font(.system(size: 11, weight: .semibold)).tracking(0.6).opacity(0.55)
-                .padding(.top, 4)
-            ForEach(snapshot.unclaimed) { row in
-                HStack {
-                    Text(row.count > 1 ? "\(row.label) ×\(row.count)" : row.label)
-                        .font(.system(size: 14))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    Spacer()
-                    Text(Self.money(row.amount) ?? "—")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
-            Button("Assign to a bucket", action: onEditBudgets)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.accent)
-        }
-    }
-
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            HeroEmptyState(label: "Money", reason: "No transactions yet")
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            Button("Add a transaction", action: onAdd)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .padding(.vertical, 12)
-                .padding(.horizontal, 22)
-                .background(
-                    Capsule()
-                        .fill(LifeOSTokens.tileSurface.resolve(scheme))
-                        .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 8, y: 2)
-                )
+        VStack(spacing: Space.x2) {
+            Spacer(minLength: Space.x8)
+            Text("Money").moneyEyebrow(scheme)
+            Text("Nothing here yet")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+            Text("Connect a bank, or log a transaction by hand to get started.")
+                .font(.system(size: 14))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(MoneyPalette.quietInk(scheme))
+
             Button("Connect your bank", action: onConnect)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.accent)
+                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                .padding(.vertical, 12)
+                .padding(.horizontal, Space.x3)
+                .background(Capsule().fill(MoneyPalette.butter.resolve(scheme)))
+
+            Button("Add a transaction", action: onAdd)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MoneyPalette.quietInk(scheme))
+            Spacer()
         }
-        .padding(.top, 40)
+        .padding(.horizontal, Space.x3)
     }
 
     /// Connected, but Plaid is still assembling the history.
@@ -224,39 +124,40 @@ struct MoneyScreen: View {
     /// the first sync can honestly come back with nothing. Rendering that as an
     /// empty month would state, as fact, that the user spent nothing.
     private var fetchingState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Space.x2) {
             ProgressView()
             Text("Fetching your transactions")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
             Text("Your bank is sending the last few months. This usually takes a minute.")
-                .font(.footnote)
+                .font(.system(size: 13))
                 .multilineTextAlignment(.center)
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .foregroundStyle(MoneyPalette.quietInk(scheme))
             Button("Check again", action: onSync)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.accent)
+                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         }
-        .padding(.top, 40)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, Space.x3)
     }
 
     private var reconnectBanner: some View {
-        SoftCard {
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(snapshot.reconnectPrompt ?? "Your bank") needs you to sign in again")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text("Numbers below are from your last sync.")
-                        .font(.footnote)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-                Spacer()
+        HStack(spacing: Space.x1) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(snapshot.reconnectPrompt ?? "Your bank") needs you to sign in again")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Figures below are from your last sync.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(MoneyPalette.quietInk(scheme))
             }
+            Spacer(minLength: 0)
         }
+        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+        .padding(Space.x2)
+        .background(MoneyPalette.clay.resolve(scheme))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+        .padding(.bottom, Space.x1)
     }
 
     static func money(_ value: Double) -> String? {
@@ -269,23 +170,46 @@ struct MoneyScreen: View {
     }
 }
 
-#Preview("With data") {
-    MoneyScreen(snapshot: MoneySnapshot(
-        income: 5_200, expenses: 2_150, net: 3_050, savingsRate: 0.586, netWorth: 24_800,
-        recent: [
-            MoneyRow(id: UUID(), merchant: "Salary", category: "Income", amount: 5_200, date: .now, pending: false),
-            MoneyRow(id: UUID(), merchant: "Rent", category: "Housing", amount: -1_500, date: .now, pending: false),
-            MoneyRow(id: UUID(), merchant: "Groceries", category: "Food", amount: -650, date: .now, pending: true),
-        ],
-        budgets: [
-            BudgetBandRow(id: UUID(), name: "Eating out", limit: 300, spent: 210),
-            BudgetBandRow(id: UUID(), name: "Groceries", limit: 450, spent: 480),
-        ],
-        unclaimed: [UnclaimedBandRow(id: "GENERAL_MERCHANDISE", label: "Shopping", amount: 210, count: 4)],
-        monthLabel: "August 2026", isConnected: true
-    ))
-}
+extension MoneySnapshot {
+    /// What is costing more than it should, assembled where the data is rather
+    /// than in the view: the "what hurts" tab renders a list, and deciding what
+    /// belongs on it is a judgement about money, not about layout.
+    var pressurePoints: [PressurePoint] {
+        var points: [PressurePoint] = []
 
-#Preview("Empty") {
-    MoneyScreen(snapshot: MoneySnapshot())
+        for bucket in budgets where bucket.isOver {
+            points.append(PressurePoint(
+                id: "budget-\(bucket.id)",
+                title: bucket.name,
+                detail: "Over its limit by \(MoneyScreen.money(bucket.spent - bucket.limit) ?? "")",
+                amount: bucket.spent - bucket.limit
+            ))
+        }
+
+        // Unclaimed spend is not over anything, but it is money leaving with
+        // no bucket watching it, which is the same problem one step earlier.
+        let unclaimedTotal = unclaimed.reduce(0) { $0 + abs($1.amount) }
+        if unclaimedTotal > 0 {
+            points.append(PressurePoint(
+                id: "unclaimed",
+                title: "Unclaimed spending",
+                detail: "\(unclaimed.reduce(0) { $0 + $1.count }) charges no bucket is watching",
+                amount: unclaimedTotal
+            ))
+        }
+
+        // A subscription pile only counts as pressure when it is a real share
+        // of the month. Below that it is a fact, and it already has its own tab.
+        let recurringTotal = recurring.reduce(0) { $0 + $1.amount }
+        if expenses > 0, recurringTotal / expenses > 0.2 {
+            points.append(PressurePoint(
+                id: "recurring",
+                title: "Repeating payments",
+                detail: "\(Int((recurringTotal / expenses) * 100))% of this month's spending renews by itself",
+                amount: recurringTotal
+            ))
+        }
+
+        return points.sorted { $0.amount > $1.amount }
+    }
 }
