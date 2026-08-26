@@ -40,13 +40,44 @@ struct MoneyScreen: View {
         }
     }
 
+    @ViewBuilder
     private var loaded: some View {
+        if layout.isRegular { wideLayout } else { narrowLayout }
+    }
+
+    /// iPad: the picker lies down above the content, because the app's own nav
+    /// rail already owns the left edge and two vertical bars side by side is
+    /// chrome competing with chrome.
+    private var wideLayout: some View {
+        VStack(spacing: Space.x2) {
+            MoneySectionRail(selection: $section)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            sections
+        }
+        .frame(maxWidth: layout.maxContentWidth)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, layout.gutter)
+        .padding(.leading, layout.railInset)
+        .padding(.top, Space.x2)
+    }
+
+    private var narrowLayout: some View {
         HStack(alignment: .top, spacing: Space.x1) {
             MoneySectionRail(selection: $section)
                 .padding(.leading, Space.x1)
                 .padding(.top, Space.x2)
 
-            ScrollView {
+            sections
+                .padding(.top, Space.x2)
+                .padding(.trailing, Space.x2)
+        }
+        .frame(maxWidth: layout.maxContentWidth)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var sections: some View {
+        ScrollView {
                 VStack(spacing: 0) {
                     if snapshot.isSample { sampleBadge }
                     if snapshot.reconnectPrompt != nil { reconnectBanner }
@@ -64,15 +95,9 @@ struct MoneyScreen: View {
                     }
                     .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
                 }
-                .padding(.top, Space.x2)
-                .padding(.trailing, Space.x2)
                 .padding(.bottom, layout.contentBottomInset)
-            }
-            .scrollIndicators(.hidden)
         }
-        .frame(maxWidth: layout.maxContentWidth)
-        .frame(maxWidth: .infinity)
-        .padding(.leading, layout.railInset)
+        .scrollIndicators(.hidden)
     }
 
     /// Quiet by design. Sample data is a state this screen is in, not a fault,

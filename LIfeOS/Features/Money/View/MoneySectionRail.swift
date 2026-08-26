@@ -65,35 +65,95 @@ enum MoneySection: String, CaseIterable, Identifiable {
     }
 }
 
-/// The vertical tab rail down the side of the Money screen.
+/// The section picker for the Money screen.
 ///
-/// Down the side rather than across the top because the content is full-bleed
-/// colour bands: a horizontal tab strip would need its own background and
-/// would read as a second, competing header. A narrow rail lets each band run
-/// to the right edge and gives the selected section a block of its own colour
-/// to sit against, which is the same device the bands themselves use.
+/// Two shapes, and which one appears is not a style preference. On a phone the
+/// app's own nav bar is a floating pill along the bottom, so the side is free
+/// and a vertical rail is the right call: the content is full-bleed colour
+/// bands, and a horizontal strip would need its own background and read as a
+/// second, competing header.
+///
+/// On iPad that same nav bar stands on end against the left edge. A second
+/// vertical rail beside it is two parallel bars of chrome doing unrelated jobs,
+/// which is exactly as confusing as it sounds: the reader has to work out which
+/// bar changes the tab and which changes the section. So on a regular width
+/// this lies down into a row of chips above the content, and the screen keeps
+/// one vertical bar.
 struct MoneySectionRail: View {
     @Binding var selection: MoneySection
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layout) private var layout
     @Namespace private var marker
 
     private static let width: CGFloat = 62
 
     var body: some View {
+        if layout.isRegular { chips } else { rail }
+    }
+
+    /// iPad: a horizontal row, so the app's left nav rail stays the only
+    /// vertical bar on screen.
+    private var chips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Space.half) {
+                ForEach(MoneySection.allCases) { section in
+                    let isSelected = section == selection
+                    Button { select(section) } label: {
+                        HStack(spacing: Space.half + 2) {
+                            Image(systemName: section.systemImage)
+                                .font(.system(size: 13, weight: .semibold))
+                            // The full title here, not the rail's clipped one:
+                            // a horizontal chip has the room, and "Where it
+                            // went" says what "Spend" only gestures at.
+                            Text(section.title)
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(MoneyPalette.ink.resolve(scheme)
+                            .opacity(isSelected ? 1 : 0.45))
+                        .padding(.vertical, 9)
+                        .padding(.horizontal, Space.x2)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(section.tone.resolve(scheme))
+                                    .matchedGeometryEffect(id: "rail", in: marker)
+                            }
+                        }
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(section.title)
+                    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+                }
+            }
+            .padding(Space.half)
+        }
+        .scrollIndicators(.hidden)
+        .background(
+            Capsule().fill(MoneyPalette.ink.resolve(scheme).opacity(scheme == .dark ? 0.10 : 0.04))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Money sections")
+    }
+
+    private func select(_ section: MoneySection) {
+        if reduceMotion {
+            selection = section
+        } else {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                selection = section
+            }
+        }
+    }
+
+    /// iPhone: a vertical rail down the free side.
+    private var rail: some View {
         VStack(spacing: 2) {
             ForEach(MoneySection.allCases) { section in
                 let isSelected = section == selection
 
-                Button {
-                    if reduceMotion {
-                        selection = section
-                    } else {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
-                            selection = section
-                        }
-                    }
-                } label: {
+                Button { select(section) } label: {
                     VStack(spacing: 5) {
                         Image(systemName: section.systemImage)
                             .font(.system(size: 15, weight: .semibold))
