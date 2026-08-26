@@ -32,6 +32,9 @@ extension MoneySnapshot {
             recent: sampleRows,
             budgets: sampleBudgets,
             unclaimed: sampleUnclaimed,
+            categories: sampleCategories,
+            recurring: sampleRecurring,
+            goal: SavingsGoal(name: "Emergency fund", target: 6_000, saved: 1_768.42),
             monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
             isSample: true,
             isConnected: true
@@ -84,5 +87,39 @@ extension MoneySnapshot {
                 pending: pending
             )
         }
+    }
+
+    /// Shares are written to sum to the sample's own expenses figure, because
+    /// a category list that does not add up to the total above it is the
+    /// screen contradicting itself in front of the person reading it.
+    private static var sampleCategories: [CategoryRow] {
+        let total = 4_431.58
+        let parts: [(String, Double)] = [
+            ("Rent", 1_850.00),
+            ("Groceries", 412.87),
+            ("Transport", 163.15),
+            ("Eating out", 238.40),
+            ("Subscriptions", 47.97),
+            ("Health", 128.00),
+            ("Uncategorised", 1_591.19),
+        ]
+        return parts.map {
+            CategoryRow(id: $0.0, name: $0.0, amount: $0.1, share: $0.1 / total)
+        }
+    }
+
+    /// The pile most people forget they are paying, which is the point of the
+    /// tab: small enough to ignore monthly, not annually.
+    private static var sampleRecurring: [RecurringRow] {
+        [
+            RecurringRow(id: "Netflix", merchant: "Netflix", category: "Entertainment",
+                         amount: 19.99, months: 6),
+            RecurringRow(id: "Spotify", merchant: "Spotify", category: "Entertainment",
+                         amount: 10.99, months: 6),
+            RecurringRow(id: "iCloud", merchant: "iCloud", category: "Subscriptions",
+                         amount: 9.99, months: 5),
+            RecurringRow(id: "Gym", merchant: "Force Club", category: "Health",
+                         amount: 45.00, months: 4),
+        ]
     }
 }
