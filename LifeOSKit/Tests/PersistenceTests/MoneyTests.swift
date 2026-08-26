@@ -62,4 +62,58 @@ import SwiftData
         #expect(rows[0].amount == -22.5)
         #expect(rows[0].pending == false)
     }
+
+    @Test func transfersBetweenOwnAccountsDoNotCountAsIncomeOrSpending() {
+        // Moving 500 from savings to checking is not a 500 raise and not a 500
+        // shopping trip. Counting it as both leaves net correct while dragging the
+        // savings rate toward zero, which is the number the screen leads with.
+        let entries = [
+            MoneyEntry(date: day, amount: 4_000, merchant: "Salary",
+                       categoryCode: "INCOME_WAGES"),
+            MoneyEntry(date: day, amount: 500, merchant: "Transfer from Savings",
+                       categoryCode: "TRANSFER_IN_ACCOUNT_TRANSFER"),
+            MoneyEntry(date: day, amount: -500, merchant: "Transfer to Checking",
+                       categoryCode: "TRANSFER_OUT_ACCOUNT_TRANSFER"),
+            MoneyEntry(date: day, amount: -1_000, merchant: "Rent",
+                       categoryCode: "RENT_AND_UTILITIES_RENT"),
+        ]
+        let summary = summarise(entries: entries)
+
+        #expect(summary.income == 4_000)
+        #expect(summary.expenses == 1_000)
+        #expect(summary.savingsRate == 0.75)
+    }
+
+    @Test func payingTheCreditCardIsNotSpendingOnTopOfTheCardsPurchases() {
+        // The purchases already landed on the card. Counting the payment too bills
+        // the same money twice.
+        let entries = [
+            MoneyEntry(date: day, amount: 3_000, merchant: "Salary",
+                       categoryCode: "INCOME_WAGES"),
+            MoneyEntry(date: day, amount: -300, merchant: "Groceries",
+                       categoryCode: "FOOD_AND_DRINK_GROCERIES"),
+            MoneyEntry(date: day, amount: -300, merchant: "Card Payment",
+                       categoryCode: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"),
+        ]
+        let summary = summarise(entries: entries)
+
+        #expect(summary.expenses == 300)
+    }
+
+    @Test func manualEntriesHaveNoCategoryCodeAndAreNeverExcluded() {
+        let summary = summarise(entries: [
+            MoneyEntry(date: day, amount: -75, merchant: "Cash"),
+        ])
+        #expect(summary.expenses == 75)
+    }
+
+    @Test func otherLoanPaymentsAreRealSpending() {
+        // Only the credit card payment is a double count. A car loan payment is
+        // money genuinely leaving.
+        let summary = summarise(entries: [
+            MoneyEntry(date: day, amount: -450, merchant: "Auto Loan",
+                       categoryCode: "LOAN_PAYMENTS_CAR_PAYMENT"),
+        ])
+        #expect(summary.expenses == 450)
+    }
 }
