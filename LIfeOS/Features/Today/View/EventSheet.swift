@@ -134,13 +134,19 @@ struct EventSheet: View {
         isAllDay ? [.date] : [.date, .hourAndMinute]
     }
 
-    /// End clamped to at least 15 minutes after start on save; a user who
-    /// drags end before start gets corrected silently rather than blocked.
+    /// End clamped on save so a user who drags end before start gets
+    /// corrected silently rather than blocked. A timed event floors at 15
+    /// minutes; an all-day event only floors at `startDate` itself, since
+    /// end == start is its normal single-day shape and a 15-minute floor
+    /// would falsify it into a timed-looking span.
     private var draft: CalendarEventDraft {
-        CalendarEventDraft(
+        let clampedEnd = isAllDay
+            ? max(endDate, startDate)
+            : max(endDate, startDate.addingTimeInterval(15 * 60))
+        return CalendarEventDraft(
             title: title,
             startDate: startDate,
-            endDate: max(endDate, startDate.addingTimeInterval(15 * 60)),
+            endDate: clampedEnd,
             isAllDay: isAllDay,
             location: location.isEmpty ? nil : location,
             notes: notes.isEmpty ? nil : notes
