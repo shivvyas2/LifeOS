@@ -38,67 +38,6 @@ struct WhoopDetailScreen: View {
     }
 }
 
-/// One metric over the window, with the baseline drawn in.
-struct TrendChart: View {
-    let title: String
-    let unit: String?
-    let series: TrendSeries
-    var color: Color = ModuleHue.recovery.top
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        // Nothing recorded means no chart, not an empty axis.
-        if series.points.contains(where: { $0.value != nil }) {
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        Spacer()
-                        if let average = series.average {
-                            Text("avg \(formatted(average))\(unit.map { " \($0)" } ?? "")")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        }
-                    }
-
-                    Chart {
-                        // A day with no reading contributes no mark at all, so the
-                        // gap stays visible instead of being drawn as a zero.
-                        ForEach(series.points) { point in
-                            if let value = point.value {
-                                BarMark(
-                                    x: .value("Day", point.date, unit: .day),
-                                    y: .value(title, value)
-                                )
-                                .foregroundStyle(color)
-                                .cornerRadius(3)
-                            }
-                        }
-                        if let average = series.average {
-                            RuleMark(y: .value("Average", average))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .day, count: 4)) { _ in
-                            AxisValueLabel(format: .dateTime.day().month(.abbreviated))
-                        }
-                    }
-                    .frame(height: 120)
-                }
-            }
-        }
-    }
-
-    private func formatted(_ value: Double) -> String {
-        value >= 100 ? "\(Int(value))" : String(format: "%.1f", value)
-    }
-}
-
 /// One column per night so composition is compared by eye, not stacked inside
 /// a single chart box.
 struct SleepCompositionChart: View {
