@@ -1,14 +1,15 @@
 import Foundation
 
 /// Decides whether an automatic sync is due, so the app can refresh itself on
-/// becoming active instead of waiting for a tap on "Sync now".
+/// becoming active instead of waiting for a tap on "Sync now". Shared by every
+/// integration that pulls on a schedule.
 ///
 /// Two clocks matter, not one. Staleness handles the common case: data older
 /// than an hour is worth refreshing. The day boundary handles the one that
 /// matters most: the first open of the morning must pull the night's sleep,
 /// and a sync from 23:50 is only minutes old while still knowing nothing
 /// about the night.
-public enum WhoopSyncPolicy {
+public enum SyncStalenessPolicy {
     public static func shouldSync(
         lastSync: Date?,
         now: Date = .now,

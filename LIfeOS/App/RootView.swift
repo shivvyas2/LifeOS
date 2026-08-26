@@ -38,6 +38,7 @@ struct RootView: View {
     @State private var recovery = RecoveryViewModel()
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
+    @State private var plaid = PlaidConnectionViewModel()
     @State private var plan = PlanViewModel()
     @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
@@ -82,7 +83,7 @@ struct RootView: View {
             QuickLogSheet(model: quickLog)
         }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop, health: health, onSignOut: onSignOut)
+            SettingsScreen(model: settings, whoop: whoop, health: health, plaid: plaid, onSignOut: onSignOut)
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
@@ -221,7 +222,12 @@ struct RootView: View {
                     )
                 }
             case .money:
-                MoneyScreen(snapshot: money.snapshot) { showAddMoney = true }
+                MoneyScreen(
+                    snapshot: money.snapshot,
+                    onAdd: { showAddMoney = true },
+                    onConnect: { plaid.connect() },
+                    onSync: { Task { await plaid.sync(); money.load(connection: plaid) } }
+                )
             case .plan:
                 PlanScreen(
                     snapshot: plan.snapshot,
@@ -308,6 +314,7 @@ struct RootView: View {
         recovery.attach(context)
         wellness.attach(context)
         money.attach(context)
+        plaid.attach(context)
         plan.attach(context)
         life.attach(context)
         settings.attach(context)
@@ -321,7 +328,11 @@ struct RootView: View {
         activity.load()
         recovery.load()
         wellness.load()
-        money.load()
+        money.load(connection: plaid)
+        Task {
+            await plaid.syncIfDue()
+            money.load(connection: plaid)
+        }
         plan.load()
         life.load()
         settings.load()

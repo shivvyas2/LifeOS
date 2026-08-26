@@ -1,11 +1,12 @@
 import SwiftUI
 import DesignSystem
 
-/// Full-screen connections, not a cramped Settings section. Whoop is live;
-/// the others are named so the empty slots are honest rather than hidden.
+/// Full-screen connections, not a cramped Settings section. All three
+/// integrations are live: Whoop, Apple Health and bank accounts via Plaid.
 struct ConnectionsSettingsScreen: View {
     @Bindable var whoop: WhoopConnectionViewModel
     @Bindable var health: HealthConnectionViewModel
+    @Bindable var plaid: PlaidConnectionViewModel
     @Environment(\.colorScheme) private var scheme
     @State private var showWhoop = false
 
@@ -16,11 +17,7 @@ struct ConnectionsSettingsScreen: View {
                     whoopCard
 
                     healthCard
-                    comingSoon(
-                        title: "Bank accounts",
-                        detail: "Income and spending via Plaid. Arrives in the next release.",
-                        systemImage: "dollarsign.circle.fill"
-                    )
+                    bankCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -128,6 +125,55 @@ struct ConnectionsSettingsScreen: View {
         }
     }
 
+    private var bankCard: some View {
+        Button {
+            if case .connected = plaid.state {} else { plaid.connect() }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "dollarsign.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Bank accounts")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Text(plaid.statusDetail)
+                        .font(.system(size: 13))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+
+                Spacer()
+
+                Text(bankActionTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(LifeOSTokens.accent)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5), lineWidth: 1)
+                    }
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var bankActionTitle: String {
+        switch plaid.state {
+        // The tap only connects, so the connected row shows a state, not a verb.
+        case .connected: "Connected"
+        case .connecting: "…"
+        case .unconfigured: "Setup"
+        default: "Connect"
+        }
+    }
+
     private var whoopActionTitle: String {
         switch whoop.state {
         case .connected: "Sync"
@@ -137,32 +183,4 @@ struct ConnectionsSettingsScreen: View {
         }
     }
 
-    private func comingSoon(title: String, detail: String, systemImage: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(LifeOSTokens.tileSurface.resolve(scheme)))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                Text(detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(LifeOSTokens.cardSurface.resolve(scheme))
-                .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 12, y: 4)
-        )
-        .opacity(0.7)
-    }
 }

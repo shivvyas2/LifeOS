@@ -27,6 +27,16 @@ enum AppConfig {
         supabaseURL?.appendingPathComponent("functions/v1/whoop-token")
     }
 
+    /// The four Plaid functions live under here. The Plaid client id and
+    /// secret are deliberately absent: they exist only in the function
+    /// environment, because anything in the app bundle can be read out of the
+    /// `.ipa`, and a Plaid secret reads every connected bank account.
+    static var plaidFunctionsBase: URL? {
+        supabaseURL?.appendingPathComponent("functions/v1")
+    }
+
+    static var isPlaidConfigured: Bool { plaidFunctionsBase != nil }
+
     /// The scheme `ASWebAuthenticationSession` waits for.
     ///
     /// Deliberately not derived from `whoopRedirectURI`. Whoop requires an

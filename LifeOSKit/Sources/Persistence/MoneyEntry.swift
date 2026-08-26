@@ -29,6 +29,11 @@ public final class MoneyEntry {
 
     public var merchant: String
     public var category: String?
+    /// Plaid's raw `personal_finance_category.detailed`, or nil for a manual
+    /// entry. Kept beside `category` rather than replacing it because
+    /// `category` is a display string: keying the rollup rule off display text
+    /// would mean renaming a label silently changes the savings rate.
+    public var categoryCode: String?
     public var accountID: String?
     public var accountName: String?
     public var pending: Bool
@@ -41,6 +46,7 @@ public final class MoneyEntry {
         amount: Double,
         merchant: String,
         category: String? = nil,
+        categoryCode: String? = nil,
         currencyCode: String = "USD",
         source: MoneySource = .manual,
         externalID: String? = nil,
@@ -56,6 +62,7 @@ public final class MoneyEntry {
         self.currencyCode = currencyCode
         self.merchant = merchant
         self.category = category
+        self.categoryCode = categoryCode
         self.accountID = accountID
         self.accountName = accountName
         self.pending = pending
@@ -133,11 +140,31 @@ public struct MoneySummary: Sendable, Equatable {
     }
 }
 
+/// Which categories are money moving rather than money earned or spent.
+///
+/// A transfer between your own accounts and a credit card payment both appear
+/// as a real debit and a real credit. Counting them leaves `net` correct while
+/// overstating income and expenses, and the savings rate is computed from
+/// those two, not from net.
+public enum MoneyCategoryRule {
+    public static func isTransferLike(_ code: String?) -> Bool {
+        guard let code else { return false }
+        if code == "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" { return true }
+        // Plaid's detailed codes extend the primary with an underscore, e.g.
+        // TRANSFER_IN_ACCOUNT_TRANSFER. Match the underscore-delimited prefix
+        // rather than listing every detail Plaid may add; without the underscore
+        // a code that merely starts with the same letters would be excluded as if
+        // it were a transfer.
+        return code.hasPrefix("TRANSFER_IN_") || code.hasPrefix("TRANSFER_OUT_")
+    }
+}
+
 /// Rolls entries into a summary. Pure and testable: no store, no context.
 public func summarise(entries: [MoneyEntry], accounts: [MoneyAccount] = []) -> MoneySummary {
     var income = 0.0
     var expenses = 0.0
-    for entry in entries where !entry.pending {
+    for entry in entries where !entry.pending
+        && !MoneyCategoryRule.isTransferLike(entry.categoryCode) {
         if entry.amount > 0 { income += entry.amount } else { expenses += -entry.amount }
     }
     return MoneySummary(
