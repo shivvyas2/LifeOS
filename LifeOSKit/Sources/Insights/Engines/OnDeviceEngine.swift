@@ -13,7 +13,7 @@ public struct OnDeviceEngine: Engine {
     public func run<T: CoachTask>(_ task: T, _ context: T.Context) async throws -> T.Output {
         let session = LanguageModelSession(instructions: task.instructions)
         let response = try await session.respond(
-            to: task.prompt(context),
+            to: task.prompt(context, for: .onDevice),
             generating: T.Output.self
         )
         return response.content

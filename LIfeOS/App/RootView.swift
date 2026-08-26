@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import DesignSystem
 import Persistence
+import Insights
 import Integrations
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
@@ -398,6 +399,42 @@ struct RootView: View {
         settings.attach(context)
         quickLog.attach(context)
         coach.attach(context)
+
+        // Direct capture, not weak: `money` and `life` are RootView's own
+        // `@State` view models, so they outlive `coach` for as long as
+        // `coach` itself does, and neither holds a reference back to the
+        // coach that would make this a cycle.
+        coach.bundleExtras = { [money, life] in
+            let snapshot = money.snapshot
+            return (
+                money: snapshot.isConnected
+                    ? ContextBundle.Money(
+                        income: snapshot.income,
+                        expenses: snapshot.expenses,
+                        savingsRate: snapshot.savingsRate,
+                        netWorth: snapshot.netWorth,
+                        recent: snapshot.recent.prefix(30).map {
+                            ContextBundle.Money.Transaction(
+                                merchant: $0.merchant, category: $0.category,
+                                amount: $0.amount, date: $0.date)
+                        })
+                    : nil,
+                sectors: life.cards.map { card in
+                    // Newest-last history: the delta is simply the latest
+                    // month's score minus the one before it.
+                    let delta: Int? = {
+                        guard card.history.count >= 2,
+                              let last = card.history[card.history.count - 1].value,
+                              let previous = card.history[card.history.count - 2].value
+                        else { return nil }
+                        return Int(last - previous)
+                    }()
+                    return ContextBundle.Sector(name: card.sector.title, score: card.score, delta: delta)
+                },
+                firstName: nil
+            )
+        }
+
         if assistantModel == nil {
             assistantModel = AssistantViewModel(context: context)
         }

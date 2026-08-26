@@ -32,13 +32,10 @@ public protocol CoachTask: Sendable {
     /// Stable across requests. Anything that varies belongs in `prompt`.
     var instructions: String { get }
 
-    /// Has no audience parameter yet, so a `Context` of `MetricsDigest`
-    /// always renders through `digest.promptLines`, which defaults to
-    /// `.onDevice`. That output is on-device-shaped: it carries the raw
-    /// Whoop series that must not leave the phone. A cloud caller cannot use
-    /// this method as written; `prompt` needs an audience parameter before a
-    /// remote engine can call it safely.
-    func prompt(_ context: Context) -> String
+    /// Renders the context for a given audience. `.onDevice` may carry raw
+    /// series; `.offDevice` must never, which is why the audience is a
+    /// parameter here rather than a policy inside each engine.
+    func prompt(_ context: Context, for audience: MetricsDigest.Audience) -> String
 }
 
 public struct BriefTask: CoachTask {
@@ -58,11 +55,11 @@ public struct BriefTask: CoachTask {
         """
     }
 
-    public func prompt(_ digest: MetricsDigest) -> String {
+    public func prompt(_ digest: MetricsDigest, for audience: MetricsDigest.Audience) -> String {
         """
         Here are the most recent days:
 
-        \(digest.promptLines)
+        \(digest.promptLines(for: audience))
 
         Write today's brief.
         """
@@ -71,7 +68,7 @@ public struct BriefTask: CoachTask {
 
 public struct AnswerTask: CoachTask {
     public typealias Output = CoachAnswer
-    public typealias Context = MetricsDigest
+    public typealias Context = ContextBundle
 
     public let question: String
 
@@ -83,17 +80,18 @@ public struct AnswerTask: CoachTask {
 
     public var instructions: String {
         """
-        You answer questions about one person's health metrics.
+        You answer questions about one person's life: their health metrics,
+        money, and life-sector scores.
         Cite only numbers that appear in the data given to you. If the data
         does not contain the answer, say so plainly rather than guessing.
         """
     }
 
-    public func prompt(_ digest: MetricsDigest) -> String {
+    public func prompt(_ bundle: ContextBundle, for audience: MetricsDigest.Audience) -> String {
         """
-        Here are the most recent days:
+        Here is what their data shows:
 
-        \(digest.promptLines)
+        \(bundle.promptLines(for: audience))
 
         Question: \(question)
         """

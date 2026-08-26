@@ -58,7 +58,7 @@ public struct SectorNoteTask: CoachTask {
         """
     }
 
-    public func prompt(_ context: Context) -> String {
+    public func prompt(_ context: Context, for audience: MetricsDigest.Audience) -> String {
         """
         Area: \(context.sectorTitle)
 

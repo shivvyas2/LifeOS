@@ -39,6 +39,13 @@ final class CoachViewModel {
     private let router = CoachRouter(onDevice: OnDeviceEngine(), remote: nil)
     private let speech = SpeechListener()
 
+    /// Set by RootView; pulls the money and sector context that live in other
+    /// view models. A closure rather than references, so the coach does not
+    /// hold screens it never renders.
+    var bundleExtras: (@MainActor () -> (money: ContextBundle.Money?,
+                                         sectors: [ContextBundle.Sector],
+                                         firstName: String?))?
+
     func attach(_ context: ModelContext) {
         self.context = context
         speech.onPartial = { [weak self] text in
@@ -133,7 +140,14 @@ final class CoachViewModel {
                 sleeps: try metricsStore.sleepRecords(from: start, to: end),
                 workouts: try metricsStore.workouts(from: start, to: end)
             )
-            let result = await router.run(AnswerTask(question: question), digest)
+            let extras = bundleExtras?()
+            let bundle = ContextBundle(
+                digest: digest,
+                money: extras?.money,
+                sectors: extras?.sectors ?? [],
+                firstName: extras?.firstName
+            )
+            let result = await router.run(AnswerTask(question: question), bundle)
             switch result {
             case .answered(let output), .degraded(let output):
                 answer = output.answer
