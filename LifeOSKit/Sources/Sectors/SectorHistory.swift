@@ -118,7 +118,7 @@ public struct SectorHistory: Sendable, Equatable {
             months: decided,
             questions: tracks,
             notes: notes,
-            observations: [] // Task 2 replaces this
+            observations: SectorObservations.all(months: decided, questions: tracks)
         )
     }
 }
