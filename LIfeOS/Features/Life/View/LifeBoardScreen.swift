@@ -16,6 +16,9 @@ import Sectors
 /// nothing outside this screen needs to know the close sheet is open.
 struct LifeBoardScreen: View {
     let model: LifeBoardViewModel
+    /// Called with the sector whose full tab should open. The board does not
+    /// know how the tab bar works, and `AppTab` stays private to RootView.
+    let onOpenTab: (LifeSector) -> Void
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -28,41 +31,60 @@ struct LifeBoardScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.x3) {
-                if let month = model.monthAwaitingClose {
-                    Button {
-                        closeMonth = month
-                        showClose = true
-                    } label: {
-                        AlertBanner(messages: [
-                            "Close \(month.formatted(.dateTime.month(.wide).year())): score your nine sectors for the month."
-                        ])
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.x3) {
+                    if let month = model.monthAwaitingClose {
+                        Button {
+                            closeMonth = month
+                            showClose = true
+                        } label: {
+                            AlertBanner(messages: [
+                                "Close \(month.formatted(.dateTime.month(.wide).year())): score your nine sectors for the month."
+                            ])
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+
+                    header
+
+                    LazyVGrid(columns: columns, spacing: Space.x2) {
+                        ForEach(model.cards) { card in
+                            NavigationLink(value: card.sector) {
+                                SectorCard(card: card)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
-
-                header
-
-                LazyVGrid(columns: columns, spacing: Space.x2) {
-                    ForEach(model.cards) { card in
-                        SectorCard(card: card)
-                    }
+                .frame(maxWidth: layout.maxContentWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, layout.gutter)
+                .padding(.leading, layout.railInset)
+                .padding(.top, Space.x3)
+                .padding(.bottom, layout.contentBottomInset)
+            }
+            .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+            .navigationDestination(for: LifeSector.self) { sector in
+                SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
+            }
+            .sheet(isPresented: $showClose) {
+                MonthlyCloseScreen(month: closeMonth) {
+                    showClose = false
+                    model.load()
                 }
             }
-            .frame(maxWidth: layout.maxContentWidth)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, layout.gutter)
-            .padding(.leading, layout.railInset)
-            .padding(.top, Space.x3)
-            .padding(.bottom, layout.contentBottomInset)
         }
-        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .sheet(isPresented: $showClose) {
-            MonthlyCloseScreen(month: closeMonth) {
-                showClose = false
-                model.load()
-            }
+    }
+
+    /// Only Body, Money and Mission own a full tab; every other sector gets
+    /// no row on its detail screen.
+    private func openTabClosure(for sector: LifeSector) -> (() -> Void)? {
+        switch sector {
+        case .body, .money, .mission:
+            return { onOpenTab(sector) }
+        default:
+            return nil
         }
     }
 

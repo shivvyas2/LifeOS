@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import DesignSystem
+import Persistence
 
 /// Composition root for the tab hierarchy: owns every feature's view model,
 /// hands each one the model context, and reloads them when the store changes.
@@ -230,7 +231,14 @@ struct RootView: View {
                     onDelete: { plan.delete(id: $0) }
                 )
             case .life:
-                LifeBoardScreen(model: life)
+                LifeBoardScreen(model: life) { sector in
+                    switch sector {
+                    case .body: tab = .health
+                    case .money: tab = .money
+                    case .mission: tab = .plan
+                    default: break
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
