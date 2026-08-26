@@ -2112,9 +2112,12 @@ public struct PlaidClient: PlaidAPI {
         try await post("plaid-sync", body: ["cursors": cursors])
     }
 
+    /// The status is the outcome here, so the body goes unread. Decoding a field
+    /// that carries nothing only adds a way for a disconnect that actually
+    /// worked to be reported as a failure, and this is the call that stops an
+    /// Item billing every month.
     public func disconnect(itemID: String) async throws {
-        struct Response: Decodable { let ok: Bool }
-        let _: Response = try await post("plaid-disconnect", body: ["item_id": itemID])
+        try await post("plaid-disconnect", body: ["item_id": itemID])
     }
 
     private func post<T: Decodable>(_ function: String, body: [String: Any]) async throws -> T {
