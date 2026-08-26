@@ -90,4 +90,23 @@ import Persistence
             _ = try PlaidMapping.ingestRows(from: [broken])
         }
     }
+
+    @Test func aTransactionKeepsItsDayInATimeZoneWestOfUTC() throws {
+        // Parsed as UTC and normalized in New York, the 1st becomes the 31st, and a
+        // transaction silently moves into the previous month's totals.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+
+        let transaction = PlaidTransaction(
+            transaction_id: "txn_month_boundary", account_id: "acc", amount: 25,
+            iso_currency_code: "USD", date: "2026-09-01", name: "Vendor",
+            merchant_name: nil, pending: false, personal_finance_category: nil
+        )
+
+        let rows = try PlaidMapping.ingestRows(from: [transaction], calendar: calendar)
+        let stored = calendar.startOfDay(for: try #require(rows.first).date)
+
+        #expect(calendar.component(.day, from: stored) == 1)
+        #expect(calendar.component(.month, from: stored) == 9)
+    }
 }

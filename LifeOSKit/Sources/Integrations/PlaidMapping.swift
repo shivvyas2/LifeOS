@@ -13,28 +13,38 @@ public enum PlaidMappingError: Error, Equatable {
 /// positive is money in. Get this backwards and salary becomes the month's
 /// largest expense, the savings rate inverts, and nothing crashes.
 public enum PlaidMapping {
-    private static let dateFormatter: DateFormatter = {
+    /// Plaid sends a bare calendar date, "2026-08-24", with no time in it.
+    ///
+    /// It must be parsed in the same calendar `MoneyStore` normalizes with,
+    /// because the store applies `startOfDay` on the way in. Pinning this to UTC
+    /// while the store uses `Calendar.current` puts them a day apart for every
+    /// device west of Greenwich: a transaction Plaid dates the 1st is stored as
+    /// the 31st in New York, which moves it into the previous month's income and
+    /// expense totals.
+    private static func parse(_ text: String, calendar: Calendar) -> Date? {
         let formatter = DateFormatter()
         // Fixed format needs a fixed locale, or a device set to a non-Gregorian
         // calendar parses this differently.
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
+        return formatter.date(from: text)
+    }
 
     /// Throws rather than skipping a row it cannot read. A silently dropped
     /// transaction is a wrong total with no error anywhere in the app; a thrown
     /// error fails the sync and leaves the last known-good snapshot on screen.
     public static func ingestRows(
         from transactions: [PlaidTransaction],
-        accounts: [PlaidAccount] = []
+        accounts: [PlaidAccount] = [],
+        calendar: Calendar = .current
     ) throws -> [MoneyIngestRow] {
         let namesByID = Dictionary(
             accounts.map { ($0.account_id, $0.name) }, uniquingKeysWith: { first, _ in first }
         )
         return try transactions.map { transaction in
-            guard let date = dateFormatter.date(from: transaction.date) else {
+            guard let date = parse(transaction.date, calendar: calendar) else {
                 throw PlaidMappingError.unreadableDate(transaction.date)
             }
             return MoneyIngestRow(
