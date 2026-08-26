@@ -14,6 +14,7 @@ public enum LifeOSContainer {
         MoneyAccount.self,
         SectorScore.self,
         CheckInAnswer.self,
+        CalendarEvent.self,
     ])
 
     public static func make(inMemory: Bool = false) throws -> ModelContainer {
