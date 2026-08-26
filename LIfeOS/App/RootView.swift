@@ -221,16 +221,24 @@ struct RootView: View {
             switch tab {
             case .today:
                 NavigationStack {
-                    TodayScreen(snapshot: today.snapshot, onSelectDay: { today.select($0) })
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button { showSettings = true } label: {
-                                    Image(systemName: "gearshape.fill")
-                                }
-                                .tint(LifeOSTokens.primaryText.resolve(scheme))
-                                .accessibilityLabel("Settings")
+                    TodayScreen(
+                        snapshot: today.snapshot,
+                        onSelectDay: { today.select($0) },
+                        // Task 3 wires these for real; the app just needs to build.
+                        onConnectCalendar: {},
+                        onAddEvent: {},
+                        onTapEvent: { _ in },
+                        onOpenToday: {}
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button { showSettings = true } label: {
+                                Image(systemName: "gearshape.fill")
                             }
+                            .tint(LifeOSTokens.primaryText.resolve(scheme))
+                            .accessibilityLabel("Settings")
                         }
+                    }
                 }
             case .health:
                 NavigationStack {
