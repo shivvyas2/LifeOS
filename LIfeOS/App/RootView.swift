@@ -51,6 +51,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showAddPlan = false
     @State private var showAddMoney = false
+    @State private var showBudgets = false
     @State private var showJournal = false
     @State private var showCoach = false
     @State private var showWhoop = false
@@ -104,6 +105,9 @@ struct RootView: View {
             AddMoneySheet { merchant, amount, isIncome, category in
                 money.add(merchant: merchant, amount: amount, isIncome: isIncome, category: category)
             }
+        }
+        .sheet(isPresented: $showBudgets, onDismiss: { money.load(connection: plaid) }) {
+            BucketEditorSheet(model: money)
         }
         .environment(\.layout, metrics)
         .task {
@@ -226,7 +230,8 @@ struct RootView: View {
                     snapshot: money.snapshot,
                     onAdd: { showAddMoney = true },
                     onConnect: { plaid.connect() },
-                    onSync: { Task { await plaid.sync(); money.load(connection: plaid) } }
+                    onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
+                    onEditBudgets: { showBudgets = true }
                 )
             case .plan:
                 PlanScreen(

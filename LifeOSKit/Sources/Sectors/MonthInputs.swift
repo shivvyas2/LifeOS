@@ -17,6 +17,8 @@ public struct MonthInputs: Sendable {
     /// negative out.
     public var amounts: [Double]
     public var previousAmounts: [Double]
+    /// This month's budgets, measured, or nil when no buckets exist.
+    public var budget: BudgetReport?
 
     /// Goals and habits whose status moved this month (`updatedAt` inside
     /// the month window).
@@ -39,6 +41,7 @@ public struct MonthInputs: Sendable {
         targets: GoalTargets = .default,
         amounts: [Double] = [],
         previousAmounts: [Double] = [],
+        budget: BudgetReport? = nil,
         planStatuses: [PlanStatus] = [],
         goalStatuses: [PlanStatus] = [],
         habitTickRate: Double? = nil,
@@ -50,6 +53,7 @@ public struct MonthInputs: Sendable {
         self.targets = targets
         self.amounts = amounts
         self.previousAmounts = previousAmounts
+        self.budget = budget
         self.planStatuses = planStatuses
         self.goalStatuses = goalStatuses
         self.habitTickRate = habitTickRate

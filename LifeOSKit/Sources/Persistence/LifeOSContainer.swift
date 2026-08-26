@@ -12,6 +12,7 @@ public enum LifeOSContainer {
         HabitTick.self,
         MoneyEntry.self,
         MoneyAccount.self,
+        SpendBucket.self,
         SectorScore.self,
         CheckInAnswer.self,
         CalendarEvent.self,

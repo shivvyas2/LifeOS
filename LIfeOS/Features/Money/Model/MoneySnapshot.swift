@@ -8,6 +8,8 @@ struct MoneySnapshot: Equatable {
     var savingsRate: Double?
     var netWorth: Double?
     var recent: [MoneyRow] = []
+    var budgets: [BudgetBandRow] = []
+    var unclaimed: [UnclaimedBandRow] = []
     var monthLabel: String = ""
     var isConnected = false
     /// A bank is linked, whether or not any transaction has arrived yet.
@@ -32,4 +34,22 @@ struct MoneyRow: Equatable, Identifiable {
     let amount: Double
     let date: Date
     let pending: Bool
+}
+
+struct BudgetBandRow: Equatable, Identifiable {
+    let id: UUID
+    let name: String
+    let limit: Double
+    let spent: Double
+
+    var isOver: Bool { spent > limit }
+    var progress: Double { limit > 0 ? min(spent / limit, 1) : 0 }
+}
+
+struct UnclaimedBandRow: Equatable, Identifiable {
+    /// The claim key, or "uncategorised" for the nil key.
+    let id: String
+    let label: String
+    let amount: Double
+    let count: Int
 }
