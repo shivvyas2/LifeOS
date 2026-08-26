@@ -231,12 +231,19 @@ struct RootView: View {
                     onDelete: { plan.delete(id: $0) }
                 )
             case .life:
+                // `LifeSector.ownsTab` in the Sectors package is the one
+                // decision about which three sectors get this row at all;
+                // `LifeBoardScreen` only ever calls this closure for those
+                // three. `default` below is reachable only if this switch
+                // has drifted out of sync with that decision, which should
+                // fail loudly rather than swallow the tap.
                 LifeBoardScreen(model: life) { sector in
                     switch sector {
                     case .body: tab = .health
                     case .money: tab = .money
                     case .mission: tab = .plan
-                    default: break
+                    default:
+                        assertionFailure("RootView has no tab mapped for \(sector)")
                     }
                 }
             }

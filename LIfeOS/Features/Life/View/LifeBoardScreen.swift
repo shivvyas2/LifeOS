@@ -77,15 +77,10 @@ struct LifeBoardScreen: View {
         }
     }
 
-    /// Only Body, Money and Mission own a full tab; every other sector gets
-    /// no row on its detail screen.
+    /// `LifeSector.ownsTab` is the one decision about which sectors own a
+    /// full tab; every other sector gets no row on its detail screen.
     private func openTabClosure(for sector: LifeSector) -> (() -> Void)? {
-        switch sector {
-        case .body, .money, .mission:
-            return { onOpenTab(sector) }
-        default:
-            return nil
-        }
+        sector.ownsTab ? { onOpenTab(sector) } : nil
     }
 
     /// The header carries the two `BoardSummary` facts. There is no combined
