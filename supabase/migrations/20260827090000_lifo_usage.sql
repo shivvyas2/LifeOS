@@ -31,3 +31,7 @@ $$;
 
 -- Only the service role may spend; definer or not, keep the front door shut.
 revoke execute on function public.lifo_debit from public, anon, authenticated;
+
+-- Revoking PUBLIC above strips the default grant. Explicit grant to service_role
+-- so the Edge Function can actually call this.
+grant execute on function public.lifo_debit(uuid, bigint) to service_role;
