@@ -104,16 +104,7 @@ private struct SectorDeckCard: View {
         .frame(height: height, alignment: .top)
         .background(
             RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-                .fill(SectorPalette.tone(card.sector).resolve(scheme))
-        )
-        // Cast upward, onto the card this one covers. A shadow falling the
-        // usual way would land on the card in front and the deck would read
-        // inside out. An open card's shadow deepens: that, plus the raised
-        // z-order, is what sells it as lifted rather than merely taller.
-        .shadow(
-            color: .black.opacity(shadowOpacity),
-            radius: isOpen ? 22 : 10,
-            y: isOpen ? 6 : -3
+                .fill(fill)
         )
         .accessibilityElement(children: isOpen ? .contain : .ignore)
         .accessibilityLabel(accessibilityText)
@@ -121,9 +112,19 @@ private struct SectorDeckCard: View {
         .accessibilityHint(isOpen ? "Collapse" : "Expand for the trend")
     }
 
-    private var shadowOpacity: Double {
-        let base = scheme == .dark ? 0.34 : 0.12
-        return isOpen ? base * 1.8 : base
+    /// No shadow on these cards: the deck separates neighbours by tone, and
+    /// an open card is sold as lifted by its raised z-order and the movement
+    /// of the cards below it. The wash brightening toward the top keeps the
+    /// deck light; in dark mode the whole tone steps up so nine stacked cards
+    /// never read as a black slab, while staying deep enough for the light ink.
+    private var fill: LinearGradient {
+        let lifted = SectorPalette.tone(card.sector).resolve(scheme)
+            .mix(with: .white, by: scheme == .dark ? 0.12 : 0)
+        return LinearGradient(
+            colors: [lifted.mix(with: .white, by: scheme == .dark ? 0.12 : 0.35), lifted],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     /// Title and score on one line, sized to fill the visible band.
