@@ -35,7 +35,12 @@ final class FriendsViewModel {
 
     private let sessions: any AuthSessionStoring
     private var myUserID: UUID?
-    private var accessToken: String?
+    /// Read fresh from the keychain on every call rather than captured once.
+    /// `AppShell` refreshes the session hourly and on foregrounding; a token
+    /// snapshotted at `appear()` would strand a long-open screen with 401s
+    /// once that refresh rotates it. Identity does not rotate, so `myUserID`
+    /// is the one thing still safe to capture.
+    private var accessToken: String? { sessions.load()?.accessToken }
 
     init(sessions: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.sessions = sessions
@@ -55,7 +60,6 @@ final class FriendsViewModel {
             return
         }
         myUserID = userID
-        accessToken = session.accessToken
 
         let name = ProfileStore.load().fullName
         if let api, !name.isEmpty {
@@ -175,6 +179,19 @@ final class FriendsViewModel {
             await load()
         } catch {
             errorMessage = "Could not accept request"
+        }
+    }
+
+    /// Ends a friendship row and reloads. The same call for both endings of
+    /// its life: declining a pending request and removing an accepted
+    /// friend, since either way the row simply stops existing.
+    func remove(friendshipID: Int) async {
+        guard let api, let accessToken else { return }
+        do {
+            try await api.remove(friendshipID: friendshipID, accessToken: accessToken)
+            await load()
+        } catch {
+            errorMessage = "Could not remove"
         }
     }
 

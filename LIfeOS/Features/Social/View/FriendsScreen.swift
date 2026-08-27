@@ -133,6 +133,12 @@ struct FriendsScreen: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(primary)
                     Spacer(minLength: 8)
+                    Button("Decline") {
+                        Task { await viewModel.remove(friendshipID: entry.friendshipID) }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(secondary)
                     CapsuleButton(title: "Accept") {
                         Task { await viewModel.accept(entry.friendshipID) }
                     }
@@ -166,6 +172,11 @@ struct FriendsScreen: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Remove friend", systemImage: "person.badge.minus", role: .destructive) {
+                            Task { await viewModel.remove(friendshipID: entry.friendshipID) }
+                        }
+                    }
                 }
             }
         }

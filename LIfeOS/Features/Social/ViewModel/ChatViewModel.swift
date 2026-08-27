@@ -22,7 +22,13 @@ final class ChatViewModel {
 
     private let sessions: any AuthSessionStoring
     private(set) var myUserID: UUID?
-    private var accessToken: String?
+    /// Read fresh from the keychain on every call rather than captured once
+    /// at `init`. `AppShell` refreshes the session hourly and on
+    /// foregrounding, and a chat can stay open across both; a captured token
+    /// would strand it with endless 401s once that refresh rotates it.
+    /// Identity does not rotate, so `myUserID` is the one thing still safe to
+    /// capture.
+    private var accessToken: String? { sessions.load()?.accessToken }
 
     /// Provisional rows get negative ids counting down from -1, so they can
     /// never collide with a real server id (always positive) while a send is
@@ -32,11 +38,11 @@ final class ChatViewModel {
     init(friend: SocialProfile, sessions: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.friend = friend
         self.sessions = sessions
-        // A token without a parseable identity is not a usable session: keep
-        // both or neither, rather than holding a token with a nil `myUserID`.
+        // A token without a parseable identity is not a usable session: treat
+        // the whole session as absent rather than resolving `myUserID` alone
+        // here and leaving `accessToken` to its own live read.
         if let session = sessions.load(), let userID = UUID(uuidString: session.userID) {
             myUserID = userID
-            accessToken = session.accessToken
         }
     }
 
