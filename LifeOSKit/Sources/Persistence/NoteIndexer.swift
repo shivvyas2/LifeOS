@@ -31,6 +31,11 @@ public enum NoteIndexer {
         )
         for row in existing { context.delete(row) }
 
+        let existingLinks = try context.fetch(
+            FetchDescriptor<NoteLink>(predicate: #Predicate { $0.sourceID == documentID })
+        )
+        for row in existingLinks { context.delete(row) }
+
         guard document.deletedAt == nil else { return }
 
         for (offset, block) in document.blocks.enumerated() where block.kind == .todo {
@@ -47,5 +52,34 @@ public enum NoteIndexer {
                 )
             )
         }
+
+        // Resolved by folded title, because that is how a person writes a
+        // link: by the name of the page, not its id. Titles are not unique,
+        // so first match wins and the tie is stable only by fetch order. That
+        // is the same tie the backlinks list already lives with.
+        let titles = try titleIndex(in: context)
+        for target in NoteLinkScanner.links(in: document.blocks) {
+            let folded = target.lowercased()
+            context.insert(
+                NoteLink(
+                    sourceID: documentID,
+                    targetTitleFolded: folded,
+                    targetID: titles[folded]
+                )
+            )
+        }
+    }
+
+    /// Live pages by folded title. Built once per reindex rather than fetched
+    /// per link, since a page with twenty links would otherwise mean twenty
+    /// fetches for one keystroke.
+    private static func titleIndex(in context: ModelContext) throws -> [String: UUID] {
+        var index: [String: UUID] = [:]
+        for document in try context.fetch(FetchDescriptor<NoteDocument>())
+        where document.deletedAt == nil {
+            let key = document.displayTitle.lowercased()
+            if index[key] == nil { index[key] = document.id }
+        }
+        return index
     }
 }

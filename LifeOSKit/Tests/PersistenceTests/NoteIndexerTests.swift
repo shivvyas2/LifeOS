@@ -122,4 +122,63 @@ import SwiftData
 
         #expect(try tasks(in: context).isEmpty)
     }
+
+    private func links(in context: ModelContext) throws -> [NoteLink] {
+        try context.fetch(FetchDescriptor<NoteLink>())
+    }
+
+    @Test func everyWikiLinkBecomesAnEdge() throws {
+        let context = try makeContext()
+        let document = NoteDocument(title: "Trip", blocks: [
+            NoteBlock(text: "See [[Marathon]] and [[Kit list]]")
+        ])
+        context.insert(document)
+
+        try NoteIndexer.reindex(document, in: context)
+
+        let edges = try links(in: context)
+        #expect(edges.count == 2)
+        #expect(Set(edges.map(\.targetTitleFolded)) == ["marathon", "kit list"])
+        #expect(edges.allSatisfy { $0.sourceID == document.id })
+    }
+
+    /// An edge points at a page when one exists by that name, so the mindmap
+    /// can draw a real node rather than a name.
+    @Test func anEdgeResolvesToThePageItNames() throws {
+        let context = try makeContext()
+        let target = NoteDocument(title: "Marathon")
+        let source = NoteDocument(title: "Trip", blocks: [NoteBlock(text: "see [[marathon]]")])
+        context.insert(target)
+        context.insert(source)
+
+        try NoteIndexer.reindex(source, in: context)
+
+        #expect(try links(in: context).first?.targetID == target.id)
+    }
+
+    /// A link written before its page exists is kept unresolved rather than
+    /// dropped. It is a note to self, and the mindmap draws it as a stub.
+    @Test func anEdgeToNothingIsKeptUnresolved() throws {
+        let context = try makeContext()
+        let document = NoteDocument(blocks: [NoteBlock(text: "[[Not written yet]]")])
+        context.insert(document)
+
+        try NoteIndexer.reindex(document, in: context)
+
+        let edge = try #require(try links(in: context).first)
+        #expect(edge.targetTitleFolded == "not written yet")
+        #expect(edge.targetID == nil)
+    }
+
+    @Test func aRemovedLinkLosesItsEdge() throws {
+        let context = try makeContext()
+        let document = NoteDocument(blocks: [NoteBlock(text: "[[Marathon]] [[Kit list]]")])
+        context.insert(document)
+        try NoteIndexer.reindex(document, in: context)
+
+        document.blocks = [NoteBlock(text: "[[Marathon]]")]
+        try NoteIndexer.reindex(document, in: context)
+
+        #expect(try links(in: context).map(\.targetTitleFolded) == ["marathon"])
+    }
 }
