@@ -9,6 +9,11 @@ final class ChatViewModel {
     let friend: SocialProfile
 
     private(set) var messages: [SocialMessage] = []
+    /// Optimistic rows not yet confirmed by the server, kept apart from
+    /// `messages` so a poll landing mid-send can never wholesale-replace them.
+    /// `refresh()` only ever assigns `messages`; the screen renders
+    /// `messages + pending`.
+    private(set) var pending: [SocialMessage] = []
     var draft = ""
     private(set) var sending = false
     /// One quiet sentence for the screen. Never an alert: a failed send is
@@ -27,8 +32,10 @@ final class ChatViewModel {
     init(friend: SocialProfile, sessions: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.friend = friend
         self.sessions = sessions
-        if let session = sessions.load() {
-            myUserID = UUID(uuidString: session.userID)
+        // A token without a parseable identity is not a usable session: keep
+        // both or neither, rather than holding a token with a nil `myUserID`.
+        if let session = sessions.load(), let userID = UUID(uuidString: session.userID) {
+            myUserID = userID
             accessToken = session.accessToken
         }
     }
@@ -38,8 +45,9 @@ final class ChatViewModel {
         return SocialAPI(baseURL: baseURL, anonKey: anonKey)
     }
 
-    /// Loads the conversation. Called on appear, on the poll loop, and again
-    /// after a send so the optimistic row reconciles with the real one.
+    /// Loads the conversation. Called on the poll loop and again after a send
+    /// so the server's real row shows up; only ever assigns `messages`, never
+    /// touches `pending`.
     func refresh() async {
         guard let api, let accessToken else { return }
         do {
@@ -50,10 +58,13 @@ final class ChatViewModel {
         }
     }
 
-    /// Appends a provisional row immediately, clears the draft, then posts.
-    /// A failed post removes the row it added rather than leaving a message
-    /// on screen that never actually sent.
+    /// Appends a provisional row to `pending` immediately, clears the draft,
+    /// then posts. A failed post removes the row it added rather than leaving
+    /// a message on screen that never actually sent. Guards its own reentry
+    /// so a fast double-tap of the send button (before the disabled state has
+    /// a chance to apply) can never fire two posts for the same draft.
     func send() async {
+        guard !sending else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let api, let accessToken, let myUserID else { return }
 
@@ -62,16 +73,17 @@ final class ChatViewModel {
         let provisional = SocialMessage(
             id: provisionalID, sender: myUserID, recipient: friend.userID, body: text, createdAt: .now
         )
-        messages.append(provisional)
+        pending.append(provisional)
         draft = ""
         sending = true
 
         do {
             try await api.send(text, to: friend.userID, accessToken: accessToken)
+            pending.removeAll { $0.id == provisionalID }
             errorMessage = nil
             await refresh()
         } catch {
-            messages.removeAll { $0.id == provisionalID }
+            pending.removeAll { $0.id == provisionalID }
             errorMessage = "Could not send message"
         }
 
