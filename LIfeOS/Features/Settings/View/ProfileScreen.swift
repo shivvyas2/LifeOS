@@ -72,21 +72,34 @@ struct ProfileScreen: View {
 
     // MARK: - The photo, twice
 
-    /// The sharp photo, then the same photo blurred and masked so it takes
-    /// over gradually below the midline, then a quiet dark wash for the type.
-    /// No panel: the frost IS the image.
+    /// The sharp photo at the top, the same photo blurred behind everything,
+    /// then a quiet dark wash for the type. No panel: the frost IS the image.
+    ///
+    /// The sharp part is a 3:4 block anchored to the top rather than the whole
+    /// screen. A phone is about 9:19.5, so filling it with a 3:4 photograph
+    /// crops away most of the frame from the centre outwards, which is exactly
+    /// where faces are: portraits came out beheaded. Three by four is what the
+    /// camera shot and what every other app shows back.
     @ViewBuilder
     private func heroLayer(size: CGSize) -> some View {
-        ZStack {
-            photoLayer(size: size)
+        let sharpHeight = size.width * 4 / 3
 
+        ZStack(alignment: .top) {
+            // Behind everything, so the frost still reaches the bottom of the
+            // screen once the sharp block has ended.
             photoLayer(size: size)
                 .blur(radius: 38, opaque: true)
+
+            photoLayer(size: CGSize(width: size.width, height: sharpHeight))
+                .frame(height: sharpHeight, alignment: .top)
+                // Fades into the frost rather than ending on a hard line,
+                // which is what keeps the two copies reading as one image.
                 .mask(
                     LinearGradient(
                         stops: [
-                            .init(color: .clear, location: 0.38),
-                            .init(color: .black, location: 0.62),
+                            .init(color: .black, location: 0.0),
+                            .init(color: .black, location: 0.72),
+                            .init(color: .clear, location: 1.0),
                         ],
                         startPoint: .top, endPoint: .bottom
                     )
@@ -100,6 +113,7 @@ struct ProfileScreen: View {
                 startPoint: .top, endPoint: .bottom
             )
         }
+        .frame(width: size.width, height: size.height, alignment: .top)
         .clipped()
     }
 
@@ -109,7 +123,12 @@ struct ProfileScreen: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: size.width, height: size.height)
+                // Anchored to the top, not centred. `scaledToFill` overflows
+                // by design and a centred crop trims equally from both ends,
+                // taking the head off a portrait. Biasing upward keeps the
+                // part of a photograph anyone actually framed.
+                .frame(width: size.width, height: size.height, alignment: .top)
+                .clipped()
         } else {
             // No photo is a state, not a gap: the module gradient stands in
             // so the shape of the screen is the same either way.
