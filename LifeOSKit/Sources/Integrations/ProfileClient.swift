@@ -73,6 +73,22 @@ public struct RemoteProfile: Codable, Sendable, Equatable {
     }
 }
 
+/// What a lookup of the stored avatar's timestamp found.
+///
+/// Three cases rather than an optional string, because "there is no object"
+/// and "the object is there but the listing did not say when it changed" want
+/// opposite answers. Collapsed into a single nil, the safe reading of nil is
+/// "do not download", and then a device with nothing cached downloads nothing,
+/// ever, and shows an empty circle for a profile that has a picture.
+public enum AvatarStamp: Sendable, Equatable {
+    /// No such object in the bucket.
+    case missing
+    /// The object exists, but nothing said when it last changed.
+    case unknown
+    /// The object exists and last changed at this stamp.
+    case at(String)
+}
+
 /// Reads and writes the profile row, and the avatar beside it.
 ///
 /// The profile used to live in `auth.users.user_metadata` with a copy in
@@ -158,14 +174,17 @@ public struct ProfileClient: Sendable {
         return path
     }
 
-    public func downloadAvatar(path: String) async throws -> Data {
-        // The bucket is public, so this needs no token. A friend list shows
-        // faces, and signing a URL per row per refresh is a great deal of work
-        // to hide a picture someone put on a profile on purpose.
+    public func downloadAvatar(path: String, accessToken: String) async throws -> Data {
+        // Reads are signed-in-only now: the bucket is private, so the public
+        // route answers nothing at all and this has to carry a token. What the
+        // policy still allows is any signed-in user reading any avatar, which
+        // is what keeps a friend list from needing a signed URL per face on
+        // every refresh to show a picture someone put on a profile on purpose.
         var request = URLRequest(
-            url: baseURL.appendingPathComponent("storage/v1/object/public/avatars/\(path)")
+            url: baseURL.appendingPathComponent("storage/v1/object/authenticated/avatars/\(path)")
         )
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -173,6 +192,63 @@ public struct ProfileClient: Sendable {
             throw SupabaseREST.RESTError.server(status: status, message: "avatar download failed")
         }
         return data
+    }
+
+    /// When the stored avatar last changed, as the bucket listing reports it.
+    ///
+    /// The remote path is `{user_id}/avatar.jpg` forever, so nothing about the
+    /// path tells a second device that the picture behind it was replaced.
+    /// This is the only thing that does.
+    public func avatarStamp(path: String, accessToken: String) async throws -> AvatarStamp {
+        let folder = (path as NSString).deletingLastPathComponent
+        let file = (path as NSString).lastPathComponent
+
+        var request = URLRequest(
+            url: baseURL.appendingPathComponent("storage/v1/object/list/avatars")
+        )
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // The listing is scoped to the account's own folder, which holds one
+        // object. Asking for the whole bucket would work under the read policy
+        // and would be a page of strangers' file names to find one row in.
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "prefix": folder.isEmpty ? "" : "\(folder)/",
+            "limit": 100,
+        ])
+
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw SupabaseREST.RESTError.server(status: status, message: "avatar list failed")
+        }
+
+        guard let row = SupabaseREST.decode(data).first(where: { $0["name"] as? String == file })
+        else { return .missing }
+        guard let updated = row["updated_at"] as? String, !updated.isEmpty else { return .unknown }
+        return .at(updated)
+    }
+
+    /// Whether a device that already holds a copy has to fetch it again.
+    ///
+    /// Split out from the caller so the three cases can be read at once, and
+    /// so the one that gets forgotten is the one that is tested: `.unknown`
+    /// with nothing cached still has to download, or a fresh device sits there
+    /// showing no face forever.
+    public static func shouldDownloadAvatar(
+        stamp: AvatarStamp, recorded: String?, hasLocalCopy: Bool
+    ) -> Bool {
+        switch stamp {
+        case .missing:
+            // Nothing to fetch. The row still points at a path, but the object
+            // behind it is gone, so a download would only earn a 404.
+            return false
+        case .unknown:
+            return !hasLocalCopy
+        case .at(let current):
+            return !hasLocalCopy || current != recorded
+        }
     }
 
     public func deleteAvatar(userID: String, accessToken: String) async throws {

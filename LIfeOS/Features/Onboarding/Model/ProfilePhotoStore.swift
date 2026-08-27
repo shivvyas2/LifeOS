@@ -32,10 +32,32 @@ enum ProfilePhotoStore {
         return directory.appendingPathComponent("avatar.jpg")
     }
 
+    /// When the object this copy came from last changed on the server.
+    ///
+    /// Per account, like the file itself. The remote path never changes: it is
+    /// `{user_id}/avatar.jpg` for the life of the account. So without a stamp
+    /// there is nothing to compare, and a photo replaced on one phone stayed
+    /// invisible on the other, which was pinned to whatever it downloaded
+    /// first.
+    private static let stampKey = "avatarStamp"
+
+    static func stamp() -> String? {
+        UserDefaults.currentAccount.string(forKey: stampKey)
+    }
+
+    static func recordStamp(_ value: String) {
+        UserDefaults.currentAccount.set(value, forKey: stampKey)
+    }
+
     /// Passing nil clears it, so removing a photo is the same call as setting
     /// one and cannot leave a stale image behind.
     static func save(_ data: Data?) {
         guard let url else { return }
+        // The stamp describes the bytes on disk, so it is dropped whenever
+        // they change. A photo taken on this device has no server stamp yet,
+        // and keeping the old one would make the next sync believe the copy it
+        // holds is the one already up there.
+        UserDefaults.currentAccount.removeObject(forKey: stampKey)
         do {
             if let data {
                 try data.write(to: url, options: .atomic)
@@ -165,12 +187,32 @@ enum ProfileSync {
             return
         }
 
-        // Only when there is nothing cached. The avatar is one object per
-        // account and it changes rarely, so re-downloading it on every launch
-        // would spend bandwidth to learn nothing.
-        guard ProfilePhotoStore.load() == nil else { return }
-        if let data = try? await client.downloadAvatar(path: path) {
+        // The avatar changes rarely, so re-downloading it on every launch
+        // would spend bandwidth to learn nothing. But the path is constant, so
+        // "have I got a copy" is not the question either: that pinned a phone
+        // to the first picture it ever saw, and a photo replaced on another
+        // device never arrived. The stamp is what tells the two apart.
+        //
+        // A failed lookup reads as `.unknown` rather than as an error, so a
+        // flaky network costs at most a stale face and never a blank one.
+        let stamp = (try? await client.avatarStamp(
+            path: path, accessToken: session.accessToken
+        )) ?? .unknown
+
+        guard ProfileClient.shouldDownloadAvatar(
+            stamp: stamp,
+            recorded: ProfilePhotoStore.stamp(),
+            hasLocalCopy: ProfilePhotoStore.load() != nil
+        ) else { return }
+
+        if let data = try? await client.downloadAvatar(
+            path: path, accessToken: session.accessToken
+        ) {
+            // Saving clears the stamp, so it is recorded after, and only when
+            // the listing actually gave one. Recording nothing here means the
+            // next launch checks again rather than believing it is current.
             ProfilePhotoStore.save(data)
+            if case .at(let current) = stamp { ProfilePhotoStore.recordStamp(current) }
         } else {
             log.error("avatar download failed")
         }
