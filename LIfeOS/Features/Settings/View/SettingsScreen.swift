@@ -145,37 +145,111 @@ struct SettingsScreen: View {
         }
     }
 
+    /// Three services, three rows, each showing its own state.
+    ///
+    /// This used to be a single row with a chain-link icon reading "Whoop,
+    /// Health, banks" over Whoop's status line, which said nothing about the
+    /// other two: a connected bank and a broken Health permission looked
+    /// identical from here, and the subtitle actively misreported them. The
+    /// point of a settings summary is to answer "is everything on?" without
+    /// opening anything, so it has to show all three.
     @ViewBuilder
     private var connectionsRow: some View {
         if let whoop, let health, let plaid {
             NavigationLink {
                 ConnectionsSettingsScreen(whoop: whoop, health: health, plaid: plaid)
             } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "link")
-                        .font(LifeOSType.rowTitle)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Whoop, Health, banks")
-                            .font(LifeOSType.rowTitle)
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        Text(whoop.statusDetail)
-                            .font(LifeOSType.label.weight(.regular))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                VStack(spacing: 0) {
+                    connectionLine(
+                        icon: "bolt.heart.fill", name: "Whoop",
+                        detail: whoop.statusDetail, isOn: whoop.isConnected
+                    )
+                    rowDivider
+                    connectionLine(
+                        icon: "heart.fill", name: "Apple Health",
+                        detail: health.statusDetail, isOn: health.isConnected
+                    )
+                    rowDivider
+                    connectionLine(
+                        // The same words the Connections screen uses. Two
+                        // names for one thing makes a reader wonder whether
+                        // they are two things.
+                        icon: "building.columns.fill", name: "Bank accounts",
+                        detail: plaid.statusDetail, isOn: plaid.isConnected,
+                        showsChevron: true
+                    )
                 }
-                .padding(16)
+                .padding(.vertical, 4)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private var rowDivider: some View {
+        Rectangle()
+            .fill(LifeOSTokens.primaryText.resolve(scheme).opacity(0.07))
+            .frame(height: 1)
+            .padding(.leading, 62)
+    }
+
+    /// One service. The dot is the answer at a glance; the sentence under the
+    /// name is the detail for when the dot is not enough.
+    private func connectionLine(
+        icon: String, name: String, detail: String,
+        isOn: Bool, showsChevron: Bool = false
+    ) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(LifeOSType.label.weight(.semibold))
+                .foregroundStyle(isOn ? LifeOSTokens.accent
+                                      : LifeOSTokens.secondaryText.resolve(scheme))
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle().fill(isOn ? LifeOSTokens.accentSoft.resolve(scheme)
+                                       : LifeOSTokens.cardSurface.resolve(scheme))
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(LifeOSType.rowTitle)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                Text(detail)
+                    .font(LifeOSType.label.weight(.regular))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            // Green for on, hollow for off. Never red: not being connected is
+            // a choice someone is allowed to make, and an alarm dot next to
+            // Whoop would nag every user who does not own one.
+            Circle()
+                .fill(isOn ? Color(red: 0.20, green: 0.70, blue: 0.42) : .clear)
+                .frame(width: 8, height: 8)
+                .overlay {
+                    if !isOn {
+                        Circle().strokeBorder(
+                            LifeOSTokens.secondaryText.resolve(scheme).opacity(0.4),
+                            lineWidth: 1
+                        )
+                    }
+                }
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(LifeOSType.caption.weight(.semibold))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            } else {
+                // Keeps the three rows' text columns aligned: without it the
+                // chevron on the last row would shift only that row's dot.
+                Color.clear.frame(width: 8)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     private var signOutButton: some View {

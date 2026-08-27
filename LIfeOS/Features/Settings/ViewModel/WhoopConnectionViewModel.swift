@@ -47,6 +47,14 @@ final class WhoopConnectionViewModel {
         }
     }
 
+    /// Connected in the sense the settings summary means: a live link, not a
+    /// half-finished sign-in. `.connecting` is deliberately false, so the dot
+    /// does not claim success while Safari is still open.
+    var isConnected: Bool {
+        if case .connected = state { return true }
+        return false
+    }
+
     var statusDetail: String {
         switch state {
         case .unconfigured: "Not configured"

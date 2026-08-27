@@ -48,6 +48,13 @@ final class PlaidConnectionViewModel {
         state = connected.isEmpty ? .disconnected : .connected(connected)
     }
 
+    /// A bank needing re-authentication is not connected for this purpose:
+    /// the summary dot answers "is this working", and a stale login is not.
+    var isConnected: Bool {
+        if case .connected = state { return true }
+        return false
+    }
+
     var statusDetail: String {
         switch state {
         case .unconfigured: "Not configured"
