@@ -100,7 +100,7 @@ struct NotesSidebar: View {
             HStack(spacing: 10) {
                 iconBubble("flame.fill", hue: .habits)
                 Text("Habits")
-                    .font(.system(size: 16))
+                    .font(LifeOSType.secondary)
                     .foregroundStyle(primary)
                 Spacer(minLength: 8)
                 if habitCount > 0 { countBadge(habitCount) }
@@ -122,7 +122,7 @@ struct NotesSidebar: View {
             HStack(spacing: 10) {
                 iconBubble(systemImage, hue: hue)
                 Text(title)
-                    .font(.system(size: 16, weight: selection == target ? .semibold : .regular))
+                    .font(LifeOSType.rowTitle.weight(selection == target ? .semibold : .regular))
                     .foregroundStyle(primary)
                 Spacer(minLength: 8)
                 if count > 0 { countBadge(count) }
@@ -139,7 +139,7 @@ struct NotesSidebar: View {
     /// tiles, sized for a rail row.
     private func iconBubble(_ symbol: String, hue: ModuleHue) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 12, weight: .semibold))
+            .font(LifeOSType.caption.weight(.semibold))
             .foregroundStyle(hue.top)
             .frame(width: 26, height: 26)
             .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
@@ -172,7 +172,7 @@ struct NotesSidebar: View {
                 } label: {
                     HStack(spacing: 8) {
                         Text(bucket.title.uppercased())
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(LifeOSType.label.weight(.semibold))
                             .tracking(0.8)
                             .foregroundStyle(selection == .bucket(bucket) ? primary : secondary)
                         Spacer(minLength: 4)
@@ -310,7 +310,7 @@ private struct NoteFolderRow: View {
                         Text(folder.icon).font(LifeOSType.label.weight(.regular))
                     }
                     Text(folder.name)
-                        .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                        .font(LifeOSType.rowTitle.weight(isSelected ? .semibold : .regular))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if folder.count > 0 {

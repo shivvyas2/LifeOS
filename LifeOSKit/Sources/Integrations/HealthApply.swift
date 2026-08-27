@@ -18,8 +18,7 @@ public enum HealthApply {
     @MainActor
     public static func write(_ day: HealthDay, into store: MetricsStore) throws {
         try store.upsert(date: day.date) { row in
-            for metric in HealthMetric.allCases {
-                let incoming = day.values[metric]
+            for (metric, incoming) in day.values {
                 switch metric {
                 case .steps:
                     row.steps = whole(HealthFill.value(for: metric, existing: row.steps.map(Double.init), health: incoming))
@@ -41,14 +40,22 @@ public enum HealthApply {
                     row.spo2Percentage = HealthFill.value(for: metric, existing: row.spo2Percentage, health: incoming)
                 case .respiratoryRate:
                     row.respiratoryRate = HealthFill.value(for: metric, existing: row.respiratoryRate, health: incoming)
+                default:
+                    // The long tail. Same merge rule, stored in the bag rather
+                    // than in a column of its own. See `DailyMetrics.extrasData`.
+                    row.setExtra(
+                        metric.rawValue,
+                        HealthFill.value(
+                            for: metric,
+                            existing: row.extra(metric.rawValue),
+                            health: incoming
+                        )
+                    )
                 }
             }
         }
     }
 
-    /// Counts are stored as integers. HealthKit hands back a `Double` even for
-    /// a step count, and rounding at the boundary keeps "9770.6 steps" from
-    /// ever reaching a screen.
     private static func whole(_ value: Double?) -> Int? {
         value.map { Int($0.rounded()) }
     }

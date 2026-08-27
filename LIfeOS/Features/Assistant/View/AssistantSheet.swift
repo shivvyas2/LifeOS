@@ -32,7 +32,7 @@ struct AssistantSheet: View {
                         if !model.isAuthorized, !model.messages.isEmpty {
                             HStack(spacing: 10) {
                                 Text("Calendar not connected")
-                                    .font(.system(size: 13))
+                                    .font(LifeOSType.label.weight(.regular))
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                                 Spacer()
                                 CapsuleButton(title: "Connect") {

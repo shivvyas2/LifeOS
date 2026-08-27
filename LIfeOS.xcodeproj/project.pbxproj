@@ -303,7 +303,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Almanac;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads steps, sleep, weight and heart data from Apple Health so your day is complete even on the days you do not wear a strap.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads what Apple Health already holds, including activity, sleep and its stages, heart and fitness, body measurements, vitals, nutrition, walking steadiness and cycle tracking, so your day is complete even when you do not wear a strap. It is read only, nothing is written back, and nothing leaves your device except to your own account.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LIFO uses the microphone when you choose to talk instead of type.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LIFO listens so you can ask about your health out loud.";
@@ -344,7 +344,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/App-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Almanac;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads steps, sleep, weight and heart data from Apple Health so your day is complete even on the days you do not wear a strap.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads what Apple Health already holds, including activity, sleep and its stages, heart and fitness, body measurements, vitals, nutrition, walking steadiness and cycle tracking, so your day is complete even when you do not wear a strap. It is read only, nothing is written back, and nothing leaves your device except to your own account.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac does not add anything to Apple Health. It only reads the steps, sleep, weight and heart data already there.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "LIFO uses the microphone when you choose to talk instead of type.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "LIFO listens so you can ask about your health out loud.";

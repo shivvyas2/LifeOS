@@ -74,3 +74,62 @@ import Testing
         #expect(owned.contains(.steps))
     }
 }
+
+@Suite struct HealthMetricVocabularyTests {
+
+    /// Every metric must describe itself, or a row appears with a blank label.
+    @Test func everyMetricHasATitleAndAGroup() {
+        for metric in HealthMetric.allCases {
+            #expect(!metric.title.isEmpty, "\(metric.rawValue) has no title")
+            #expect(HealthMetric.Group.allCases.contains(metric.group))
+        }
+    }
+
+    /// The raw values are the storage keys for everything without a column of
+    /// its own, so a collision would silently overwrite one metric with
+    /// another.
+    @Test func rawValuesAreUnique() {
+        #expect(Set(HealthMetric.allCases.map(\.rawValue)).count == HealthMetric.allCases.count)
+    }
+
+    /// Whoop owns the fields it measures from a strap worn all night, and a
+    /// person types weight and water. Health must not overwrite either.
+    @Test func whoopAndHandTypedFieldsStayFillGapsOnly() {
+        let guarded: [HealthMetric] = [.restingHR, .hrvMs, .spo2Percentage,
+                                       .respiratoryRate, .sleepMinutes, .weightKg, .waterML]
+        for metric in guarded {
+            #expect(metric.precedence == .fillGapsOnly, "\(metric.rawValue) lost its guard")
+        }
+    }
+
+    /// Everything new arrived with no other writer, so the newest reading wins.
+    @Test func newMetricsLetHealthBeTheSource() {
+        for metric in [HealthMetric.vo2Max, .distanceKm, .deepSleepMinutes,
+                       .bodyFatPercentage, .caffeineMg, .walkingSpeedKmh] {
+            #expect(metric.precedence == .healthIsTheSource)
+        }
+    }
+
+    @Test func formattingCarriesTheUnitAndTheRightPrecision() {
+        #expect(HealthMetric.steps.formatted(9_770) == "9770")
+        #expect(HealthMetric.distanceKm.formatted(7.42) == "7.4 km")
+        #expect(HealthMetric.vo2Max.formatted(48.26) == "48.3 ml/kg·min")
+        #expect(HealthMetric.wristTemperatureCelsius.formatted(36.428) == "36.43 °C")
+    }
+
+    /// Flow is an ordinal wearing a number's clothes, and HealthKit's raw
+    /// values are not in an order anyone would guess.
+    @Test func flowReadsAsWordsNotAsANumber() {
+        #expect(HealthMetric.menstrualFlowLevel.formatted(2) == "Light")
+        #expect(HealthMetric.menstrualFlowLevel.formatted(4) == "Heavy")
+    }
+
+    /// A sleep breakdown that is not part of the sleep group would be filed
+    /// under the wrong panel and look like a missing metric.
+    @Test func sleepStagesSitWithSleep() {
+        for metric in [HealthMetric.deepSleepMinutes, .remSleepMinutes,
+                       .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes] {
+            #expect(metric.group == .sleep)
+        }
+    }
+}

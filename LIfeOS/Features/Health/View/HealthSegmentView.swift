@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Integrations
 
 /// The Health half: is anything off, then how the body is doing — recovery,
 /// sleep, vitals against their own baselines, weight, and the journal.
@@ -93,6 +94,8 @@ struct HealthSegmentView: View {
             }
 
             StatGroup(title: "Vitals", rows: vitalRows)
+
+            appleHealthGroups
             WeightSection(snapshot: weight)
             journalCard
 
@@ -181,6 +184,24 @@ struct HealthSegmentView: View {
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
+
+    /// Everything else Apple Health had for the day.
+    ///
+    /// Listed rather than designed: a panel appears for each group that has a
+    /// reading and the rest are simply absent, so a person with a blood
+    /// pressure cuff sees blood pressure and a person without never learns the
+    /// row existed. The panels above stay hand-built, because recovery, sleep
+    /// and the vitals Whoop owns are read against baselines and deserve more
+    /// than a label and a number.
+    @ViewBuilder
+    private var appleHealthGroups: some View {
+        ForEach(wellness.healthGroups) { group in
+            StatGroup(
+                title: group.title,
+                rows: group.items.map { StatGroup.Row(label: $0.title, value: $0.formatted) }
+            )
+        }
+    }
 
     private var vitalRows: [StatGroup.Row] {
         [

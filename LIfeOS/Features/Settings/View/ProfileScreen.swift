@@ -117,7 +117,7 @@ struct ProfileScreen: View {
                 )
                 VStack(spacing: 10) {
                     Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 52, weight: .regular))
+                        .font(LifeOSType.numeral(52, weight: .regular))
                     Text("Add a photo")
                         .font(LifeOSType.secondary.weight(.semibold))
                 }
@@ -134,7 +134,7 @@ struct ProfileScreen: View {
         VStack(spacing: 20) {
             VStack(spacing: 4) {
                 Text(name)
-                    .font(.system(size: 32, weight: .bold))
+                    .font(LifeOSType.display)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
 
@@ -151,7 +151,7 @@ struct ProfileScreen: View {
             HStack(spacing: 12) {
                 Button { isEditing = true } label: {
                     Text("Edit profile")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
@@ -161,7 +161,7 @@ struct ProfileScreen: View {
 
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 52, height: 52)
                         .glassEffect(.regular.interactive())
@@ -193,7 +193,7 @@ struct ProfileScreen: View {
                 ForEach(items) { stat in
                     VStack(spacing: 2) {
                         Text(stat.value)
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(LifeOSType.body.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)

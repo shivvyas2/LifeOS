@@ -110,7 +110,7 @@ struct FirstRunTour: View {
 
             VStack(spacing: 12) {
                 Text(tourPage.title)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(LifeOSType.screenTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .multilineTextAlignment(.center)
 
@@ -199,7 +199,7 @@ private struct DotMatrixSymbol: View {
         }
         .mask {
             Image(systemName: symbol)
-                .font(.system(size: 150, weight: .bold))
+                .font(LifeOSType.numeral(150, weight: .bold))
         }
         .task(id: active) {
             guard active else { filled = 0; return }

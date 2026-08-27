@@ -143,7 +143,7 @@ struct ProfileEditSheet: View {
                             ZStack {
                                 Circle().fill(LifeOSTokens.cardSurface.resolve(scheme))
                                 Image(systemName: "person.fill")
-                                    .font(.system(size: 44))
+                                    .font(LifeOSType.numeral(44, weight: .bold))
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                             }
                         }
@@ -152,7 +152,7 @@ struct ProfileEditSheet: View {
                     .clipShape(Circle())
 
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
                         .background(Circle().fill(LifeOSTokens.accent))

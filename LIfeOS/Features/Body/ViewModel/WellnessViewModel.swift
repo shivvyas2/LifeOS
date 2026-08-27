@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Persistence
+import Integrations
 
 @MainActor @Observable
 final class WellnessViewModel {
@@ -72,6 +73,11 @@ final class WellnessViewModel {
                 }
                 .sorted { $0.date > $1.date }
 
+            // The selected day's own row, for the full list of readings. The
+            // window above is a week, and a week of rows cannot answer "what
+            // did Health have for this day".
+            let dayRow = try store.metrics(from: end, to: end).first
+
             snapshot = WellnessSnapshot(
                 averageSleepMinutes: avgSleep,
                 workoutDays: workoutDays,
@@ -80,6 +86,7 @@ final class WellnessViewModel {
                 sleepVerdict: avgSleep.map { $0 >= 420 ? "Optimal" : ($0 >= 360 ? "Fair" : "Low") },
                 trainingVerdict: workoutDays >= 4 ? "Consistent" : "Patchy",
                 journal: journal,
+                healthGroups: HealthDaySummary.groups(for: dayRow),
                 hasEntryToday: journal.contains { calendar.isDateInToday($0.date) }
             )
         } catch {

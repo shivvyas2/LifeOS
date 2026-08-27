@@ -104,7 +104,7 @@ struct ConnectionsSettingsScreen: View {
             HStack(spacing: 4) {
                 if chip.standing {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(LifeOSType.eyebrow.weight(.bold))
                 }
                 Text(chip.text)
                     .font(LifeOSType.label.weight(.semibold))

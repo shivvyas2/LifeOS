@@ -83,9 +83,18 @@ public actor HealthKitReader {
         guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return nil }
         let range = HKQuery.predicateForSamples(withStart: start, end: end)
 
-        if metric == .sleepMinutes {
-            return try await sleepMinutes(in: range)
+        switch metric {
+        case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes:
+            return try await sleepMinutes(metric, in: range)
+        case .mindfulMinutes:
+            return try await categoryMinutes(.mindfulSession, in: range)
+        case .menstrualFlowLevel:
+            return try await categoryLevel(.menstrualFlow, in: range)
+        default:
+            break
         }
+
         guard let type = Self.sampleType(for: metric) as? HKQuantityType,
               let unit = Self.unit(for: metric) else { return nil }
 
@@ -102,7 +111,8 @@ public actor HealthKitReader {
                 let quantity = Self.option(for: metric) == .cumulativeSum
                     ? statistics?.sumQuantity()
                     : statistics?.averageQuantity()
-                continuation.resume(returning: quantity?.doubleValue(for: unit))
+                let raw = quantity?.doubleValue(for: unit)
+                continuation.resume(returning: raw.map { $0 * Self.scale(for: metric) })
             }
             store.execute(query)
         }
@@ -110,12 +120,63 @@ public actor HealthKitReader {
 
     /// Sleep is a category, not a quantity, so it is summed by hand.
     ///
-    /// Only the asleep stages count. `.inBed` is time on a mattress, not sleep,
-    /// and counting it would inflate the night by however long its owner reads
-    /// before turning the light off.
-    private func sleepMinutes(in range: NSPredicate) async throws -> Double? {
-        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return nil }
-        let samples: [HKCategorySample] = try await withCheckedThrowingContinuation { continuation in
+    /// One query answers every sleep metric. `.inBed` is time on a mattress,
+    /// not sleep, and counting it as sleep would inflate the night by however
+    /// long its owner reads before turning the light off; it is reported
+    /// separately as time in bed instead, where it is genuinely interesting
+    /// next to the time actually asleep.
+    private func sleepMinutes(_ metric: HealthMetric, in range: NSPredicate) async throws -> Double? {
+        let samples = try await categorySamples(.sleepAnalysis, in: range)
+
+        let asleep: Set<Int> = [
+            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+            HKCategoryValueSleepAnalysis.asleepREM.rawValue,
+            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+        ]
+
+        let wanted: Set<Int>
+        switch metric {
+        case .sleepMinutes:     wanted = asleep
+        case .deepSleepMinutes: wanted = [HKCategoryValueSleepAnalysis.asleepDeep.rawValue]
+        case .remSleepMinutes:  wanted = [HKCategoryValueSleepAnalysis.asleepREM.rawValue]
+        case .coreSleepMinutes: wanted = [HKCategoryValueSleepAnalysis.asleepCore.rawValue]
+        case .awakeMinutes:     wanted = [HKCategoryValueSleepAnalysis.awake.rawValue]
+        case .timeInBedMinutes: wanted = [HKCategoryValueSleepAnalysis.inBed.rawValue]
+        default:                return nil
+        }
+
+        let seconds = samples
+            .filter { wanted.contains($0.value) }
+            .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+        return seconds > 0 ? seconds / 60 : nil
+    }
+
+    /// Total duration of a category's samples, for the ones that are events
+    /// with a length rather than a measurement. Mindfulness is the case.
+    private func categoryMinutes(
+        _ identifier: HKCategoryTypeIdentifier, in range: NSPredicate
+    ) async throws -> Double? {
+        let samples = try await categorySamples(identifier, in: range)
+        let seconds = samples.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+        return seconds > 0 ? seconds / 60 : nil
+    }
+
+    /// The day's recorded level for an ordinal category. The last sample wins:
+    /// a value entered later in the day is a correction of the earlier one.
+    private func categoryLevel(
+        _ identifier: HKCategoryTypeIdentifier, in range: NSPredicate
+    ) async throws -> Double? {
+        let samples = try await categorySamples(identifier, in: range)
+        guard let latest = samples.max(by: { $0.startDate < $1.startDate }) else { return nil }
+        return Double(latest.value)
+    }
+
+    private func categorySamples(
+        _ identifier: HKCategoryTypeIdentifier, in range: NSPredicate
+    ) async throws -> [HKCategorySample] {
+        guard let type = HKCategoryType.categoryType(forIdentifier: identifier) else { return [] }
+        return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: type,
                 predicate: range,
@@ -130,60 +191,130 @@ public actor HealthKitReader {
             }
             store.execute(query)
         }
-
-        let asleep: Set<Int> = [
-            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
-            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
-            HKCategoryValueSleepAnalysis.asleepREM.rawValue,
-            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
-        ]
-        let seconds = samples
-            .filter { asleep.contains($0.value) }
-            .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
-        return seconds > 0 ? seconds / 60 : nil
     }
 
     // MARK: - Mapping
 
     static func sampleType(for metric: HealthMetric) -> HKSampleType? {
+        if let identifier = quantityIdentifier(for: metric) {
+            return HKQuantityType(identifier)
+        }
         switch metric {
-        case .steps:            HKQuantityType(.stepCount)
-        case .activeEnergyKcal: HKQuantityType(.activeEnergyBurned)
-        case .exerciseMinutes:  HKQuantityType(.appleExerciseTime)
-        case .weightKg:         HKQuantityType(.bodyMass)
-        case .waterML:          HKQuantityType(.dietaryWater)
-        case .restingHR:        HKQuantityType(.restingHeartRate)
-        case .hrvMs:            HKQuantityType(.heartRateVariabilitySDNN)
-        case .spo2Percentage:   HKQuantityType(.oxygenSaturation)
-        case .respiratoryRate:  HKQuantityType(.respiratoryRate)
-        case .sleepMinutes:     HKCategoryType(.sleepAnalysis)
+        case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes:
+            return HKCategoryType(.sleepAnalysis)
+        case .mindfulMinutes:
+            return HKCategoryType(.mindfulSession)
+        case .menstrualFlowLevel:
+            return HKCategoryType(.menstrualFlow)
+        default:
+            return nil
+        }
+    }
+
+    /// Nil for the category types, which are read by hand above.
+    static func quantityIdentifier(for metric: HealthMetric) -> HKQuantityTypeIdentifier? {
+        switch metric {
+        case .steps:                        .stepCount
+        case .activeEnergyKcal:             .activeEnergyBurned
+        case .restingEnergyKcal:            .basalEnergyBurned
+        case .exerciseMinutes:              .appleExerciseTime
+        case .standMinutes:                 .appleStandTime
+        case .distanceKm:                   .distanceWalkingRunning
+        case .flightsClimbed:               .flightsClimbed
+        case .restingHR:                    .restingHeartRate
+        case .walkingHR:                    .walkingHeartRateAverage
+        case .hrvMs:                        .heartRateVariabilitySDNN
+        case .vo2Max:                       .vo2Max
+        case .cardioRecoveryBpm:            .heartRateRecoveryOneMinute
+        case .weightKg:                     .bodyMass
+        case .bodyFatPercentage:            .bodyFatPercentage
+        case .leanBodyMassKg:               .leanBodyMass
+        case .heightCm:                     .height
+        case .spo2Percentage:               .oxygenSaturation
+        case .respiratoryRate:              .respiratoryRate
+        case .wristTemperatureCelsius:      .appleSleepingWristTemperature
+        case .bodyTemperatureCelsius:       .bodyTemperature
+        case .bloodPressureSystolic:        .bloodPressureSystolic
+        case .bloodPressureDiastolic:       .bloodPressureDiastolic
+        case .bloodGlucoseMgDl:             .bloodGlucose
+        case .waterML:                      .dietaryWater
+        case .dietaryEnergyKcal:            .dietaryEnergyConsumed
+        case .proteinG:                     .dietaryProtein
+        case .carbsG:                       .dietaryCarbohydrates
+        case .fatG:                         .dietaryFatTotal
+        case .caffeineMg:                   .dietaryCaffeine
+        case .daylightMinutes:              .timeInDaylight
+        case .walkingSpeedKmh:              .walkingSpeed
+        case .walkingStepLengthCm:          .walkingStepLength
+        case .walkingAsymmetryPercentage:   .walkingAsymmetryPercentage
+        case .doubleSupportPercentage:      .walkingDoubleSupportPercentage
+        case .walkingSteadinessPercentage:  .appleWalkingSteadiness
+        case .basalBodyTemperatureCelsius:  .basalBodyTemperature
+        case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+             .mindfulMinutes, .menstrualFlowLevel:
+            nil
         }
     }
 
     static func unit(for metric: HealthMetric) -> HKUnit? {
         switch metric {
-        case .steps:            .count()
-        case .activeEnergyKcal: .kilocalorie()
-        case .exerciseMinutes:  .minute()
-        case .weightKg:         .gramUnit(with: .kilo)
-        case .waterML:          .literUnit(with: .milli)
-        case .restingHR:        HKUnit.count().unitDivided(by: .minute())
-        case .hrvMs:            .secondUnit(with: .milli)
-        // Stored as a percentage, and HealthKit reports a 0...1 fraction, so
-        // the scaling happens where the value is read, not on the screen.
-        case .spo2Percentage:   .percent()
-        case .respiratoryRate:  HKUnit.count().unitDivided(by: .minute())
-        case .sleepMinutes:     nil
+        case .steps, .flightsClimbed:       .count()
+        case .activeEnergyKcal, .restingEnergyKcal, .dietaryEnergyKcal: .kilocalorie()
+        case .exerciseMinutes, .standMinutes, .daylightMinutes: .minute()
+        case .distanceKm:                   .meterUnit(with: .kilo)
+        case .restingHR, .walkingHR, .cardioRecoveryBpm:
+            HKUnit.count().unitDivided(by: .minute())
+        case .hrvMs:                        .secondUnit(with: .milli)
+        case .vo2Max:
+            HKUnit(from: "ml/kg*min")
+        case .weightKg, .leanBodyMassKg:    .gramUnit(with: .kilo)
+        case .heightCm, .walkingStepLengthCm: .meterUnit(with: .centi)
+        // HealthKit reports these as a 0...1 fraction. `scale(for:)` below
+        // turns them into the percentage everything else in the app stores.
+        case .bodyFatPercentage, .spo2Percentage, .walkingAsymmetryPercentage,
+             .doubleSupportPercentage, .walkingSteadinessPercentage: .percent()
+        case .respiratoryRate:              HKUnit.count().unitDivided(by: .minute())
+        case .wristTemperatureCelsius, .bodyTemperatureCelsius,
+             .basalBodyTemperatureCelsius:  .degreeCelsius()
+        case .bloodPressureSystolic, .bloodPressureDiastolic: .millimeterOfMercury()
+        case .bloodGlucoseMgDl:
+            HKUnit.gramUnit(with: .milli).unitDivided(by: .literUnit(with: .deci))
+        case .waterML:                      .literUnit(with: .milli)
+        case .proteinG, .carbsG, .fatG:     .gram()
+        case .caffeineMg:                   .gramUnit(with: .milli)
+        case .walkingSpeedKmh:
+            HKUnit.meterUnit(with: .kilo).unitDivided(by: .hour())
+        case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+             .mindfulMinutes, .menstrualFlowLevel:
+            nil
         }
+    }
+
+    /// What to multiply HealthKit's number by to get the unit the app stores.
+    ///
+    /// Only percentages need it, and they need it badly: `HKUnit.percent()`
+    /// yields 0.98 for a 98% blood oxygen reading. The app stores percentages
+    /// as percentages everywhere else, Whoop included, so a Health-sourced
+    /// SpO2 was landing two orders of magnitude below a Whoop-sourced one and
+    /// rendering as "1.0". It went unnoticed because Whoop owns that field and
+    /// Health only fills its gaps.
+    static func scale(for metric: HealthMetric) -> Double {
+        unit(for: metric) == .percent() ? 100 : 1
     }
 
     /// Counts accumulate across the day; measurements are averaged over it.
     /// Summing a heart rate would produce a number in the thousands.
     static func option(for metric: HealthMetric) -> HKStatisticsOptions {
         switch metric {
-        case .steps, .activeEnergyKcal, .exerciseMinutes, .waterML:
+        case .steps, .activeEnergyKcal, .restingEnergyKcal, .exerciseMinutes,
+             .standMinutes, .distanceKm, .flightsClimbed, .waterML,
+             .dietaryEnergyKcal, .proteinG, .carbsG, .fatG, .caffeineMg,
+             .daylightMinutes:
             .cumulativeSum
-        case .weightKg, .restingHR, .hrvMs, .spo2Percentage, .respiratoryRate, .sleepMinutes:
+        default:
             .discreteAverage
         }
     }

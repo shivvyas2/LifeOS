@@ -1,52 +1,5 @@
 import Foundation
 
-/// A field Almanac can read out of Apple Health.
-///
-/// Deliberately its own enum rather than a set of HealthKit types: this file
-/// carries the merge rules and must stay importable, testable and buildable
-/// without the HealthKit framework. `HealthKitReader` owns the translation to
-/// `HKQuantityType`.
-public enum HealthMetric: String, CaseIterable, Sendable {
-    case steps
-    case activeEnergyKcal
-    case exerciseMinutes
-    case weightKg
-    case waterML
-    case restingHR
-    case hrvMs
-    case spo2Percentage
-    case respiratoryRate
-    case sleepMinutes
-
-    /// Who owns this number when two sources disagree.
-    public enum Precedence: Sendable, Equatable {
-        /// Something else is the authority. Health writes only into a gap.
-        ///
-        /// Two different reasons land here. Whoop measures resting HR, HRV,
-        /// SpO2, respiratory rate and sleep from a strap worn all night, and it
-        /// stays the source of truth for them. Water and weight can be typed
-        /// into the app by hand, and a background sync does not get to replace
-        /// something a person entered on purpose.
-        case fillGapsOnly
-        /// Health is the only source there is, so its latest reading is simply
-        /// the truth. Steps, active energy and exercise minutes are counted
-        /// passively by the phone and the watch, nobody types them, and the
-        /// number legitimately grows through the day. This precedence is what
-        /// lets the afternoon sync correct the morning's count.
-        case healthIsTheSource
-    }
-
-    public var precedence: Precedence {
-        switch self {
-        case .steps, .activeEnergyKcal, .exerciseMinutes:
-            .healthIsTheSource
-        case .weightKg, .waterML, .restingHR, .hrvMs,
-             .spo2Percentage, .respiratoryRate, .sleepMinutes:
-            .fillGapsOnly
-        }
-    }
-}
-
 /// The merge rule, as a pure function.
 ///
 /// Kept apart from both HealthKit and SwiftData so every branch can be
