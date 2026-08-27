@@ -14,11 +14,43 @@ public struct WhoopDerivation {
     private let store: MetricsStore
     private let archive: WhoopArchive
     private let calendar: Calendar
+    private let ranking: SourceRanking
 
-    public init(store: MetricsStore, archive: WhoopArchive, calendar: Calendar = .current) {
+    public init(
+        store: MetricsStore,
+        archive: WhoopArchive,
+        calendar: Calendar = .current,
+        ranking: SourceRanking = SourceRanking()
+    ) {
         self.store = store
         self.archive = archive
         self.calendar = calendar
+        self.ranking = ranking
+    }
+
+    /// Merges one Whoop reading into a column another source also writes.
+    ///
+    /// Whoop used to assign these directly, which made it the winner by write
+    /// order: it ran first and the Health sync ran second and overwrote what it
+    /// was allowed to. That worked only while there were exactly two writers.
+    ///
+    /// Returns `existing` unchanged when `incoming` is nil, so the assignment
+    /// is safe unconditionally and the old `if let` guards are unnecessary.
+    private func merged(
+        _ metric: HealthMetric,
+        incoming: Double?,
+        existing: Double?,
+        row: DailyMetrics
+    ) -> Double? {
+        let held = row.source(metric.rawValue).flatMap(MetricSource.init(rawValue:))
+        let outcome = MetricArbiter.resolve(
+            metric: metric,
+            existing: existing, existingSource: held,
+            incoming: incoming, incomingSource: .whoop,
+            ranking: ranking
+        )
+        row.setSource(metric.rawValue, outcome.source?.rawValue)
+        return outcome.value
     }
 
     /// `body` and its date must always be supplied together: a sample without a
@@ -74,15 +106,21 @@ public struct WhoopDerivation {
             // Nil never overwrites a stored value: a sample that omits a field
             // means "no reading", not "clear what you had".
             if let value = recovery?.recoveryPercentage { row.whoopRecoveryPct = value }
-            if let value = recovery?.restingHeartRate { row.restingHR = value }
-            if let value = recovery?.hrvMilliseconds { row.hrvMs = value }
-            if let value = recovery?.spo2Percentage { row.spo2Percentage = value }
+            row.restingHR = merged(.restingHR, incoming: recovery?.restingHeartRate,
+                                   existing: row.restingHR, row: row)
+            row.hrvMs = merged(.hrvMs, incoming: recovery?.hrvMilliseconds,
+                               existing: row.hrvMs, row: row)
+            row.spo2Percentage = merged(.spo2Percentage, incoming: recovery?.spo2Percentage,
+                                        existing: row.spo2Percentage, row: row)
             if let value = recovery?.skinTempCelsius { row.skinTempCelsius = value }
             if let value = recovery?.isCalibrating { row.whoopRecoveryIsCalibrating = value }
 
             if let value = sleep?.performancePercentage { row.whoopSleepPerformancePct = value }
-            if let value = sleep?.asleepMinutes { row.sleepMinutes = value }
-            if let value = sleep?.respiratoryRate { row.respiratoryRate = value }
+            row.sleepMinutes = merged(.sleepMinutes, incoming: sleep?.asleepMinutes.map(Double.init),
+                                      existing: row.sleepMinutes.map(Double.init), row: row)
+                .map { Int($0.rounded()) }
+            row.respiratoryRate = merged(.respiratoryRate, incoming: sleep?.respiratoryRate,
+                                         existing: row.respiratoryRate, row: row)
             if let value = sleep?.consistencyPercentage { row.whoopSleepConsistencyPct = value }
             if let value = sleep?.efficiencyPercentage { row.whoopSleepEfficiencyPct = value }
             if let value = sleep?.sleepDebtMinutes { row.whoopSleepDebtMinutes = value }
@@ -94,16 +132,19 @@ public struct WhoopDerivation {
 
             let dayWorkouts = workouts.filter { calendar.startOfDay(for: $0.start) == day }
             if !dayWorkouts.isEmpty {
-                row.exerciseMinutes = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
+                let total = dayWorkouts.reduce(0) { $0 + $1.durationMinutes }
+                row.exerciseMinutes = merged(.exerciseMinutes, incoming: Double(total),
+                                             existing: row.exerciseMinutes.map(Double.init), row: row)
+                    .map { Int($0.rounded()) }
             }
 
             // Height and max heart rate are constants, not daily readings: a column
             // restating the same value on every row would be noise, so only weight
             // reaches the row. Weight is also the one column HealthKit will
             // eventually share, so nil never overwrites a value already stored.
-            if let body, calendar.startOfDay(for: body.date) == day,
-               let weight = body.sample.weightKilograms {
-                row.weightKg = weight
+            if let body, calendar.startOfDay(for: body.date) == day {
+                row.weightKg = merged(.weightKg, incoming: body.sample.weightKilograms,
+                                      existing: row.weightKg, row: row)
             }
 
             row.syncedAt = .now
