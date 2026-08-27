@@ -50,14 +50,21 @@ All pure, all in the `Sectors` package beside the scorers, all unit tested witho
 ```
 MonthProgress
   init(window: MonthWindow, now: Date, calendar: Calendar)
-  elapsedDays    Int
+  window         MonthWindow
+  elapsedDays    Int      today counts as lived
   remainingDays  Int      0 for any month that has ended
   isInFlight     Bool
+  remainingDates(calendar:) -> [Date]
 
 ProjectedInputs
-  static func coasting(_ inputs: MonthInputs, progress:) -> MonthInputs
-  static func perfect(_ inputs: MonthInputs, progress:, targets:) -> MonthInputs?
-  static func perfecting(_ lever: Lever, in: MonthInputs, progress:, targets:) -> MonthInputs
+  static func coasting(_ inputs: MonthInputs, progress:, calendar:) -> MonthInputs
+  static func perfect(_ inputs: MonthInputs, progress:, calendar:) -> MonthInputs
+  static func perfecting(_ lever: Lever, in: MonthInputs, progress:, calendar:) -> MonthInputs
+
+Targets are read from `inputs.targets`; none of these take them separately.
+Every one returns a value. Money's missing ceiling is a rule about one
+sector's score, not about a month's inputs, so it is decided in `SectorBand`
+where it can be stated once (Section 5).
 
 SectorBand
   sector          LifeSector
@@ -67,16 +74,25 @@ SectorBand
   ceilingEvidence Evidence
   decided         Double?
 
+Lever
+  enum { sleep, exercise, steps, water, journal, habits, spend }
+  static func all(for: LifeSector) -> [Lever]
+  func tracked(in: MonthInputs) -> Bool
+
 Leverage
-  static func ranked(for sector:, inputs:, progress:, targets:, answers:) -> [LeverDelta]
-  LeverDelta { lever, projectedValue, delta: Double }
+  static func ranked(for sector:, inputs:, progress:, answers:, calendar:) -> [LeverDelta]
+  LeverDelta { lever: Lever, delta: Double }
+
+`delta` is in points on the 0...10 scale and needs sub-point resolution, so
+`Evidence` gains `proposedValue: Double?`, the unrounded weighted mean, and
+`proposedScore` becomes its rounded form. The two cannot then disagree.
 ```
 
 `floor` and `ceiling` are optional and are never zero when absent. This follows the rule `Evidence.proposedScore` already sets: a sector with no evidence has not been judged badly, it has not been judged.
 
 ## 5. Sector-specific rules
 
-**Money has no ceiling without buckets.** With no `BudgetReport` there is no defensible best remaining spend. Zero is fantasy and any other figure is invented. `ProjectedInputs.perfect` returns nil for that case, the card shows a floor alone, and the copy points at bucket setup. This turns the honest gap into a funnel toward budgets rather than a fabricated number.
+**Money has no ceiling without buckets.** With no `BudgetReport` there is no defensible best remaining spend. Zero is fantasy and any other figure is invented. `SectorBand` reports no ceiling for that case, the card shows a floor alone, and the copy points at bucket setup. This turns the honest gap into a funnel toward budgets rather than a fabricated number.
 
 With buckets, the perfect variant spends the remaining bucket allowance across the remaining days, so `BudgetReport.meanAdherence` reaches 1.0 without pretending spending stops.
 
@@ -94,7 +110,9 @@ With buckets, the perfect variant spends the remaining bucket allowance across t
 
 `MonthlyCloseViewModel.loadMonthInputs()` is private, roughly 55 lines, and sits inside a 337-line view model. The in-flight board needs the same thing for the current month.
 
-It moves to `Sectors/MonthInputsLoader.swift` as `loadMonthInputs(context:month:calendar:) throws -> MonthInputs`, with the previous-month window logic it already carries. `MonthlyCloseViewModel` calls it instead of owning it.
+It moves to `Sectors/MonthInputsLoader.swift` as `load(context:month:now:calendar:) throws -> MonthInputs`, with the previous-month window logic it already carries. `MonthlyCloseViewModel` calls it instead of owning it.
+
+The new `now` parameter fixes a bug the in-flight case exposes. `PlanStore.recentTicks` returns one flag per day in its window and reads a day with no tick as a miss, so running the window to the last day of a month still being lived scores every day still to come as a habit already broken. On the 27th of a 31 day month that alone caps the rate at 27/31 however perfect the person has been. Habits are now judged only across the days already lived. A month that has ended is unaffected, which the characterization test pins.
 
 This is behaviour-preserving and is covered by a characterization test written *before* the move (Section 9). It also puts store-reading where it can be tested: `LifeBoardViewModel`'s own doc comment records that view models stay thin because the app has no test target, and this is that rule applied to the loader.
 
