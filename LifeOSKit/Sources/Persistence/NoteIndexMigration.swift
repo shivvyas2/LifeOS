@@ -30,12 +30,16 @@ public enum NoteIndexMigration {
         let key = marker
         if !defaults.bool(forKey: key) {
             let stamp = Date.now
-            for document in try context.fetch(FetchDescriptor<NoteDocument>())
-            where document.filedAt == nil {
+            let documents = try context.fetch(FetchDescriptor<NoteDocument>())
+            for document in documents where document.filedAt == nil {
                 document.filedAt = stamp
             }
             try context.save()
-            defaults.set(true, forKey: key)
+            // The marker is only spent when there was history to interpret. An
+            // empty store has none: on a fresh install the first launch runs
+            // before the first pull, so consuming the one-shot here would leave
+            // every page that arrives afterwards stranded in the Inbox.
+            if !documents.isEmpty { defaults.set(true, forKey: key) }
         }
         return try NoteIndexer.rebuildAll(context: context)
     }

@@ -250,6 +250,12 @@ public final class NoteSync {
             createdAt: row.createdAt
         )
         document.drawingData = row.drawing
+        // A page arriving from another device was filed on the device that made
+        // it, so it is not new capture here and does not belong in this
+        // device's Inbox. `filed_at` is not on the wire in this phase; phase 3
+        // adds the real column and replaces this stand-in. Insert path only:
+        // an update must not refile a page the person has since unfiled.
+        document.filedAt = row.createdAt
         document.isFavorite = row.isFavorite
         document.openedAt = row.openedAt
         document.archivedAt = row.archivedAt

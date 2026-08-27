@@ -59,4 +59,21 @@ import SwiftData
 
         #expect(captured.isInInbox)
     }
+
+    /// A fresh install runs this before its first pull, so there is nothing to
+    /// stamp and no history to interpret. Spending the one-shot there would
+    /// leave the whole pulled library sitting in the Inbox.
+    @Test func anEmptyStoreDoesNotSpendTheOneShot() throws {
+        let context = try makeContext()
+        let defaults = isolatedDefaults()
+
+        try NoteIndexMigration.run(context: context, defaults: defaults)
+
+        let pulled = NoteDocument(title: "Marathon", bucket: .projects)
+        context.insert(pulled)
+        try context.save()
+        try NoteIndexMigration.run(context: context, defaults: defaults)
+
+        #expect(!pulled.isInInbox)
+    }
 }

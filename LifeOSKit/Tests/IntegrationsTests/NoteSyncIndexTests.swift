@@ -82,4 +82,17 @@ import SwiftData
 
         #expect(try context.fetch(FetchDescriptor<NoteTask>()).isEmpty)
     }
+
+    /// A page made on another device was filed there. Arriving here it is not
+    /// new capture, and a fresh install pulling a whole library must not meet
+    /// all of it as an Inbox to sort.
+    @Test func aPulledPageIsNotInTheInbox() throws {
+        let context = ModelContext(try LifeOSContainer.make(inMemory: true))
+        let sync = makeSync(context)
+
+        try sync.apply(row(), store: NotesStore(context: context))
+
+        let pulled = try #require(try context.fetch(FetchDescriptor<NoteDocument>()).first)
+        #expect(!pulled.isInInbox)
+    }
 }
