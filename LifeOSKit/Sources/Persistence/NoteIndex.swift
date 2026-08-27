@@ -32,6 +32,12 @@ public final class NoteTask {
     /// Position in its page, so a cross note list can still show a page's
     /// to-dos in the order they were written.
     public var sortOrder: Int = 0
+    /// The owning page's `updatedAt`, copied down at index time.
+    ///
+    /// A cross page list has to order pages somehow, and `sortOrder` cannot do
+    /// it: that is a position within one page. Denormalised rather than joined
+    /// because the row is rebuilt on every save anyway, so it cannot drift.
+    public var documentUpdatedAt: Date = Date.distantPast
 
     public init(
         id: UUID = UUID(),
@@ -41,7 +47,8 @@ public final class NoteTask {
         indent: Int = 0,
         dueDate: Date? = nil,
         goalID: UUID? = nil,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        documentUpdatedAt: Date = .distantPast
     ) {
         self.id = id
         self.documentID = documentID
@@ -51,6 +58,7 @@ public final class NoteTask {
         self.dueDate = dueDate
         self.goalID = goalID
         self.sortOrder = sortOrder
+        self.documentUpdatedAt = documentUpdatedAt
     }
 }
 

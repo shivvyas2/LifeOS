@@ -252,4 +252,21 @@ import SwiftData
 
         #expect(try store.indexedTasks().isEmpty)
     }
+
+    /// Ordering across pages comes from the page, not from the block offset.
+    /// Sorting by sortOrder alone interleaved every page's first to-do, which
+    /// is what this guards against.
+    @Test func todosAcrossPagesAreNewestPageFirst() throws {
+        let store = try makeStore()
+        let older = try store.createDocument(title: "Older", bucket: .projects)
+        try store.update(older, blocks: [
+            NoteBlock(kind: .todo, text: "older first"),
+            NoteBlock(kind: .todo, text: "older second"),
+        ])
+        let newer = try store.createDocument(title: "Newer", bucket: .projects)
+        try store.update(newer, blocks: [NoteBlock(kind: .todo, text: "newer first")])
+
+        #expect(try store.indexedTasks().map(\.text)
+                == ["newer first", "older first", "older second"])
+    }
 }

@@ -188,10 +188,16 @@ public struct NotesStore {
         }
     }
 
-    /// The indexed to-dos, newest page first. What the To-dos chip reads.
+    /// The indexed to-dos, newest page first and in written order within a
+    /// page. What the To-dos chip reads.
     public func indexedTasks(openOnly: Bool = false) throws -> [NoteTask] {
         let rows = try context.fetch(
-            FetchDescriptor<NoteTask>(sortBy: [SortDescriptor(\.sortOrder)])
+            FetchDescriptor<NoteTask>(
+                sortBy: [
+                    SortDescriptor(\.documentUpdatedAt, order: .reverse),
+                    SortDescriptor(\.sortOrder),
+                ]
+            )
         )
         return openOnly ? rows.filter { !$0.isChecked } : rows
     }

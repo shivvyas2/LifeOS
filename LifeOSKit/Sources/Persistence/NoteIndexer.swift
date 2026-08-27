@@ -48,7 +48,8 @@ public enum NoteIndexer {
                     indent: block.indent,
                     dueDate: block.dueDate,
                     goalID: block.goalID,
-                    sortOrder: offset
+                    sortOrder: offset,
+                    documentUpdatedAt: document.updatedAt
                 )
             )
         }
