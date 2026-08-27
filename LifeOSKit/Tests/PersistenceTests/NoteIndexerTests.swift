@@ -208,6 +208,52 @@ import SwiftData
         #expect(try tasks(in: context).count == 1)
     }
 
+    /// A page with no links skips the title index entirely, which is the
+    /// common case and the one the editor pays for on every debounced save.
+    /// Skipping must cost it nothing: its to-dos are still indexed, and it
+    /// still ends up with no edges.
+    @Test func aPageWithNoLinksStillIndexesItsTodos() throws {
+        let context = try makeContext()
+        let document = NoteDocument(title: "Marathon", blocks: [
+            NoteBlock(kind: .todo, text: "Long run", isChecked: true),
+            NoteBlock(text: "no links here"),
+            NoteBlock(kind: .todo, text: "Buy shoes"),
+        ])
+        context.insert(document)
+
+        try NoteIndexer.reindex(document, in: context)
+
+        #expect(try tasks(in: context).map(\.text) == ["Long run", "Buy shoes"])
+        #expect(try links(in: context).isEmpty)
+    }
+
+    /// The rebuild resolves against one title index built for the whole pass,
+    /// so a link still has to land on the page it names no matter which order
+    /// the two documents are visited in.
+    @Test func rebuildingResolvesLinksAcrossDocuments() throws {
+        let context = try makeContext()
+        let marathon = NoteDocument(title: "Marathon", blocks: [
+            NoteBlock(text: "packing in [[Kit list]]")
+        ])
+        let kit = NoteDocument(title: "Kit list", blocks: [
+            NoteBlock(text: "for the [[Marathon]]"),
+            NoteBlock(kind: .todo, text: "Pack"),
+        ])
+        let stub = NoteDocument(title: "Ideas", blocks: [NoteBlock(text: "[[Nowhere]]")])
+        context.insert(marathon)
+        context.insert(kit)
+        context.insert(stub)
+
+        _ = try NoteIndexer.rebuildAll(context: context)
+
+        let edges = try links(in: context)
+        #expect(edges.count == 3)
+        #expect(edges.first { $0.sourceID == marathon.id }?.targetID == kit.id)
+        #expect(edges.first { $0.sourceID == kit.id }?.targetID == marathon.id)
+        #expect(edges.first { $0.sourceID == stub.id }?.targetID == nil)
+        #expect(try tasks(in: context).count == 1)
+    }
+
     /// Rows left behind by a page that no longer exists are the one thing a
     /// per document reindex cannot clear, so the rebuild has to.
     @Test func rebuildingClearsRowsWhosePageIsGone() throws {

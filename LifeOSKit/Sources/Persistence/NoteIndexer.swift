@@ -19,7 +19,16 @@ public enum NoteIndexer {
     /// so the rewrite is cheap, and a diff would need its own correctness
     /// argument for every field. A tombstoned page is left with no rows at
     /// all, since nothing should list the to-dos of a deleted page.
-    public static func reindex(_ document: NoteDocument, in context: ModelContext) throws {
+    ///
+    /// `titles` is the folded title index to resolve links against. Left nil it
+    /// is built on demand, which is what a single save wants; `rebuildAll`
+    /// passes one it built once, because building it per document is what made
+    /// a rebuild quadratic in the size of the library.
+    public static func reindex(
+        _ document: NoteDocument,
+        in context: ModelContext,
+        titles: [String: UUID]? = nil
+    ) throws {
         let documentID = document.id
         // Fetch and delete each, NOT `context.delete(model:where:)`. The batch
         // form runs against the persistent store and cannot see rows inserted
@@ -54,18 +63,25 @@ public enum NoteIndexer {
             )
         }
 
+        // Scanned once, and the title index is only built when there is
+        // something to resolve. Most pages carry no links at all, and the scan
+        // is cheap next to a fetch of every document in the library, which the
+        // editor would otherwise pay on every debounced keystroke.
+        let links = NoteLinkScanner.links(in: document.blocks)
+        guard !links.isEmpty else { return }
+
         // Resolved by folded title, because that is how a person writes a
         // link: by the name of the page, not its id. Titles are not unique,
-        // so first match wins and the tie is stable only by fetch order. That
-        // is the same tie the backlinks list already lives with.
-        let titles = try titleIndex(in: context)
-        for target in NoteLinkScanner.links(in: document.blocks) {
+        // so first match wins, and the fetch is ordered so that tie lands the
+        // same way on every launch.
+        let resolved = try titles ?? titleIndex(in: context)
+        for target in links {
             let folded = target.lowercased()
             context.insert(
                 NoteLink(
                     sourceID: documentID,
                     targetTitleFolded: folded,
-                    targetID: titles[folded]
+                    targetID: resolved[folded]
                 )
             )
         }
@@ -85,9 +101,14 @@ public enum NoteIndexer {
         try context.delete(model: NoteTask.self)
         try context.delete(model: NoteLink.self)
 
+        // Built once for the whole pass. Letting each `reindex` build its own
+        // made a rebuild quadratic: one fetch of every document per document,
+        // decoding the blocks of each untitled page every time, on the main
+        // actor before the UI is live.
+        let titles = try titleIndex(in: context)
         let documents = try context.fetch(FetchDescriptor<NoteDocument>())
         for document in documents {
-            try reindex(document, in: context)
+            try reindex(document, in: context, titles: titles)
         }
         try context.save()
         return documents.count
@@ -96,10 +117,15 @@ public enum NoteIndexer {
     /// Live pages by folded title. Built once per reindex rather than fetched
     /// per link, since a page with twenty links would otherwise mean twenty
     /// fetches for one keystroke.
+    ///
+    /// Ordered by `createdAt` so that when two pages share a title the older
+    /// one wins, every launch. Unordered, the tie would be broken by whatever
+    /// the store happened to return, and a link could point at one page today
+    /// and the other tomorrow.
     private static func titleIndex(in context: ModelContext) throws -> [String: UUID] {
         var index: [String: UUID] = [:]
-        for document in try context.fetch(FetchDescriptor<NoteDocument>())
-        where document.deletedAt == nil {
+        let descriptor = FetchDescriptor<NoteDocument>(sortBy: [SortDescriptor(\.createdAt)])
+        for document in try context.fetch(descriptor) where document.deletedAt == nil {
             let key = document.displayTitle.lowercased()
             if index[key] == nil { index[key] = document.id }
         }
