@@ -229,3 +229,93 @@ import Foundation
         #expect(NoteBlockEditor.transform(blocks, at: stranger, to: .todo, text: "").handled == false)
     }
 }
+
+@Suite struct NoteSketchBlockTests {
+    private func doc(_ blocks: NoteBlock...) -> [NoteBlock] { blocks }
+
+    /// A sketch holds no text, so like a rule it has to leave somewhere to
+    /// carry on typing or the person is stranded.
+    @Test func insertingASketchLeavesAParagraphForTheCaret() {
+        let block = NoteBlock(text: "/sketch")
+        let result = NoteBlockEditor.transform(doc(block), at: block.id, to: .sketch, text: "")
+
+        #expect(result.blocks.count == 2)
+        #expect(result.blocks[0].kind == .sketch)
+        #expect(result.blocks[1].kind == .paragraph)
+        #expect(result.focus == result.blocks[1].id)
+    }
+
+    @Test func aSketchIsNotTextual() {
+        #expect(NoteBlockKind.sketch.isTextual == false)
+        #expect(NoteBlockKind.sketch.continuesOnReturn == false)
+        #expect(NoteBlockKind.sketch.markdownPrefix.isEmpty)
+    }
+
+    @Test func inkIsStoredOnTheBlockItWasDrawnIn() {
+        let sketch = NoteBlock(kind: .sketch)
+        let ink = Data([1, 2, 3, 4])
+        let result = NoteBlockEditor.setDrawing(doc(sketch), at: sketch.id, drawing: ink)
+
+        #expect(result.blocks[0].drawing == ink)
+        #expect(result.blocks[0].isBlankSketch == false)
+    }
+
+    /// Empty ink is nil, so "has this been drawn in" has one answer.
+    @Test func erasingASketchLeavesNilRatherThanEmptyInk() {
+        let sketch = NoteBlock(kind: .sketch, drawing: Data([9]))
+        let result = NoteBlockEditor.setDrawing(doc(sketch), at: sketch.id, drawing: Data())
+
+        #expect(result.blocks[0].drawing == nil)
+        #expect(result.blocks[0].isBlankSketch)
+    }
+
+    @Test func inkCannotBeStoredOnATextBlock() {
+        let paragraph = NoteBlock(text: "words")
+        #expect(NoteBlockEditor.setDrawing(doc(paragraph), at: paragraph.id, drawing: Data([1])).handled == false)
+    }
+
+    @Test func sketchHeightIsClampedToUsefulBounds() {
+        let sketch = NoteBlock(kind: .sketch)
+        let tall = NoteBlockEditor.setSketchHeight(doc(sketch), at: sketch.id, height: 5_000)
+        let short = NoteBlockEditor.setSketchHeight(doc(sketch), at: sketch.id, height: 10)
+
+        #expect(tall.blocks[0].resolvedSketchHeight == NoteBlock.maxSketchHeight)
+        #expect(short.blocks[0].resolvedSketchHeight == NoteBlock.minSketchHeight)
+    }
+
+    @Test func anUndrawnSketchHasTheDefaultHeight() {
+        #expect(NoteBlock(kind: .sketch).resolvedSketchHeight == NoteBlock.defaultSketchHeight)
+    }
+
+    /// Backspacing past a blank sketch removes it, the way it removes a rule.
+    @Test func backspaceRemovesAnUntouchedSketch() {
+        let sketch = NoteBlock(kind: .sketch)
+        let below = NoteBlock(text: "after")
+        let result = NoteBlockEditor.backspaceAtStart(doc(sketch, below), at: below.id)
+
+        #expect(result.handled)
+        #expect(result.blocks.count == 1)
+        #expect(result.blocks[0].text == "after")
+    }
+
+    /// A drawing must not be deleted by a keystroke aimed at text. Losing ink
+    /// to a held Backspace is unrecoverable.
+    @Test func backspaceWillNotSwallowADrawnSketch() {
+        let sketch = NoteBlock(kind: .sketch, drawing: Data([1, 2, 3]))
+        let below = NoteBlock(text: "after")
+        let result = NoteBlockEditor.backspaceAtStart(doc(sketch, below), at: below.id)
+
+        #expect(result.handled == false)
+        #expect(result.blocks.count == 2)
+        #expect(result.blocks[0].drawing != nil)
+    }
+
+    @Test func markdownSaysADrawingWasHereRatherThanDroppingIt() {
+        let markdown = NoteBlockParser.markdown(doc(
+            NoteBlock(text: "before"),
+            NoteBlock(kind: .sketch, drawing: Data([1])),
+            NoteBlock(text: "after")
+        ))
+        #expect(markdown.contains("[sketch]"))
+    }
+}

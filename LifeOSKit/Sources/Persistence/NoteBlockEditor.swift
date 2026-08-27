@@ -87,9 +87,18 @@ public enum NoteBlockEditor {
         // the keystroke is not ours and UIKit keeps whatever it would have done.
         guard index > 0 else { return Result(blocks: blocks, handled: false) }
 
-        if blocks[index - 1].kind == .divider {
+        // Backspacing into a block with no text deletes it, since there is
+        // nothing to merge with. A sketch counts only when it is still blank:
+        // deleting someone's drawing because they held Backspace would be
+        // unrecoverable.
+        let above = blocks[index - 1]
+        if above.kind == .divider || above.isBlankSketch {
             blocks.remove(at: index - 1)
             return Result(blocks: blocks, focus: id)
+        }
+        if above.kind == .sketch {
+            // A drawn sketch stops the merge rather than being swallowed.
+            return Result(blocks: blocks, handled: false)
         }
 
         let removed = blocks.remove(at: index)
@@ -124,8 +133,11 @@ public enum NoteBlockEditor {
         }
         var blocks = blocks
 
-        if kind == .divider {
-            blocks[index] = NoteBlock(kind: .divider)
+        // Neither a rule nor a sketch holds text, so both are followed by an
+        // empty paragraph for the caret. Without it, typing `---` or picking
+        // Sketch from the menu strands the person with nowhere to type.
+        if !kind.isTextual {
+            blocks[index] = NoteBlock(kind: kind)
             let paragraph = NoteBlock()
             blocks.insert(paragraph, at: index + 1)
             return Result(blocks: blocks, focus: paragraph.id)
@@ -205,5 +217,34 @@ public enum NoteBlockEditor {
         let tail = String(prefix[open.upperBound...])
         guard !tail.contains("]]"), !tail.contains("\n") else { return nil }
         return tail
+    }
+}
+
+
+public extension NoteBlockEditor {
+    /// Stores a sketch's ink.
+    static func setDrawing(_ blocks: [NoteBlock], at id: UUID, drawing: Data?) -> Result {
+        guard let index = blocks.firstIndex(where: { $0.id == id }),
+              blocks[index].kind == .sketch
+        else { return Result(blocks: blocks, handled: false) }
+
+        var blocks = blocks
+        // Empty ink is stored as nil rather than as an empty drawing, so
+        // "has this been drawn in" stays one question with one answer.
+        blocks[index].drawing = (drawing?.isEmpty ?? true) ? nil : drawing
+        return Result(blocks: blocks)
+    }
+
+    /// Resizes a sketch, clamped to the bounds a sketch is useful between.
+    static func setSketchHeight(_ blocks: [NoteBlock], at id: UUID, height: Double) -> Result {
+        guard let index = blocks.firstIndex(where: { $0.id == id }),
+              blocks[index].kind == .sketch
+        else { return Result(blocks: blocks, handled: false) }
+
+        var blocks = blocks
+        blocks[index].sketchHeight = min(
+            max(height, NoteBlock.minSketchHeight), NoteBlock.maxSketchHeight
+        )
+        return Result(blocks: blocks)
     }
 }

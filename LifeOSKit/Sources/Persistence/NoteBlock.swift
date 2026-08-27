@@ -12,6 +12,9 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
     case bulleted, numbered, todo
     case quote, callout, code
     case divider
+    /// A drawing that takes its own space in the flow, as opposed to the
+    /// page-wide ink layer that floats over everything.
+    case sketch
 
     public var id: String { rawValue }
 
@@ -28,6 +31,7 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
         case .callout:   "Callout"
         case .code:      "Code"
         case .divider:   "Divider"
+        case .sketch:    "Sketch"
         }
     }
 
@@ -44,6 +48,7 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
         case .callout:   "Make something stand out"
         case .code:      "Monospaced, no autocorrect"
         case .divider:   "A line between sections"
+        case .sketch:    "Draw with a pencil, in line with the text"
         }
     }
 
@@ -60,13 +65,14 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
         case .callout:   "lightbulb"
         case .code:      "chevron.left.forwardslash.chevron.right"
         case .divider:   "minus"
+        case .sketch:    "scribble.variable"
         }
     }
 
-    /// Whether the block owns editable text. A divider does not, which is why
-    /// it can never hold focus and why Return on the block before it inserts a
-    /// paragraph rather than a second rule.
-    public var isTextual: Bool { self != .divider }
+    /// Whether the block owns editable text. A divider and a sketch do not,
+    /// which is why neither can hold the caret and why the editor inserts a
+    /// paragraph after each so there is somewhere to carry on typing.
+    public var isTextual: Bool { self != .divider && self != .sketch }
 
     /// Whether Return inside the block continues it rather than dropping back
     /// to a paragraph. Lists continue; a heading does not, because nobody wants
@@ -97,7 +103,8 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
 
     /// The blocks the slash menu offers, in menu order.
     public static var menuOrder: [NoteBlockKind] {
-        [.paragraph, .heading1, .heading2, .heading3, .todo, .bulleted, .numbered, .quote, .callout, .code, .divider]
+        [.paragraph, .heading1, .heading2, .heading3, .todo, .bulleted, .numbered,
+         .quote, .callout, .code, .sketch, .divider]
     }
 }
 
@@ -118,19 +125,47 @@ public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
     /// a sibling in the array, which is what keeps every editing operation a
     /// flat list operation.
     public var indent: Int
+    /// A `PKDrawing`, on sketch blocks only. Optional so the overwhelming
+    /// majority of blocks, which are text, carry nothing.
+    public var drawing: Data?
+    /// How tall the sketch is. Stored because a person can drag it taller and
+    /// the ink would otherwise be cropped differently on another device.
+    public var sketchHeight: Double?
 
     public init(
         id: UUID = UUID(),
         kind: NoteBlockKind = .paragraph,
         text: String = "",
         isChecked: Bool = false,
-        indent: Int = 0
+        indent: Int = 0,
+        drawing: Data? = nil,
+        sketchHeight: Double? = nil
     ) {
         self.id = id
         self.kind = kind
         self.text = text
         self.isChecked = isChecked
         self.indent = min(max(indent, 0), NoteBlock.maxIndent)
+        self.drawing = drawing
+        self.sketchHeight = sketchHeight
+    }
+
+    /// Sketches start at a comfortable drawing height and can be dragged
+    /// between these bounds. A sketch shorter than this is not worth the
+    /// gesture; taller than this and it stops being inline.
+    public static let defaultSketchHeight: Double = 220
+    public static let minSketchHeight: Double = 120
+    public static let maxSketchHeight: Double = 640
+
+    public var resolvedSketchHeight: Double {
+        min(max(sketchHeight ?? NoteBlock.defaultSketchHeight, NoteBlock.minSketchHeight),
+            NoteBlock.maxSketchHeight)
+    }
+
+    /// True when a sketch block has never been drawn in, so the editor can
+    /// prompt rather than showing an unexplained empty rectangle.
+    public var isBlankSketch: Bool {
+        kind == .sketch && (drawing?.isEmpty ?? true)
     }
 
     public static let maxIndent = 4
@@ -203,6 +238,10 @@ public enum NoteBlockParser {
             case .callout:   lines.append(pad + "> " + block.text)
             case .code:      lines.append(pad + "```\n" + block.text + "\n" + pad + "```")
             case .divider:   lines.append("---")
+            // Markdown has no ink. Saying a drawing was here beats dropping it
+            // silently, which would make an exported page look complete when
+            // it is not.
+            case .sketch:    lines.append(pad + "_[sketch]_")
             }
         }
         return lines.joined(separator: "\n")

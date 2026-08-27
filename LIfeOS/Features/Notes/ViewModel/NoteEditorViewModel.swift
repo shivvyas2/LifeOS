@@ -143,6 +143,23 @@ final class NoteEditorViewModel {
         return true
     }
 
+    /// Ink inside a sketch block. Saved on the same debounce as text: a stroke
+    /// lands every few milliseconds while someone is drawing, and writing the
+    /// document on each one would rewrite every block in the page per stroke.
+    func setSketchDrawing(_ drawing: Data?, on id: UUID) {
+        let result = NoteBlockEditor.setDrawing(blocks, at: id, drawing: drawing)
+        guard result.handled else { return }
+        blocks = result.blocks
+        scheduleSave()
+    }
+
+    func setSketchHeight(_ height: Double, on id: UUID) {
+        let result = NoteBlockEditor.setSketchHeight(blocks, at: id, height: height)
+        guard result.handled else { return }
+        blocks = result.blocks
+        scheduleSave()
+    }
+
     func indent(_ id: UUID, by delta: Int) {
         let result = NoteBlockEditor.indent(blocks, at: id, by: delta)
         guard result.handled else { return }

@@ -26,6 +26,8 @@ struct NoteBlockRow: View {
     var onTransform: (NoteBlockKind, String) -> Void
     var onSlashQuery: (String?) -> Void
     var onLinkQuery: (String?) -> Void
+    var onSketchDrawing: (Data?) -> Void = { _ in }
+    var onSketchHeight: (Double) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -39,7 +41,14 @@ struct NoteBlockRow: View {
     }
 
     var body: some View {
-        if block.kind == .divider {
+        if block.kind == .sketch {
+            SketchBlockView(
+                block: block,
+                onDrawing: onSketchDrawing,
+                onHeight: onSketchHeight
+            )
+            .padding(.leading, indentWidth)
+        } else if block.kind == .divider {
             Rectangle()
                 .fill(primary.opacity(scheme == .dark ? 0.18 : 0.10))
                 .frame(height: 1)

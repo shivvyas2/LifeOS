@@ -19,17 +19,50 @@ struct NoteEditorScreen: View {
     /// Measured, so the ink canvas covers exactly the blocks. A canvas sized to
     /// the screen instead would clip strokes the moment the page scrolled.
     @State private var contentHeight: CGFloat = 0
+    /// The editor's own width, which is not the pane's: in a three-column
+    /// layout the page is the last of three, and only it knows how much it got.
+    @State private var editorWidth: CGFloat = 0
     @State private var showEmojiPicker = false
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
 
+    /// Backlinks move out from under the text once there is room beside it.
+    /// A measure capped at 760 leaves a wide pane with empty margin, and the
+    /// list of what points here is the obvious thing to put in it. Below this
+    /// the panel would squeeze the writing, so it stays under the text.
+    private var showsInspector: Bool {
+        editorWidth >= 1_040 && !model.backlinks.isEmpty
+    }
+
     var body: some View {
+        HStack(spacing: 0) {
+            page
+
+            if showsInspector {
+                Rectangle()
+                    .fill(primary.opacity(scheme == .dark ? 0.14 : 0.07))
+                    .frame(width: 1)
+
+                backlinksInspector
+                    .frame(width: 280)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            editorWidth = width
+        }
+        .animation(.easeInOut(duration: 0.2), value: showsInspector)
+    }
+
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 pageBody
-                if !model.backlinks.isEmpty { backlinks }
+                if !model.backlinks.isEmpty, !showsInspector { backlinks }
                 Spacer(minLength: 120)
             }
             .frame(maxWidth: 760, alignment: .leading)
@@ -179,7 +212,9 @@ struct NoteEditorScreen: View {
                         onFocus: { model.focusedBlockID = block.id },
                         onTransform: { kind, text in model.transform(block.id, to: kind, text: text) },
                         onSlashQuery: { model.slashQuery = $0 },
-                        onLinkQuery: { model.linkQuery = $0 }
+                        onLinkQuery: { model.linkQuery = $0 },
+                        onSketchDrawing: { model.setSketchDrawing($0, on: block.id) },
+                        onSketchHeight: { model.setSketchHeight($0, on: block.id) }
                     )
                     .id(block.id)
                 }
@@ -201,6 +236,10 @@ struct NoteEditorScreen: View {
             InkCanvasView(
                 data: Binding(get: { model.drawingData }, set: { model.setDrawing($0) }),
                 isInkMode: model.isInking,
+                onPencilShortcut: {
+                    model.isInking.toggle()
+                    if model.isInking { model.focusedBlockID = nil }
+                },
                 height: max(contentHeight, 320),
                 isDark: scheme == .dark
             )
@@ -210,6 +249,27 @@ struct NoteEditorScreen: View {
     }
 
     // MARK: - Backlinks
+
+    /// The same list in a column of its own, for a pane wide enough to spare
+    /// the width.
+    private var backlinksInspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Linked from")
+                    .font(LifeOSType.eyebrow)
+                    .tracking(0.6)
+                    .foregroundStyle(secondary)
+
+                ForEach(model.backlinks) { link in
+                    backlinkRow(link)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(18)
+        }
+        .scrollIndicators(.hidden)
+        .background(LifeOSTokens.canvas.resolve(scheme))
+    }
 
     private var backlinks: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -221,35 +281,40 @@ struct NoteEditorScreen: View {
                 .foregroundStyle(secondary)
 
             ForEach(model.backlinks) { link in
-                Button {
-                    onOpenLinked(link.id)
-                } label: {
-                    HStack(alignment: .top, spacing: 10) {
-                        Circle()
-                            .fill(NoteAccentPalette.dot(link.accent, scheme))
-                            .frame(width: 8, height: 8)
-                            .padding(.top, 6)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(link.title)
-                                .font(LifeOSType.secondary.weight(.medium))
-                                .foregroundStyle(primary)
-                            Text(link.context)
-                                .font(LifeOSType.label.weight(.regular))
-                                .foregroundStyle(secondary)
-                                .lineLimit(2)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(LifeOSTokens.tileSurface.resolve(scheme))
-                    )
-                }
-                .buttonStyle(.plain)
+                backlinkRow(link)
             }
         }
         .padding(.top, 20)
+    }
+
+    private func backlinkRow(_ link: NoteBacklink) -> some View {
+        Button {
+            onOpenLinked(link.id)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(NoteAccentPalette.dot(link.accent, scheme))
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 6)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(link.title)
+                        .font(LifeOSType.secondary.weight(.medium))
+                        .foregroundStyle(primary)
+                    Text(link.context)
+                        .font(LifeOSType.label.weight(.regular))
+                        .foregroundStyle(secondary)
+                        .lineLimit(3)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LifeOSTokens.tileSurface.resolve(scheme))
+            )
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 
     // MARK: - Toolbar

@@ -129,13 +129,21 @@ public struct NoteDocumentRow: Equatable, Sendable {
     /// column is queryable and a malformed document is refused by Postgres at
     /// write time instead of surfacing on another device later.
     static func blockJSON(_ block: NoteBlock) -> [String: Any] {
-        [
+        var json: [String: Any] = [
             "id": block.id.uuidString.lowercased(),
             "kind": block.kind.rawValue,
             "text": block.text,
             "isChecked": block.isChecked,
             "indent": block.indent,
         ]
+        // Only sketches carry these, and only when drawn in. Writing nulls on
+        // every text block would inflate a page of prose for nothing.
+        if let drawing = block.drawing, !drawing.isEmpty,
+           drawing.count <= NoteDocumentRow.maxDrawingBytes {
+            json["drawing"] = drawing.base64EncodedString()
+        }
+        if let height = block.sketchHeight { json["sketchHeight"] = height }
+        return json
     }
 
     static func blocks(from raw: Any?) -> [NoteBlock] {
@@ -149,7 +157,9 @@ public struct NoteDocumentRow: Equatable, Sendable {
                 kind: kind,
                 text: entry["text"] as? String ?? "",
                 isChecked: entry["isChecked"] as? Bool ?? false,
-                indent: entry["indent"] as? Int ?? 0
+                indent: entry["indent"] as? Int ?? 0,
+                drawing: (entry["drawing"] as? String).flatMap { Data(base64Encoded: $0) },
+                sketchHeight: entry["sketchHeight"] as? Double
             )
         }
         return blocks.isEmpty ? NoteBlock.blank : blocks
