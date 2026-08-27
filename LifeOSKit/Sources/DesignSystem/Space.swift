@@ -40,23 +40,12 @@ public struct GlassPanel<Content: View>: View {
     }
 
     public var body: some View {
+        // Liquid Glass, not a material imitation of it: the system renders
+        // real refraction and highlights, and every panel in the app gets it
+        // from this one place.
         content
             .padding(Space.x3)
-            .background {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .fill(LifeOSTokens.cardSurface.resolve(scheme).opacity(scheme == .dark ? 0.28 : 0.18))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .strokeBorder(
-                                Color.white.opacity(scheme == .dark ? 0.16 : 0.55),
-                                lineWidth: 1
-                            )
-                    }
-            }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 }
 

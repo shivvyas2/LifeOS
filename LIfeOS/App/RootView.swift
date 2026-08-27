@@ -128,7 +128,7 @@ struct RootView: View {
         .fullScreenCover(isPresented: $showSettings) {
             ProfileScreen(
                 settings: settings, whoop: whoop, health: health, plaid: plaid,
-                stats: profileStats, onSignOut: onSignOut
+                stats: profileStats, highlights: profileHighlights, onSignOut: onSignOut
             )
         }
         .fullScreenCover(isPresented: $showCoach) {
@@ -522,6 +522,30 @@ struct RootView: View {
             ProfileStat("Sectors scored", "\(life.cards.count { $0.score != nil })"),
             ProfileStat("Pages", "\(notes.snapshot.totalCount)"),
         ]
+    }
+
+    /// Today's living numbers for the profile's glass panel. Only what is
+    /// actually known: a missing reading is left out rather than dashed, so
+    /// the panel always reads as facts. Money is deliberately absent; the
+    /// sample-data default would put invented dollars on a person's face.
+    private var profileHighlights: [ProfileStat] {
+        var highlights: [ProfileStat] = []
+        if let steps = today.snapshot.steps {
+            highlights.append(ProfileStat("Steps", steps.formatted()))
+        }
+        if let sleep = today.snapshot.sleepMinutes {
+            highlights.append(ProfileStat("Sleep", TodayScreen.duration(sleep)))
+        }
+        if let recovery = today.snapshot.recoveryPct {
+            highlights.append(ProfileStat("Recovery", "\(Int(recovery))%"))
+        }
+        if let weight = today.snapshot.weightKg {
+            highlights.append(ProfileStat("Weight", String(format: "%.1f kg", weight)))
+        }
+        if !today.snapshot.agenda.isEmpty {
+            highlights.append(ProfileStat("Events today", "\(today.snapshot.agenda.count)"))
+        }
+        return highlights
     }
 
     private func attachAll() {

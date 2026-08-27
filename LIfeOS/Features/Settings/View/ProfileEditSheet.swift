@@ -37,70 +37,82 @@ struct ProfileEditSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    HStack {
-                        Spacer()
-                        PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                            ZStack {
-                                if let draftPhoto, let image = UIImage(data: draftPhoto) {
-                                    Image(uiImage: image).resizable().scaledToFill()
-                                } else {
-                                    Circle().fill(LifeOSTokens.cardSurface.resolve(scheme))
-                                    Image(systemName: "camera.fill")
+            GradientCanvas(hue: .habits) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        photoPicker
+                            .frame(maxWidth: .infinity)
+
+                        sectionLabel("Name")
+                        GlassPanel {
+                            VStack(spacing: 0) {
+                                TextField("First name", text: $draft.firstName)
+                                    .textContentType(.givenName)
+                                    .font(LifeOSType.secondary)
+                                    .padding(.vertical, 10)
+                                divider
+                                TextField("Last name", text: $draft.lastName)
+                                    .textContentType(.familyName)
+                                    .font(LifeOSType.secondary)
+                                    .padding(.vertical, 10)
+                            }
+                        }
+
+                        sectionLabel("About")
+                        GlassPanel {
+                            VStack(spacing: 0) {
+                                DatePicker(
+                                    "Birthday",
+                                    selection: Binding(
+                                        get: { draft.birthDate ?? Self.defaultBirthday },
+                                        set: { draft.birthDate = $0 }
+                                    ),
+                                    in: Self.earliest...Date.now,
+                                    displayedComponents: .date
+                                )
+                                .font(LifeOSType.secondary.weight(.medium))
+                                .padding(.vertical, 6)
+
+                                divider
+
+                                HStack {
+                                    Text("Height")
+                                        .font(LifeOSType.secondary.weight(.medium))
+                                    Spacer()
+                                    TextField("—", text: Binding(
+                                        get: { draft.heightCM.map { String(Int($0.rounded())) } ?? "" },
+                                        set: { draft.heightCM = Double($0.filter(\.isNumber)) }
+                                    ))
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 70)
+                                    Text("cm")
                                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                                 }
+                                .padding(.vertical, 10)
+
+                                divider
+
+                                HStack {
+                                    Text("Gender")
+                                        .font(LifeOSType.secondary.weight(.medium))
+                                    Spacer()
+                                    Picker("Gender", selection: Binding(
+                                        get: { Gender(rawValue: draft.gender ?? "") ?? .unspecified },
+                                        set: { draft.gender = $0.stored }
+                                    )) {
+                                        ForEach(Gender.allCases) { Text($0.title).tag($0) }
+                                    }
+                                    .labelsHidden()
+                                    .tint(LifeOSTokens.primaryText.resolve(scheme))
+                                }
+                                .padding(.vertical, 6)
                             }
-                            .frame(width: 104, height: 104)
-                            .clipShape(Circle())
                         }
-                        .buttonStyle(.plain)
-                        Spacer()
                     }
-                    .listRowBackground(Color.clear)
-
-                    if draftPhoto != nil {
-                        Button("Remove photo", role: .destructive) { draftPhoto = nil }
-                    }
-                }
-
-                Section("Name") {
-                    TextField("First name", text: $draft.firstName)
-                        .textContentType(.givenName)
-                    TextField("Last name", text: $draft.lastName)
-                        .textContentType(.familyName)
-                }
-
-                Section("About") {
-                    DatePicker(
-                        "Birthday",
-                        selection: Binding(
-                            get: { draft.birthDate ?? Self.defaultBirthday },
-                            set: { draft.birthDate = $0 }
-                        ),
-                        in: Self.earliest...Date.now,
-                        displayedComponents: .date
-                    )
-
-                    HStack {
-                        Text("Height")
-                        Spacer()
-                        TextField("cm", text: Binding(
-                            get: { draft.heightCM.map { String(Int($0.rounded())) } ?? "" },
-                            set: { draft.heightCM = Double($0.filter(\.isNumber)) }
-                        ))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 70)
-                        Text("cm").foregroundStyle(.secondary)
-                    }
-
-                    Picker("Gender", selection: Binding(
-                        get: { Gender(rawValue: draft.gender ?? "") ?? .unspecified },
-                        set: { draft.gender = $0.stored }
-                    )) {
-                        ForEach(Gender.allCases) { Text($0.title).tag($0) }
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Edit profile")
@@ -116,6 +128,58 @@ struct ProfileEditSheet: View {
             }
             .onChange(of: pickedPhoto) { _, item in Task { await load(item) } }
         }
+    }
+
+    /// The photo is the reason this sheet exists: a big circle with a camera
+    /// badge, and the remove affordance kept small beneath it.
+    private var photoPicker: some View {
+        VStack(spacing: 10) {
+            PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                ZStack(alignment: .bottomTrailing) {
+                    Group {
+                        if let draftPhoto, let image = UIImage(data: draftPhoto) {
+                            Image(uiImage: image).resizable().scaledToFill()
+                        } else {
+                            ZStack {
+                                Circle().fill(LifeOSTokens.cardSurface.resolve(scheme))
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 44))
+                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                            }
+                        }
+                    }
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(LifeOSTokens.accent))
+                        .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 2))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change photo")
+
+            if draftPhoto != nil {
+                Button("Remove photo", role: .destructive) { draftPhoto = nil }
+                    .font(LifeOSType.label.weight(.medium))
+            }
+        }
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(LifeOSType.label.weight(.bold))
+            .tracking(0.8)
+            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(LifeOSTokens.primaryText.resolve(scheme).opacity(0.08))
+            .frame(height: 1)
     }
 
     private func save() async {

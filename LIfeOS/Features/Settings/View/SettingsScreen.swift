@@ -10,38 +10,26 @@ struct SettingsScreen: View {
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.dismiss) private var dismiss
 
+    /// A page of its own, pushed from the profile's gear. No inner
+    /// NavigationStack and no Done: the back chevron is the way out, which is
+    /// what makes this feel like a place rather than an overlay.
     var body: some View {
-        NavigationStack {
-            GradientCanvas(hue: .habits) {
-                ScrollView {
-                    sections
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 40)
-                }
-            }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                }
+        GradientCanvas(hue: .habits) {
+            ScrollView {
+                sections
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
             }
         }
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: model.draft) { model.save() }
     }
 
-    /// The settings themselves, without a screen around them.
-    ///
-    /// Pulled out so the profile screen can render exactly these rather than a
-    /// second set that looks similar and drifts apart the first time either is
-    /// touched. Settings now lives inside the profile; this screen stays
-    /// because other places still push straight to it.
     @ViewBuilder
-    var sections: some View {
+    private var sections: some View {
         VStack(alignment: .leading, spacing: 22) {
             sectionLabel("Look")
             appearanceCard
@@ -184,15 +172,7 @@ struct SettingsScreen: View {
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
                 .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
-                                              lineWidth: 1)
-                        }
-                )
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
             .buttonStyle(.plain)
         }
@@ -211,15 +191,7 @@ struct SettingsScreen: View {
             }
             .foregroundStyle(Color(red: 0.86, green: 0.22, blue: 0.22))
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
-                                          lineWidth: 1)
-                    }
-            )
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -266,5 +238,7 @@ struct SettingsScreen: View {
 }
 
 #Preview {
-    SettingsScreen(model: SettingsViewModel())
+    NavigationStack {
+        SettingsScreen(model: SettingsViewModel())
+    }
 }
