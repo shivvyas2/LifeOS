@@ -48,13 +48,24 @@ struct ProfileScreen: View {
             .scrollIndicators(.hidden)
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
             .ignoresSafeArea(edges: .top)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            // No toolbar at all: a bar button sits in a strip the photo runs
+            // under, so it arrives as a pale pill floating on the image with
+            // nothing tying it to the design. The close control belongs on the
+            // photo, styled like the Edit control it sits opposite.
+            .toolbar(.hidden, for: .navigationBar)
+            .overlay(alignment: .topLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(LifeOSType.label.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(.black.opacity(0.35)))
+                        .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
                 }
+                .padding(.leading, 20)
+                .padding(.top, 60)
+                .accessibilityLabel("Close")
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
         }
         .onChange(of: settings.draft) { settings.save() }
         .sheet(isPresented: $isEditing) {
@@ -79,13 +90,22 @@ struct ProfileScreen: View {
                 // No photo is a state, not a gap: the module gradient stands
                 // in so the shape of the screen is the same either way.
                 LinearGradient(
-                    colors: [ModuleHue.habits.pastel, ModuleHue.recovery.pastel],
+                    colors: [ModuleHue.habits.top.opacity(0.85),
+                             ModuleHue.recovery.top.opacity(0.85)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
-                Image(systemName: "person.fill")
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.25))
-                    .padding(.bottom, 60)
+                // Saturated, not pastel. The pastels are tuned to sit behind
+                // text on a light canvas; stretched across 360 points with a
+                // scrim over them they turn to grey mush, which reads as an
+                // image that failed to load rather than a deliberate state.
+                VStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.system(size: 52, weight: .regular))
+                    Text("Add a photo")
+                        .font(LifeOSType.secondary.weight(.semibold))
+                }
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.bottom, 54)
             }
 
             // The photo has to carry white text at its bottom edge whatever it
@@ -96,7 +116,15 @@ struct ProfileScreen: View {
             )
         }
         .frame(height: 360)
-        .frame(maxWidth: .infinity)
+        // Pinned to the container's width, not the image's.
+        //
+        // `scaledToFill` makes the image larger than its frame by design, and
+        // a ZStack sizes itself to its largest child: with only a height
+        // constraint the stack took the scaled image's full width, which made
+        // the whole scroll view wider than the screen. Every row below it then
+        // centred inside that phantom width and hung off both edges, which is
+        // what clipped the name and the section labels.
+        .containerRelativeFrame(.horizontal)
         .clipped()
         .overlay(alignment: .bottomTrailing) {
             // On the photo rather than in the toolbar: this is the thing
