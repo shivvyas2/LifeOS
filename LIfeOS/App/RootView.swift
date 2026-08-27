@@ -625,6 +625,7 @@ struct RootView: View {
         do {
             try PlanNoteMigration.seedIfEmpty(context: context)
             try PlanNoteMigration.run(context: context)
+            try NoteIndexMigration.run(context: context)
         } catch {
             rootLog.error("note migration failed: \(String(describing: error), privacy: .public)")
         }
