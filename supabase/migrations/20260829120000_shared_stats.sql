@@ -7,7 +7,12 @@
 -- row level. A `shares_stats` column there would be world-readable along with
 -- the numbers beside it, and "opt in" would mean opting into showing everyone.
 -- Its own table gets its own policy, and that policy can name friendship.
-create table public.profile_stats (
+-- Every statement here is written to be re-runnable. A push of this file
+-- failed partway once, leaving the table committed and the migration
+-- unrecorded, which left no way to finish it: the re-run died on the create
+-- rather than carrying on to the policies. `if not exists` and the drops
+-- below mean running it twice ends in the same place as running it once.
+create table if not exists public.profile_stats (
   user_id uuid primary key references auth.users (id) on delete cascade,
   -- The owner's answer, kept even when the numbers are null, so turning
   -- sharing off and on again does not read as a fresh decision.
@@ -28,6 +33,7 @@ alter table public.profile_stats enable row level security;
 -- Yourself always, and an accepted friend. Pending is not enough: asking to
 -- be someone's friend must not be a way to read their figures while they
 -- decide, or the request itself becomes the attack.
+drop policy if exists "own stats and accepted friends' stats" on public.profile_stats;
 create policy "own stats and accepted friends' stats"
   on public.profile_stats for select to authenticated
   using (
@@ -42,12 +48,15 @@ create policy "own stats and accepted friends' stats"
     )
   );
 
+drop policy if exists "own stats insert" on public.profile_stats;
 create policy "own stats insert"
   on public.profile_stats for insert to authenticated
   with check (user_id = auth.uid());
+drop policy if exists "own stats update" on public.profile_stats;
 create policy "own stats update"
   on public.profile_stats for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "own stats delete" on public.profile_stats;
 create policy "own stats delete"
   on public.profile_stats for delete to authenticated
   using (user_id = auth.uid());
