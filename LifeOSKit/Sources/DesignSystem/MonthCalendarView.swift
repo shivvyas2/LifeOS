@@ -61,8 +61,8 @@ public struct DateHeadline: View {
 
         VStack(alignment: .leading, spacing: 0) {
             Text(date.formatted(.dateTime.day().locale(.current)))
-                .font(LifeOSType.display)
-                .tracking(-5)
+                .font(LifeOSType.masthead)
+                .tracking(LifeOSType.mastheadTracking)
                 .foregroundStyle(primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -70,17 +70,17 @@ public struct DateHeadline: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(date.formatted(.dateTime.month(.wide)).uppercased())
-                        .font(LifeOSType.screenTitle)
+                        .font(LifeOSType.mastheadCaption)
                         .foregroundStyle(primary)
                     Text(date.formatted(.dateTime.year()))
-                        .font(LifeOSType.screenTitle.weight(.regular))
+                        .font(LifeOSType.mastheadCaption.weight(.regular))
                         .foregroundStyle(secondary)
                 }
 
                 Spacer(minLength: 12)
 
                 Text(date.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(LifeOSType.sectionTitle.weight(.medium))
+                    .font(LifeOSType.mastheadWeekday)
                     .foregroundStyle(secondary)
             }
         }

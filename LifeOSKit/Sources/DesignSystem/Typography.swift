@@ -60,6 +60,24 @@ public enum LifeOSType {
     /// The largest words in the app. One per screen at most.
     public static let display = Font.system(size: 34, weight: .bold)
 
+    /// The date on the hub, and nothing else.
+    ///
+    /// A step of its own because the scale had no room for it and the date was
+    /// flattened into `display` to fit, which took it from 104pt to 34pt: the
+    /// masthead the whole screen is built around became an ordinary heading.
+    /// A type scale that cannot express the biggest thing in the app is
+    /// missing a step rather than being violated by one.
+    ///
+    /// The negative tracking travels with it. At this size the default letter
+    /// spacing leaves the numerals visibly loose, and a caller who took the
+    /// font without the tracking would get a subtly wrong masthead.
+    public static let masthead = Font.system(size: 104, weight: .bold)
+    public static let mastheadTracking: CGFloat = -5
+
+    /// The month and year under the masthead, and the weekday beside it.
+    public static let mastheadCaption = Font.system(size: 27, weight: .bold)
+    public static let mastheadWeekday = Font.system(size: 22, weight: .medium)
+
     // MARK: - Numerals
 
     /// A figure inside a tile, beside its label.
