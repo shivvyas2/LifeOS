@@ -34,6 +34,10 @@ struct LIfeOSApp: App {
                 .task { await seedIfEmpty() }
         }
         .modelContainer(container)
+        // Hardware keyboard support lives in the scene so the shortcuts work
+        // wherever focus is, and so iPadOS lists them in the overlay that
+        // appears when Command is held.
+        .commands { NotesCommands() }
     }
 
     @MainActor

@@ -61,6 +61,15 @@ struct NoteEditorScreen: View {
         .toolbar { toolbar }
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { model.flush() }
+        // Escape backs out one layer at a time rather than closing everything
+        // at once: the block menu, then the link picker, then the keyboard.
+        // Closing the page on the first press would lose someone mid-sentence.
+        .onKeyPress(.escape) {
+            if model.slashQuery != nil { model.slashQuery = nil; return .handled }
+            if model.linkQuery != nil { model.linkQuery = nil; return .handled }
+            if model.focusedBlockID != nil { model.focusedBlockID = nil; return .handled }
+            return .ignored
+        }
         .animation(.easeInOut(duration: 0.15), value: model.slashQuery)
         .animation(.easeInOut(duration: 0.15), value: model.linkQuery)
     }

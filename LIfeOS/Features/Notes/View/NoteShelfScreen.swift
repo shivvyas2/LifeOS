@@ -72,7 +72,9 @@ struct NoteShelfScreen: View {
                                 onOpen: { onOpen(card.id) },
                                 onFavorite: { model.toggleFavorite(card.id) },
                                 onArchive: { model.toggleArchive(card.id) },
-                                onDelete: { model.delete(card.id) }
+                                onDelete: { model.delete(card.id) },
+                                moveTargets: moveTargets,
+                                onMove: { model.move(card.id, to: $0.bucket, folderID: $0.folderID) }
                             )
                         }
                     }
@@ -224,6 +226,29 @@ struct NoteShelfScreen: View {
                     )
             }
         }
+    }
+
+    /// Every shelf, and every folder on it, flattened for the move menu.
+    /// Nested folders are shown with their parent's name in front, since a menu
+    /// has no indentation to say what is inside what.
+    private var moveTargets: [NoteMoveTarget] {
+        var targets: [NoteMoveTarget] = []
+
+        for bucket in NoteBucket.filing {
+            targets.append(NoteMoveTarget(bucket: bucket, folderID: nil, title: bucket.title))
+
+            func walk(_ folders: [NoteFolderSnapshot], prefix: String) {
+                for folder in folders {
+                    let name = prefix.isEmpty ? folder.name : "\(prefix) / \(folder.name)"
+                    targets.append(
+                        NoteMoveTarget(bucket: bucket, folderID: folder.id, title: name)
+                    )
+                    walk(folder.children, prefix: name)
+                }
+            }
+            walk(model.snapshot.folders(in: bucket), prefix: "")
+        }
+        return targets
     }
 
     private var emptyState: some View {

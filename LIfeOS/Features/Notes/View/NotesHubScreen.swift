@@ -41,6 +41,9 @@ struct NotesHubScreen: View {
     /// Measured rather than derived from the size class, for the reason in the
     /// type comment above.
     @State private var paneWidth: CGFloat = 0
+    /// Raised by Command-F. The sidebar owns the field; this is how the scene's
+    /// menu reaches it.
+    @State private var isSearchFocused = false
     @State private var newFolderBucket: NoteBucket?
     @State private var renamingFolder: UUID?
     @State private var folderName = ""
@@ -60,6 +63,7 @@ struct NotesHubScreen: View {
             }
         }
         .background(LifeOSTokens.canvas.resolve(scheme))
+        .focusedSceneValue(\.notesCommands, commandTarget)
         .sheet(item: $newFolderBucket) { bucket in
             NoteFolderSheet(
                 title: "New folder in \(bucket.title)",
@@ -200,6 +204,7 @@ struct NotesHubScreen: View {
                 }
             ),
             query: $model.query,
+            isSearchFocused: $isSearchFocused,
             onNewFolder: { newFolderBucket = $0 },
             onOpenHabits: { path.append(.habits) },
             habitCount: plan.snapshot.habits.count,
@@ -267,6 +272,46 @@ struct NotesHubScreen: View {
             isLibraryVisible: isLibraryVisible
         )
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// What the hardware keyboard drives. Built here because only the shell
+    /// knows whether a page is pushed or shown beside the shelf.
+    private var commandTarget: NotesCommandTarget {
+        NotesCommandTarget(
+            newPage: { if let id = model.createNote() { open(id) } },
+            newFolder: { newFolderBucket = model.activeBucket },
+            todaysJournal: { if let id = model.openTodaysJournal() { open(id) } },
+            focusSearch: {
+                // The field lives in the library, so raising it has to raise
+                // the library first or the caret goes somewhere invisible.
+                isLibraryVisible = true
+                isSearchFocused = true
+            },
+            toggleLibrary: { isLibraryVisible.toggle() },
+            selectBucket: { bucket in
+                model.selection = .bucket(bucket)
+                path.removeAll()
+                openPage = nil
+            },
+            selectRecent: {
+                model.selection = .recent
+                path.removeAll()
+                openPage = nil
+            },
+            closePage: closeAction
+        )
+    }
+
+    /// Nil when there is nothing open, which greys out Command-W rather than
+    /// letting it fire into an empty detail column.
+    private var closeAction: (() -> Void)? {
+        if openPage != nil {
+            return { openPage = nil }
+        }
+        if case .page = path.last {
+            return { path.removeLast() }
+        }
+        return nil
     }
 
     /// Opens a page wherever this arrangement puts one.

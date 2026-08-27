@@ -12,6 +12,10 @@ struct NotesSidebar: View {
     let snapshot: NotesSnapshot
     @Binding var selection: NoteSelection
     @Binding var query: String
+    /// Driven by Command-F from the scene's menu. A binding rather than a
+    /// `@FocusState` owned here, because the thing that raises it is three
+    /// views up and cannot reach a focus state.
+    var isSearchFocused: Binding<Bool>?
     var onNewFolder: (NoteBucket) -> Void
     /// Habits are the one thing in this tab that is not a page. See
     /// `PlanNoteMigration` for why they stayed behind.
@@ -31,6 +35,7 @@ struct NotesSidebar: View {
     /// row, because only one row can be targeted at a time and two rows both
     /// believing they are is exactly how a stuck highlight happens.
     @State private var droppingOn: NoteSelection?
+    @FocusState private var searchFieldFocused: Bool
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }

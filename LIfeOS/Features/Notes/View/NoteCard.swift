@@ -17,6 +17,10 @@ struct NoteCard: View {
     var onFavorite: () -> Void = {}
     var onArchive: () -> Void = {}
     var onDelete: () -> Void = {}
+    /// Where this page could go. Drag and drop is the quick way on an iPad,
+    /// but it is a pointer gesture, so the same move has to exist as a menu.
+    var moveTargets: [NoteMoveTarget] = []
+    var onMove: (NoteMoveTarget) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -64,6 +68,15 @@ struct NoteCard: View {
             NoteDragPreview(card: card)
         }
         .contextMenu {
+            if !moveTargets.isEmpty {
+                Menu("Move to", systemImage: "folder") {
+                    ForEach(moveTargets) { target in
+                        Button(target.title) { onMove(target) }
+                            .disabled(target.isCurrentHome(of: card))
+                    }
+                }
+                Divider()
+            }
             Button(card.isFavorite ? "Remove from favourites" : "Add to favourites",
                    systemImage: card.isFavorite ? "star.slash" : "star", action: onFavorite)
             Button(card.isArchived ? "Restore" : "Archive",
@@ -198,5 +211,22 @@ private struct NoteDragPreview: View {
         .background(
             Capsule().fill(LifeOSTokens.cardSurface.resolve(scheme))
         )
+    }
+}
+
+
+/// Somewhere a page can be filed: a shelf, or a folder on one.
+struct NoteMoveTarget: Identifiable, Hashable {
+    let bucket: NoteBucket
+    /// Nil for the shelf itself, which files the page loose on it.
+    let folderID: UUID?
+    let title: String
+
+    var id: String { "\(bucket.rawValue)-\(folderID?.uuidString ?? "root")" }
+
+    /// Greys out the place the page already is, rather than offering a move
+    /// that would do nothing.
+    func isCurrentHome(of card: NoteCardSnapshot) -> Bool {
+        card.bucket == bucket && card.folderID == folderID
     }
 }
