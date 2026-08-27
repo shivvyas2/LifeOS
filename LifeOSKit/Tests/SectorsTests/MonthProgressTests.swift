@@ -20,14 +20,12 @@ import Foundation
         let august = progress(on: 27)
         #expect(august.elapsedDays == 27)
         #expect(august.remainingDays == 4)
-        #expect(august.isInFlight)
     }
 
     @Test func theLastDayOfTheMonthLeavesNothingRemaining() {
         let august = progress(on: 31)
         #expect(august.elapsedDays == 31)
         #expect(august.remainingDays == 0)
-        #expect(august.isInFlight == false)
     }
 
     @Test func aMonthAlreadyOverLeavesNothingRemaining() {

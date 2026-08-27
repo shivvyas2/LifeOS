@@ -15,12 +15,18 @@ final class InFlightSectorViewModel {
     private(set) var answers: [String: String] = [:]
     private(set) var remainingDays = 0
     /// True when the ceiling came from targets the person never set, so the
-    /// sheet can say whose numbers they are.
+    /// screen can say whose numbers they are.
     private(set) var usesDefaultTargets = false
 
     private let sector: LifeSector
     private let calendar: Calendar
     private var context: ModelContext?
+    /// The instant and the month `load` last resolved from it. `persist` and
+    /// the reload after an immediate answer both write against these rather
+    /// than recomputing from `.now`, so an injected date stays authoritative
+    /// end to end. In production this is always the same instant as `.now`.
+    private var now: Date = .now
+    private var month: Date = .now
 
     /// Debounced free-text saves, keyed by question id. Choice answers save
     /// immediately, on `AnswerPersistence`'s say-so, exactly as they do in
@@ -42,7 +48,8 @@ final class InFlightSectorViewModel {
 
     func load(now: Date = .now) {
         guard let context else { return }
-        let month = Date.startOfMonth(now, calendar: calendar)
+        self.now = now
+        month = Date.startOfMonth(now, calendar: calendar)
         let store = SectorStore(context: context, calendar: calendar)
 
         answers = [:]
@@ -76,7 +83,7 @@ final class InFlightSectorViewModel {
         answers[question.id] = value
         if AnswerPersistence.isImmediate(question) {
             persist(question, value: value)
-            load()
+            load(now: now)
         } else {
             pendingSaveTasks[question.id]?.cancel()
             pendingSaveValues[question.id] = (question, value)
@@ -89,7 +96,7 @@ final class InFlightSectorViewModel {
     }
 
     /// Saves anything still waiting on its debounce, synchronously. Called
-    /// when the sheet goes away, so leaving mid-sentence never drops the
+    /// when the screen goes away, so leaving mid-sentence never drops the
     /// last few keystrokes.
     func flushPendingSaves() {
         for (id, task) in pendingSaveTasks {
@@ -104,7 +111,6 @@ final class InFlightSectorViewModel {
 
     private func persist(_ question: CheckInQuestion, value: String) {
         guard let context else { return }
-        let month = Date.startOfMonth(.now, calendar: calendar)
         try? SectorStore(context: context, calendar: calendar).saveAnswer(
             sector: sector, month: month, questionID: question.id, answer: value
         )

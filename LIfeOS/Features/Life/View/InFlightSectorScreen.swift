@@ -9,7 +9,7 @@ import Sectors
 /// Three parts, in the order the questions come: where it stands and where it
 /// can get to, what moves it most, and, for a sector scored from answers, the
 /// questions themselves.
-struct InFlightSectorSheet: View {
+struct InFlightSectorScreen: View {
     let sector: LifeSector
 
     @Environment(\.colorScheme) private var scheme

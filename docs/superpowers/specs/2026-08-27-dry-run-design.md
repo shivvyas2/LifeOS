@@ -41,7 +41,7 @@ Given the current month's real `MonthInputs`, a `MonthProgress` splitting the mo
 
 **Coast is defined as continuing at your current daily rate, not as an empty tail.** For Body the two are nearly identical: `BodyScorer` counts only days that have data, so logging nothing leaves the ratio and the averages untouched. For Money they are opposites. Spending nothing for the rest of the month is the *best* case, not the worst, so an empty tail would compute the floor above the ceiling and invert the card. One definition applies to every sector, and it is the one that reads correctly for spend: the rest of the month looks like the part already lived.
 
-**Decided** is defined per sector as `1 - (ceiling - floor) / 10`, clamped to `0...1`. It is literally the share of the score that is no longer movable. The board header shows the mean across the nine sectors. No other definition of "decided" appears anywhere in the feature.
+**Decided** is defined per sector as `1 - (ceiling - floor) / 10`, clamped to `0...1`. It is literally the share of the score that is no longer movable. The board header shows the mean across only the sectors that have a band, not all nine: a sector nobody has any evidence for has not been judged settled or unsettled, it has not been judged, and folding it into the mean would let silence read as certainty. No other definition of "decided" appears anywhere in the feature.
 
 ## 4. New types
 
@@ -53,7 +53,6 @@ MonthProgress
   window         MonthWindow
   elapsedDays    Int      today counts as lived
   remainingDays  Int      0 for any month that has ended
-  isInFlight     Bool
   remainingDates(calendar:) -> [Date]
 
 ProjectedInputs

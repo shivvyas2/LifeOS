@@ -28,11 +28,6 @@ public struct MonthProgress: Sendable, Equatable {
         remainingDays = window.daysInMonth - elapsedDays
     }
 
-    /// True only while there is still a day left to change the outcome. On
-    /// the last day of the month the band has collapsed and the score is
-    /// whatever it is.
-    public var isInFlight: Bool { remainingDays > 0 }
-
     /// Midnight on each day not yet lived, oldest first. Empty once the
     /// month is over.
     public func remainingDates(calendar: Calendar = .current) -> [Date] {

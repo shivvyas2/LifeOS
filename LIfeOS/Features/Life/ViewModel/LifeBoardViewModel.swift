@@ -70,8 +70,10 @@ final class LifeBoardViewModel {
         self.context = context
     }
 
-    /// The month the board displays is the most recently completed one; the
-    /// header and cards compare it against the month before that.
+    /// Closed shows the most recently completed month, comparing it against
+    /// the one before that. In flight shows the month still being lived, as
+    /// a band per sector rather than a single score. `mode` picks between
+    /// them; both read from the same `thisMonth` anchor below.
     func load(now: Date = .now) {
         guard let context else { return }
         let store = SectorStore(context: context, calendar: calendar)

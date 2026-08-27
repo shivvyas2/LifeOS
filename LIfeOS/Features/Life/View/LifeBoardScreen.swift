@@ -67,7 +67,7 @@ struct LifeBoardScreen: View {
                 case .closed:
                     SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
                 case .inFlight:
-                    InFlightSectorSheet(sector: sector)
+                    InFlightSectorScreen(sector: sector)
                 }
             }
             // Reload on dismissal, not on completion. `MonthlyCloseScreen`
