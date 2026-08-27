@@ -39,15 +39,25 @@ from the bundle, not the listing.
 
 ## Every upload
 
-**Bump the build number first.** App Store Connect rejects a `(version, build)`
-pair it has already seen, and it rejects it *after* the upload finishes, which
-wastes the whole round trip. Bump `CURRENT_PROJECT_VERSION` in both the Debug
-and Release configurations:
+**Bump the build number first, and commit it.** App Store Connect rejects a
+`(version, build)` pair it has already seen, and it rejects it *after* the
+upload finishes, which wastes the whole round trip. Bump
+`CURRENT_PROJECT_VERSION` in both the Debug and Release configurations:
 
 ```
 MARKETING_VERSION       1.0   → user-facing, bump for real releases
-CURRENT_PROJECT_VERSION 1     → bump for EVERY upload, even a re-upload
+CURRENT_PROJECT_VERSION 16    → bump for EVERY upload, even a re-upload
 ```
+
+Committing it is the part that was being skipped. Through build 15 the number
+in git never moved off 1, because each archive was made from an edit that was
+never committed, so nothing in the repository could answer "what did we upload
+last?" and every archive was a guess. The number here is the last build that
+reached App Store Connect. Raise it, commit, then archive, and the guess goes
+away.
+
+A rejected upload still burns the number. If a build fails validation, bump
+again rather than re-uploading the same one.
 
 Then, in Xcode:
 
@@ -111,3 +121,16 @@ Confirm it stayed opaque before committing. `hasAlpha` must read `no`:
 sips -g pixelWidth -g pixelHeight -g hasAlpha \
   LIfeOS/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png
 ```
+
+## Warnings that are not failures
+
+**"The archive did not include a dSYM for the LinkKit.framework."** Expected,
+and nothing to fix here. Plaid ships `LinkKit.xcframework` with no dSYMs in any
+slice, so there is nothing for the archive to include. The upload still
+processes and the build still reaches TestFlight; the only cost is that crash
+reports cannot symbolicate frames inside Plaid's own code. Ours symbolicate
+normally.
+
+Do not try to silence it by turning off `DEBUG_INFORMATION_FORMAT` or by
+stripping symbols: that would trade a cosmetic warning for unsymbolicated
+crash reports in the app's own code.
