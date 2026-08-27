@@ -4,11 +4,18 @@ import Persistence
 
 /// The notes tab.
 ///
-/// Two shells over one set of screens, matching what `RootView` already does
-/// for the app as a whole. A phone gets the library as its own screen and
-/// pushes into a shelf and then a page; an iPad gets the library as a permanent
-/// rail with the shelf beside it, which is the layout the reference this was
-/// drawn from uses and the reason it reads as a desk rather than as a list.
+/// One set of screens in three arrangements, chosen by how much width there
+/// actually is rather than by the size class alone.
+///
+/// A phone gets the library as its own screen and pushes into a shelf and then
+/// a page. A narrow iPad pane gets library and shelf side by side, with a page
+/// pushed over the shelf. A wide one gets all three at once, which is the whole
+/// argument for the layout: on a landscape iPad, opening a note should not hide
+/// the grid you were reading it from.
+///
+/// The threshold is measured, not assumed. A regular size class covers
+/// everything from a 1366pt landscape iPad to a narrow Stage Manager window,
+/// and those two want different arrangements.
 struct NotesHubScreen: View {
     @Bindable var model: NotesViewModel
     /// Habits did not become pages, so the tab hosts the one screen that still
@@ -20,10 +27,20 @@ struct NotesHubScreen: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
-    /// One navigation path, shared by both shells. The iPad's detail column
-    /// pushes a page onto it exactly as the phone does, so opening a note is
-    /// one code path rather than two that have to be kept in step.
+    /// Pushed navigation: the phone's whole journey, and the shelf column's
+    /// own stack on an iPad. A page is only ever on here when there is no
+    /// detail column to put it in.
     @State private var path: [NoteRoute] = []
+    /// The page in the detail column. Only used in the three-column
+    /// arrangement; everywhere else a page is pushed onto `path` instead.
+    /// Keeping one of the two always empty is what stops them disagreeing.
+    @State private var openPage: UUID?
+    /// Collapsing the library gives the page the width back, which is what a
+    /// person writing rather than filing actually wants.
+    @State private var isLibraryVisible = true
+    /// Measured rather than derived from the size class, for the reason in the
+    /// type comment above.
+    @State private var paneWidth: CGFloat = 0
     @State private var newFolderBucket: NoteBucket?
     @State private var renamingFolder: UUID?
     @State private var folderName = ""
@@ -65,44 +82,133 @@ struct NotesHubScreen: View {
 
     // MARK: - Shells
 
-    /// iPad and wide panes. The rail is a real column that takes its width out
-    /// of the layout, unlike the app's tab rail, which floats: a sidebar that
-    /// overlapped the shelf would put the note grid underneath it.
+    /// Three columns need room for a readable measure in each: a 268pt
+    /// library, a shelf wide enough for a card, and a page wide enough to write
+    /// in. Below that the page takes the shelf's place instead of standing
+    /// beside it.
+    private var isThreeColumn: Bool {
+        layout.isRegular && paneWidth >= 1000
+    }
+
+    /// iPad and wide panes.
     private var wideShell: some View {
         HStack(spacing: 0) {
-            NotesSidebar(
-                snapshot: model.snapshot,
-                selection: Binding(
-                    get: { model.selection },
-                    set: { selection in
-                        model.selection = selection
-                        // Selecting in the rail returns the detail column to
-                        // the shelf. Leaving an open page there while the rail
-                        // highlights a different folder is the state that makes
-                        // split views confusing.
-                        path.removeAll()
-                    }
-                ),
-                query: $model.query,
-                onNewFolder: { newFolderBucket = $0 },
-                onOpenHabits: { path.append(.habits) },
-                habitCount: plan.snapshot.habits.count,
-                onRenameFolder: startRename,
-                onDeleteFolder: { model.deleteFolder($0) }
-            )
-            .frame(width: 268)
-            .padding(.leading, layout.railInset)
-            .background(LifeOSTokens.canvas.resolve(scheme))
+            if isLibraryVisible {
+                library
+                    .frame(width: 268)
+                    .padding(.leading, layout.railInset)
+                    .background(LifeOSTokens.canvas.resolve(scheme))
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                columnRule
+            }
 
-            Rectangle()
-                .fill(LifeOSTokens.primaryText.resolve(scheme).opacity(scheme == .dark ? 0.14 : 0.07))
-                .frame(width: 1)
+            if isThreeColumn {
+                NavigationStack(path: $path) {
+                    shelf
+                        .navigationDestination(for: NoteRoute.self, destination: destination)
+                }
+                // Bounded on both sides: below the minimum a card stops being
+                // legible, above the maximum the shelf starts stealing width
+                // from the thing being written.
+                .frame(minWidth: 340, idealWidth: 420, maxWidth: 480)
 
-            NavigationStack(path: $path) {
-                shelf
-                    .navigationDestination(for: NoteRoute.self, destination: destination)
+                columnRule
+                detailColumn
+            } else {
+                NavigationStack(path: $path) {
+                    shelf
+                        .navigationDestination(for: NoteRoute.self, destination: destination)
+                }
             }
         }
+        // The rail's clearance moves onto whichever column is leftmost, so
+        // collapsing the library does not tuck the shelf under the tab rail.
+        .padding(.leading, isLibraryVisible ? 0 : layout.railInset)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            paneWidth = width
+        }
+        .animation(.easeInOut(duration: 0.22), value: isLibraryVisible)
+        // Rotating an iPad, or resizing a Stage Manager window, changes which
+        // arrangement applies. The open page has to move between the detail
+        // column and the navigation stack with it, or it vanishes.
+        .onChange(of: isThreeColumn) { _, three in
+            if three {
+                if case .page(let id) = path.last {
+                    path.removeLast()
+                    openPage = id
+                }
+            } else if let page = openPage {
+                openPage = nil
+                path.append(.page(page))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailColumn: some View {
+        if let openPage {
+            NavigationStack {
+                NoteEditorHost(documentID: openPage, onOpenLinked: { open($0) })
+            }
+            // Rebuilt per page rather than reused, so the editor never shows
+            // the previous page's blocks for a frame while the new ones load.
+            .id(openPage)
+        } else {
+            noPageSelected
+        }
+    }
+
+    private var noPageSelected: some View {
+        VStack(spacing: 10) {
+            Image(systemName: model.selection.bucket?.systemImage ?? "doc.text")
+                .font(LifeOSType.display.weight(.light))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.5))
+            Text("No page open")
+                .font(LifeOSType.sectionTitle)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            Text("Pick one from \(model.headerTitle), or press Command N to start a new page.")
+                .font(LifeOSType.secondary)
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 320)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(LifeOSTokens.canvas.resolve(scheme))
+    }
+
+    private var columnRule: some View {
+        Rectangle()
+            .fill(LifeOSTokens.primaryText.resolve(scheme).opacity(scheme == .dark ? 0.14 : 0.07))
+            .frame(width: 1)
+    }
+
+    /// The library rail, shared by both shells so its wiring is stated once.
+    private var library: some View {
+        NotesSidebar(
+            snapshot: model.snapshot,
+            selection: Binding(
+                get: { model.selection },
+                set: { selection in
+                    model.selection = selection
+                    // Selecting in the rail returns to the shelf. Leaving an
+                    // open page beside a rail that highlights a different
+                    // folder is the state that makes split views confusing.
+                    path.removeAll()
+                    openPage = nil
+                }
+            ),
+            query: $model.query,
+            onNewFolder: { newFolderBucket = $0 },
+            onOpenHabits: { path.append(.habits) },
+            habitCount: plan.snapshot.habits.count,
+            onRenameFolder: startRename,
+            onDeleteFolder: { model.deleteFolder($0) },
+            onDropNotes: { ids, bucket, folderID in
+                for id in ids { model.move(id, to: bucket, folderID: folderID) }
+            }
+        )
     }
 
     /// Phone. The library is the root screen, so the first thing someone sees
@@ -116,22 +222,7 @@ struct NotesHubScreen: View {
                     .padding(.horizontal, layout.gutter)
                     .padding(.top, 4)
 
-                NotesSidebar(
-                    snapshot: model.snapshot,
-                    selection: Binding(
-                        get: { model.selection },
-                        set: { selection in
-                            model.selection = selection
-                            path = [.shelf]
-                        }
-                    ),
-                    query: $model.query,
-                    onNewFolder: { newFolderBucket = $0 },
-                    onOpenHabits: { path.append(.habits) },
-                    habitCount: plan.snapshot.habits.count,
-                    onRenameFolder: startRename,
-                    onDeleteFolder: { model.deleteFolder($0) }
-                )
+                library
             }
             .padding(.bottom, layout.contentBottomInset)
             .background(LifeOSTokens.canvas.resolve(scheme))
@@ -150,7 +241,7 @@ struct NotesHubScreen: View {
         case .shelf:
             shelf
         case .page(let id):
-            NoteEditorHost(documentID: id, onOpenLinked: { path.append(.page($0)) })
+            NoteEditorHost(documentID: id, onOpenLinked: { open($0) })
         case .habits:
             PlanScreen(
                 snapshot: plan.snapshot,
@@ -168,10 +259,23 @@ struct NotesHubScreen: View {
     private var shelf: some View {
         NoteShelfScreen(
             model: model,
-            onOpen: { path.append(.page($0)) },
-            onNewFolder: { newFolderBucket = $0 }
+            openPageID: openPage,
+            onOpen: { open($0) },
+            onNewFolder: { newFolderBucket = $0 },
+            // Offered only where there is a library to collapse.
+            onToggleLibrary: layout.isRegular ? { isLibraryVisible.toggle() } : nil,
+            isLibraryVisible: isLibraryVisible
         )
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Opens a page wherever this arrangement puts one.
+    private func open(_ id: UUID) {
+        if isThreeColumn {
+            openPage = id
+        } else {
+            path.append(.page(id))
+        }
     }
 
     private func startRename(_ id: UUID) {

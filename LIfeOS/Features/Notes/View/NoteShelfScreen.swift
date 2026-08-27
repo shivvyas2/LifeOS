@@ -11,8 +11,19 @@ import Persistence
 /// leaves them to guess.
 struct NoteShelfScreen: View {
     @Bindable var model: NotesViewModel
+    /// The page showing in the detail column, so the card that produced it can
+    /// say so. Nil whenever pages are pushed rather than shown beside.
+    var openPageID: UUID?
     var onOpen: (UUID) -> Void
     var onNewFolder: (NoteBucket) -> Void
+    /// Nil where there is no library column to collapse.
+    var onToggleLibrary: (() -> Void)?
+    var isLibraryVisible = true
+
+    /// Measured, because the shelf is 340pt wide as the middle of three columns
+    /// and over 900 as the second of two. A column count fixed to the size
+    /// class gives one of those a cramped grid and the other a sparse one.
+    @State private var gridWidth: CGFloat = 0
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -20,10 +31,20 @@ struct NoteShelfScreen: View {
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
 
+    /// Cards read best around 300pt across: narrower and the title wraps to
+    /// three lines, wider and the excerpt runs past a comfortable measure.
+    private static let idealCardWidth: CGFloat = 300
+
+    private var columnCount: Int {
+        guard gridWidth > 0 else { return layout.isRegular ? 3 : 2 }
+        let fitted = Int((gridWidth / Self.idealCardWidth).rounded())
+        return min(max(fitted, 1), 5)
+    }
+
     private var columns: [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: 14, alignment: .top),
-            count: layout.isRegular ? 3 : 2
+            count: columnCount
         )
     }
 
@@ -47,6 +68,7 @@ struct NoteShelfScreen: View {
                         ForEach(model.cards) { card in
                             NoteCard(
                                 card: card,
+                                isOpen: card.id == openPageID,
                                 onOpen: { onOpen(card.id) },
                                 onFavorite: { model.toggleFavorite(card.id) },
                                 onArchive: { model.toggleArchive(card.id) },
@@ -55,6 +77,11 @@ struct NoteShelfScreen: View {
                         }
                     }
                     .padding(.top, 14)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.width
+                    } action: { width in
+                        gridWidth = width
+                    }
                 }
 
                 Spacer(minLength: layout.contentBottomInset)
@@ -68,6 +95,21 @@ struct NoteShelfScreen: View {
 
     private var breadcrumb: some View {
         HStack(spacing: 6) {
+            if let onToggleLibrary {
+                Button(action: onToggleLibrary) {
+                    Image(systemName: "sidebar.leading")
+                        .font(LifeOSType.label.weight(.semibold))
+                        .foregroundStyle(isLibraryVisible ? secondary : primary)
+                        .frame(width: 26, height: 26)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .keyboardShortcut("s", modifiers: [.command, .control])
+                .accessibilityLabel(isLibraryVisible ? "Hide library" : "Show library")
+                .padding(.trailing, 2)
+            }
+
             ForEach(Array(model.breadcrumb.enumerated()), id: \.offset) { index, crumb in
                 if index > 0 {
                     Text("/").foregroundStyle(secondary.opacity(0.5))

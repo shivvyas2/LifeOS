@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import DesignSystem
 import Persistence
 
@@ -9,6 +10,9 @@ import Persistence
 /// colour is doing the separating here anyway.
 struct NoteCard: View {
     let card: NoteCardSnapshot
+    /// True when this card's page is the one showing in the detail column, so
+    /// a three-column layout can say which of the grid produced it.
+    var isOpen = false
     var onOpen: () -> Void
     var onFavorite: () -> Void = {}
     var onArchive: () -> Void = {}
@@ -40,11 +44,25 @@ struct NoteCard: View {
                     .fill(NoteAccentPalette.fill(card.accent, scheme))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(NoteAccentPalette.edge(scheme), lineWidth: 1)
+                            // The open card is ringed in its own ink rather
+                            // than the app accent: a grid of pastel cards with
+                            // one orange ring reads as an error state.
+                            .strokeBorder(
+                                isOpen ? ink.opacity(0.55) : NoteAccentPalette.edge(scheme),
+                                lineWidth: isOpen ? 2 : 1
+                            )
                     )
             )
         }
         .buttonStyle(.plain)
+        // Trackpad and Magic Keyboard are the iPad's other input, and a grid
+        // that gives a pointer no feedback feels dead under one.
+        .hoverEffect(.lift)
+        // Filing is what PARA is, so a card has to be movable. The payload is
+        // the page's id, and every drop target parses it back.
+        .draggable(NoteDragPayload(id: card.id)) {
+            NoteDragPreview(card: card)
+        }
         .contextMenu {
             Button(card.isFavorite ? "Remove from favourites" : "Add to favourites",
                    systemImage: card.isFavorite ? "star.slash" : "star", action: onFavorite)
@@ -134,5 +152,51 @@ struct NoteCard: View {
         LifeOSTokens.canvas.resolve(.light).ignoresSafeArea()
         NoteCard(card: card, onOpen: {})
             .frame(width: 240)
+    }
+}
+
+
+/// What a dragged card carries.
+///
+/// A typed payload rather than a bare string, so a folder row cannot accept a
+/// paragraph of text dragged in from another app and try to file it.
+struct NoteDragPayload: Codable, Transferable {
+    let id: UUID
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .lifeOSNote)
+    }
+}
+
+extension UTType {
+    /// Same-process drags only, which is why this is `exportedAs` without a
+    /// matching Info.plist declaration: nothing outside the app is ever asked
+    /// to understand it.
+    ///
+    /// `nonisolated` because `Transferable.transferRepresentation` is, and the
+    /// app target defaults to main-actor isolation.
+    nonisolated static let lifeOSNote = UTType(exportedAs: "com.shivvyas.lifeos.note")
+}
+
+/// What travels under the finger. The card itself is too big to drag over a
+/// sidebar row without hiding the row it is aimed at.
+private struct NoteDragPreview: View {
+    let card: NoteCardSnapshot
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(NoteAccentPalette.dot(card.accent, scheme))
+                .frame(width: 8, height: 8)
+            Text(card.title)
+                .font(LifeOSType.label)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(LifeOSTokens.cardSurface.resolve(scheme))
+        )
     }
 }

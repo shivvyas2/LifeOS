@@ -19,11 +19,18 @@ struct NotesSidebar: View {
     var habitCount: Int = 0
     var onRenameFolder: (UUID) -> Void = { _ in }
     var onDeleteFolder: (UUID) -> Void = { _ in }
+    /// Pages dropped onto a shelf or a folder. The folder is nil for a drop on
+    /// the shelf itself, which files the page loose on that shelf.
+    var onDropNotes: (_ ids: [UUID], _ bucket: NoteBucket, _ folderID: UUID?) -> Void = { _, _, _ in }
 
     @Environment(\.colorScheme) private var scheme
     /// Which shelves are open. All four to begin with: a first launch showing
     /// four collapsed rows tells a new user nothing about what PARA is.
     @State private var expanded: Set<NoteBucket> = Set(NoteBucket.allCases)
+    /// Which row a drag is currently over. One value rather than a flag per
+    /// row, because only one row can be targeted at a time and two rows both
+    /// believing they are is exactly how a stuck highlight happens.
+    @State private var droppingOn: NoteSelection?
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -127,6 +134,7 @@ struct NotesSidebar: View {
             .background(rowHighlight(selection == target))
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 
     @ViewBuilder
@@ -174,6 +182,18 @@ struct NotesSidebar: View {
             .padding(.horizontal, 14)
             .padding(.top, 18)
             .padding(.bottom, 6)
+            .background {
+                if droppingOn == .bucket(bucket) { dropHighlight }
+            }
+            .dropDestination(for: NoteDragPayload.self) { payload, _ in
+                // Archive is a state, not a place, so a page dropped on it is
+                // archived rather than refiled onto an "archive shelf".
+                onDropNotes(payload.map(\.id), bucket, nil)
+                droppingOn = nil
+                return !payload.isEmpty
+            } isTargeted: { targeted in
+                droppingOn = targeted ? .bucket(bucket) : (droppingOn == .bucket(bucket) ? nil : droppingOn)
+            }
 
             if isOpen {
                 ForEach(folders) { folder in
@@ -181,8 +201,10 @@ struct NotesSidebar: View {
                         folder: folder,
                         depth: 0,
                         selection: $selection,
+                        droppingOn: $droppingOn,
                         onRename: onRenameFolder,
-                        onDelete: onDeleteFolder
+                        onDelete: onDeleteFolder,
+                        onDropNotes: onDropNotes
                     )
                 }
 
@@ -209,6 +231,19 @@ struct NotesSidebar: View {
         }
     }
 
+    /// What a row under a drag looks like. Deliberately not the selection
+    /// highlight: "this is where it will land" and "this is what you are
+    /// looking at" are different statements and must not share a colour.
+    private var dropHighlight: some View {
+        RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(LifeOSTokens.accent.opacity(0.18))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(LifeOSTokens.accent.opacity(0.6), lineWidth: 1.5)
+            )
+            .padding(.horizontal, 8)
+    }
+
     /// The selected row's ground. Inset from the rail's own edges so the
     /// highlight reads as a pill against the canvas rather than as a band
     /// running out of the panel.
@@ -232,8 +267,10 @@ private struct NoteFolderRow: View {
     let folder: NoteFolderSnapshot
     let depth: Int
     @Binding var selection: NoteSelection
+    @Binding var droppingOn: NoteSelection?
     var onRename: (UUID) -> Void
     var onDelete: (UUID) -> Void
+    var onDropNotes: (_ ids: [UUID], _ bucket: NoteBucket, _ folderID: UUID?) -> Void
 
     @Environment(\.colorScheme) private var scheme
 
@@ -269,7 +306,15 @@ private struct NoteFolderRow: View {
                 .padding(.trailing, 14)
                 .padding(.vertical, 6)
                 .background {
-                    if isSelected {
+                    if droppingOn == .folder(folder.id) {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(LifeOSTokens.accent.opacity(0.18))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .strokeBorder(LifeOSTokens.accent.opacity(0.6), lineWidth: 1.5)
+                            )
+                            .padding(.horizontal, 8)
+                    } else if isSelected {
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(primary.opacity(scheme == .dark ? 0.14 : 0.06))
                             .padding(.horizontal, 8)
@@ -277,6 +322,15 @@ private struct NoteFolderRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .dropDestination(for: NoteDragPayload.self) { payload, _ in
+                onDropNotes(payload.map(\.id), folder.bucket, folder.id)
+                droppingOn = nil
+                return !payload.isEmpty
+            } isTargeted: { targeted in
+                let me = NoteSelection.folder(folder.id)
+                droppingOn = targeted ? me : (droppingOn == me ? nil : droppingOn)
+            }
             .contextMenu {
                 Button("Rename", systemImage: "pencil") { onRename(folder.id) }
                 Button("Delete folder", systemImage: "trash", role: .destructive) {
@@ -289,8 +343,10 @@ private struct NoteFolderRow: View {
                     folder: child,
                     depth: depth + 1,
                     selection: $selection,
+                    droppingOn: $droppingOn,
                     onRename: onRename,
-                    onDelete: onDelete
+                    onDelete: onDelete,
+                    onDropNotes: onDropNotes
                 )
             }
         }

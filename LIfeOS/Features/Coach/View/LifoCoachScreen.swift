@@ -73,10 +73,10 @@ struct LifoCoachScreen: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("LIFO")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(LifeOSType.screenTitle)
                     .foregroundStyle(LifoPalette.ink)
                 Text("Your life, answered from your own data.")
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifoPalette.quietInk)
             }
             Spacer(minLength: 12)
@@ -84,7 +84,7 @@ struct LifoCoachScreen: View {
             if !model.history.isEmpty {
                 Button { showHistory = true } label: {
                     Image(systemName: "clock")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifoPalette.quietInk)
                         .frame(width: 38, height: 38)
                         .glassPane(Circle())
@@ -94,7 +94,7 @@ struct LifoCoachScreen: View {
 
             Button { close() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifoPalette.quietInk)
                     .frame(width: 38, height: 38)
                     .glassPane(Circle())
@@ -113,7 +113,7 @@ struct LifoCoachScreen: View {
             Spacer(minLength: 40)
 
             Text("How can I help you?")
-                .font(.system(size: 32, weight: .semibold, design: .serif))
+                .font(LifeOSType.display.weight(.semibold))
                 .foregroundStyle(LifoPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -127,7 +127,7 @@ struct LifoCoachScreen: View {
 
             if let error = model.error {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifoPalette.ink.opacity(0.85))
                     .padding(.top, 4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -161,14 +161,14 @@ struct LifoCoachScreen: View {
                 HStack(spacing: 8) {
                     ProgressView().tint(LifoPalette.ink)
                     Text("Thinking…")
-                        .font(.system(size: 13))
+                        .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifoPalette.quietInk)
                 }
             }
 
             if let error = model.error {
                 Text(error)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifoPalette.ink.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -179,7 +179,7 @@ struct LifoCoachScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             bubble(question, isQuestion: true)
             Text(answer)
-                .font(.system(size: 16))
+                .font(LifeOSType.secondary)
                 .foregroundStyle(LifoPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
@@ -188,7 +188,7 @@ struct LifoCoachScreen: View {
 
     private func bubble(_ text: String, isQuestion: Bool) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .semibold))
+            .font(LifeOSType.label.weight(.semibold))
             .foregroundStyle(LifoPalette.ink)
             .padding(.vertical, 9)
             .padding(.horizontal, 14)
@@ -205,7 +205,7 @@ struct LifoCoachScreen: View {
         VStack(spacing: 10) {
             if model.phase == .listening {
                 Text(model.liveTranscript.isEmpty ? "Listening…" : model.liveTranscript)
-                    .font(.system(size: 13))
+                    .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(LifoPalette.quietInk)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
@@ -214,7 +214,7 @@ struct LifoCoachScreen: View {
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
                     TextField("Ask anything about your life…", text: $model.draft, axis: .vertical)
-                        .font(.system(size: 16))
+                        .font(LifeOSType.secondary)
                         .focused($typingFocused)
                         .autocorrectionDisabled()
                         .lineLimit(1...4)
@@ -227,7 +227,7 @@ struct LifoCoachScreen: View {
                             Task { await model.sendTyped() }
                         } label: {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 14, weight: .bold))
+                                .font(LifeOSType.label.weight(.bold))
                                 .foregroundStyle(LifoPalette.night)
                                 .frame(width: 30, height: 30)
                                 .background(Circle().fill(LifoPalette.cyan))
@@ -245,7 +245,7 @@ struct LifoCoachScreen: View {
                     Task { await model.toggleListening() }
                 } label: {
                     Image(systemName: model.phase == .listening ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(model.phase == .listening ? LifoPalette.night : LifoPalette.ink)
                         .frame(width: 46, height: 46)
                         .background {
@@ -272,8 +272,8 @@ struct LifoCoachScreen: View {
         NavigationStack {
             List(model.history) { turn in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(turn.question).font(.system(size: 14, weight: .semibold))
-                    Text(turn.answer).font(.system(size: 14))
+                    Text(turn.question).font(LifeOSType.label.weight(.semibold))
+                    Text(turn.answer).font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
@@ -359,7 +359,7 @@ struct FlowChips: View {
             ForEach(items, id: \.self) { item in
                 Button { onTap(item) } label: {
                     Text(item)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(LifeOSType.label)
                         .foregroundStyle(LifoPalette.ink)
                         .padding(.vertical, 10)
                         .padding(.horizontal, 16)

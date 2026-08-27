@@ -71,7 +71,7 @@ public struct PastelFillCard: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text(value ?? "—")
-                    .font(LifeOSType.display)
+                    .font(LifeOSType.numeralLarge)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .opacity(value == nil ? 0.4 : 1)
                 if let unit, value != nil {
