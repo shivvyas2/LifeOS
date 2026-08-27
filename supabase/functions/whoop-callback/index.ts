@@ -3,14 +3,23 @@
 // Whoop requires a redirect URL starting with https, but the authorization
 // code has to reach an iOS app, which is addressed by a custom scheme. This
 // function is the hop between: Whoop redirects the browser here, and this
-// immediately 302s to lifeos://whoop-callback carrying the same parameters.
+// immediately 302s to almanac://whoop-callback carrying the same parameters.
 //
 // It holds no secret and makes no decisions. PKCE and the `state` check still
 // happen in the app, so this hop cannot be used to inject a forged code. An
 // attacker who reaches this endpoint only gets a redirect back to an app that
 // will reject a `state` it did not issue.
 
-const APP_SCHEME_URL = "lifeos://whoop-callback";
+// `almanac`, not `lifeos`. The bundle identifier changed in 09049ed, which
+// means a device that had the app before that date still carries the old one
+// as a separate install, and both declared `lifeos`. iOS does not define which
+// app wins when two claim a scheme, and in practice it hands the callback to
+// whichever was installed first, so Whoop authorization was opening a build
+// from before the rename. A scheme only the current app declares is the fix.
+//
+// Deployed in lockstep with the app: a build still listening for `lifeos` will
+// not receive this redirect.
+const APP_SCHEME_URL = "almanac://whoop-callback";
 
 Deno.serve((req: Request) => {
   const incoming = new URL(req.url);
@@ -21,7 +30,7 @@ Deno.serve((req: Request) => {
 
   // "Sign in on another device": the app issues a `manual-` state when the
   // user completes authorization in a desktop browser, which cannot hand back
-  // to lifeos://. Render the code for transcription instead of redirecting.
+  // to almanac://. Render the code for transcription instead of redirecting.
   if (state?.startsWith("manual-")) {
     return new Response(page(code, error), {
       status: 200,
@@ -55,9 +64,9 @@ Deno.serve((req: Request) => {
 function page(code: string | null, error: string | null): string {
   const body = error
     ? `<p class="err">Whoop returned: ${escapeHtml(error)}</p>
-       <p>Nothing was connected. Start again in Life OS.</p>`
+       <p>Nothing was connected. Start again in Almanac.</p>`
     : code
-    ? `<p>Copy this code and paste it into Life OS:</p>
+    ? `<p>Copy this code and paste it into Almanac:</p>
        <div class="code" id="c">${escapeHtml(code)}</div>
        <button onclick="navigator.clipboard.writeText(document.getElementById('c').textContent.trim())">Copy code</button>
        <p class="hint">Single use, and it expires in a few minutes.</p>`
@@ -65,7 +74,7 @@ function page(code: string | null, error: string | null): string {
 
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Life OS · Whoop</title><style>
+<title>Almanac · Whoop</title><style>
 :root{color-scheme:light dark}
 body{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
      max-width:34rem;margin:0 auto;padding:3rem 1.5rem}

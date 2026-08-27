@@ -41,7 +41,7 @@ enum AppConfig {
     ///
     /// Deliberately not derived from `whoopRedirectURI`. Whoop requires an
     /// https redirect, so that value points at the Edge Function bridge, and
-    /// the browser only returns to the app on the final `lifeos://` hop. Using
+    /// the browser only returns to the app on the final `almanac://` hop. Using
     /// the redirect's own scheme would leave the session waiting for https and
     /// the callback would never arrive.
     static var appURLScheme: String? {

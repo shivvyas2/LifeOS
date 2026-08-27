@@ -64,7 +64,7 @@ final class WhoopConnectionViewModel {
     /// Whoop's login sits behind a Cloudflare bot challenge that will not clear
     /// inside `ASWebAuthenticationSession`. It hangs on a blank page, on
     /// device as well as in the simulator. The same URL completes immediately
-    /// in Safari, so the app hands off and is returned to by the lifeos://
+    /// in Safari, so the app hands off and is returned to by the almanac://
     /// redirect. The cost is leaving the app briefly; the benefit is a flow
     /// that works at all.
     func connect() {
@@ -165,7 +165,7 @@ final class WhoopConnectionViewModel {
         }
     }
 
-    /// Entry point for the lifeos:// redirect.
+    /// Entry point for the almanac:// redirect.
     func handleCallback(_ url: URL) {
         // Logged on arrival so "the redirect never came back" is distinguishable
         // from "it came back and the exchange failed". Without this the two look

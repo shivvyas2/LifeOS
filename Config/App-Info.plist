@@ -11,17 +11,17 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.shivvyas.lifeos.whoop</string>
+			<string>com.shivvyas.almanac.whoop</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>lifeos</string>
+				<string>almanac</string>
 			</array>
 		</dict>
 	</array>
 	<key>ElevenLabsAPIKey</key>
 	<string>$(ELEVENLABS_API_KEY)</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>LifeOS shows your day's schedule on Today and lets the assistant create and change events for you.</string>
+	<string>Almanac shows your day's schedule on Today and lets the assistant create and change events for you.</string>
 	<key>SupabaseAnonKey</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>SupabaseURL</key>
