@@ -29,6 +29,21 @@ struct LifoCoachScreen: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        // The globe is the listening body, and it appears only
+                        // while listening. Standing it at the top of a resting
+                        // screen was what made this feel voice-first when most
+                        // questions are typed; showing it the moment the mic
+                        // opens keeps what it was good at, which is making it
+                        // obvious the app is hearing you.
+                        if model.phase == .listening || model.phase == .thinking {
+                            GlassGlobe(intensity: model.level, isActive: true)
+                                .frame(width: 190, height: 190)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                                .transition(.scale(scale: 0.8).combined(with: .opacity))
+                        }
+
                         if model.history.isEmpty && model.answer.isEmpty {
                             opening
                         } else {
@@ -41,6 +56,7 @@ struct LifoCoachScreen: View {
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
+                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: model.phase)
 
                 composer
             }
@@ -71,7 +87,7 @@ struct LifoCoachScreen: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(LifoPalette.quietInk)
                         .frame(width: 38, height: 38)
-                        .background(Circle().fill(.ultraThinMaterial))
+                        .glassPane(Circle())
                 }
                 .accessibilityLabel("History")
             }
@@ -81,7 +97,7 @@ struct LifoCoachScreen: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(LifoPalette.quietInk)
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(.ultraThinMaterial))
+                    .glassPane(Circle())
             }
             .accessibilityLabel("Close")
         }
@@ -176,7 +192,7 @@ struct LifoCoachScreen: View {
             .foregroundStyle(LifoPalette.ink)
             .padding(.vertical, 9)
             .padding(.horizontal, 14)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .glassPane(Capsule())
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -223,10 +239,7 @@ struct LifoCoachScreen: View {
                 .padding(.leading, 18)
                 .padding(.trailing, 6)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(.ultraThinMaterial)
-                        .overlay { Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1) }
-                )
+                .glassPane(Capsule(), highlight: 0.4)
 
                 Button {
                     Task { await model.toggleListening() }
@@ -235,11 +248,12 @@ struct LifoCoachScreen: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(model.phase == .listening ? LifoPalette.night : LifoPalette.ink)
                         .frame(width: 46, height: 46)
-                        .background(
-                            Circle().fill(model.phase == .listening
-                                          ? AnyShapeStyle(LifoPalette.cyan)
-                                          : AnyShapeStyle(.ultraThinMaterial))
-                        )
+                        .background {
+                            if model.phase == .listening {
+                                Circle().fill(LifoPalette.cyan)
+                            }
+                        }
+                        .glassPane(Circle(), highlight: model.phase == .listening ? 0.5 : 0.34)
                 }
                 .accessibilityLabel(model.phase == .listening ? "Stop listening" : "Speak instead")
             }
@@ -271,6 +285,66 @@ struct LifoCoachScreen: View {
     }
 }
 
+/// The glass this screen is made of.
+///
+/// `.ultraThinMaterial` alone is flat on a dark ground: it frosts, but it has
+/// no edge and no light on it, so a chip and a field and a button all read as
+/// the same grey smear over the aura. Real glass has a bright top edge where
+/// light catches it and a dimmer bottom, and that gradient stroke is what
+/// separates one pane from the next without drawing a border around anything.
+struct GlassPane: ViewModifier {
+    var shape: AnyInsettableShape
+    var highlight: Double = 0.34
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                shape.fill(.ultraThinMaterial)
+                // A wash of the palette inside the frost, so the glass looks
+                // lit by the aura behind it rather than laid on top of it.
+                shape.fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.10), LifoPalette.cyan.opacity(0.05)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+            }
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(highlight),
+                                 Color.white.opacity(0.06)],
+                        startPoint: .top, endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+            }
+    }
+}
+
+/// Type-erased so `GlassPane` can take a capsule or a rounded rectangle
+/// without the modifier becoming generic at every call site.
+struct AnyInsettableShape: InsettableShape {
+    // `@Sendable` on both: `Shape` is Sendable, so the closures capturing a
+    // shape are too, but the compiler cannot see that through the erasure.
+    private let makePath: @Sendable (CGRect) -> Path
+    private let makeInset: @Sendable (CGFloat) -> AnyInsettableShape
+
+    init<S: InsettableShape>(_ shape: S) {
+        makePath = { shape.path(in: $0) }
+        makeInset = { AnyInsettableShape(shape.inset(by: $0)) }
+    }
+
+    func path(in rect: CGRect) -> Path { makePath(rect) }
+    func inset(by amount: CGFloat) -> AnyInsettableShape { makeInset(amount) }
+}
+
+extension View {
+    func glassPane(_ shape: some InsettableShape, highlight: Double = 0.34) -> some View {
+        modifier(GlassPane(shape: AnyInsettableShape(shape), highlight: highlight))
+    }
+}
+
 /// Chips that wrap onto as many rows as they need.
 ///
 /// `LazyVGrid` cannot do this: its columns are fixed widths, and these are
@@ -289,12 +363,7 @@ struct FlowChips: View {
                         .foregroundStyle(LifoPalette.ink)
                         .padding(.vertical, 10)
                         .padding(.horizontal, 16)
-                        .background(
-                            Capsule().fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                                }
-                        )
+                        .glassPane(Capsule())
                 }
                 .buttonStyle(.plain)
             }

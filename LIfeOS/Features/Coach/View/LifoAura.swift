@@ -45,39 +45,66 @@ struct LifoAura: View {
             let side = max(proxy.size.width, proxy.size.height)
             // The core swells with the voice, and breathes when idle.
             let swell = 1 + (isActive ? intensity * 0.35 : 0) + breath * 0.06
+            // The whole field drifts, slowly and off-centre. A glow pinned to
+            // the exact middle reads as a spotlight; one that wanders reads as
+            // atmosphere, which is what the reference has.
+            let driftX = (breath - 0.5) * side * 0.08
+            let driftY = (0.5 - breath) * side * 0.05
 
             ZStack {
                 LifoPalette.night
 
-                // The far wash: most of the screen, barely there.
+                // The far wash: most of the screen, barely there. Offset from
+                // the core so the two do not stack into concentric rings.
                 RadialGradient(
-                    colors: [LifoPalette.blue.opacity(0.55), LifoPalette.night.opacity(0)],
-                    center: .center,
+                    colors: [LifoPalette.blue.opacity(0.5), LifoPalette.night.opacity(0)],
+                    center: .init(x: 0.42, y: 0.44),
                     startRadius: 0,
-                    endRadius: side * 0.62 * swell
+                    endRadius: side * 0.72 * swell
                 )
+                .offset(x: -driftX, y: -driftY)
 
                 // The body of the glow.
                 RadialGradient(
-                    colors: [LifoPalette.blue.opacity(0.85), LifoPalette.blue.opacity(0)],
-                    center: .center,
+                    colors: [LifoPalette.blue.opacity(0.8),
+                             LifoPalette.blue.opacity(0.32),
+                             LifoPalette.blue.opacity(0)],
+                    center: .init(x: 0.54, y: 0.5),
+                    startRadius: 0,
+                    endRadius: side * 0.42 * swell
+                )
+                .offset(x: driftX, y: driftY)
+
+                // A second, cooler lobe. Two lobes at different centres are
+                // what turn a ring into a blend: where they overlap the hue
+                // moves continuously instead of stepping.
+                RadialGradient(
+                    colors: [LifoPalette.cyan.opacity(0.34), LifoPalette.cyan.opacity(0)],
+                    center: .init(x: 0.36, y: 0.58),
                     startRadius: 0,
                     endRadius: side * 0.34 * swell
                 )
+                .offset(x: driftY, y: -driftX)
+                .blendMode(.screen)
 
-                // The core. Small and saturated: this is the only place the
-                // cyan appears at full strength, which is what keeps it a
-                // light source rather than a colour.
+                // The core. Small and saturated: the only place cyan appears
+                // at full strength, which keeps it a light source rather than
+                // a colour.
                 RadialGradient(
-                    colors: [LifoPalette.cyan.opacity(0.9),
-                             LifoPalette.cyan.opacity(0.25),
+                    colors: [LifoPalette.cyan.opacity(0.92),
+                             LifoPalette.cyan.opacity(0.3),
                              LifoPalette.cyan.opacity(0)],
-                    center: .center,
+                    center: .init(x: 0.5, y: 0.48),
                     startRadius: 0,
-                    endRadius: side * 0.16 * swell
+                    endRadius: side * 0.18 * swell
                 )
-                .blur(radius: 12)
+                .offset(x: driftX * 0.5, y: driftY * 0.5)
+                .blendMode(.screen)
             }
+            // One blur over the whole stack rather than per layer: it melts
+            // the lobes into each other, which is the difference between
+            // stacked gradients and a single blended field.
+            .blur(radius: 34)
             .frame(width: proxy.size.width, height: proxy.size.height)
             .animation(.easeInOut(duration: 0.35), value: intensity)
         }
