@@ -27,6 +27,24 @@ enum AppConfig {
         supabaseURL?.appendingPathComponent("functions/v1/whoop-token")
     }
 
+    static var fitbitClientID: String? { string("FitbitClientID") }
+    static var fitbitRedirectURI: String? { string("FitbitRedirectURI") }
+
+    /// The confidential-client exchange. Fitbit tokens never reach the app, so
+    /// unlike Whoop there is no endpoint the client reads a token from: this
+    /// one only ever returns a confirmation.
+    static var fitbitTokenEndpoint: URL? {
+        supabaseURL?.appendingPathComponent("functions/v1/fitbit-token")
+    }
+
+    static var fitbitSyncEndpoint: URL? {
+        supabaseURL?.appendingPathComponent("functions/v1/fitbit-sync")
+    }
+
+    static var isFitbitConfigured: Bool {
+        fitbitClientID?.isEmpty == false && fitbitTokenEndpoint != nil
+    }
+
     /// The four Plaid functions live under here. The Plaid client id and
     /// secret are deliberately absent: they exist only in the function
     /// environment, because anything in the app bundle can be read out of the

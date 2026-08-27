@@ -9,6 +9,7 @@ import DesignSystem
 /// something to do, a quiet green state when the connection is standing.
 struct ConnectionsSettingsScreen: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var fitbit: FitbitConnectionViewModel
     @Bindable var health: HealthConnectionViewModel
     @Bindable var plaid: PlaidConnectionViewModel
     @Environment(\.colorScheme) private var scheme
@@ -23,6 +24,13 @@ struct ConnectionsSettingsScreen: View {
                         title: "Whoop", status: whoop.statusDetail,
                         chip: whoopChip
                     ) { showWhoop = true }
+
+                    connectionCard(
+                        icon: "figure.run.circle.fill", hue: .body,
+                        title: "Fitbit", status: fitbit.statusDetail,
+                        chip: fitbitChip
+                    ) { fitbit.connect() }
+                    .disabled(fitbit.state == .unconfigured)
 
                     connectionCard(
                         icon: "heart.fill", hue: .body,
@@ -155,6 +163,18 @@ struct ConnectionsSettingsScreen: View {
         case .connected: Chip(text: "Sync")
         case .connecting: Chip(text: "…")
         case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Connect")
+        }
+    }
+
+    private var fitbitChip: Chip {
+        switch fitbit.state {
+        case .connected: Chip(text: "Sync")
+        case .connecting: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        // A dead credential is an action the user can take, not an error for
+        // them to read, so the chip names the action.
+        case .needsReauth: Chip(text: "Reconnect")
         default: Chip(text: "Connect")
         }
     }
