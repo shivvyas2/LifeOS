@@ -15,6 +15,8 @@ extension CalendarSync: CalendarWriting {}
 final class AssistantViewModel {
     private(set) var messages: [ChatMessageSnapshot] = []
     private(set) var pending: [PendingWrite] = []
+    /// Events surfaced by each assistant turn, for the cards under its reply.
+    private(set) var eventsByMessage: [UUID: [CalendarEventSnapshot]] = [:]
     private(set) var isThinking = false
     private(set) var isAuthorized = false
     var draft = ""
@@ -80,8 +82,12 @@ final class AssistantViewModel {
         }
         self.broker = broker
 
+        // One per turn, so the cards under a reply are the events that reply
+        // was actually about rather than everything the conversation has ever
+        // looked at.
+        let collector = CalendarEventCollector()
         let tools: [any CoachTool] = isAuthorized
-            ? CalendarAssistant.tools(reading: store, writing: sync)
+            ? CalendarAssistant.tools(reading: store, writing: sync, collector: collector)
             : []
 
         do {
@@ -91,10 +97,18 @@ final class AssistantViewModel {
                 tools: tools,
                 broker: broker
             )
-            try? chat.append(
+            let events = await collector.collected()
+            let saved = try? chat.append(
                 conversationID: conversationID, role: .assistant,
                 text: reply.text, toolSummaries: reply.toolSummaries
             )
+            // Held beside the messages rather than on them. A chat message is
+            // a stored row and an event is a live thing that can move or be
+            // deleted, so the cards belong to this session's turns; reopening
+            // the sheet shows the text, which is the part that was written.
+            if let saved, !events.isEmpty {
+                eventsByMessage[saved.id] = events
+            }
         } catch {
             try? chat.append(
                 conversationID: conversationID, role: .assistant,

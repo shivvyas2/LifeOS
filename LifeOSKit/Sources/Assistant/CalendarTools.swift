@@ -73,6 +73,9 @@ func eventLine(_ event: CalendarEventSnapshot, timeZone: TimeZone = .current) ->
 
 struct GetEventsTool: CoachTool {
     let reading: any CalendarReading
+    /// Optional so every existing construction site and test keeps working;
+    /// the screen supplies one, a unit test need not.
+    var collector: CalendarEventCollector?
     let name = "get_events"
     let description = "List calendar events in a date range, with their ids."
     var parameters: GenerationSchema { RangeArguments.generationSchema }
@@ -84,6 +87,7 @@ struct GetEventsTool: CoachTool {
         let from = try ToolDates.parse(args.start)
         let to = try ToolDates.parse(args.end)
         let events = try await reading.events(from: from, to: to)
+        await collector?.record(events)
         guard !events.isEmpty else { return "No events in that range." }
         return events.map { eventLine($0) }.joined(separator: "\n")
     }

@@ -121,6 +121,19 @@ struct AssistantSheet: View {
                               ? AnyShapeStyle(LifeOSTokens.fabFill.resolve(scheme).opacity(0.15))
                               : AnyShapeStyle(.ultraThinMaterial))
                 )
+            // The events the turn actually looked at, drawn rather than left
+            // for the sentence above to describe. Only under the assistant's
+            // own replies: a card under the question would be answering it
+            // before the assistant has.
+            if message.role == .assistant, let events = model.eventsByMessage[message.id], !events.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(events) { event in
+                        CalendarEventCard(event: event)
+                    }
+                }
+                .padding(.top, 2)
+            }
+
             if !message.toolSummaries.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(message.toolSummaries, id: \.self) { summary in

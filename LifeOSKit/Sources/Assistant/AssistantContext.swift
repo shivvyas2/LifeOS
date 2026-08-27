@@ -9,10 +9,11 @@ public enum CalendarAssistant {
     /// connect rather than calling something that would fail.
     public static func tools(
         reading: any CalendarReading,
-        writing: any CalendarWriting
+        writing: any CalendarWriting,
+        collector: CalendarEventCollector? = nil
     ) -> [any CoachTool] {
         [
-            GetEventsTool(reading: reading),
+            GetEventsTool(reading: reading, collector: collector),
             FindFreeTimeTool(reading: reading),
             AnalyzeScheduleTool(reading: reading),
             CreateEventTool(writing: writing),
