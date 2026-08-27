@@ -110,4 +110,20 @@ import Persistence
         let result = band(.friends, MonthInputs(daysInMonth: 31), answers: answers)
         #expect(result.floor != nil)
     }
+
+    /// One rule renders every band as text: nil floor is nil text, a
+    /// collapsed or ceiling-less band is a single number, and a true range
+    /// is floor–ceiling with an en dash.
+    @Test func rangeTextCoversTheThreeShapesABandCanTake() {
+        let noEvidence = band(.family, MonthInputs(daysInMonth: 31))
+        #expect(noEvidence.rangeText == nil)
+
+        let collapsed = band(.body, poorMonth(days: 31), on: 31)
+        #expect(collapsed.rangeText == String(try! #require(collapsed.floor)))
+
+        let inFlight = band(.body, poorMonth())
+        let floor = try! #require(inFlight.floor)
+        let ceiling = try! #require(inFlight.ceiling)
+        #expect(inFlight.rangeText == "\(floor)–\(ceiling)")
+    }
 }

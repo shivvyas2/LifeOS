@@ -100,9 +100,7 @@ struct InFlightSectorSheet: View {
     }
 
     private var rangeText: String {
-        guard let band = model.band, let floor = band.floor else { return "Not read yet" }
-        guard let ceiling = band.ceiling, ceiling != floor else { return String(floor) }
-        return "\(floor)–\(ceiling)"
+        model.band?.rangeText ?? "Not read yet"
     }
 
     @ViewBuilder

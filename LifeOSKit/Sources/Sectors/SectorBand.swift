@@ -27,6 +27,16 @@ public struct SectorBand: Sendable, Equatable, Identifiable {
         return min(max(1 - Double(ceiling - floor) / 10, 0), 1)
     }
 
+    /// How the range reads: nil when nothing has been judged, a single
+    /// number when the band has collapsed or has no ceiling, and the two
+    /// ends otherwise. One rule, because three views render it and a
+    /// fourth will.
+    public var rangeText: String? {
+        guard let floor else { return nil }
+        guard let ceiling, ceiling != floor else { return String(floor) }
+        return "\(floor)–\(ceiling)"
+    }
+
     public static func band(
         for sector: LifeSector,
         inputs: MonthInputs,

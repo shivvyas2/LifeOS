@@ -188,9 +188,7 @@ private struct SectorDeckCard: View {
     /// matching what the rest of the app shows for a missing value.
     private var scoreText: String {
         if let band = card.band {
-            guard let floor = band.floor else { return "—" }
-            guard let ceiling = band.ceiling, ceiling != floor else { return String(floor) }
-            return "\(floor)–\(ceiling)"
+            return band.rangeText ?? "—"
         }
         return card.score.map(String.init) ?? "—"
     }
