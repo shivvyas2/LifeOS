@@ -20,6 +20,9 @@ struct ProfileScreen: View {
     /// Today's living numbers, shown in a glass panel below the stats. Only
     /// what the app actually knows right now; missing data is simply absent.
     var highlights: [ProfileStat] = []
+    /// Lifetime aggregates in a second panel: what all that tracking adds up
+    /// to. Same rule: only non-zero facts appear.
+    var allTime: [ProfileStat] = []
     var onSignOut: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
@@ -169,16 +172,16 @@ struct ProfileScreen: View {
 
             if !stats.isEmpty { statRow }
 
-            if !highlights.isEmpty { highlightsPanel }
+            if !highlights.isEmpty { statsPanel("TODAY", items: highlights) }
+            if !allTime.isEmpty { statsPanel("ALL TIME", items: allTime) }
         }
     }
 
-    /// A glass grid of what today looks like, the way the reference keeps a
-    /// rounded panel under its numbers. Real glass: the photo refracts
-    /// through it.
-    private var highlightsPanel: some View {
+    /// A glass grid of figures, the way the reference keeps a rounded panel
+    /// under its numbers. Real glass: the photo refracts through it.
+    private func statsPanel(_ title: String, items: [ProfileStat]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("TODAY")
+            Text(title)
                 .font(LifeOSType.caption.weight(.semibold))
                 .tracking(0.8)
                 .foregroundStyle(.white.opacity(0.65))
@@ -187,7 +190,7 @@ struct ProfileScreen: View {
                 columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
                 spacing: 14
             ) {
-                ForEach(highlights) { stat in
+                ForEach(items) { stat in
                     VStack(spacing: 2) {
                         Text(stat.value)
                             .font(.system(size: 17, weight: .semibold))

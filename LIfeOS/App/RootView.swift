@@ -128,7 +128,8 @@ struct RootView: View {
         .fullScreenCover(isPresented: $showSettings) {
             ProfileScreen(
                 settings: settings, whoop: whoop, health: health, plaid: plaid,
-                stats: profileStats, highlights: profileHighlights, onSignOut: onSignOut
+                stats: profileStats, highlights: profileHighlights,
+                allTime: profileAllTime, onSignOut: onSignOut
             )
         }
         .fullScreenCover(isPresented: $showCoach) {
@@ -551,6 +552,44 @@ struct RootView: View {
             highlights.append(ProfileStat("Events today", "\(today.snapshot.agenda.count)"))
         }
         return highlights
+    }
+
+    /// What all the tracking adds up to. Sums come from one fetch of the
+    /// daily rows, which is a few hundred small objects at most; the counts
+    /// are `fetchCount`, which never materialises anything. Zero-valued
+    /// figures are left out so the panel only ever states facts.
+    private var profileAllTime: [ProfileStat] {
+        var figures: [ProfileStat] = []
+
+        let rows = (try? context.fetch(FetchDescriptor<DailyMetrics>())) ?? []
+        let steps = rows.compactMap(\.steps).reduce(0, +)
+        if steps > 0 {
+            figures.append(ProfileStat(
+                "Steps taken",
+                steps.formatted(.number.notation(.compactName).precision(.significantDigits(3)))
+            ))
+        }
+        let sleepHours = rows.compactMap(\.sleepMinutes).reduce(0, +) / 60
+        if sleepHours > 0 {
+            figures.append(ProfileStat("Sleep logged", "\(sleepHours)h"))
+        }
+
+        let habitTicks = (try? context.fetchCount(FetchDescriptor<HabitTick>())) ?? 0
+        if habitTicks > 0 {
+            figures.append(ProfileStat("Habits done", "\(habitTicks)"))
+        }
+        let events = (try? context.fetchCount(FetchDescriptor<CalendarEvent>())) ?? 0
+        if events > 0 {
+            figures.append(ProfileStat("Events", "\(events)"))
+        }
+        if notes.snapshot.totalCount > 0 {
+            figures.append(ProfileStat("Pages", "\(notes.snapshot.totalCount)"))
+        }
+        let scored = life.cards.count { $0.score != nil }
+        if scored > 0 {
+            figures.append(ProfileStat("Sectors scored", "\(scored)"))
+        }
+        return figures
     }
 
     private func attachAll() {
