@@ -61,9 +61,6 @@ final class MonthlyCloseViewModel {
     private var pendingSaveValues: [String: (question: CheckInQuestion, value: String)] = [:]
 
     private let store: SectorStore
-    private let metricsStore: MetricsStore
-    private let moneyStore: MoneyStore
-    private let planStore: PlanStore
     /// Held as well as the stores built from it, because the note evidence
     /// helpers take a context rather than a store of their own.
     private let context: ModelContext
@@ -77,9 +74,6 @@ final class MonthlyCloseViewModel {
         calendar: Calendar = .current
     ) {
         self.store = SectorStore(context: context, calendar: calendar)
-        self.metricsStore = MetricsStore(context: context, calendar: calendar)
-        self.moneyStore = MoneyStore(context: context, calendar: calendar)
-        self.planStore = PlanStore(context: context, calendar: calendar)
         self.context = context
         self.month = month
         self.calendar = calendar
@@ -114,7 +108,9 @@ final class MonthlyCloseViewModel {
         for stored in (try? store.answers(sector: sector, month: month)) ?? [] {
             answers[stored.questionID] = stored.answer
         }
-        monthInputs = (try? loadMonthInputs()) ?? MonthInputs()
+        monthInputs = (try? MonthInputsLoader.load(
+            context: context, month: month, calendar: calendar
+        )) ?? MonthInputs()
         recompute()
     }
 
@@ -189,65 +185,6 @@ final class MonthlyCloseViewModel {
         flushPendingSaves()
         skippedThisSession.insert(sector)
         advance()
-    }
-
-    /// Reads and month-filters everything the six data-fed scorers need.
-    /// `MonthWindow` (from `Sectors`) owns the date-boundary arithmetic and
-    /// the filtering itself, so this is store reads plus assembly, nothing
-    /// that needs its own test coverage.
-    private func loadMonthInputs() throws -> MonthInputs {
-        let window = MonthWindow(for: month, calendar: calendar)
-
-        let readings = try metricsStore.metrics(from: window.start, to: window.lastDay).map(\.reading)
-        let targets = try metricsStore.goals().targets
-
-        let monthEntries = try moneyStore.entries(from: window.start, to: window.lastDay)
-        let amounts = monthEntries.filter { !$0.pending }.map(\.amount)
-
-        let buckets = try moneyStore.buckets().map(BudgetBucket.init)
-        let budget = buckets.isEmpty
-            ? nil
-            : BudgetPeriod.assess(buckets: buckets, lines: BudgetPeriod.lines(from: monthEntries))
-
-        let goals = try planStore.entries(kind: .goal)
-        let habits = try planStore.entries(kind: .habit)
-        // Project pages carry what goals used to, so both feed the number.
-        let projectPages = try NoteEvidence.projectStatuses(context: context)
-        let pageStatuses = window.filter(projectPages, on: \.updatedAt).map(\.status)
-        let goalStatuses = window.filter(goals, on: \.updatedAt).map(\.status) + pageStatuses
-        let planStatuses = window.filter(goals + habits, on: \.updatedAt).map(\.status) + pageStatuses
-
-        let perHabitTicks = try habits.map {
-            try planStore.recentTicks(for: $0, days: window.daysInMonth, endingOn: window.lastDay)
-        }
-        let habitTickRate = SectorEvidenceFactory.habitTickRate(perHabitTicks: perHabitTicks)
-
-        // Journalling moved to note pages. Legacy plan entries are still read
-        // and summed in, because months already closed were scored against
-        // them and a migration must not silently rewrite a past score.
-        let journalEntries = try planStore.entries(kind: .journal)
-        let noteJournalDates = try NoteEvidence.journalDates(context: context)
-        let journalDates = window.filter(journalEntries, on: \.createdAt).map(\.createdAt)
-            + window.filter(noteJournalDates) { $0 }
-
-        var previousAmounts: [Double] = []
-        var previousJournalCount: Int?
-        if let previousMonth = calendar.date(byAdding: .month, value: -1, to: month) {
-            let previousWindow = MonthWindow(for: previousMonth, calendar: calendar)
-            previousAmounts = try moneyStore.entries(from: previousWindow.start, to: previousWindow.lastDay)
-                .filter { !$0.pending }
-                .map(\.amount)
-            previousJournalCount = previousWindow.filter(journalEntries, on: \.createdAt).count
-        }
-
-        return MonthInputs(
-            readings: readings, targets: targets,
-            amounts: amounts, previousAmounts: previousAmounts, budget: budget,
-            planStatuses: planStatuses, goalStatuses: goalStatuses,
-            habitTickRate: habitTickRate,
-            journalDates: journalDates, previousJournalCount: previousJournalCount,
-            daysInMonth: window.daysInMonth
-        )
     }
 
     private func committedSectors() -> Set<LifeSector> {
