@@ -94,15 +94,32 @@ private struct StubEngine: Engine {
         #expect(result == .answered(cloud))
     }
 
-    @Test func aRefusalIsSurfacedEvenWhenARemoteEngineIsAvailable() async {
-        let refusal = LanguageModelSession.GenerationError.Refusal(transcriptEntries: [])
+    /// A refusal is an answer. Falling through to the other engine would be a
+    /// way around it rather than a second opinion, so whichever tier refuses,
+    /// the refusal stands.
+    @Test func aRemoteRefusalIsNeverRetriedOnDevice() async {
         let result = await router(
-            onDevice: { throw LanguageModelSession.GenerationError.refusal(refusal, self.context) },
-            remote: { DailyBrief(headline: "Should never be reached.", observations: ["a", "b"]) }
+            onDevice: {
+                Issue.record("a refusal must not be routed around")
+                return self.brief
+            },
+            remote: { throw RemoteEngineError.refused("not something I can help with") }
         ).run(BriefTask(), empty)
 
         guard case .refused = result else {
-            Issue.record("a refusal must never be answered by the cloud, got \(result)")
+            Issue.record("expected the refusal to stand, got \(result)")
+            return
+        }
+    }
+
+    @Test func aLocalRefusalStandsWhenTheDeviceIsTheOnlyTier() async {
+        let refusal = LanguageModelSession.GenerationError.Refusal(transcriptEntries: [])
+        let result = await router(
+            onDevice: { throw LanguageModelSession.GenerationError.refusal(refusal, self.context) }
+        ).run(BriefTask(), empty)
+
+        guard case .refused = result else {
+            Issue.record("expected a refusal, got \(result)")
             return
         }
     }
@@ -118,39 +135,69 @@ private struct StubEngine: Engine {
         #expect(result == .answered(cloud))
     }
 
-    /// A concurrency failure is contention, and no paid model fixes
-    /// contention. However many times it fails, the router must not reach for
-    /// a paid engine, even when one is sitting right there.
-    @Test func aContentionFailureNeverReachesThePaidEngine() async {
+    /// A concurrency failure is contention on a local session, and a second
+    /// local attempt is the only thing that can help. With the cloud tried
+    /// first this is now reached only as the fallback path, but the rule is
+    /// unchanged: contention retries locally rather than escalating.
+    @Test func contentionRetriesLocallyRatherThanEscalating() async {
+        let attempts = ReadCount()
         let result = await router(
-            onDevice: { throw LanguageModelSession.GenerationError.concurrentRequests(self.context) },
-            remote: {
-                Issue.record("a concurrency bug of ours must never be billed to the cloud")
+            onDevice: {
+                if attempts.next() == 0 {
+                    throw LanguageModelSession.GenerationError.concurrentRequests(self.context)
+                }
                 return self.brief
-            }
+            },
+            remote: { throw RemoteEngineError.exhausted }
         ).run(BriefTask(), empty)
 
-        #expect(result == .unavailable)
+        // Degraded, not answered: the cloud was wanted and the device replied.
+        #expect(result == .degraded(brief))
     }
 
     /// The user can switch Apple Intelligence off while the app is
-    /// backgrounded. A router that remembered `.available` would keep taking
-    /// the local path, fail, escalate, and bill every later request to the
-    /// cloud, so availability is re-read on every request.
+    /// backgrounded, so availability is re-read on every request rather than
+    /// remembered. With the cloud unreachable, the first call falls back to the
+    /// device and the second has no tier left at all.
     @Test func availabilityIsReReadRatherThanTrustedForeverOnceAvailable() async {
-        let cloud = DailyBrief(headline: "From the cloud.", observations: ["a", "b"])
         let reads = ReadCount()
         let router = CoachRouter(
             onDevice: StubEngine(outcome: { self.brief }),
-            remote: StubEngine(outcome: { cloud }),
+            remote: StubEngine(outcome: { throw RemoteEngineError.exhausted }),
             availability: { reads.next() == 0 ? .available : .unavailablePermanently }
         )
 
         let first = await router.run(BriefTask(), empty)
         let second = await router.run(BriefTask(), empty)
 
-        #expect(first == .answered(brief))
-        #expect(second == .answered(cloud))
+        #expect(first == .degraded(brief))
+        #expect(second == .unavailable)
+    }
+
+    /// The whole point of the inversion: when both tiers can answer, the
+    /// better one does.
+    @Test func theCloudAnswersWhenBothTiersCould() async {
+        let cloud = DailyBrief(headline: "From the cloud.", observations: ["a", "b"])
+        let result = await router(
+            onDevice: {
+                Issue.record("the device must not be asked while the cloud can answer")
+                return self.brief
+            },
+            remote: { cloud }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .answered(cloud))
+    }
+
+    /// A spent allowance is not an error. The device picks it up, and the
+    /// screen is told the answer came from the smaller model.
+    @Test func aSpentAllowanceFallsBackToTheDeviceAsDegraded() async {
+        let result = await router(
+            onDevice: { self.brief },
+            remote: { throw RemoteEngineError.exhausted }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .degraded(brief))
     }
 
     @Test func anIneligibleDeviceWithNoCloudIsUnavailable() async {

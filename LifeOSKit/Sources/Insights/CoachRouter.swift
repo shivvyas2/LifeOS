@@ -58,6 +58,22 @@ public actor CoachRouter {
         self.availability = availability
     }
 
+    /// The cloud answers first, and the device is the fallback.
+    ///
+    /// It used to be the other way round, on the reasoning that the free
+    /// engine should be tried before the paid one. The reasoning was sound and
+    /// the result was not: the on-device model is markedly weaker at the kind
+    /// of question this app gets asked, so the common path was the worse
+    /// answer and the better one only appeared when the weaker model failed
+    /// outright, which it rarely does. Quality, not availability, is what
+    /// should pick a tier.
+    ///
+    /// What keeps this affordable is that the remote engine is metered. A
+    /// daily token cap lives on the server, and when it is spent this falls
+    /// back to the device rather than to a bill or to an error. So the cost
+    /// ceiling is enforced where it can actually be enforced, and the device
+    /// stops being a permanent second-best and becomes what it is good at
+    /// being: the thing that still works when the cloud will not.
     public func run<T: CoachTask>(
         _ task: T,
         _ context: T.Context
@@ -65,10 +81,31 @@ public actor CoachRouter {
         if case .cloud = task.floor {
             return await runRemote(task, context)
         }
-        guard currentAvailability() == .available else {
-            return await runRemote(task, context)
+
+        // No remote engine configured at all: the device is the only tier.
+        guard remote != nil else {
+            guard currentAvailability() == .available else { return .unavailable }
+            return await runLocal(task, context, retriesLeft: 1)
         }
-        return await runLocal(task, context, retriesLeft: 1)
+
+        switch await runRemote(task, context, fallback: .unavailable) {
+        case .answered(let output):
+            return .answered(output)
+        case .refused(let reason):
+            // The model answered and declined. A second model is not a second
+            // opinion on a refusal, it is a way around one.
+            return .refused(reason)
+        case .exhausted, .unavailable, .tooLarge, .degraded:
+            // Everything else is the cloud being unable to answer, which is
+            // exactly what the device is for. Marked degraded so the screen can
+            // say the answer came from the smaller model rather than letting it
+            // read as the coach quietly getting worse.
+            guard currentAvailability() == .available else { return .unavailable }
+            switch await runLocal(task, context, retriesLeft: 1) {
+            case .answered(let output): return .degraded(output)
+            case let other:             return other
+            }
+        }
     }
 
     private func runLocal<T: CoachTask>(

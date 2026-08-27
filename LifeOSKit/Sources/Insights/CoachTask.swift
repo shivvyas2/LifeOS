@@ -49,6 +49,19 @@ public protocol CoachTask: Sendable {
     func prompt(_ context: Context, for audience: MetricsDigest.Audience) -> String
 }
 
+public extension CoachTask {
+    /// What is actually sent: the task's own instructions with the house style
+    /// appended.
+    ///
+    /// Composed here rather than in each task, so a task added later cannot
+    /// forget it, and applied to both tiers, so a reply does not change shape
+    /// depending on which model produced it.
+    var styledInstructions: String {
+        instructions + "\n\n" + ResponseStyle.instruction
+    }
+}
+
+
 public struct BriefTask: CoachTask {
     public typealias Output = DailyBrief
     public typealias Context = MetricsDigest

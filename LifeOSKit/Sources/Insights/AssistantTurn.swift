@@ -27,11 +27,14 @@ public enum AssistantTurn {
         let invoker = ToolInvoker(tools: tools, broker: broker)
         let session = LanguageModelSession(
             tools: tools.map { SessionTool($0, invoker: invoker) },
-            instructions: instructions
+            instructions: instructions + "\n\n" + ResponseStyle.instruction
         )
         let response = try await session.respond(to: prompt)
         return Reply(
-            text: response.content,
+            // Cleaned here rather than in the view, so every caller gets the
+            // same text and a second surface cannot render the raw markdown
+            // the instruction was supposed to prevent.
+            text: ResponseStyle.clean(response.content),
             toolSummaries: await invoker.toolSummaries()
         )
     }
