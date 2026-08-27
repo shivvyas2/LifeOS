@@ -34,6 +34,10 @@ struct AppShell: View {
     /// coach's cloud tier both authenticate with a real session, so a guest
     /// gets the local app and is told as much at the point those fail.
     @AppStorage("isGuest") private var isGuest = false
+    /// The one-time walkthrough. Keyed on its own flag rather than on
+    /// `hasFinishedOnboarding`, so it fires exactly once per install however
+    /// the person arrived: signup, sign-in, or skip.
+    @AppStorage("hasSeenFirstRunTour") private var hasSeenFirstRunTour = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -44,6 +48,12 @@ struct AppShell: View {
                     hasFinishedOnboarding = false
                     onboarding.signOut()
                 })
+                .fullScreenCover(isPresented: Binding(
+                    get: { !hasSeenFirstRunTour },
+                    set: { hasSeenFirstRunTour = !$0 }
+                )) {
+                    FirstRunTour { hasSeenFirstRunTour = true }
+                }
             } else {
                 OnboardingFlow(
                     model: onboarding,

@@ -47,8 +47,10 @@ struct NotesSidebar: View {
                     .padding(.horizontal, 14)
                     .padding(.bottom, 14)
 
-                shortcut(.recent, title: "Recent", systemImage: "clock", count: snapshot.recent.count)
-                shortcut(.favorites, title: "Favourites", systemImage: "star", count: snapshot.favorites.count)
+                shortcut(.recent, title: "Recent", systemImage: "clock.fill",
+                         hue: .recovery, count: snapshot.recent.count)
+                shortcut(.favorites, title: "Favourites", systemImage: "star.fill",
+                         hue: .activity, count: snapshot.favorites.count)
                 habitsRow
 
                 ForEach(NoteBucket.allCases) { bucket in
@@ -96,50 +98,62 @@ struct NotesSidebar: View {
     private var habitsRow: some View {
         Button(action: onOpenHabits) {
             HStack(spacing: 10) {
-                Image(systemName: "flame")
-                    .font(LifeOSType.label)
-                    .frame(width: 14)
+                iconBubble("flame.fill", hue: .habits)
                 Text("Habits")
-                    .font(LifeOSType.secondary)
+                    .font(LifeOSType.rowTitle.weight(.regular))
+                    .foregroundStyle(primary)
                 Spacer(minLength: 8)
-                if habitCount > 0 {
-                    Text("\(habitCount)")
-                        .font(LifeOSType.label.weight(.regular))
-                }
+                if habitCount > 0 { countBadge(habitCount) }
                 Image(systemName: "chevron.right")
                     .font(LifeOSType.eyebrow)
+                    .foregroundStyle(secondary)
             }
-            .foregroundStyle(secondary)
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
     }
 
-    private func shortcut(_ target: NoteSelection, title: String, systemImage: String, count: Int) -> some View {
+    private func shortcut(_ target: NoteSelection, title: String, systemImage: String,
+                          hue: ModuleHue, count: Int) -> some View {
         Button {
             selection = target
         } label: {
             HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(LifeOSType.label)
-                    .frame(width: 14)
+                iconBubble(systemImage, hue: hue)
                 Text(title)
                     .font(LifeOSType.rowTitle.weight(selection == target ? .semibold : .regular))
+                    .foregroundStyle(primary)
                 Spacer(minLength: 8)
-                if count > 0 {
-                    Text("\(count)")
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(secondary)
-                }
+                if count > 0 { countBadge(count) }
             }
-            .foregroundStyle(selection == target ? primary : secondary)
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .background(rowHighlight(selection == target))
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+    }
+
+    /// The same pastel-bubble vocabulary as the journey rows and the stat
+    /// tiles, sized for a rail row.
+    private func iconBubble(_ symbol: String, hue: ModuleHue) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(hue.top)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
+    }
+
+    /// A quiet capsule rather than a bare number, so counts read as badges
+    /// instead of trailing digits.
+    private func countBadge(_ count: Int) -> some View {
+        Text("\(count)")
+            .font(LifeOSType.caption.weight(.medium))
+            .foregroundStyle(secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(primary.opacity(scheme == .dark ? 0.12 : 0.05)))
     }
 
     @ViewBuilder
@@ -159,12 +173,11 @@ struct NotesSidebar: View {
                     HStack(spacing: 8) {
                         Text(bucket.title.uppercased())
                             .font(LifeOSType.caption.weight(.semibold))
-                            .tracking(0.6)
+                            .tracking(0.8)
+                            .foregroundStyle(selection == .bucket(bucket) ? primary : secondary)
                         Spacer(minLength: 4)
-                        Text("\(snapshot.count(in: bucket))")
-                            .font(LifeOSType.caption)
+                        countBadge(snapshot.count(in: bucket))
                     }
-                    .foregroundStyle(selection == .bucket(bucket) ? primary : secondary)
                 }
                 .buttonStyle(.plain)
 
