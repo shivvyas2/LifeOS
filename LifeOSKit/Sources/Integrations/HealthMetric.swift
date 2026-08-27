@@ -256,6 +256,24 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     /// Blood pressure only means anything as a pair, and flow is an ordinal
     /// dressed as a number. Both are rendered by hand rather than by the
     /// generic row.
+    /// Cycle data is asked for separately, and only when it applies.
+    ///
+    /// Not because it is more private than a heart rate, but because a
+    /// permission sheet that asks every person for menstrual data is telling
+    /// most of them the app has misread who they are. It is requested in a
+    /// second prompt, after the first, and only when cycle tracking is on.
+    public var needsCycleConsent: Bool { group == .cycle }
+
+    /// The metrics read in the first authorisation request: everything that
+    /// applies to everyone.
+    public static var universal: [HealthMetric] {
+        allCases.filter { !$0.needsCycleConsent }
+    }
+
+    public static var cycleOnly: [HealthMetric] {
+        allCases.filter(\.needsCycleConsent)
+    }
+
     public var rendersAsPlainNumber: Bool {
         self != .menstrualFlowLevel
     }

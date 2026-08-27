@@ -133,3 +133,34 @@ import Testing
         }
     }
 }
+
+@Suite struct CycleConsentTests {
+
+    /// A permission sheet that asks every person for menstrual data is telling
+    /// most of them the app has misread who they are. The first request must
+    /// not contain it.
+    @Test func theFirstRequestNeverAsksForCycleData() {
+        #expect(HealthMetric.universal.allSatisfy { !$0.needsCycleConsent })
+        #expect(HealthMetric.universal.contains(.steps))
+        #expect(!HealthMetric.universal.contains(.menstrualFlowLevel))
+    }
+
+    @Test func cycleMetricsAreExactlyTheCycleGroup() {
+        #expect(Set(HealthMetric.cycleOnly) == Set(HealthMetric.allCases.filter { $0.group == .cycle }))
+        #expect(!HealthMetric.cycleOnly.isEmpty)
+    }
+
+    /// The two lists have to partition the vocabulary, or a metric is either
+    /// never read or read without consent.
+    @Test func universalAndCyclePartitionEveryMetric() {
+        let combined = Set(HealthMetric.universal).union(HealthMetric.cycleOnly)
+        #expect(combined == Set(HealthMetric.allCases))
+        #expect(Set(HealthMetric.universal).isDisjoint(with: HealthMetric.cycleOnly))
+    }
+
+    /// Basal temperature is cycle data even though it reads like a vital, and
+    /// filing it anywhere else would leak it past the switch.
+    @Test func basalTemperatureIsGatedWithTheRest() {
+        #expect(HealthMetric.basalBodyTemperatureCelsius.needsCycleConsent)
+    }
+}

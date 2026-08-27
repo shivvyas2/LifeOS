@@ -28,19 +28,25 @@ public enum HealthDaySummary {
     /// Named columns first, then the bag, then grouped in the enum's own order
     /// so the panels and the rows inside them are stable from day to day. A
     /// list that reorders itself as values appear is unreadable.
+    /// `includingCycle` is the display half of the consent gate. The sync
+    /// already declines to read cycle metrics when it is off, so this only
+    /// matters for a day read while it was on and looked at after it was
+    /// turned off, but that is exactly the case where showing it anyway would
+    /// be a betrayal of the switch.
     @MainActor
-    public static func groups(for row: DailyMetrics?) -> [Group] {
+    public static func groups(for row: DailyMetrics?, includingCycle: Bool = false) -> [Group] {
         guard let row else { return [] }
 
+        let readable = includingCycle ? HealthMetric.allCases : HealthMetric.universal
         var values: [HealthMetric: Double] = [:]
-        for metric in HealthMetric.allCases {
+        for metric in readable {
             if let value = named(metric, in: row) ?? row.extra(metric.rawValue) {
                 values[metric] = value
             }
         }
 
         return HealthMetric.Group.allCases.compactMap { group in
-            let items = HealthMetric.allCases
+            let items = readable
                 .filter { $0.group == group }
                 .compactMap { metric in
                     values[metric].map { Item(metric: metric, value: $0) }

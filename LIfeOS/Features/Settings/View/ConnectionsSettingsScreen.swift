@@ -31,6 +31,8 @@ struct ConnectionsSettingsScreen: View {
                     ) { Task { await health.connect() } }
                     .disabled(health.state == .unavailable)
 
+                    if health.isConnected { cycleToggle }
+
                     connectionCard(
                         icon: "building.columns.fill", hue: .money,
                         title: "Bank accounts", status: plaid.statusDetail,
@@ -86,6 +88,32 @@ struct ConnectionsSettingsScreen: View {
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    /// Offered to everyone, defaulted from Health's own sex characteristic.
+    ///
+    /// A switch rather than an inference, because who tracks a cycle is not
+    /// answered by a profile field or by a characteristic: a trans man may
+    /// track one and a woman past menopause may not want to. Defaulting it and
+    /// then letting it be changed is the only arrangement that is right for
+    /// both of them.
+    private var cycleToggle: some View {
+        Toggle(isOn: Binding(
+            get: { health.readsCycleTracking },
+            set: { enabled in Task { await health.setCycleTracking(enabled) } }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Cycle tracking")
+                    .font(LifeOSType.rowTitle)
+                Text("Reads menstrual and cycle data from Health. Asks separately the first time.")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(LifeOSTokens.accent)
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     /// A verb in a soft capsule, or the standing state with a check. The

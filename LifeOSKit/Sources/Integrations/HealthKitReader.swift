@@ -55,22 +55,58 @@ public actor HealthKitReader {
     /// has to link out to Health rather than claim a connection state.
     public func requestAuthorisation() async throws {
         guard isAvailable else { throw HealthKitError.unavailableOnThisDevice }
-        let types = Set(HealthMetric.allCases.compactMap(Self.sampleType))
+        var types = Set(HealthMetric.universal.compactMap(Self.sampleType) as [HKSampleType])
+            .map { $0 as HKObjectType }
+        // Sex comes with the first request because it decides whether the
+        // second one is ever shown. It is a single characteristic and reads as
+        // "Sex" on the sheet, which is a far smaller thing to ask of everyone
+        // than menstrual data.
+        if let sex = HKCharacteristicType.characteristicType(forIdentifier: .biologicalSex) {
+            types.append(sex)
+        }
         do {
-            try await store.requestAuthorization(toShare: [], read: types)
+            try await store.requestAuthorization(toShare: [], read: Set(types))
         } catch {
             Self.log.error("authorisation failed: \(error.localizedDescription, privacy: .public)")
             throw HealthKitError.authorisationRefused
         }
     }
 
+    /// The second prompt, asked only when cycle tracking is turned on.
+    public func requestCycleAuthorisation() async throws {
+        guard isAvailable else { throw HealthKitError.unavailableOnThisDevice }
+        let types = Set(HealthMetric.cycleOnly.compactMap(Self.sampleType) as [HKSampleType])
+        guard !types.isEmpty else { return }
+        do {
+            try await store.requestAuthorization(toShare: [], read: types)
+        } catch {
+            Self.log.error("cycle authorisation failed: \(error.localizedDescription, privacy: .public)")
+            throw HealthKitError.authorisationRefused
+        }
+    }
+
+    /// Whether cycle tracking should be on by default for this person.
+    ///
+    /// Reads Health's own sex characteristic, which is the user's setting in
+    /// Apple's app and the same thing Health uses to decide whether to show
+    /// Cycle Tracking. Returns a plain Bool rather than the HealthKit enum so
+    /// the view models stay free of the framework, which is the arrangement
+    /// that lets them be reasoned about and tested without a device.
+    ///
+    /// A default, not a rule. Who tracks a cycle is not answered by this
+    /// field, so the setting is offered either way.
+    public func healthSuggestsCycleTracking() -> Bool {
+        (try? store.biologicalSex().biologicalSex) == .female
+    }
+
     /// Every metric for one day, skipping the ones with nothing recorded.
     ///
     /// A metric that errors is dropped rather than failing the day: one
     /// unreadable type must not cost the user the other nine.
-    public func day(_ date: Date) async -> HealthDay {
+    public func day(_ date: Date, includingCycle: Bool = false) async -> HealthDay {
         var values: [HealthMetric: Double] = [:]
-        for metric in HealthMetric.allCases {
+        let metrics = includingCycle ? HealthMetric.allCases : HealthMetric.universal
+        for metric in metrics {
             if let value = try? await read(metric, on: date) {
                 values[metric] = value
             }

@@ -36,6 +36,10 @@ final class HealthConnectionViewModel {
     /// clears this too, so the sync that follows backfills the whole window
     /// instead of only the days since the last run.
     static let lastSyncKey = "healthLastSyncedAt"
+    /// Whether cycle metrics are read at all. Absent means "never decided",
+    /// which is not the same as off: the first connect fills it in from what
+    /// Health holds, and after that it is whatever the person set.
+    private static let cycleTrackingKey = "healthReadsCycleTracking"
     /// Whether the user has ever been through the Health prompt. iOS shows it
     /// once and never again, so the row must stop offering "Connect" after
     /// that or it becomes a button that visibly does nothing.
@@ -94,6 +98,37 @@ final class HealthConnectionViewModel {
         defaults.object(forKey: Self.lastSyncKey) as? Date
     }
 
+    /// Whether the app reads menstrual and cycle data.
+    ///
+    /// Deliberately not derived from the gender asked at signup. That field
+    /// says how someone wants to be addressed, and its own comment says so:
+    /// it is "not a biological-sex field wearing a friendlier label". Using it
+    /// here would get the answer wrong in both directions, and would strand
+    /// everyone who chose "Prefer not to say", which is the default.
+    ///
+    /// The default comes from Health's own sex characteristic, which is the
+    /// user's setting in Apple's app and the same thing Health itself uses to
+    /// decide whether to show Cycle Tracking. A default, not a rule: a trans
+    /// man may track a cycle and a woman past menopause may not want to, so
+    /// the switch is offered to everyone either way.
+    var readsCycleTracking: Bool {
+        defaults.bool(forKey: Self.cycleTrackingKey)
+    }
+
+    /// Turns cycle reading on or off. Turning it on asks for the extra
+    /// permission there and then, so the prompt arrives with the tap that
+    /// caused it rather than at some later sync.
+    func setCycleTracking(_ enabled: Bool) async {
+        defaults.set(enabled, forKey: Self.cycleTrackingKey)
+        guard enabled, reader.isAvailable else { return }
+        do {
+            try await reader.requestCycleAuthorisation()
+        } catch {
+            healthLog.error("cycle authorisation failed: \(String(describing: error), privacy: .public)")
+        }
+        await sync()
+    }
+
     /// Asks for permission, then reads. The prompt only ever appears once;
     /// after that this is just a sync.
     func connect() async {
@@ -101,6 +136,7 @@ final class HealthConnectionViewModel {
         do {
             try await reader.requestAuthorisation()
             defaults.set(true, forKey: Self.hasAskedKey)
+            await decideCycleDefault()
         } catch {
             healthLog.error("authorisation failed: \(String(describing: error), privacy: .public)")
             state = .failed("Could not open Health")
@@ -116,6 +152,19 @@ final class HealthConnectionViewModel {
         await sync()
     }
 
+    /// Runs once, after the first authorisation, when nothing has been decided
+    /// yet. Someone who has already chosen keeps their choice.
+    private func decideCycleDefault() async {
+        guard defaults.object(forKey: Self.cycleTrackingKey) == nil else { return }
+        let isFemale = await reader.healthSuggestsCycleTracking()
+        defaults.set(isFemale, forKey: Self.cycleTrackingKey)
+        // Only the people it applies to see a second prompt, and only right
+        // after the first, where it reads as part of the same setup.
+        if isFemale {
+            try? await reader.requestCycleAuthorisation()
+        }
+    }
+
     private func sync() async {
         if let running {
             await running.value
@@ -123,6 +172,7 @@ final class HealthConnectionViewModel {
         }
         guard let context else { return }
 
+        let readsCycle = readsCycleTracking
         let task = Task { @MainActor [reader, defaults] in
             state = .syncing
             let store = MetricsStore(context: context)
@@ -130,7 +180,7 @@ final class HealthConnectionViewModel {
             var written = 0
 
             for day in window {
-                let health = await reader.day(day)
+                let health = await reader.day(day, includingCycle: readsCycle)
                 // A day Health knows nothing about is skipped rather than
                 // written: an upsert would create an empty row and put a blank
                 // day on the calendar that nothing ever fills.

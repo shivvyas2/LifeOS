@@ -86,7 +86,12 @@ final class WellnessViewModel {
                 sleepVerdict: avgSleep.map { $0 >= 420 ? "Optimal" : ($0 >= 360 ? "Fair" : "Low") },
                 trainingVerdict: workoutDays >= 4 ? "Consistent" : "Patchy",
                 journal: journal,
-                healthGroups: HealthDaySummary.groups(for: dayRow),
+                healthGroups: HealthDaySummary.groups(
+                    for: dayRow,
+                    // The same switch the sync reads, so what is on screen and
+                    // what is being read can never disagree.
+                    includingCycle: UserDefaults.standard.bool(forKey: "healthReadsCycleTracking")
+                ),
                 hasEntryToday: journal.contains { calendar.isDateInToday($0.date) }
             )
         } catch {
