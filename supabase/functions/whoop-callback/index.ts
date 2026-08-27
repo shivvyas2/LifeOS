@@ -3,23 +3,27 @@
 // Whoop requires a redirect URL starting with https, but the authorization
 // code has to reach an iOS app, which is addressed by a custom scheme. This
 // function is the hop between: Whoop redirects the browser here, and this
-// immediately 302s to almanac://whoop-callback carrying the same parameters.
+// immediately 302s to the app's custom scheme carrying the same parameters.
 //
 // It holds no secret and makes no decisions. PKCE and the `state` check still
 // happen in the app, so this hop cannot be used to inject a forged code. An
 // attacker who reaches this endpoint only gets a redirect back to an app that
 // will reject a `state` it did not issue.
 
-// `almanac`, not `lifeos`. The bundle identifier changed in 09049ed, which
-// means a device that had the app before that date still carries the old one
-// as a separate install, and both declared `lifeos`. iOS does not define which
-// app wins when two claim a scheme, and in practice it hands the callback to
-// whichever was installed first, so Whoop authorization was opening a build
-// from before the rename. A scheme only the current app declares is the fix.
+// The app answers to both `almanac` and `lifeos`, so this can be either and
+// can be changed at any time without shipping an app build alongside it.
 //
-// Deployed in lockstep with the app: a build still listening for `lifeos` will
-// not receive this redirect.
-const APP_SCHEME_URL = "almanac://whoop-callback";
+// It sends `lifeos` because that is the scheme every build already installed
+// knows, including ones that predate `almanac`. Pointing it at `almanac`
+// stranded anyone who had not updated: Safari was handed a scheme no installed
+// app claimed and refused it as an invalid address.
+//
+// Worth moving to `almanac` once no build that predates it is still in use.
+// `lifeos` is the weaker of the two, because the app's own bundle identifier
+// changed in 09049ed and a device that had the app before that date carries
+// the old install as a separate app that claims `lifeos` as well. iOS does not
+// define which app wins, and in practice the earliest install does.
+const APP_SCHEME_URL = "lifeos://whoop-callback";
 
 Deno.serve((req: Request) => {
   const incoming = new URL(req.url);
@@ -30,7 +34,7 @@ Deno.serve((req: Request) => {
 
   // "Sign in on another device": the app issues a `manual-` state when the
   // user completes authorization in a desktop browser, which cannot hand back
-  // to almanac://. Render the code for transcription instead of redirecting.
+  // to the app. Render the code for transcription instead of redirecting.
   if (state?.startsWith("manual-")) {
     return new Response(page(code, error), {
       status: 200,

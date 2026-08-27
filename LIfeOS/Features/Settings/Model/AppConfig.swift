@@ -37,18 +37,30 @@ enum AppConfig {
 
     static var isPlaidConfigured: Bool { plaidFunctionsBase != nil }
 
-    /// The scheme `ASWebAuthenticationSession` waits for.
+    /// Every scheme the app answers to, in the order the bundle declares them.
+    ///
+    /// Plural on purpose. The app carries both `almanac` and the older `lifeos`
+    /// so the redirect bridge can point at either without the app and the
+    /// server having to ship together; a callback arriving on any of them is
+    /// ours. Checking only the first would reject the very redirect the bundle
+    /// was extended to accept.
     ///
     /// Deliberately not derived from `whoopRedirectURI`. Whoop requires an
     /// https redirect, so that value points at the Edge Function bridge, and
-    /// the browser only returns to the app on the final `almanac://` hop. Using
-    /// the redirect's own scheme would leave the session waiting for https and
-    /// the callback would never arrive.
-    static var appURLScheme: String? {
-        guard let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]],
-              let schemes = types.first?["CFBundleURLSchemes"] as? [String]
-        else { return nil }
-        return schemes.first
+    /// the browser only returns to the app on the final custom-scheme hop.
+    static var appURLSchemes: [String] {
+        guard let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
+        else { return [] }
+        return types.compactMap { $0["CFBundleURLSchemes"] as? [String] }.flatMap { $0 }
+    }
+
+    /// The preferred scheme: the first declared. For anywhere that has to name
+    /// one, such as a session waiting on a single callback scheme.
+    static var appURLScheme: String? { appURLSchemes.first }
+
+    static func handles(_ scheme: String?) -> Bool {
+        guard let scheme else { return false }
+        return appURLSchemes.contains(scheme)
     }
 
     static var isWhoopConfigured: Bool {
