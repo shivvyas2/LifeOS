@@ -167,6 +167,37 @@ import Persistence
         #expect(blocks[0].text == "known")
     }
 
+    /// A due date typed on the phone has to reach the server, or the next pull
+    /// writes nil back over it: `existing.blocks = row.blocks` replaces the
+    /// whole array, so a field the wire drops is a field the wire erases.
+    @Test func aTodoKeepsItsDueDateAndGoalAcrossTheWire() throws {
+        let due = Date(timeIntervalSince1970: 1_800_000_500)
+        let goal = UUID()
+        let block = NoteBlock(kind: .todo, text: "Long run", dueDate: due, goalID: goal)
+
+        let decoded = NoteDocumentRow.blocks(from: [NoteDocumentRow.blockJSON(block)])
+
+        #expect(decoded.count == 1)
+        #expect(abs(try #require(decoded[0].dueDate).timeIntervalSince(due)) < 0.001)
+        #expect(decoded[0].goalID == goal)
+    }
+
+    /// Both keys are written only when set, so a page of prose is not inflated
+    /// with nulls, and a block written before they existed still decodes.
+    @Test func aBlockWrittenBeforeTheseKeysDecodesWithBothNil() {
+        let plain = NoteDocumentRow.blockJSON(NoteBlock(kind: .paragraph, text: "prose"))
+        #expect(plain["dueDate"] == nil)
+        #expect(plain["goalID"] == nil)
+
+        let decoded = NoteDocumentRow.blocks(from: [
+            ["id": UUID().uuidString, "kind": "todo", "text": "old", "isChecked": false],
+        ])
+
+        #expect(decoded.count == 1)
+        #expect(decoded[0].dueDate == nil)
+        #expect(decoded[0].goalID == nil)
+    }
+
     @Test func aDocumentWithNoBlocksStillHasSomewhereToType() {
         #expect(NoteDocumentRow.blocks(from: []).count == 1)
         #expect(NoteDocumentRow.blocks(from: nil).count == 1)
