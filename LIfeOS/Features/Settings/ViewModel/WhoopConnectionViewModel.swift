@@ -278,7 +278,16 @@ final class WhoopConnectionViewModel {
     /// launch task and the foreground transition, which fire together on a
     /// cold start, coalesce into one sync instead of racing Whoop's rate
     /// limit with duplicate requests.
-    private var isSyncing = false
+    /// Visible to the view, so a sync can show that it is happening. It was
+    /// private, which meant "Sync now" did its work in complete silence: the
+    /// button did not move, nothing spun, and the only evidence anything had
+    /// happened was a status line changing several seconds later.
+    private(set) var isSyncing = false
+
+    /// True for a moment after a sync lands. A spinner that simply vanishes
+    /// answers "is it working" but never "did it work", and those are
+    /// different questions: this one is the answer to the second.
+    private(set) var justSynced = false
 
     /// Clears a sign-in that was started and then abandoned.
     ///
@@ -334,6 +343,16 @@ final class WhoopConnectionViewModel {
         }
     }
 
+    /// Holds the confirmation on screen long enough to be read, then clears
+    /// it. Two seconds: shorter and it is a flicker someone glancing away
+    /// misses, longer and it is still claiming success while they change
+    /// something else.
+    private func flashSynced() async {
+        justSynced = true
+        try? await Task.sleep(for: .seconds(2))
+        justSynced = false
+    }
+
     /// Manual sync: "Sync now" and the first sync after connecting. Every
     /// failure is surfaced, because the user asked and deserves an answer.
     func sync() async {
@@ -345,6 +364,7 @@ final class WhoopConnectionViewModel {
         defer { isSyncing = false }
         do {
             state = .connected(lastSyncedDays: try await performSync())
+            await flashSynced()
         } catch WhoopSyncError.reauthenticationRequired {
             whoopLog.error("sync: refresh token rejected, reauthentication required")
             state = .failed("Whoop sign-in expired")

@@ -128,7 +128,16 @@ struct WhoopConnectModal: View {
                 waitingForSafari
             }
         case .connected:
-            PrimaryButton("Sync now") { Task { await model.sync() } }
+            // Three states in one control: idle, working, just finished. The
+            // button used to have only the first, so pressing it looked
+            // identical to pressing nothing.
+            PrimaryButton(
+                model.justSynced ? "Synced" : "Sync now",
+                isLoading: model.isSyncing
+            ) {
+                Task { await model.sync() }
+            }
+            .disabled(model.isSyncing)
             Button("Disconnect", role: .destructive) {
                 model.disconnect()
             }

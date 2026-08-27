@@ -162,7 +162,8 @@ struct SettingsScreen: View {
                 VStack(spacing: 0) {
                     connectionLine(
                         icon: "bolt.heart.fill", name: "Whoop",
-                        detail: whoop.statusDetail, isOn: whoop.isConnected
+                        detail: whoop.statusDetail, isOn: whoop.isConnected,
+                        isBusy: whoop.isSyncing
                     )
                     rowDivider
                     connectionLine(
@@ -197,7 +198,7 @@ struct SettingsScreen: View {
     /// name is the detail for when the dot is not enough.
     private func connectionLine(
         icon: String, name: String, detail: String,
-        isOn: Bool, showsChevron: Bool = false
+        isOn: Bool, isBusy: Bool = false, showsChevron: Bool = false
     ) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
@@ -225,17 +226,26 @@ struct SettingsScreen: View {
             // Green for on, hollow for off. Never red: not being connected is
             // a choice someone is allowed to make, and an alarm dot next to
             // Whoop would nag every user who does not own one.
-            Circle()
-                .fill(isOn ? Color(red: 0.20, green: 0.70, blue: 0.42) : .clear)
-                .frame(width: 8, height: 8)
-                .overlay {
-                    if !isOn {
-                        Circle().strokeBorder(
-                            LifeOSTokens.secondaryText.resolve(scheme).opacity(0.4),
-                            lineWidth: 1
-                        )
+            if isBusy {
+                // The dot answers "is it on"; while a sync is running the
+                // honest answer is "ask me in a second", so the spinner takes
+                // its place rather than sitting beside it.
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 8, height: 8)
+            } else {
+                Circle()
+                    .fill(isOn ? Color(red: 0.20, green: 0.70, blue: 0.42) : .clear)
+                    .frame(width: 8, height: 8)
+                    .overlay {
+                        if !isOn {
+                            Circle().strokeBorder(
+                                LifeOSTokens.secondaryText.resolve(scheme).opacity(0.4),
+                                lineWidth: 1
+                            )
+                        }
                     }
-                }
+            }
 
             if showsChevron {
                 Image(systemName: "chevron.right")
