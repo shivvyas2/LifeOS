@@ -14,7 +14,13 @@ private let appLog = Logger(subsystem: "com.shivvyas.lifeos", category: "app")
 
 @main
 struct LIfeOSApp: App {
-    private let container: ModelContainer
+    /// Which account's store is open, and the store itself.
+    ///
+    /// Both are state rather than constants because switching accounts
+    /// replaces the container. A store belongs to one account, so the only way
+    /// to change accounts is to open a different file and rebuild the tree
+    /// above it.
+    @State private var session = AccountSession()
 
     init() {
         // Demo default for TestFlight: the Money tab opens on sample figures,
@@ -22,21 +28,29 @@ struct LIfeOSApp: App {
         // connected. An attached bank overrides it, and Settings turns it off.
         UserDefaults.standard.register(defaults: [MoneyViewModel.sampleDataKey: true])
 
-        do {
-            container = try LifeOSContainer.make()
-        } catch {
-            // A container that cannot open is unrecoverable and always a
-            // schema bug, never a user condition. Fail loudly during development.
-            fatalError("Failed to create the model container: \(error)")
-        }
     }
 
     var body: some Scene {
         WindowGroup {
-            AppShell()
-                .task { purgeSeededHistoryOnce() }
+            if let container = session.container {
+                AppShell(onSignedIn: { session.signIn($0, session: $1) },
+                         onSignedOut: { session.signOut() })
+                    .modelContainer(container)
+                    // Re-rooted per account, so no screen carries the previous
+                    // account's view models or scroll position into the next
+                    // one. A stale snapshot on screen after a switch is the
+                    // same class of leak as a stale row.
+                    .id(session.scope?.id ?? "none")
+                    .environment(\.accountSession, session)
+                    .task(id: session.scope?.id) { purgeSeededHistoryOnce() }
+            } else {
+                // Nobody signed in. The onboarding flow needs no store: it has
+                // nothing to read and nowhere to put anything until there is
+                // an account to put it in.
+                AppShell(onSignedIn: { session.signIn($0, session: $1) },
+                         onSignedOut: { session.signOut() })
+            }
         }
-        .modelContainer(container)
         // Hardware keyboard support lives in the scene so the shortcuts work
         // wherever focus is, and so iPadOS lists them in the overlay that
         // appears when Command is held.
@@ -61,10 +75,13 @@ struct LIfeOSApp: App {
     /// month blank, which would look exactly like the purge had broken the app.
     @MainActor
     private func purgeSeededHistoryOnce() {
-        let defaults = UserDefaults.standard
+        // Per account: one person's history being purged says nothing
+        // about another's.
+        let defaults = UserDefaults.currentAccount
         guard !defaults.bool(forKey: Self.purgedSeededHistoryKey) else { return }
 
         do {
+            guard let container = session.container else { return }
             let removed = try SampleMetricsPurge.run(context: container.mainContext)
             defaults.set(true, forKey: Self.purgedSeededHistoryKey)
             defaults.removeObject(forKey: HealthConnectionViewModel.lastSyncKey)

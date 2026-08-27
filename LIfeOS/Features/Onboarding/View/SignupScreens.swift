@@ -69,7 +69,6 @@ struct IdentityScreen: View {
     private enum Field { case phone, email }
 
     @Bindable var model: OnboardingViewModel
-    var onSkipAuth: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
     @State private var showCountries = false
     @FocusState private var focus: Field?
@@ -157,9 +156,6 @@ struct IdentityScreen: View {
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(height: Space.x5)
 
-                if let onSkipAuth {
-                    SecondaryButton("Continue without an account") { onSkipAuth() }
-                }
             }
         }
         .task {

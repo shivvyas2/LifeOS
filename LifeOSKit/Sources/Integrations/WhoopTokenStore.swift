@@ -67,7 +67,17 @@ public struct KeychainWhoopTokenStore: WhoopTokenStoring {
     private let service: String
     private let account: String
 
-    public init(service: String = "ai.lifeos.whoop", account: String = "tokens") {
+    /// Scoped to whichever account is open. A Whoop connection belongs to a
+    /// person, not to a phone: without this, the second account to sign in
+    /// would silently inherit the first one's strap, and sync their recovery
+    /// scores into their own store.
+    public init(
+        service: String = "ai.lifeos.whoop",
+        account: String? = nil
+    ) {
+        let account = account
+            ?? UserDefaults.standard.string(forKey: KeychainAuthSessionStore.currentAccountKey)
+            ?? "tokens"
         self.service = service
         self.account = account
     }

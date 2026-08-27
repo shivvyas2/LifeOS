@@ -52,7 +52,10 @@ final class HealthConnectionViewModel {
     /// arriving together do one pass rather than two.
     private var running: Task<Void, Never>?
 
-    init(reader: HealthKitReader = HealthKitReader(), defaults: UserDefaults = .standard) {
+    /// Per account, because the sync cursor, the cycle switch and whether
+    /// permission has been asked for are all facts about one person rather
+    /// than about the phone.
+    init(reader: HealthKitReader = HealthKitReader(), defaults: UserDefaults = .currentAccount) {
         self.reader = reader
         self.defaults = defaults
     }

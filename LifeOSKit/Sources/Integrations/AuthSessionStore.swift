@@ -14,9 +14,25 @@ public struct KeychainAuthSessionStore: AuthSessionStoring {
     private let service: String
     private let account: String
 
-    public init(service: String = "ai.lifeos.auth", account: String = "session") {
+    /// The slot every build before accounts used. Kept as a name so the
+    /// upgrade path can find the session already on the device.
+    public static let legacyAccount = "session"
+    /// Where the current account id is recorded. Read directly rather than
+    /// through `AccountStore`, which is main-actor bound while this type is
+    /// used from wherever a network call happens to be made.
+    public static let currentAccountKey = "accounts.current"
+
+    /// Defaults to whichever account is current.
+    ///
+    /// This matters more than it looks. Every network client in the app builds
+    /// one of these to get a token, and before accounts there was one slot, so
+    /// after a switch they would all have carried on presenting the previous
+    /// account's access token and reading the previous account's rows.
+    public init(service: String = "ai.lifeos.auth", account: String? = nil) {
         self.service = service
         self.account = account
+            ?? UserDefaults.standard.string(forKey: Self.currentAccountKey)
+            ?? Self.legacyAccount
     }
 
     private var query: [String: Any] {

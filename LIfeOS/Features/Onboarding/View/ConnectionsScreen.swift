@@ -132,7 +132,6 @@ struct OnboardingFlow: View {
     /// tested while email delivery is still being sorted out. Signup is meant
     /// to be required, so remove this and the buttons that call it before
     /// shipping, or the requirement is theatre.
-    var onSkipAuth: (() -> Void)?
 
     var body: some View {
         Group {
@@ -140,10 +139,9 @@ struct OnboardingFlow: View {
             case .intro:
                 IntroScreen(
                     onStart: { model.beginSignup() },
-                    onSignIn: { model.beginSignIn() },
-                    onSkipAuth: onSkipAuth
+                    onSignIn: { model.beginSignIn() }
                 )
-            case .identity:    IdentityScreen(model: model, onSkipAuth: onSkipAuth)
+            case .identity:    IdentityScreen(model: model)
             case .code:        CodeScreen(model: model)
             case .profile:     ProfileStepScreen(model: model)
             case .connections: ConnectionsScreen(model: model, whoop: whoop, health: health, onFinish: onFinish)

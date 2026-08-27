@@ -45,7 +45,7 @@ public final class NoteSync {
         self.rest = rest
         self.calendar = calendar
         self.accessToken = accessToken
-        self.lastSyncedAt = UserDefaults.standard.object(forKey: Self.cursorKey) as? Date
+        self.lastSyncedAt = UserDefaults.currentAccount.object(forKey: Self.cursorKey) as? Date
     }
 
     /// Runs a full pass, or joins the one already running.
@@ -142,7 +142,7 @@ public final class NoteSync {
         }
 
         lastSyncedAt = newest == .distantPast ? .now : newest
-        UserDefaults.standard.set(lastSyncedAt, forKey: Self.cursorKey)
+        UserDefaults.currentAccount.set(lastSyncedAt, forKey: Self.cursorKey)
     }
 
     private func apply(_ row: NoteFolderRow, store: NotesStore) throws {

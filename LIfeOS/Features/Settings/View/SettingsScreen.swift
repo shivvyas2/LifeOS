@@ -1,8 +1,13 @@
 import SwiftUI
 import Insights
+import Integrations
 import DesignSystem
 
 struct SettingsScreen: View {
+    /// The accounts signed in on this device. Held by the scene, because
+    /// switching one replaces the store under everything below it.
+    @Environment(\.accountSession) private var session
+
     @Bindable var model: SettingsViewModel
     var whoop: WhoopConnectionViewModel?
     var health: HealthConnectionViewModel?
@@ -41,6 +46,11 @@ struct SettingsScreen: View {
             sectionLabel("Daily goals")
             goalsCard
 
+            if let session, session.signedInAccounts.count > 1 || session.currentAccount != nil {
+                sectionLabel("Account")
+                accountsCard(session)
+            }
+
             sectionLabel("Thinking")
             tierCard
 
@@ -55,6 +65,47 @@ struct SettingsScreen: View {
 
             signOutButton
                 .padding(.top, 8)
+        }
+    }
+
+    /// Who is signed in, and who else could be.
+    ///
+    /// Switching does not sign anybody out. Each account keeps its own store,
+    /// its own sync cursors and its own Whoop and bank connections, so moving
+    /// between them is opening a different file rather than tearing one down.
+    private func accountsCard(_ session: AccountSession) -> some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(session.signedInAccounts) { account in
+                    let current = account.userID == session.currentAccount?.userID
+                    Button {
+                        guard !current else { return }
+                        session.switch(to: account.userID)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: current ? "checkmark.circle.fill" : "circle")
+                                .font(LifeOSType.body)
+                                .foregroundStyle(current
+                                                 ? LifeOSTokens.accent
+                                                 : LifeOSTokens.secondaryText.resolve(scheme))
+                            Text(account.label)
+                                .font(LifeOSType.rowTitle.weight(current ? .semibold : .regular))
+                                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                }
+
+                Text("Each account keeps its own notes, health data and connections. Switching does not sign the others out.")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

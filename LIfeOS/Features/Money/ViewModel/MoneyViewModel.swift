@@ -34,7 +34,7 @@ final class MoneyViewModel {
         case .connected, .needsReconnect: true
         default: false
         }
-        if UserDefaults.standard.bool(forKey: Self.sampleDataKey), !bankAttached {
+        if UserDefaults.currentAccount.bool(forKey: Self.sampleDataKey), !bankAttached {
             snapshot = .sample
             return
         }

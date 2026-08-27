@@ -1,0 +1,122 @@
+import SwiftUI
+import SwiftData
+import OSLog
+import Persistence
+import Integrations
+
+private let accountLog = Logger(subsystem: "com.shivvyas.lifeos", category: "accounts")
+
+/// Which account is open, and the store that belongs to it.
+///
+/// The app used to build one container in `init` and keep it for the process.
+/// That is exactly what made two people on one device impossible: a container
+/// is a file, and a file is one account's data. Switching accounts means
+/// closing one and opening another, so this owns both and the scene rebuilds
+/// around it.
+@MainActor
+@Observable
+final class AccountSession {
+    private(set) var scope: UserScope?
+    private(set) var container: ModelContainer?
+
+    private let accounts = AccountStore()
+
+    init() {
+        adoptExistingSessionIfNeeded()
+        adopt(accounts.currentScope)
+    }
+
+    /// Brings a device that was already signed in before accounts existed into
+    /// the roster.
+    ///
+    /// Without this, upgrading would look like being signed out: the session
+    /// sits in the old single keychain slot, the roster is empty, and the app
+    /// has no account to open a store for. The same launch adopts the
+    /// pre-account store, so the person keeps both their session and
+    /// everything they had written.
+    private func adoptExistingSessionIfNeeded() {
+        guard accounts.accounts.isEmpty else { return }
+        let legacy = KeychainAuthSessionStore(account: KeychainAuthSessionStore.legacyAccount)
+        guard let session = legacy.load() else { return }
+
+        let account = Account(
+            userID: session.userID,
+            label: session.email ?? session.phone ?? "Account"
+        )
+        do {
+            try accounts.add(account, session: session)
+            if try LifeOSContainer.adoptLegacyStore(into: account.scope) {
+                accountLog.info("adopted the pre-account store for the existing session")
+            }
+        } catch {
+            accountLog.error("could not adopt the existing session: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    var signedInAccounts: [Account] { accounts.accounts }
+    var currentAccount: Account? { accounts.currentAccount }
+
+    /// Records a newly signed-in account and opens its store.
+    func signIn(_ account: Account, session: AuthSession) {
+        do {
+            try accounts.add(account, session: session)
+            // Everything written before accounts existed becomes the first
+            // account's. Attempted on every sign-in and refused after the
+            // first, because the legacy file is gone by then.
+            let adopted = try LifeOSContainer.adoptLegacyStore(into: account.scope)
+            if adopted { accountLog.info("adopted the pre-account store") }
+        } catch {
+            accountLog.error("sign-in bookkeeping failed: \(String(describing: error), privacy: .public)")
+        }
+        adopt(account.scope)
+    }
+
+    /// Switches to an account already signed in on this device.
+    @discardableResult
+    func `switch`(to userID: String) -> Bool {
+        guard accounts.setCurrent(userID) else { return false }
+        adopt(accounts.currentScope)
+        return true
+    }
+
+    /// Signs the current account out, leaving the others and their stores
+    /// alone. Lands on whichever account is left, or on signup when none is.
+    func signOut() {
+        if let scope { accounts.remove(scope.id) }
+        adopt(accounts.currentScope ?? accounts.accounts.first.map(\.scope))
+        if let remaining = accounts.accounts.first, accounts.currentScope == nil {
+            _ = accounts.setCurrent(remaining.userID)
+            adopt(accounts.currentScope)
+        }
+    }
+
+    /// Defaults scoped to the open account, for the cursors and connection
+    /// tokens that are per account rather than per device.
+    var defaults: UserDefaults {
+        scope.flatMap { UserDefaults(suiteName: $0.defaultsSuiteName) } ?? .standard
+    }
+
+    private func adopt(_ next: UserScope?) {
+        scope = next
+        guard let next else {
+            container = nil
+            return
+        }
+        do {
+            container = try LifeOSContainer.make(for: next)
+        } catch {
+            // A store that cannot open is not something the person can fix,
+            // and carrying on with the previous account's container would show
+            // them somebody else's data. Nothing open is the safe failure.
+            accountLog.error("could not open the store for an account: \(String(describing: error), privacy: .public)")
+            container = nil
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Injected once by the scene. Settings is four views below the root and
+    /// threading the session through every one of them would put an argument
+    /// about accounts into screens that have nothing to do with accounts.
+    @Entry var accountSession: AccountSession?
+}

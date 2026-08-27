@@ -90,7 +90,7 @@ final class WellnessViewModel {
                     for: dayRow,
                     // The same switch the sync reads, so what is on screen and
                     // what is being read can never disagree.
-                    includingCycle: UserDefaults.standard.bool(forKey: "healthReadsCycleTracking")
+                    includingCycle: UserDefaults.currentAccount.bool(forKey: "healthReadsCycleTracking")
                 ),
                 hasEntryToday: journal.contains { calendar.isDateInToday($0.date) }
             )

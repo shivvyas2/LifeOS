@@ -29,6 +29,10 @@ final class OnboardingViewModel {
     /// invisible to `@Observable`, which left the shell showing the app after a
     /// sign-out until something else happened to redraw it.
     private(set) var isSignedIn: Bool
+    /// The session just obtained, so the scene can record the account and open
+    /// its store. Held rather than only written to the keychain, because which
+    /// account is open is decided above this view model and it needs the id.
+    private(set) var session: AuthSession?
 
     private let store: any AuthSessionStoring
     private var auth: SupabaseAuth?
@@ -206,6 +210,7 @@ final class OnboardingViewModel {
                 channel: draft.channel
             )
             try store.save(session)
+            self.session = session
             isSignedIn = true
             // The only thing that separates a returning user from a new one,
             // and it is known only now. The door they came through does not
@@ -264,6 +269,7 @@ final class OnboardingViewModel {
 
     func signOut() {
         store.clear()
+        session = nil
         isSignedIn = false
         draft = SignupDraft()
         mode = .signUp
@@ -282,5 +288,17 @@ final class OnboardingViewModel {
                 resendIn -= 1
             }
         }
+    }
+}
+
+extension OnboardingViewModel {
+    /// What the scene needs to record this account: a stable id, and something
+    /// readable beside it in the switcher.
+    var account: Account? {
+        guard let session else { return nil }
+        return Account(
+            userID: session.userID,
+            label: session.email ?? session.phone ?? "Account"
+        )
     }
 }

@@ -1,4 +1,6 @@
 import SwiftUI
+import Integrations
+import Persistence
 import DesignSystem
 import OSLog
 
@@ -10,6 +12,12 @@ private let shellLog = Logger(subsystem: "com.shivvyas.lifeos", category: "shell
 /// from `RootView` so the tab hierarchy is never constructed for a signed-out
 /// user. A half-built RootView reading an empty store was the alternative.
 struct AppShell: View {
+    /// Raised once a session exists, so the scene can record the account and
+    /// open its store. The shell does not own the container: which account is
+    /// open is a decision above it.
+    var onSignedIn: (Account, AuthSession) -> Void = { _, _ in }
+    var onSignedOut: () -> Void = {}
+
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
     @State private var health = HealthConnectionViewModel()
@@ -23,17 +31,6 @@ struct AppShell: View {
     @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @Environment(\.scenePhase) private var scenePhase
-    /// Set by "Skip for now", and now persisted, because signing in is no
-    /// longer required to reach the app: a launch that restores no session
-    /// lands on the app rather than on signup. Persisting it is what stops the
-    /// intro reappearing on every cold start for someone who never intends to
-    /// sign in.
-    ///
-    /// Signing in is still reachable, through Settings, and is still what a
-    /// user needs before anything server-backed works: bank connection and the
-    /// coach's cloud tier both authenticate with a real session, so a guest
-    /// gets the local app and is told as much at the point those fail.
-    @AppStorage("isGuest") private var isGuest = false
     /// The one-time walkthrough. Keyed on its own flag rather than on
     /// `hasFinishedOnboarding`, so it fires exactly once per install however
     /// the person arrived: signup, sign-in, or skip.
@@ -43,11 +40,11 @@ struct AppShell: View {
 
     var body: some View {
         Group {
-            if (onboarding.isSignedIn && hasFinishedOnboarding) || isGuest {
+            if onboarding.isSignedIn && hasFinishedOnboarding {
                 RootView(whoop: whoop, health: health, onSignOut: {
-                    isGuest = false
                     hasFinishedOnboarding = false
                     onboarding.signOut()
+                    onSignedOut()
                 })
                 .overlay {
                     // An overlay, deliberately not a fullScreenCover: iOS can
@@ -74,8 +71,12 @@ struct AppShell: View {
                     model: onboarding,
                     whoop: whoop,
                     health: health,
-                    onFinish: { withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true } },
-                    onSkipAuth: { withAnimation(.easeInOut(duration: 0.35)) { isGuest = true } }
+                    onFinish: {
+                        if let account = onboarding.account, let session = onboarding.session {
+                            onSignedIn(account, session)
+                        }
+                        withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true }
+                    },
                 )
             }
         }
@@ -87,17 +88,15 @@ struct AppShell: View {
             // signup rather than making them prove themselves on every launch.
             if await onboarding.restoreSession() {
                 hasFinishedOnboarding = true
-            } else {
-                // No session, so open the app anyway rather than holding the
-                // door shut. Signing in is a thing this app offers, not a
-                // toll it charges: everything local works without an account,
-                // and the parts that cannot say so where they fail.
-                //
-                // This is what makes the intro reachable only through Settings
-                // -> Sign out. Restoring the old behaviour is deleting this
-                // else branch, which puts a signed-out launch back on signup.
-                isGuest = true
             }
+            // No session means signup, and that is now the only way in.
+            //
+            // The app used to open anyway on a signed-out launch, on the
+            // reasoning that everything local worked without an account. It
+            // does not any more: a store belongs to an account, notes sync to
+            // one, and the connections are held per account. There is nowhere
+            // for a signed-out person's data to live that would not become
+            // somebody else's the moment they signed in.
             await whoop.syncIfStale()
             // After Whoop, not before: Health fills the gaps Whoop leaves, so
             // running it second means it sees the strap's numbers already in
@@ -122,7 +121,7 @@ struct AppShell: View {
                 // switched apps after entering their code. Demotion still
                 // applies: a refused session must not leave a shell behind that
                 // can no longer sync.
-                if await onboarding.restoreSession() == false, !isGuest {
+                if await onboarding.restoreSession() == false {
                     hasFinishedOnboarding = false
                 }
                 // Before syncing: a sign-in abandoned in Safari leaves the

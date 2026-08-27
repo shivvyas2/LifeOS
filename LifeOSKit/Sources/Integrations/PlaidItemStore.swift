@@ -1,4 +1,5 @@
 import Foundation
+import Persistence
 import OSLog
 
 private let plaidItemStoreLog = Logger(subsystem: "com.shivvyas.lifeos", category: "plaid-item-store")
@@ -43,7 +44,7 @@ public struct UserDefaultsPlaidItemStore: PlaidItemStoring {
     // makes each whole sequence atomic, even though every individual UserDefaults access
     // already is. items() also takes the lock to prevent observing a half-written array.
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .currentAccount) {
         self.defaults = defaults
     }
 

@@ -7,7 +7,6 @@ import Integrations
 struct IntroScreen: View {
     let onStart: () -> Void
     var onSignIn: (() -> Void)?
-    var onSkipAuth: (() -> Void)?
     @State private var page = 0
     @Environment(\.colorScheme) private var scheme
 
@@ -41,17 +40,14 @@ struct IntroScreen: View {
                             .foregroundStyle(LifeOSTokens.accent)
                             .frame(height: Space.x5)
                     }
-                    if let onSkipAuth {
-                        Button("Skip for now") { onSkipAuth() }
-                            .font(LifeOSType.secondary.weight(.medium))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            .frame(height: Space.x5)
-                    } else {
-                        Button("Skip") { onStart() }
-                            .font(LifeOSType.secondary.weight(.medium))
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            .frame(height: Space.x5)
-                    }
+                    // Skips the rest of the carousel, not the sign-in. There
+                    // is no way past that any more: a store belongs to an
+                    // account, so there is nowhere for a signed-out person's
+                    // data to live.
+                    Button("Skip") { onStart() }
+                        .font(LifeOSType.secondary.weight(.medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .frame(height: Space.x5)
                 }
                 .padding(.horizontal, Space.x3)
                 .padding(.bottom, Space.x4)

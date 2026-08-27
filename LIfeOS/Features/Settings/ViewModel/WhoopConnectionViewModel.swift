@@ -269,8 +269,8 @@ final class WhoopConnectionViewModel {
     /// UserDefaults rather than Keychain: this is a convenience timestamp, not
     /// a credential, and losing it costs one extra sync.
     private var lastCompletedSync: Date? {
-        get { UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: Self.lastSyncKey) }
+        get { UserDefaults.currentAccount.object(forKey: Self.lastSyncKey) as? Date }
+        set { UserDefaults.currentAccount.set(newValue, forKey: Self.lastSyncKey) }
     }
     private static let lastSyncKey = "whoopLastCompletedSyncAt"
 
