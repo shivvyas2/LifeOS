@@ -38,6 +38,7 @@ struct AppShell: View {
     /// `hasFinishedOnboarding`, so it fires exactly once per install however
     /// the person arrived: signup, sign-in, or skip.
     @AppStorage("hasSeenFirstRunTour") private var hasSeenFirstRunTour = false
+    @State private var showTour = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -48,11 +49,25 @@ struct AppShell: View {
                     hasFinishedOnboarding = false
                     onboarding.signOut()
                 })
-                .fullScreenCover(isPresented: Binding(
-                    get: { !hasSeenFirstRunTour },
-                    set: { hasSeenFirstRunTour = !$0 }
-                )) {
-                    FirstRunTour { hasSeenFirstRunTour = true }
+                .overlay {
+                    // An overlay, deliberately not a fullScreenCover: iOS can
+                    // restore a previously-presented cover at launch, and two
+                    // covers contending for the same window silently drops
+                    // one. An overlay has no presentation machinery to lose.
+                    if showTour {
+                        FirstRunTour {
+                            hasSeenFirstRunTour = true
+                            withAnimation(.easeOut(duration: 0.3)) { showTour = false }
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                .task {
+                    guard !hasSeenFirstRunTour, !showTour else { return }
+                    try? await Task.sleep(for: .milliseconds(400))
+                    if !hasSeenFirstRunTour {
+                        withAnimation(.easeIn(duration: 0.25)) { showTour = true }
+                    }
                 }
             } else {
                 OnboardingFlow(

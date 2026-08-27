@@ -100,7 +100,7 @@ struct NotesSidebar: View {
             HStack(spacing: 10) {
                 iconBubble("flame.fill", hue: .habits)
                 Text("Habits")
-                    .font(LifeOSType.rowTitle.weight(.regular))
+                    .font(.system(size: 16))
                     .foregroundStyle(primary)
                 Spacer(minLength: 8)
                 if habitCount > 0 { countBadge(habitCount) }
@@ -122,7 +122,7 @@ struct NotesSidebar: View {
             HStack(spacing: 10) {
                 iconBubble(systemImage, hue: hue)
                 Text(title)
-                    .font(LifeOSType.rowTitle.weight(selection == target ? .semibold : .regular))
+                    .font(.system(size: 16, weight: selection == target ? .semibold : .regular))
                     .foregroundStyle(primary)
                 Spacer(minLength: 8)
                 if count > 0 { countBadge(count) }
@@ -172,7 +172,7 @@ struct NotesSidebar: View {
                 } label: {
                     HStack(spacing: 8) {
                         Text(bucket.title.uppercased())
-                            .font(LifeOSType.caption.weight(.semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .tracking(0.8)
                             .foregroundStyle(selection == .bucket(bucket) ? primary : secondary)
                         Spacer(minLength: 4)
@@ -238,10 +238,10 @@ struct NotesSidebar: View {
                                 .font(LifeOSType.eyebrow)
                             Spacer()
                         }
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(secondary.opacity(0.8))
+                        .font(LifeOSType.secondary)
+                        .foregroundStyle(secondary.opacity(0.85))
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
                     }
                     .buttonStyle(.plain)
                 }
@@ -310,7 +310,7 @@ private struct NoteFolderRow: View {
                         Text(folder.icon).font(LifeOSType.label.weight(.regular))
                     }
                     Text(folder.name)
-                        .font(LifeOSType.rowTitle.weight(isSelected ? .semibold : .regular))
+                        .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if folder.count > 0 {

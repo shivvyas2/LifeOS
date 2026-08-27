@@ -3,6 +3,10 @@ import DesignSystem
 
 /// Full-screen connections, not a cramped Settings section. All three
 /// integrations are live: Whoop, Apple Health and bank accounts via Plaid.
+///
+/// Each source wears its own hue in the app's bubble vocabulary, the cards
+/// are real glass, and the action sits in a chip: a verb when there is
+/// something to do, a quiet green state when the connection is standing.
 struct ConnectionsSettingsScreen: View {
     @Bindable var whoop: WhoopConnectionViewModel
     @Bindable var health: HealthConnectionViewModel
@@ -14,10 +18,26 @@ struct ConnectionsSettingsScreen: View {
         GradientCanvas(hue: .recovery) {
             ScrollView {
                 VStack(spacing: 14) {
-                    whoopCard
+                    connectionCard(
+                        icon: "bolt.heart.fill", hue: .recovery,
+                        title: "Whoop", status: whoop.statusDetail,
+                        chip: whoopChip
+                    ) { showWhoop = true }
 
-                    healthCard
-                    bankCard
+                    connectionCard(
+                        icon: "heart.fill", hue: .body,
+                        title: "Apple Health", status: health.statusDetail,
+                        chip: healthChip
+                    ) { Task { await health.connect() } }
+                    .disabled(health.state == .unavailable)
+
+                    connectionCard(
+                        icon: "building.columns.fill", hue: .money,
+                        title: "Bank accounts", status: plaid.statusDetail,
+                        chip: bankChip
+                    ) {
+                        if case .connected = plaid.state {} else { plaid.connect() }
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -33,154 +53,103 @@ struct ConnectionsSettingsScreen: View {
         }
     }
 
-    private var whoopCard: some View {
-        Button { showWhoop = true } label: {
+    // MARK: - The one card
+
+    private func connectionCard(
+        icon: String, hue: ModuleHue,
+        title: String, status: String,
+        chip: Chip, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: "bolt.heart.fill")
+                Image(systemName: icon)
                     .font(LifeOSType.body.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
+                    .foregroundStyle(hue.top)
                     .frame(width: 44, height: 44)
-                    .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                    .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Whoop")
+                    Text(title)
                         .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text(whoop.statusDetail)
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-
-                Spacer()
-
-                Text(whoopActionTitle)
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5), lineWidth: 1)
-                    }
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Health has no modal of its own: there is nothing to configure and no
-    /// account to enter. The row either opens the system prompt or re-reads.
-    private var healthCard: some View {
-        Button {
-            Task { await health.connect() }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "heart.fill")
-                    .font(LifeOSType.body.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Apple Health")
-                        .font(LifeOSType.body.weight(.semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text(health.statusDetail)
+                    Text(status)
                         .font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer()
+                Spacer(minLength: 10)
 
-                Text(healthActionTitle)
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
+                chipView(chip)
             }
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5), lineWidth: 1)
-                    }
-            )
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(health.state == .unavailable)
     }
 
-    private var healthActionTitle: String {
+    /// A verb in a soft capsule, or the standing state with a check. The
+    /// difference in colour is the difference in meaning: orange asks for a
+    /// tap, green reports one that already happened.
+    private struct Chip {
+        let text: String
+        var standing = false
+    }
+
+    @ViewBuilder
+    private func chipView(_ chip: Chip) -> some View {
+        if chip.text.isEmpty {
+            EmptyView()
+        } else {
+            HStack(spacing: 4) {
+                if chip.standing {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                Text(chip.text)
+                    .font(LifeOSType.label.weight(.semibold))
+            }
+            .foregroundStyle(chip.standing ? ModuleHue.money.top : LifeOSTokens.primaryText.resolve(scheme))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule().fill(chip.standing
+                               ? (scheme == .dark ? ModuleHue.money.pastelDark : ModuleHue.money.pastel)
+                               : LifeOSTokens.accentSoft.resolve(scheme))
+            )
+        }
+    }
+
+    // MARK: - Per-source chips
+
+    private var whoopChip: Chip {
+        switch whoop.state {
+        case .connected: Chip(text: "Sync")
+        case .connecting: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Connect")
+        }
+    }
+
+    private var healthChip: Chip {
         switch health.state {
-        case .unavailable: ""
-        case .notAsked:    "Connect"
-        case .syncing:     "…"
+        case .unavailable: Chip(text: "")
+        case .notAsked:    Chip(text: "Connect")
+        case .syncing:     Chip(text: "…")
         // "Sync" rather than "Connect" once asked: iOS shows the permission
         // sheet exactly once, so offering to connect again would be a button
         // that visibly does nothing.
-        case .synced, .noData, .failed: "Sync"
+        case .synced, .noData, .failed: Chip(text: "Sync")
         }
     }
 
-    private var bankCard: some View {
-        Button {
-            if case .connected = plaid.state {} else { plaid.connect() }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "dollarsign.circle.fill")
-                    .font(LifeOSType.body.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Bank accounts")
-                        .font(LifeOSType.body.weight(.semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text(plaid.statusDetail)
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-
-                Spacer()
-
-                Text(bankActionTitle)
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.accent)
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5), lineWidth: 1)
-                    }
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var bankActionTitle: String {
+    private var bankChip: Chip {
         switch plaid.state {
         // The tap only connects, so the connected row shows a state, not a verb.
-        case .connected: "Connected"
-        case .connecting: "…"
-        case .unconfigured: "Setup"
-        default: "Connect"
+        case .connected: Chip(text: "Connected", standing: true)
+        case .connecting: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Connect")
         }
     }
-
-    private var whoopActionTitle: String {
-        switch whoop.state {
-        case .connected: "Sync"
-        case .connecting: "…"
-        case .unconfigured: "Setup"
-        default: "Connect"
-        }
-    }
-
 }

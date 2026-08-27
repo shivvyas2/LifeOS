@@ -42,7 +42,7 @@ struct ProfileScreen: View {
                     heroLayer(size: geo.size)
                     content
                         .padding(.horizontal, 24)
-                        .padding(.bottom, geo.safeAreaInsets.bottom + 28)
+                        .padding(.bottom, geo.safeAreaInsets.bottom + 56)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
             }
