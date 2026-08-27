@@ -123,7 +123,7 @@ This is behaviour-preserving and is covered by a characterization test written *
 
 The header differs by mode. `BoardSummary(scores:previous:)` compares two closed months and has no meaning in flight, so in-flight mode shows "N days left" and the mean decided percentage instead of stretching a type that means something else.
 
-`InFlightSectorSheet` is the new detail surface: the band, the floor and ceiling evidence tables, and the ranked levers.
+`InFlightSectorScreen` is the new detail surface: the band, the floor and ceiling evidence tables, and the ranked levers. It is pushed the way `SectorDetailScreen` is on the closed path, not presented as a sheet.
 
 ## 8. Answering early
 
