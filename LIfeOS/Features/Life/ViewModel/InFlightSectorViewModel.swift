@@ -26,6 +26,10 @@ final class InFlightSectorViewModel {
     /// immediately, on `AnswerPersistence`'s say-so, exactly as they do in
     /// the close.
     private var pendingSaveTasks: [String: Task<Void, Never>] = [:]
+    /// The question and latest value each debounced save is waiting to
+    /// persist. Held alongside the tasks so a flush can write them
+    /// synchronously, the way `MonthlyCloseViewModel` does.
+    private var pendingSaveValues: [String: (question: CheckInQuestion, value: String)] = [:]
 
     init(sector: LifeSector, calendar: Calendar = .current) {
         self.sector = sector
@@ -75,6 +79,7 @@ final class InFlightSectorViewModel {
             load()
         } else {
             pendingSaveTasks[question.id]?.cancel()
+            pendingSaveValues[question.id] = (question, value)
             pendingSaveTasks[question.id] = Task { [weak self] in
                 try? await Task.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
@@ -83,11 +88,27 @@ final class InFlightSectorViewModel {
         }
     }
 
+    /// Saves anything still waiting on its debounce, synchronously. Called
+    /// when the sheet goes away, so leaving mid-sentence never drops the
+    /// last few keystrokes.
+    func flushPendingSaves() {
+        for (id, task) in pendingSaveTasks {
+            task.cancel()
+            if let pending = pendingSaveValues[id] {
+                persist(pending.question, value: pending.value)
+            }
+        }
+        pendingSaveTasks.removeAll()
+        pendingSaveValues.removeAll()
+    }
+
     private func persist(_ question: CheckInQuestion, value: String) {
         guard let context else { return }
         let month = Date.startOfMonth(.now, calendar: calendar)
         try? SectorStore(context: context, calendar: calendar).saveAnswer(
             sector: sector, month: month, questionID: question.id, answer: value
         )
+        pendingSaveTasks[question.id] = nil
+        pendingSaveValues[question.id] = nil
     }
 }

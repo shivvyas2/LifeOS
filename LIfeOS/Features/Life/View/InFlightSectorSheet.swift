@@ -78,6 +78,7 @@ struct InFlightSectorSheet: View {
             model.attach(context)
             model.load()
         }
+        .onDisappear { model.flushPendingSaves() }
     }
 
     @ViewBuilder
