@@ -76,6 +76,26 @@ import Persistence
         #expect(inputs.habitTickRate == 1.0)
     }
 
+    /// The two tests above tick every day in the window, so an all-ticked
+    /// window of any size passes and an off-by-one in the window's bounds
+    /// cannot be caught. Ticking only part of the month pins the numerator
+    /// and the denominator at once: 20 of the 27 days already lived.
+    @Test func habitsAreJudgedAsAShareOfTheDaysLived() throws {
+        let context = try makeContext()
+        let plans = PlanStore(context: context, calendar: calendar)
+        let habit = try plans.add(kind: .habit, title: "Read")
+        for day in 1...20 {
+            _ = try plans.toggleTick(for: habit, on: date(2026, 8, day))
+        }
+
+        let inputs = try MonthInputsLoader.load(
+            context: context, month: date(2026, 8, 1),
+            now: date(2026, 8, 27), calendar: calendar
+        )
+        let rate = try #require(inputs.habitTickRate)
+        #expect(abs(rate - 20.0 / 27.0) < 0.001)
+    }
+
     @Test func aClosedMonthStillJudgesEveryDayOfIt() throws {
         let context = try makeContext()
         let plans = PlanStore(context: context, calendar: calendar)
