@@ -517,10 +517,15 @@ struct RootView: View {
     /// past the point the figures are readable, and because these are the
     /// three the app can state without qualification.
     private var profileStats: [ProfileStat] {
-        [
+        // Cumulative, not daily: the trio under the name is who this person
+        // has been, the way the reference's followers number is. Counts come
+        // straight from the store so they are real however the day is going.
+        let daysTracked = (try? context.fetchCount(FetchDescriptor<DailyMetrics>())) ?? 0
+        let workouts = (try? context.fetchCount(FetchDescriptor<WorkoutRecord>())) ?? 0
+        return [
             ProfileStat("Day streak", "\(today.snapshot.streak)"),
-            ProfileStat("Sectors scored", "\(life.cards.count { $0.score != nil })"),
-            ProfileStat("Pages", "\(notes.snapshot.totalCount)"),
+            ProfileStat("Days tracked", "\(daysTracked)"),
+            ProfileStat("Workouts", "\(workouts)"),
         ]
     }
 
