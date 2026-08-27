@@ -73,6 +73,13 @@ public final class NoteLink {
     /// Nil when the link points at a page that does not exist yet. Obsidian
     /// calls these unresolved, and they are worth keeping: a link written
     /// before its page is a to-do of its own.
+    ///
+    /// Non-nil is not proof the page is still there. `NoteIndexer.reindex`
+    /// only rewrites the edges out of the document being saved, so renaming or
+    /// deleting a page leaves every edge that pointed at it holding an id that
+    /// now names something else or nothing at all. The next launch's
+    /// `rebuildAll` repairs them; until then a consumer must treat the lookup
+    /// as a miss it can survive, not as a page it is owed.
     public var targetID: UUID?
 
     public init(sourceID: UUID, targetTitleFolded: String, targetID: UUID? = nil) {
