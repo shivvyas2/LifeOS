@@ -232,6 +232,14 @@ final class OnboardingViewModel {
             // the app makes. Syncing it across devices needs a storage bucket,
             // which is a bigger change than this step.
             ProfilePhotoStore.save(draft.photo)
+            ProfileStore.save(LocalProfile(
+                firstName: draft.firstName.trimmingCharacters(in: .whitespaces),
+                lastName: draft.lastName.trimmingCharacters(in: .whitespaces),
+                country: draft.country,
+                heightCM: draft.heightCM,
+                birthDate: draft.birthDate,
+                gender: draft.gender.stored
+            ))
 
             try await auth.updateProfile(
                 accessToken: session.accessToken,

@@ -46,3 +46,46 @@ enum ProfilePhotoStore {
         return try? Data(contentsOf: url)
     }
 }
+
+/// The profile fields the app shows back to the user.
+///
+/// Kept beside the photo rather than read from the session, because the
+/// session does not carry them: `user_metadata` is written to Supabase during
+/// signup and the decoded `AuthSession` only keeps what the app needs to stay
+/// signed in. Rather than widen that type and re-fetch the user on every
+/// launch to render a name, the same values are recorded locally when they are
+/// saved.
+///
+/// The server copy stays the source of truth. This is a cache for display, and
+/// it is written at exactly the moment the server write succeeds.
+struct LocalProfile: Codable, Equatable {
+    var firstName = ""
+    var lastName = ""
+    var country = ""
+    var heightCM: Double?
+    var birthDate: Date?
+    var gender: String?
+
+    var fullName: String {
+        [firstName, lastName]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+}
+
+enum ProfileStore {
+    private static let key = "localProfile"
+
+    static func save(_ profile: LocalProfile) {
+        guard let data = try? JSONEncoder().encode(profile) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func load() -> LocalProfile {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let profile = try? JSONDecoder().decode(LocalProfile.self, from: data)
+        else { return LocalProfile() }
+        return profile
+    }
+}

@@ -260,7 +260,7 @@ struct CodeScreen: View {
 }
 
 /// Step 3. Name and country.
-struct ProfileScreen: View {
+struct ProfileStepScreen: View {
     private enum Field { case first, last, height }
 
     @Bindable var model: OnboardingViewModel

@@ -73,6 +73,9 @@ struct RootView: View {
     @State private var healthDate = Date()
     @State private var showQuickLog = false
     @State private var showSettings = false
+    /// Re-read when the cover closes, so a photo changed in there shows on the
+    /// button straight away rather than after a relaunch.
+    @State private var profilePhoto: Data? = ProfilePhotoStore.load()
     @State private var showAddPlan = false
     @State private var showAddMoney = false
     @State private var showBudgets = false
@@ -119,8 +122,14 @@ struct RootView: View {
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
         }
+        .onChange(of: showSettings) { _, isOpen in
+            if !isOpen { profilePhoto = ProfilePhotoStore.load() }
+        }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsScreen(model: settings, whoop: whoop, health: health, plaid: plaid, onSignOut: onSignOut)
+            ProfileScreen(
+                settings: settings, whoop: whoop, health: health, plaid: plaid,
+                stats: profileStats, onSignOut: onSignOut
+            )
         }
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
@@ -340,10 +349,9 @@ struct RootView: View {
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showSettings = true } label: {
-                                Image(systemName: "gearshape.fill")
+                                ProfileAvatar(photo: profilePhoto)
                             }
-                            .tint(LifeOSTokens.primaryText.resolve(scheme))
-                            .accessibilityLabel("Settings")
+                            .accessibilityLabel("Profile and settings")
                         }
                     }
                 }
@@ -501,6 +509,19 @@ struct RootView: View {
         railReturnTask?.cancel()
         railReturnTask = nil
         isRailVisible = true
+    }
+
+    /// What the profile shows under the name.
+    ///
+    /// Three, because a row of four on a narrow phone squeezes each column
+    /// past the point the figures are readable, and because these are the
+    /// three the app can state without qualification.
+    private var profileStats: [ProfileStat] {
+        [
+            ProfileStat("Day streak", "\(today.snapshot.streak)"),
+            ProfileStat("Sectors scored", "\(life.cards.count { $0.score != nil })"),
+            ProfileStat("Pages", "\(notes.snapshot.totalCount)"),
+        ]
     }
 
     private func attachAll() {

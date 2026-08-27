@@ -145,7 +145,7 @@ struct OnboardingFlow: View {
                 )
             case .identity:    IdentityScreen(model: model, onSkipAuth: onSkipAuth)
             case .code:        CodeScreen(model: model)
-            case .profile:     ProfileScreen(model: model)
+            case .profile:     ProfileStepScreen(model: model)
             case .connections: ConnectionsScreen(model: model, whoop: whoop, health: health, onFinish: onFinish)
             case .signedIn:    ProgressView().controlSize(.large)
             }

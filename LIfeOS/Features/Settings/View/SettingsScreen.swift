@@ -16,25 +16,10 @@ struct SettingsScreen: View {
         NavigationStack {
             GradientCanvas(hue: .habits) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
-                        sectionLabel("Look")
-                        appearanceCard
-
-                        sectionLabel("Daily goals")
-                        goalsCard
-
-                        sectionLabel("Connections")
-                        connectionsRow
-
-                        sectionLabel("Developer")
-                        sampleDataCard
-
-                        signOutButton
-                            .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+                    sections
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 40)
                 }
             }
             .navigationTitle("Settings")
@@ -47,6 +32,32 @@ struct SettingsScreen: View {
             }
         }
         .onChange(of: model.draft) { model.save() }
+    }
+
+    /// The settings themselves, without a screen around them.
+    ///
+    /// Pulled out so the profile screen can render exactly these rather than a
+    /// second set that looks similar and drifts apart the first time either is
+    /// touched. Settings now lives inside the profile; this screen stays
+    /// because other places still push straight to it.
+    @ViewBuilder
+    var sections: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            sectionLabel("Look")
+            appearanceCard
+
+            sectionLabel("Daily goals")
+            goalsCard
+
+            sectionLabel("Connections")
+            connectionsRow
+
+            sectionLabel("Developer")
+            sampleDataCard
+
+            signOutButton
+                .padding(.top, 8)
+        }
     }
 
     /// Fills the Money screen with invented numbers so its layout can be judged
