@@ -269,4 +269,46 @@ import SwiftData
         #expect(try store.indexedTasks().map(\.text)
                 == ["newer first", "older first", "older second"])
     }
+
+    /// Capture first: a note starts unfiled, and stays that way while it is
+    /// only being written in. Deciding where it belongs is what files it.
+    @Test func aNewPageStartsInTheInbox() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        #expect(document.isInInbox)
+        #expect(try store.inbox().count == 1)
+    }
+
+    @Test func editingDoesNotFileAPage() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        try store.update(document, blocks: [NoteBlock(text: "more thinking")])
+
+        #expect(document.isInInbox)
+    }
+
+    @Test func movingAPageFilesIt() throws {
+        let store = try makeStore()
+        let folder = try store.createFolder(name: "Training", bucket: .areas)
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        try store.move(document, to: .areas, folderID: folder.id)
+
+        #expect(!document.isInInbox)
+        #expect(try store.inbox().isEmpty)
+    }
+
+    /// Filing is a decision, and a decision is not unmade by a later edit.
+    @Test func filingSticksThroughLaterEdits() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+        try store.move(document, to: .areas, folderID: nil)
+        let filedAt = document.filedAt
+
+        try store.update(document, blocks: [NoteBlock(text: "more")])
+
+        #expect(document.filedAt == filedAt)
+    }
 }

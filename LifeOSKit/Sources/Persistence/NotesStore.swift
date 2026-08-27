@@ -207,6 +207,18 @@ public struct NotesStore {
         try context.fetch(FetchDescriptor<NoteLink>())
     }
 
+    /// Captured and not yet filed, newest first. The phone's first screen.
+    ///
+    /// Newest first rather than `displayOrder`: the Inbox is a capture queue,
+    /// and the thing you just wrote is the thing you are still thinking about.
+    public func inbox() throws -> [NoteCardSnapshot] {
+        let names = try folderNames()
+        return try documents(includeArchived: false)
+            .filter(\.isInInbox)
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .map { card($0, folderNames: names) }
+    }
+
     /// The page a `[[link]]` points at, matched on title. Nil when nothing
     /// carries that title yet, which is the cue to offer creating it.
     public func document(titled title: String) throws -> NoteDocument? {
@@ -336,6 +348,8 @@ public struct NotesStore {
     public func move(_ document: NoteDocument, to bucket: NoteBucket, folderID: UUID?) throws {
         document.bucket = bucket
         document.folderID = folderID
+        // Choosing a home is what files a page. Editing one never does.
+        if document.filedAt == nil { document.filedAt = .now }
         try touch(document)
     }
 
