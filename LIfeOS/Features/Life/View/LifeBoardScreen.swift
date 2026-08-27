@@ -38,6 +38,16 @@ struct LifeBoardScreen: View {
                         }
                     }
 
+                    Picker("Month", selection: Binding(
+                        get: { model.mode },
+                        set: { model.mode = $0 }
+                    )) {
+                        ForEach(LifeBoardViewModel.BoardMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
                     header
 
                     SectorStack(cards: model.cards) { sector in
@@ -73,20 +83,36 @@ struct LifeBoardScreen: View {
         sector.ownsTab ? { onOpenTab(sector) } : nil
     }
 
-    /// The header carries the two `BoardSummary` facts. There is no combined
-    /// life score to show here — see `BoardSummary`'s own doc comment.
+    /// Closed mode carries the two `BoardSummary` facts. In flight there is
+    /// no previous month to compare against and no closed score to compare,
+    /// so it answers the only question that mode has: how much is left.
     @ViewBuilder
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.half) {
-            if let lowest = model.summary.lowest {
-                Text("Lowest: \(lowest.title)")
-                    .font(LifeOSType.sectionTitle)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            }
-            if let mover = model.summary.biggestMover {
-                Text("Biggest move: \(mover.sector.title) \(mover.delta > 0 ? "+" : "")\(mover.delta)")
-                    .font(LifeOSType.secondary.weight(.medium))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            switch model.mode {
+            case .closed:
+                if let lowest = model.summary.lowest {
+                    Text("Lowest: \(lowest.title)")
+                        .font(LifeOSType.sectionTitle)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                }
+                if let mover = model.summary.biggestMover {
+                    Text("Biggest move: \(mover.sector.title) \(mover.delta > 0 ? "+" : "")\(mover.delta)")
+                        .font(LifeOSType.secondary.weight(.medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+
+            case .inFlight:
+                if let progress = model.progress {
+                    Text(progress.remainingDays == 1 ? "1 day left" : "\(progress.remainingDays) days left")
+                        .font(LifeOSType.sectionTitle)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                }
+                if let decided = model.meanDecided {
+                    Text("\(Int((decided * 100).rounded()))% of this month is decided")
+                        .font(LifeOSType.secondary.weight(.medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
             }
         }
     }

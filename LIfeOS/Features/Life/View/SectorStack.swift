@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Sectors
 
 /// The nine sectors as a deck of overlapping cards, in the shape of a wallet.
 ///
@@ -137,7 +138,7 @@ private struct SectorDeckCard: View {
             Text(scoreText)
                 .font(LifeOSType.display)
                 .monospacedDigit()
-                .foregroundStyle(ink.opacity(card.score == nil ? 0.35 : 1))
+                .foregroundStyle(ink.opacity(hasValue ? 1 : 0.35))
         }
         .foregroundStyle(ink)
         .frame(height: peek - Space.x2 - Space.x1, alignment: .center)
@@ -182,14 +183,31 @@ private struct SectorDeckCard: View {
         .buttonStyle(.plain)
     }
 
-    /// An em dash for an unscored sector, matching what the rest of the app
-    /// shows for a missing value.
+    /// A closed sector shows its score; one in flight shows the range it can
+    /// still close in. An em dash for either when there is nothing to say,
+    /// matching what the rest of the app shows for a missing value.
     private var scoreText: String {
-        card.score.map(String.init) ?? "—"
+        if let band = card.band {
+            guard let floor = band.floor else { return "—" }
+            guard let ceiling = band.ceiling, ceiling != floor else { return String(floor) }
+            return "\(floor)–\(ceiling)"
+        }
+        return card.score.map(String.init) ?? "—"
     }
 
-    /// Derived from the history the card already carries.
+    private var hasValue: Bool {
+        card.band.map { $0.floor != nil } ?? (card.score != nil)
+    }
+
+    /// Derived from what the card already carries. In flight the six month
+    /// trend is still the chart below, but the line above it answers the
+    /// question the mode exists for: how much of this month is left.
     private var trendLine: String {
+        if let band = card.band {
+            guard band.floor != nil else { return "Not read yet" }
+            guard let decided = band.decided else { return "No ceiling without budgets" }
+            return "\(Int((decided * 100).rounded()))% decided"
+        }
         guard card.score != nil else { return "Not scored yet" }
         guard card.history.count > 1 else { return "First month scored" }
         let months = card.history.suffix(2)
@@ -205,6 +223,13 @@ private struct SectorDeckCard: View {
     /// of the nine cards are partly covered on screen, and all nine are whole
     /// here.
     private var accessibilityText: String {
+        if let band = card.band {
+            guard let floor = band.floor else { return "\(card.sector.title), not read yet" }
+            guard let ceiling = band.ceiling, ceiling != floor else {
+                return "\(card.sector.title), closing at \(floor)"
+            }
+            return "\(card.sector.title), between \(floor) and \(ceiling)"
+        }
         let score = card.score.map { "score \($0)" } ?? "not scored yet"
         return "\(card.sector.title), \(score)"
     }
