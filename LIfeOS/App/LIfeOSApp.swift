@@ -7,7 +7,10 @@
 
 import SwiftUI
 import SwiftData
+import OSLog
 import Persistence
+
+private let appLog = Logger(subsystem: "com.shivvyas.lifeos", category: "app")
 
 @main
 struct LIfeOSApp: App {
@@ -31,7 +34,7 @@ struct LIfeOSApp: App {
     var body: some Scene {
         WindowGroup {
             AppShell()
-                .task { await seedIfEmpty() }
+                .task { purgeSeededHistoryOnce() }
         }
         .modelContainer(container)
         // Hardware keyboard support lives in the scene so the shortcuts work
@@ -40,15 +43,36 @@ struct LIfeOSApp: App {
         .commands { NotesCommands() }
     }
 
+    /// Key for the one-time removal of the fabricated history the app used to
+    /// seed. Named for what it did rather than when, so it reads sensibly in a
+    /// defaults dump years from now.
+    private static let purgedSeededHistoryKey = "didPurgeSeededHealthHistory"
+
+    /// Clears the sixty days of invented health data a first launch used to
+    /// write, once, on the first run of a build that no longer seeds.
+    ///
+    /// The days are not merely wrong to look at: most health fields are
+    /// `fillGapsOnly`, so Apple Health declines to overwrite a day that already
+    /// has a value, and every seeded day refused the real reading for as long
+    /// as it sat there. Removing them is what lets the real numbers arrive.
+    ///
+    /// The Health sync cursor is reset with them. Without that, the next sync
+    /// would re-read only the days since the last one and leave the rest of the
+    /// month blank, which would look exactly like the purge had broken the app.
     @MainActor
-    private func seedIfEmpty() async {
-        let store = MetricsStore(context: container.mainContext)
+    private func purgeSeededHistoryOnce() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.purgedSeededHistoryKey) else { return }
+
         do {
-            let existing = try store.metrics(from: .distantPast, to: .now)
-            guard existing.isEmpty else { return }
-            try SeedData.populate(store: store)
+            let removed = try SampleMetricsPurge.run(context: container.mainContext)
+            defaults.set(true, forKey: Self.purgedSeededHistoryKey)
+            defaults.removeObject(forKey: HealthConnectionViewModel.lastSyncKey)
+            appLog.info("purged \(removed, privacy: .public) seeded day rows")
         } catch {
-            print("Seed failed: \(error)")
+            // Left unflagged on failure, so the next launch tries again rather
+            // than leaving invented data in place for good.
+            appLog.error("seeded history purge failed: \(String(describing: error), privacy: .public)")
         }
     }
 }

@@ -333,7 +333,9 @@ struct RootView: View {
                         onConnectCalendar: { requestCalendarAccess() },
                         onAddEvent: { eventSheet = .create },
                         onTapEvent: { eventSheet = .edit($0) },
-                        onOpenToday: { today.select(.now) }
+                        onOpenToday: { today.select(.now) },
+                        onConnectHealth: { Task { await health.connect() } },
+                        isHealthConnected: health.isConnected
                     )
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {

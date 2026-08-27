@@ -55,6 +55,18 @@ struct TodaySnapshot: Equatable {
     var sleepTargetMinutes: Double?
 
     var calendarAccess: CalendarAccessState = .notDetermined
+
+    /// True when nothing has arrived from Apple Health or Whoop for the week.
+    ///
+    /// Asked so the screen can offer to connect a source rather than showing a
+    /// grid of dashes. The app used to seed sixty days of invented history at
+    /// first launch, so this state was unreachable and never had to be drawn;
+    /// now that the numbers are real, an unconnected day is the normal first
+    /// thing a person sees.
+    var hasNoHealthData: Bool {
+        steps == nil && sleepMinutes == nil && weightKg == nil && recoveryPct == nil
+            && stepsWeek.points.isEmpty && sleepWeek.points.isEmpty
+    }
     /// Today's events, sorted by start.
     var agenda: [CalendarEventSnapshot] = []
     /// The next seven days after today, flattened and capped by the view.

@@ -32,7 +32,10 @@ final class HealthConnectionViewModel {
 
     /// UserDefaults rather than Keychain: a sync timestamp is a convenience,
     /// not a secret, and this matches where the Whoop sync keeps its own.
-    private static let lastSyncKey = "healthLastSyncedAt"
+    /// Internal rather than private: the one-time purge of seeded history
+    /// clears this too, so the sync that follows backfills the whole window
+    /// instead of only the days since the last run.
+    static let lastSyncKey = "healthLastSyncedAt"
     /// Whether the user has ever been through the Health prompt. iOS shows it
     /// once and never again, so the row must stop offering "Connect" after
     /// that or it becomes a button that visibly does nothing.

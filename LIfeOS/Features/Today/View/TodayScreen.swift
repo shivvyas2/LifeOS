@@ -15,6 +15,12 @@ struct TodayScreen: View {
     /// Raised by the agenda's "+N more" row, since only the day sheet lists
     /// everything.
     let onOpenToday: () -> Void
+    /// Raised from the empty state below. Like the calendar prompt, the
+    /// permission sheet fires from a tap and never at launch.
+    var onConnectHealth: () -> Void = {}
+    /// Whether a source is already attached, so a connected person with a quiet
+    /// day is not told to connect something they have connected.
+    var isHealthConnected = false
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -54,15 +60,53 @@ struct TodayScreen: View {
                 }
                 .frame(maxWidth: 520)
 
-                statGrid(columns: 2)
+                VStack(alignment: .leading, spacing: 22) {
+                    if showsHealthPrompt { healthPrompt }
+                    statGrid(columns: 2)
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 22) {
                 month
                 agendaCard
                 streakLine
+                if showsHealthPrompt { healthPrompt }
                 statGrid(columns: layout.statColumns)
             }
+        }
+    }
+
+    /// Only when there is nothing to show and nothing attached. A connected
+    /// strap that simply has not synced yet is a different situation, and
+    /// telling that person to connect something would be wrong.
+    private var showsHealthPrompt: Bool {
+        snapshot.hasNoHealthData && !isHealthConnected
+    }
+
+    private var healthPrompt: some View {
+        SoftCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("No health data yet", systemImage: "heart.text.square")
+                    .font(LifeOSType.rowTitle)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+
+                Text("Steps, sleep, weight and recovery come from Apple Health and Whoop. Connect one and this fills in.")
+                    .font(LifeOSType.label.weight(.regular))
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button(action: onConnectHealth) {
+                    Text("Connect Apple Health")
+                        .font(LifeOSType.label.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(LifeOSTokens.accent))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
