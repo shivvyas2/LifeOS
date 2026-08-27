@@ -188,7 +188,9 @@ public final class NoteSync {
         context.insert(folder)
     }
 
-    private func apply(_ row: NoteDocumentRow, store: NotesStore) throws {
+    /// Internal rather than private so the index wiring can be tested without
+    /// standing up a network. Nothing outside this package calls it.
+    func apply(_ row: NoteDocumentRow, store: NotesStore) throws {
         let id = row.id
         let existing = try context.fetch(
             FetchDescriptor<NoteDocument>(predicate: #Predicate { $0.id == id })
@@ -197,6 +199,10 @@ public final class NoteSync {
         if let existing {
             guard row.updatedAt > existing.updatedAt else { return }
             if row.deletedAt != nil {
+                // Clear the index before the page goes, since a deleted row
+                // cannot be reindexed afterwards.
+                existing.deletedAt = row.deletedAt
+                try NoteIndexer.reindex(existing, in: context)
                 context.delete(existing)
                 return
             }
@@ -220,6 +226,9 @@ public final class NoteSync {
             existing.archivedAt = row.archivedAt
             existing.updatedAt = row.updatedAt
             existing.syncedAt = .now
+            // Derived rows never travel, so each device builds its own from
+            // whatever it just pulled.
+            try NoteIndexer.reindex(existing, in: context)
             return
         }
 
@@ -247,6 +256,7 @@ public final class NoteSync {
         document.updatedAt = row.updatedAt
         document.syncedAt = .now
         context.insert(document)
+        try NoteIndexer.reindex(document, in: context)
     }
 
     // MARK: - Model to row
