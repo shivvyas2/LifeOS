@@ -133,13 +133,7 @@ struct RootView: View {
             )
         }
         .fullScreenCover(isPresented: $showCoach) {
-            // Signing in from here rides the sign-out path on purpose: both
-            // roads lead to the auth flow, which offers sign-in first.
-            LifoCoachScreen(
-                model: coach,
-                onDismiss: { showCoach = false },
-                onSignIn: { showCoach = false; onSignOut() }
-            )
+            LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
         }
         .sheet(isPresented: $showAssistant) {
             if let assistantModel {

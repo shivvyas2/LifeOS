@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import DesignSystem
 
 /// The coach. Text first, voice second.
@@ -12,12 +13,11 @@ import DesignSystem
 struct LifoCoachScreen: View {
     @Bindable var model: CoachViewModel
     var onDismiss: () -> Void
-    /// Routes to the auth flow when the coach's failure is a signed-out one.
-    var onSignIn: () -> Void = {}
 
     /// The aura is dark in both appearances, so every token here resolves
     /// dark regardless of the system scheme.
     private let scheme: ColorScheme = .dark
+    @Environment(\.openURL) private var openURL
     @FocusState private var typingFocused: Bool
     @State private var showHistory = false
 
@@ -134,9 +134,9 @@ struct LifoCoachScreen: View {
         }
     }
 
-    /// The failure line, and the door out of it when there is one: a
-    /// signed-out failure gets a Sign in button rather than only a sentence
-    /// describing what signing in would do.
+    /// The failure line, and the door out of it when there is one: when the
+    /// on-device model is off, the fix is a device setting, so the button
+    /// opens Settings rather than describing the journey there.
     private func errorView(_ error: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(error)
@@ -144,12 +144,13 @@ struct LifoCoachScreen: View {
                 .foregroundStyle(LifoPalette.ink.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
 
-            if model.needsSignIn {
+            if model.needsAppleIntelligence {
                 Button {
-                    close()
-                    onSignIn()
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
+                    }
                 } label: {
-                    Text("Sign in")
+                    Text("Turn on Apple Intelligence")
                         .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 20)

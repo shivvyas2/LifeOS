@@ -35,9 +35,10 @@ final class CoachViewModel {
     var isTyping = false
     var draft = ""
     var level: CGFloat = 0
-    /// True when the last failure is one that signing in would fix, so the
-    /// screen can offer the door rather than just describing it.
-    var needsSignIn = false
+    /// True when the last failure is the on-device model being unavailable,
+    /// so the screen can offer the Apple Intelligence setting rather than
+    /// just describing it.
+    var needsAppleIntelligence = false
 
     private var context: ModelContext?
 
@@ -148,7 +149,7 @@ final class CoachViewModel {
         phase = .thinking
         status = "Thinking…"
         level = 0
-        needsSignIn = false
+        needsAppleIntelligence = false
 
         guard let context else {
             fail("LIFO could not read your metrics.")
@@ -193,8 +194,8 @@ final class CoachViewModel {
                 if isSignedIn {
                     fail("LIFO could not reach the cloud just now. Try again in a moment.")
                 } else {
-                    fail("Sign in and LIFO can think in the cloud. On this device alone it needs Apple Intelligence.")
-                    needsSignIn = true
+                    fail("LIFO thinks on this device with Apple Intelligence. Turn it on in Settings, or sign in to think in the cloud.")
+                    needsAppleIntelligence = true
                 }
             case .tooLarge:
                 fail("That covered too much at once. Try asking about a shorter stretch.")
