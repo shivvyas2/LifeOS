@@ -142,7 +142,7 @@ struct FriendChatScreen: View {
                 .font(LifeOSType.secondary)
                 .foregroundStyle(.white)
             Text(message.createdAt, format: .dateTime.hour().minute())
-                .font(.system(size: 10))
+                .font(LifeOSType.eyebrow.weight(.regular))
                 .foregroundStyle(.white.opacity(0.5))
         }
         .padding(.horizontal, 14)
@@ -170,7 +170,7 @@ struct FriendChatScreen: View {
                 Task { await model.send() }
             } label: {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(LifeOSType.rowTitle.weight(.bold))
                     .foregroundStyle(Self.night)
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(Self.cyan))

@@ -26,6 +26,12 @@ struct LifoTurn: Identifiable, Equatable {
 /// Owns the LIFO session: speech in, on-device coach out, typed fallback.
 @MainActor @Observable
 final class CoachViewModel {
+    /// Held rather than made per answer: `AVAudioPlayer` stops the instant it
+    /// is deallocated, which is how a spoken reply becomes a tenth of a second
+    /// of noise.
+    let voicePlayer = VoicePlayer()
+    private var voiceTask: Task<Void, Never>?
+
     var phase: LifoPhase = .idle
     var liveTranscript = ""
     var answer = ""
@@ -141,10 +147,46 @@ final class CoachViewModel {
         await send(text)
     }
 
+    /// Reads the answer aloud, when asked to.
+    ///
+    /// Fire and forget, and deliberately not awaited by `send`: the text is
+    /// already on screen and a person should be reading it while the audio is
+    /// still being fetched, not waiting for it. A failure is silence, which is
+    /// the same thing the feature does when it is switched off, so there is
+    /// nothing to report.
+    private func speak(_ text: String) {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: AssistantVoice.enabledKey),
+              let key = AppConfig.elevenLabsAPIKey
+        else { return }
+
+        let voice = AssistantVoice(
+            rawValue: defaults.string(forKey: AssistantVoice.voiceKey) ?? ""
+        ) ?? .default
+
+        voiceTask?.cancel()
+        voiceTask = Task { [voicePlayer] in
+            guard let audio = try? await ElevenLabsVoiceClient.speech(
+                for: text, voice: voice, apiKey: key
+            ) else { return }
+            guard !Task.isCancelled else { return }
+            voicePlayer.play(audio)
+        }
+    }
+
+    /// Stops whatever is being said. Asking a new question while the last
+    /// answer is still being read out should not produce two voices.
+    func stopSpeaking() {
+        voiceTask?.cancel()
+        voiceTask = nil
+        voicePlayer.stop()
+    }
+
     func send(_ text: String) async {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
         speech.stop()
+        stopSpeaking()
         liveTranscript = question
         phase = .thinking
         status = "Thinking…"
@@ -180,6 +222,7 @@ final class CoachViewModel {
                 history.append(LifoTurn(question: question, answer: output.answer))
                 phase = .answered
                 status = "LIFO"
+                speak(output.answer)
             case .refused(let reason):
                 fail(reason)
             case .exhausted:

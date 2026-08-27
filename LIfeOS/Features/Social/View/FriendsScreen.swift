@@ -130,14 +130,14 @@ struct FriendsScreen: View {
                 HStack(spacing: 12) {
                     initialBubble(entry.profile.displayName)
                     Text(entry.profile.displayName)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(LifeOSType.secondary.weight(.medium))
                         .foregroundStyle(primary)
                     Spacer(minLength: 8)
                     Button("Decline") {
                         Task { await viewModel.remove(friendshipID: entry.friendshipID) }
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(LifeOSType.secondary.weight(.medium))
                     .foregroundStyle(secondary)
                     CapsuleButton(title: "Accept") {
                         Task { await viewModel.accept(entry.friendshipID) }
@@ -163,7 +163,7 @@ struct FriendsScreen: View {
                         HStack(spacing: 12) {
                             initialBubble(entry.profile.displayName)
                             Text(entry.profile.displayName)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(LifeOSType.rowTitle)
                                 .foregroundStyle(primary)
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right")
@@ -193,7 +193,7 @@ struct FriendsScreen: View {
                     HStack(spacing: 12) {
                         initialBubble(profile.displayName)
                         Text(profile.displayName)
-                            .font(.system(size: 16, weight: .medium))
+                            .font(LifeOSType.secondary.weight(.medium))
                             .foregroundStyle(primary)
                         Spacer(minLength: 8)
                         searchTrailing(for: profile)
@@ -240,7 +240,7 @@ struct FriendsScreen: View {
         let hue = Self.stableHue(for: name)
         let letter = name.trimmingCharacters(in: .whitespaces).first.map(String.init)?.uppercased() ?? "?"
         return Text(letter)
-            .font(.system(size: 15, weight: .semibold))
+            .font(LifeOSType.rowTitle)
             .foregroundStyle(hue.top)
             .frame(width: 38, height: 38)
             .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))

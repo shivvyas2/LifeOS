@@ -9,6 +9,8 @@ struct SettingsScreen: View {
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
+    @AppStorage(AssistantVoice.enabledKey) private var speaksReplies = false
+    @AppStorage(AssistantVoice.voiceKey) private var voiceRaw = AssistantVoice.default.rawValue
     @Environment(\.colorScheme) private var scheme
 
     /// A page of its own, pushed from the profile's gear. No inner
@@ -37,6 +39,9 @@ struct SettingsScreen: View {
             sectionLabel("Daily goals")
             goalsCard
 
+            sectionLabel("Voice")
+            voiceCard
+
             sectionLabel("Connections")
             connectionsRow
 
@@ -45,6 +50,59 @@ struct SettingsScreen: View {
 
             signOutButton
                 .padding(.top, 8)
+        }
+    }
+
+    /// Whether the coach speaks, and in which voice.
+    ///
+    /// Off by default. A coach that starts talking because an answer arrived,
+    /// in a room the phone knows nothing about, is a worse default than
+    /// silence. The voices are only offered once speech is on: three names
+    /// that do nothing are three questions a person has to work out the
+    /// answer to for no reason.
+    private var voiceCard: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: $speaksReplies) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Speak replies")
+                            .font(LifeOSType.rowTitle)
+                        Text("Reads the coach's answers aloud.")
+                            .font(LifeOSType.caption)
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    }
+                }
+                .tint(LifeOSTokens.accent)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+
+                if speaksReplies {
+                    ForEach(AssistantVoice.allCases) { voice in
+                        let selected = voiceRaw == voice.rawValue
+                        Button { voiceRaw = voice.rawValue } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                                    .font(LifeOSType.body)
+                                    .foregroundStyle(selected
+                                                     ? LifeOSTokens.accent
+                                                     : LifeOSTokens.secondaryText.resolve(scheme))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(voice.title)
+                                        .font(LifeOSType.rowTitle.weight(selected ? .semibold : .regular))
+                                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                                    Text(voice.detail)
+                                        .font(LifeOSType.caption)
+                                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 6)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                    }
+                }
+            }
         }
     }
 

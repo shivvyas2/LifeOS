@@ -184,7 +184,7 @@ struct ProfileScreen: View {
 
                 Button { showFriends = true } label: {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 52, height: 52)
                         .glassEffect(.regular.interactive())
