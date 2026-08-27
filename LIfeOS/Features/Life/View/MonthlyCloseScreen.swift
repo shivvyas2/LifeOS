@@ -48,7 +48,11 @@ struct MonthlyCloseScreen: View {
                 if !model.questions.isEmpty {
                     VStack(alignment: .leading, spacing: Space.x3) {
                         ForEach(model.questions, id: \.id) { question in
-                            questionView(question, model: model)
+                            CheckInQuestionView(
+                                question: question,
+                                answer: model.answers[question.id],
+                                onAnswer: { model.answer(question, with: $0) }
+                            )
                         }
                     }
                 }
@@ -135,41 +139,6 @@ struct MonthlyCloseScreen: View {
             Text(sector.title)
                 .font(LifeOSType.screenTitle.weight(.semibold))
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-        }
-    }
-
-    @ViewBuilder
-    private func questionView(_ question: CheckInQuestion, model: MonthlyCloseViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Space.x1) {
-            Text(question.prompt)
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
-            if question.isFreeText {
-                TextField("", text: Binding(
-                    get: { model.answers[question.id] ?? "" },
-                    set: { model.answer(question, with: $0) }
-                ))
-                .textFieldStyle(.roundedBorder)
-            } else {
-                VStack(spacing: Space.half) {
-                    ForEach(question.options, id: \.label) { option in
-                        Button {
-                            model.answer(question, with: option.label)
-                        } label: {
-                            Text(option.label)
-                                .font(LifeOSType.label)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(
-                            model.answers[question.id] == option.label
-                                ? LifeOSTokens.accent
-                                : LifeOSTokens.secondaryText.resolve(scheme)
-                        )
-                    }
-                }
-            }
         }
     }
 
