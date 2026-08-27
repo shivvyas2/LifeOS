@@ -98,4 +98,17 @@ import Persistence
         )
         #expect(ranked(.money, inputs).map(\.lever) == [.spend])
     }
+
+    /// The ranking runs on `Evidence.proposedValue`, not `proposedScore`.
+    /// Sleep is worth about 0.81 of a point here: real, and invisible to a
+    /// ranking that rounds before subtracting, which would call it worthless.
+    @Test func aLeverWorthLessThanAWholePointIsStillWorthSomething() {
+        let reading = DayReading(steps: 20000, sleepMinutes: 200, exerciseMinutes: 5, waterML: 2600)
+        let inputs = MonthInputs(
+            readings: Array(repeating: reading, count: 27), targets: .default, daysInMonth: 31
+        )
+        let sleep = try! #require(ranked(.body, inputs).first { $0.lever == .sleep })
+        #expect(sleep.delta > 0)
+        #expect(sleep.delta < 1)
+    }
 }
