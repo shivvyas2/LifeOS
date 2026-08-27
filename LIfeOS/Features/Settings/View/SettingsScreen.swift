@@ -1,4 +1,5 @@
 import SwiftUI
+import Insights
 import DesignSystem
 
 struct SettingsScreen: View {
@@ -9,6 +10,7 @@ struct SettingsScreen: View {
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
+    @AppStorage(TierPreference.storageKey) private var tierRaw = TierPreference.automatic.rawValue
     @AppStorage(AssistantVoice.enabledKey) private var speaksReplies = false
     @AppStorage(AssistantVoice.voiceKey) private var voiceRaw = AssistantVoice.default.rawValue
     @Environment(\.colorScheme) private var scheme
@@ -39,6 +41,9 @@ struct SettingsScreen: View {
             sectionLabel("Daily goals")
             goalsCard
 
+            sectionLabel("Thinking")
+            tierCard
+
             sectionLabel("Voice")
             voiceCard
 
@@ -50,6 +55,45 @@ struct SettingsScreen: View {
 
             signOutButton
                 .padding(.top, 8)
+        }
+    }
+
+    /// Which engine answers.
+    ///
+    /// Offered because the two are genuinely different trades rather than
+    /// better and worse: the cloud gives the stronger answer and spends an
+    /// allowance, the phone gives a weaker one and sends nothing anywhere.
+    /// Automatic is the default and the only one that falls back.
+    private var tierCard: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(TierPreference.allCases) { option in
+                    let selected = tierRaw == option.rawValue
+                    Button { tierRaw = option.rawValue } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                                .font(LifeOSType.body)
+                                .foregroundStyle(selected
+                                                 ? LifeOSTokens.accent
+                                                 : LifeOSTokens.secondaryText.resolve(scheme))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(option.title)
+                                    .font(LifeOSType.rowTitle.weight(selected ? .semibold : .regular))
+                                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                                Text(option.detail)
+                                    .font(LifeOSType.caption)
+                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                }
+            }
         }
     }
 

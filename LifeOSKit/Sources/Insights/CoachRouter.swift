@@ -44,6 +44,10 @@ public actor CoachRouter {
     private let onDevice: any Engine
     private let remote: (any Engine)?
     private let availability: @Sendable () -> ModelAvailability
+    /// Read per request rather than captured, for the same reason availability
+    /// is: it can be changed in Settings while a screen holding this router is
+    /// still on screen.
+    private let preference: @Sendable () -> TierPreference
     private var cachedAvailability: ModelAvailability?
 
     public init(
@@ -51,11 +55,13 @@ public actor CoachRouter {
         remote: (any Engine)?,
         availability: @escaping @Sendable () -> ModelAvailability = {
             ModelAvailability.from(SystemLanguageModel.default.availability)
-        }
+        },
+        preference: @escaping @Sendable () -> TierPreference = { .automatic }
     ) {
         self.onDevice = onDevice
         self.remote = remote
         self.availability = availability
+        self.preference = preference
     }
 
     /// The cloud answers first, and the device is the fallback.
@@ -78,6 +84,8 @@ public actor CoachRouter {
         _ task: T,
         _ context: T.Context
     ) async -> CoachResult<T.Output> {
+        // The floor wins over the preference. A task that cannot run on the
+        // device is not made to by choosing the device; it goes where it runs.
         if case .cloud = task.floor {
             return await runRemote(task, context)
         }
@@ -86,6 +94,19 @@ public actor CoachRouter {
         guard remote != nil else {
             guard currentAvailability() == .available else { return .unavailable }
             return await runLocal(task, context, retriesLeft: 1)
+        }
+
+        switch preference() {
+        case .cloud:
+            // No fallback on purpose. Someone who chose the stronger model
+            // wants to be told when it did not answer, not quietly handed a
+            // weaker answer that looks the same.
+            return await runRemote(task, context)
+        case .onDevice:
+            guard currentAvailability() == .available else { return .unavailable }
+            return await runLocal(task, context, retriesLeft: 1)
+        case .automatic:
+            break
         }
 
         switch await runRemote(task, context, fallback: .unavailable) {

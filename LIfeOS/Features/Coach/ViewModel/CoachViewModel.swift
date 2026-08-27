@@ -66,7 +66,17 @@ final class CoachViewModel {
                 KeychainAuthSessionStore().load()?.accessToken
             })
         }
-        return CoachRouter(onDevice: OnDeviceEngine(), remote: remote)
+        return CoachRouter(
+            onDevice: OnDeviceEngine(),
+            remote: remote,
+            // Read per request rather than captured, so changing it in Settings
+            // takes effect on the next question instead of the next launch.
+            preference: {
+                TierPreference(
+                    rawValue: UserDefaults.standard.string(forKey: TierPreference.storageKey) ?? ""
+                ) ?? .automatic
+            }
+        )
     }()
     private let speech = SpeechListener()
 

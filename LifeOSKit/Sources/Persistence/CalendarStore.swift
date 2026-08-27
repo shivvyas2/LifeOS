@@ -15,6 +15,19 @@ public struct CalendarStore {
 
     /// Events overlapping the half-open interval `[from, to)`, sorted by start.
     /// Overlap is strict, so an event ending exactly at `from` is excluded.
+    /// The events with these ids, in one fetch.
+    ///
+    /// For rebuilding the cards under an assistant reply, where the ids were
+    /// stored and the events were not. Anything since deleted is simply absent
+    /// from the result, which is what lets a stale card disappear rather than
+    /// linger.
+    public func events(withIDs ids: Set<UUID>) throws -> [CalendarEventSnapshot] {
+        guard !ids.isEmpty else { return [] }
+        return try context
+            .fetch(FetchDescriptor<CalendarEvent>(predicate: #Predicate { ids.contains($0.id) }))
+            .map { $0.snapshot() }
+    }
+
     public func events(from: Date, to: Date) throws -> [CalendarEventSnapshot] {
         let descriptor = FetchDescriptor<CalendarEvent>(
             predicate: #Predicate { $0.startDate < to && $0.endDate > from },

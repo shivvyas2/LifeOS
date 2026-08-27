@@ -64,3 +64,42 @@ import SwiftData
         #expect(try store.latestConversationID() == nil)
     }
 }
+
+@Suite @MainActor struct ChatEventCardTests {
+    private func makeStore() throws -> ChatStore {
+        ChatStore(context: ModelContext(try LifeOSContainer.make(inMemory: true)))
+    }
+
+    @Test func aReplyRemembersTheEventsItWasAbout() throws {
+        let store = try makeStore()
+        let conversation = UUID()
+        let ids = [UUID(), UUID()]
+
+        try store.append(conversationID: conversation, role: .assistant,
+                         text: "You have two things on", eventIDs: ids)
+
+        let saved = try #require(try store.recent(conversationID: conversation).first)
+        #expect(saved.eventIDs == ids)
+    }
+
+    /// A conversation that predates cards, and a plain reply, both carry none.
+    @Test func aReplyWithNoEventsCarriesAnEmptyList() throws {
+        let store = try makeStore()
+        let conversation = UUID()
+
+        try store.append(conversationID: conversation, role: .assistant, text: "Nothing on")
+
+        #expect(try store.recent(conversationID: conversation).first?.eventIDs == [])
+    }
+
+    @Test func idsSurviveAReloadInTheOrderTheyWereWritten() throws {
+        let store = try makeStore()
+        let conversation = UUID()
+        let ids = (0..<5).map { _ in UUID() }
+
+        try store.append(conversationID: conversation, role: .assistant,
+                         text: "Your week", eventIDs: ids)
+
+        #expect(try store.recent(conversationID: conversation).first?.eventIDs == ids)
+    }
+}

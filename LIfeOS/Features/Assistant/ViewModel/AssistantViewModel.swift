@@ -16,6 +16,11 @@ final class AssistantViewModel {
     private(set) var messages: [ChatMessageSnapshot] = []
     private(set) var pending: [PendingWrite] = []
     /// Events surfaced by each assistant turn, for the cards under its reply.
+    ///
+    /// Rebuilt from the calendar on every reload rather than kept from the
+    /// turn that produced it, so a card shows the event as it is now. One that
+    /// has since been deleted stops appearing, which is the correct thing for
+    /// it to do.
     private(set) var eventsByMessage: [UUID: [CalendarEventSnapshot]] = [:]
     private(set) var isThinking = false
     private(set) var isAuthorized = false
@@ -98,17 +103,11 @@ final class AssistantViewModel {
                 broker: broker
             )
             let events = await collector.collected()
-            let saved = try? chat.append(
+            try? chat.append(
                 conversationID: conversationID, role: .assistant,
-                text: reply.text, toolSummaries: reply.toolSummaries
+                text: reply.text, toolSummaries: reply.toolSummaries,
+                eventIDs: events.map(\.id)
             )
-            // Held beside the messages rather than on them. A chat message is
-            // a stored row and an event is a live thing that can move or be
-            // deleted, so the cards belong to this session's turns; reopening
-            // the sheet shows the text, which is the part that was written.
-            if let saved, !events.isEmpty {
-                eventsByMessage[saved.id] = events
-            }
         } catch {
             try? chat.append(
                 conversationID: conversationID, role: .assistant,
@@ -142,5 +141,35 @@ final class AssistantViewModel {
 
     private func reloadMessages() {
         messages = (try? chat.recent(conversationID: conversationID)) ?? []
+        resolveEventCards()
+    }
+
+    /// Turns the ids stored on each reply back into events.
+    ///
+    /// One fetch across the whole conversation rather than one per message,
+    /// and a dictionary lookup after: a transcript of twenty replies asking
+    /// the calendar twenty times would be twenty round trips for what is one
+    /// question.
+    private func resolveEventCards() {
+        let wanted = Set(messages.flatMap(\.eventIDs))
+        guard !wanted.isEmpty else {
+            eventsByMessage = [:]
+            return
+        }
+
+        let found = (try? store.events(withIDs: wanted)) ?? []
+        let byID = Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })
+
+        var resolved: [UUID: [CalendarEventSnapshot]] = [:]
+        for message in messages where !message.eventIDs.isEmpty {
+            // compactMap, so an event deleted since the reply was written
+            // simply drops out rather than leaving a card describing something
+            // that no longer exists.
+            let events = message.eventIDs.compactMap { byID[$0] }
+            if !events.isEmpty {
+                resolved[message.id] = events.sorted { $0.startDate < $1.startDate }
+            }
+        }
+        eventsByMessage = resolved
     }
 }

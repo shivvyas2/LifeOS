@@ -13,17 +13,28 @@ public struct ChatMessageSnapshot: Equatable, Identifiable, Sendable {
     public let text: String
     /// Rendered as activity chips. Empty for plain replies.
     public let toolSummaries: [String]
+    /// The calendar events this reply was about, by id.
+    ///
+    /// Ids rather than the events themselves, on purpose. An event is a live
+    /// thing that can be moved, shortened or deleted after the sentence about
+    /// it was written, and a card showing what was true last Tuesday is worse
+    /// than no card. These are re-resolved against the calendar when the
+    /// conversation is reopened, so one that has since been deleted simply
+    /// stops appearing.
+    public let eventIDs: [UUID]
     public let createdAt: Date
 
     public init(
         id: UUID, conversationID: UUID, role: ChatRole,
-        text: String, toolSummaries: [String], createdAt: Date
+        text: String, toolSummaries: [String],
+        eventIDs: [UUID] = [], createdAt: Date
     ) {
         self.id = id
         self.conversationID = conversationID
         self.role = role
         self.text = text
         self.toolSummaries = toolSummaries
+        self.eventIDs = eventIDs
         self.createdAt = createdAt
     }
 }
@@ -36,7 +47,24 @@ public final class ChatMessage {
     public var roleRaw: String
     public var text: String
     public var toolSummaries: [String]
+    /// Optional so an existing store migrates without a plan: a conversation
+    /// that predates cards simply has none.
+    public var eventIDsData: Data?
     public var createdAt: Date
+
+    /// The ids, decoded. Stored as JSON rather than as a relationship because
+    /// a chat message does not own an event and must not keep one alive.
+    public var eventIDs: [UUID] {
+        get {
+            guard let eventIDsData, !eventIDsData.isEmpty,
+                  let decoded = try? JSONDecoder().decode([UUID].self, from: eventIDsData)
+            else { return [] }
+            return decoded
+        }
+        set {
+            eventIDsData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue)
+        }
+    }
 
     public init(conversationID: UUID, role: ChatRole, text: String,
                 toolSummaries: [String] = [], createdAt: Date = .now) {
@@ -56,7 +84,8 @@ public final class ChatMessage {
     public func snapshot() -> ChatMessageSnapshot {
         ChatMessageSnapshot(
             id: id, conversationID: conversationID, role: role,
-            text: text, toolSummaries: toolSummaries, createdAt: createdAt
+            text: text, toolSummaries: toolSummaries,
+            eventIDs: eventIDs, createdAt: createdAt
         )
     }
 }
@@ -75,12 +104,13 @@ public struct ChatStore {
     @discardableResult
     public func append(
         conversationID: UUID, role: ChatRole, text: String,
-        toolSummaries: [String] = [], at date: Date = .now
+        toolSummaries: [String] = [], eventIDs: [UUID] = [], at date: Date = .now
     ) throws -> ChatMessageSnapshot {
         let message = ChatMessage(
             conversationID: conversationID, role: role,
             text: text, toolSummaries: toolSummaries, createdAt: date
         )
+        message.eventIDs = eventIDs
         context.insert(message)
         try context.save()
         return message.snapshot()

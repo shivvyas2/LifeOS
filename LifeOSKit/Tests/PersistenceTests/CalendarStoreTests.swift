@@ -147,3 +147,37 @@ import SwiftData
         #expect(titles == ["Theirs"])
     }
 }
+
+@Suite @MainActor struct CalendarEventsByIDTests {
+
+    private func snapshot(_ title: String, _ sourceID: String) -> CalendarEventSnapshot {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        return CalendarEventSnapshot(
+            id: UUID(), source: .eventKit, sourceID: sourceID,
+            calendarTitle: "Work", title: title,
+            startDate: now, endDate: now.addingTimeInterval(1800),
+            isAllDay: false, isRecurring: false, location: nil, notes: nil
+        )
+    }
+
+    /// The lookup behind the cards under an assistant reply.
+    @Test func onlyTheAskedForEventsComeBack() throws {
+        let context = ModelContext(try LifeOSContainer.make(inMemory: true))
+        let store = CalendarStore(context: context)
+
+        let wanted = snapshot("Standup", "a")
+        context.insert(CalendarEvent(from: wanted))
+        context.insert(CalendarEvent(from: snapshot("Lunch", "b")))
+        try context.save()
+
+        #expect(try store.events(withIDs: [wanted.id]).map(\.id) == [wanted.id])
+    }
+
+    /// An event deleted since the reply was written must simply be absent, so
+    /// the card disappears rather than describing something that is gone.
+    @Test func anUnknownIdIsAbsentRatherThanAnError() throws {
+        let store = CalendarStore(context: ModelContext(try LifeOSContainer.make(inMemory: true)))
+        #expect(try store.events(withIDs: [UUID()]).isEmpty)
+        #expect(try store.events(withIDs: []).isEmpty)
+    }
+}

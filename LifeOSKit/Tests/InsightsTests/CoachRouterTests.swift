@@ -209,3 +209,96 @@ private struct StubEngine: Engine {
         #expect(result == .unavailable)
     }
 }
+
+@Suite struct TierPreferenceTests {
+    private let empty = MetricsDigest(
+        days: [],
+        averages: MetricsDigest.Averages(
+            recoveryPct: nil, sleepMinutes: nil, steps: nil,
+            hrvMs: nil, restingHR: nil, strain: nil, sleepDebtMinutes: nil
+        )
+    )
+    private let brief = DailyBrief(headline: "Fine.", observations: ["a", "b"])
+    private let cloud = DailyBrief(headline: "From the cloud.", observations: ["a", "b"])
+
+    private func router(
+        preference: TierPreference,
+        onDevice: @escaping @Sendable () throws -> DailyBrief,
+        remote: @escaping @Sendable () throws -> DailyBrief,
+        availability: ModelAvailability = .available
+    ) -> CoachRouter {
+        CoachRouter(
+            onDevice: StubEngine(outcome: onDevice),
+            remote: StubEngine(outcome: remote),
+            availability: { availability },
+            preference: { preference }
+        )
+    }
+
+    /// Choosing the stronger model means being told when it did not answer,
+    /// rather than being quietly handed a weaker answer that looks the same.
+    @Test func choosingTheCloudNeverFallsBackToTheDevice() async {
+        let result = await router(
+            preference: .cloud,
+            onDevice: {
+                Issue.record("the device must not answer when the cloud was chosen")
+                return self.brief
+            },
+            remote: { throw RemoteEngineError.exhausted }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .exhausted)
+    }
+
+    /// The whole point of choosing the device is that nothing is sent.
+    @Test func choosingTheDeviceNeverReachesTheCloud() async {
+        let result = await router(
+            preference: .onDevice,
+            onDevice: { self.brief },
+            remote: {
+                Issue.record("nothing may be sent when the device was chosen")
+                return self.cloud
+            }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .answered(brief))
+    }
+
+    @Test func automaticPrefersTheCloud() async {
+        let result = await router(
+            preference: .automatic,
+            onDevice: { self.brief },
+            remote: { self.cloud }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .answered(cloud))
+    }
+
+    @Test func automaticFallsBackToTheDeviceAsDegraded() async {
+        let result = await router(
+            preference: .automatic,
+            onDevice: { self.brief },
+            remote: { throw RemoteEngineError.exhausted }
+        ).run(BriefTask(), empty)
+
+        #expect(result == .degraded(brief))
+    }
+
+    @Test func choosingTheDeviceOnAnIneligiblePhoneIsUnavailable() async {
+        let result = await router(
+            preference: .onDevice,
+            onDevice: { self.brief },
+            remote: { self.cloud },
+            availability: .unavailablePermanently
+        ).run(BriefTask(), empty)
+
+        #expect(result == .unavailable)
+    }
+
+    @Test func everyPreferenceDescribesItself() {
+        for preference in TierPreference.allCases {
+            #expect(!preference.title.isEmpty)
+            #expect(!preference.detail.isEmpty)
+        }
+    }
+}
