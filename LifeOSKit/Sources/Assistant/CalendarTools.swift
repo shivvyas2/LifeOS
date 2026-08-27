@@ -168,10 +168,15 @@ struct UpdateEventTool: CoachTool {
               let id = UUID(uuidString: args.id),
               let current = try? await reading.snapshot(id: id)
         else { return ["Update an event"] }
-        return [
-            "Now: \(eventLine(current))",
-            "Becomes: \(args.title), \(args.start) to \(args.end)",
-        ]
+        // The update is a full replacement, so the card must surface what a
+        // glance would miss: a location being changed, or quietly dropped.
+        var becomes = "Becomes: \(args.title), \(args.start) to \(args.end)"
+        if !args.location.isEmpty { becomes += " at \(args.location)" }
+        var lines = ["Now: \(eventLine(current))", becomes]
+        if args.location.isEmpty, let location = current.location, !location.isEmpty {
+            lines.append("Removes the location \"\(location)\"")
+        }
+        return lines
     }
 
     func call(_ arguments: GeneratedContent) async throws -> String {

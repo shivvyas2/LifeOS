@@ -26,6 +26,22 @@ struct AssistantSheet: View {
                         Spacer()
                     } else {
                         conversation
+                        // The empty state carries the connect button, but a
+                        // conversation with history hides that state; someone
+                        // who revoked access later still needs a way back in.
+                        if !model.isAuthorized, !model.messages.isEmpty {
+                            HStack(spacing: 10) {
+                                Text("Calendar not connected")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                                Spacer()
+                                CapsuleButton(title: "Connect") {
+                                    Task { await model.connectCalendar() }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 6)
+                        }
                         composer
                     }
                 }

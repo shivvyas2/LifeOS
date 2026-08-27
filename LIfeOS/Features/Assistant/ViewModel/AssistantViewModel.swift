@@ -50,8 +50,20 @@ final class AssistantViewModel {
         if granted { await sync.sync() }
     }
 
-    func confirm(_ id: UUID) { let broker = broker; Task { await broker.confirm(id) } }
-    func cancel(_ id: UUID) { let broker = broker; Task { await broker.cancel(id) } }
+    /// The card leaves the screen the moment it is answered. The broker prunes
+    /// its own copy on resolve; without this the view's copy lingered with
+    /// live-looking buttons until the whole turn finished.
+    func confirm(_ id: UUID) {
+        pending.removeAll { $0.id == id }
+        let broker = broker
+        Task { await broker.confirm(id) }
+    }
+
+    func cancel(_ id: UUID) {
+        pending.removeAll { $0.id == id }
+        let broker = broker
+        Task { await broker.cancel(id) }
+    }
 
     func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)

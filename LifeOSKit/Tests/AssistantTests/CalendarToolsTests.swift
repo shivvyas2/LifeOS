@@ -183,4 +183,27 @@ private final class FakeCalendar: CalendarReading, CalendarWriting, @unchecked S
         ]))
         #expect(preview.joined(separator: "\n").contains("Gym"))
     }
+
+    /// The update is a full replacement, so a model that omits the location
+    /// silently erases it. The card must say so before anyone confirms.
+    @Test func updatePreviewCallsOutADroppedLocation() async throws {
+        let fake = FakeCalendar()
+        let mine = CalendarEventSnapshot(
+            id: UUID(), source: .eventKit, sourceID: "ek-loc",
+            calendarTitle: "Cal", title: "Dentist",
+            startDate: noon, endDate: noon.addingTimeInterval(3_600),
+            isAllDay: false, isRecurring: false,
+            location: "12 Main St", notes: nil
+        )
+        fake.stored = [mine]
+
+        let preview = try await tool(named: "update_event", on: fake).confirmationPreview(arguments([
+            "id": mine.id.uuidString, "title": "Dentist",
+            "start": "2026-08-26T12:00:00Z", "end": "2026-08-26T13:00:00Z",
+            "isAllDay": "false", "location": "", "notes": "",
+        ]))
+
+        #expect(preview.joined(separator: "\n").contains("12 Main St"))
+        #expect(preview.contains { $0.contains("Removes the location") })
+    }
 }
