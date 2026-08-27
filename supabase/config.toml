@@ -147,12 +147,21 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
+# LOCAL VALUES, and localhost on purpose. Do NOT run `supabase config push`
+# against the hosted project with this file as it stands: it would set the live
+# site_url to localhost and push the SMTP block below with RESEND_API_KEY unset,
+# which would stop every auth email being delivered. The hosted project's auth
+# settings live in the dashboard; this file configures `supabase start`.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# The magic link must be able to hand back to the app. Supabase only redirects
-# to allow-listed URLs, so an unlisted scheme silently drops the user on a
-# Supabase page with no way back.
-additional_redirect_urls = ["https://127.0.0.1:3000", "lifeos://auth-callback"]
+# Supabase only redirects to allow-listed URLs, so an unlisted scheme silently
+# drops the user on a Supabase page with no way back.
+#
+# `almanac` first, matching the app's own URL types. Nothing in the sign-in
+# flow uses these: email sign-in is a six-digit code, not a link. They are
+# corrected anyway, because an allow-list naming a scheme the app no longer
+# answers to is a trap for whoever adds a link-based flow later.
+additional_redirect_urls = ["https://127.0.0.1:3000", "almanac://auth-callback", "lifeos://auth-callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to the local API URL (http://127.0.0.1:<port>/auth/v1).
@@ -229,7 +238,7 @@ host = "smtp.resend.com"
 port = 465
 user = "resend"
 pass = "env(RESEND_API_KEY)"
-sender_name = "Life OS"
+sender_name = "Almanac"
 # Required whenever auth.email.smtp.enabled = true; it supplies the From
 # header. Without it, config load hard-fails with "Missing required field
 # in config: auth.email.smtp.admin_email" (supabase status, config push,
@@ -243,7 +252,7 @@ admin_email = "env(RESEND_SENDER_EMAIL)"
 # Both are needed: GoTrue sends confirmation.html to an address it has not seen
 # and magic_link.html to one it has.
 [auth.email.template.magic_link]
-subject = "Your Life OS code"
+subject = "Your Almanac code"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.email.template.confirmation]

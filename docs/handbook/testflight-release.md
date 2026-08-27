@@ -134,3 +134,28 @@ normally.
 Do not try to silence it by turning off `DEBUG_INFORMATION_FORMAT` or by
 stripping symbols: that would trade a cosmetic warning for unsymbolicated
 crash reports in the app's own code.
+
+## Auth emails send a code, not a link
+
+Sign-in is a six-digit code. Supabase's stock templates send a magic *link*
+instead, and a link cannot be typed into an app, so signup dead-ends at
+"check your email" with nothing to enter. Worse, the link points at whatever
+`site_url` the project holds, which lands on a page unrelated to the app.
+
+`supabase/templates/` holds the templates that fix this, and
+`supabase/config.toml` points at them. **Both only apply to `supabase start`.**
+The hosted project reads its templates from the dashboard, and neither
+`supabase db push` nor a function deploy carries them across.
+
+To change them on the hosted project, paste the contents of
+`supabase/templates/magic_link.html` and `confirmation.html` into
+**Authentication → Emails** in the dashboard, as the Magic Link and Confirm
+Signup templates. GoTrue picks between them by whether it has seen the address
+before, so both are needed; either one still sending `{{ .ConfirmationURL }}`
+brings the magic link back for half the users.
+
+**Do not run `supabase config push` to do it.** It pushes the whole `[auth]`
+block, which in this repo means a localhost `site_url` and an SMTP section
+whose `RESEND_API_KEY` is unset locally. That combination would stop every auth
+email being delivered, which is a considerably worse failure than the one being
+fixed.
