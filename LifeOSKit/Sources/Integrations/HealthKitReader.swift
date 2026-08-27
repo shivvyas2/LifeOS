@@ -289,7 +289,11 @@ public actor HealthKitReader {
         case .basalBodyTemperatureCelsius:  .basalBodyTemperature
         case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
              .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
-             .mindfulMinutes, .menstrualFlowLevel:
+             .mindfulMinutes, .menstrualFlowLevel,
+             // Fitbit's own scores. Apple Health has no equivalent type, so
+             // there is nothing here to read them from: they reach the row
+             // through FitbitDerivation or not at all.
+             .activeZoneMinutes, .sleepEfficiencyPercentage, .readinessScore:
             nil
         }
     }
@@ -324,7 +328,9 @@ public actor HealthKitReader {
             HKUnit.meterUnit(with: .kilo).unitDivided(by: .hour())
         case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
              .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
-             .mindfulMinutes, .menstrualFlowLevel:
+             .mindfulMinutes, .menstrualFlowLevel,
+             // Fitbit's own scores, which HealthKit has no type for.
+             .activeZoneMinutes, .sleepEfficiencyPercentage, .readinessScore:
             nil
         }
     }

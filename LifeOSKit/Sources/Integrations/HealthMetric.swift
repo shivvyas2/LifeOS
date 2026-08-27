@@ -20,6 +20,7 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     case standMinutes
     case distanceKm
     case flightsClimbed
+    case activeZoneMinutes
 
     // Heart and fitness
     case restingHR
@@ -27,6 +28,7 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     case hrvMs
     case vo2Max
     case cardioRecoveryBpm
+    case readinessScore
 
     // Body
     case weightKg
@@ -42,6 +44,7 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     case coreSleepMinutes
     case awakeMinutes
     case timeInBedMinutes
+    case sleepEfficiencyPercentage
 
     // Vitals
     case spo2Percentage
@@ -84,12 +87,14 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     /// them at all. Everything else on the list is counted passively by the
     /// phone itself, where the phone is the better authority.
     ///
-    /// Sleep stages are deliberately absent for now: nothing writes them but
-    /// Apple Health today, and they join this list in slice 3 when Fitbit
-    /// starts reporting them.
+    /// Sleep stages are here because Fitbit reports them: a strap measures a
+    /// stage, and a phone infers it from movement.
     public var claimedByWearable: Bool {
         switch self {
-        case .restingHR, .hrvMs, .spo2Percentage, .respiratoryRate, .sleepMinutes:
+        case .restingHR, .hrvMs, .spo2Percentage, .respiratoryRate,
+             .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+             .sleepEfficiencyPercentage, .readinessScore:
             true
         default:
             false
@@ -134,14 +139,15 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     public var group: Group {
         switch self {
         case .steps, .activeEnergyKcal, .restingEnergyKcal, .exerciseMinutes,
-             .standMinutes, .distanceKm, .flightsClimbed:
+             .standMinutes, .distanceKm, .flightsClimbed, .activeZoneMinutes:
             .movement
-        case .restingHR, .walkingHR, .hrvMs, .vo2Max, .cardioRecoveryBpm:
+        case .restingHR, .walkingHR, .hrvMs, .vo2Max, .cardioRecoveryBpm, .readinessScore:
             .heart
         case .weightKg, .bodyFatPercentage, .leanBodyMassKg, .heightCm:
             .body
         case .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
-             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes:
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+             .sleepEfficiencyPercentage:
             .sleep
         case .spo2Percentage, .respiratoryRate, .wristTemperatureCelsius,
              .bodyTemperatureCelsius, .bloodPressureSystolic,
@@ -168,11 +174,13 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
         case .standMinutes:                 "Stand time"
         case .distanceKm:                   "Distance"
         case .flightsClimbed:               "Flights climbed"
+        case .activeZoneMinutes:            "Active zone minutes"
         case .restingHR:                    "Resting heart rate"
         case .walkingHR:                    "Walking heart rate"
         case .hrvMs:                        "HRV"
         case .vo2Max:                       "VO2 max"
         case .cardioRecoveryBpm:            "Cardio recovery"
+        case .readinessScore:               "Readiness"
         case .weightKg:                     "Weight"
         case .bodyFatPercentage:            "Body fat"
         case .leanBodyMassKg:               "Lean mass"
@@ -183,6 +191,7 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
         case .coreSleepMinutes:             "Core"
         case .awakeMinutes:                 "Awake"
         case .timeInBedMinutes:             "In bed"
+        case .sleepEfficiencyPercentage:    "Sleep efficiency"
         case .spo2Percentage:               "Blood oxygen"
         case .respiratoryRate:              "Respiratory rate"
         case .wristTemperatureCelsius:      "Wrist temperature"
@@ -212,11 +221,12 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     /// itself, as a step count does.
     public var unitLabel: String {
         switch self {
-        case .steps, .flightsClimbed:                       ""
+        case .steps, .flightsClimbed, .readinessScore:      ""
         case .activeEnergyKcal, .restingEnergyKcal, .dietaryEnergyKcal: "kcal"
         case .exerciseMinutes, .standMinutes, .mindfulMinutes, .daylightMinutes,
              .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
-             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes:      "min"
+             .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+             .activeZoneMinutes:                            "min"
         case .distanceKm:                                   "km"
         case .restingHR, .walkingHR, .cardioRecoveryBpm,
              .bloodPressureSystolic, .bloodPressureDiastolic:          "bpm"
@@ -226,7 +236,8 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
         case .heightCm, .walkingStepLengthCm:               "cm"
         case .bodyFatPercentage, .spo2Percentage,
              .walkingAsymmetryPercentage, .doubleSupportPercentage,
-             .walkingSteadinessPercentage:                  "%"
+             .walkingSteadinessPercentage,
+             .sleepEfficiencyPercentage:                    "%"
         case .respiratoryRate:                              "br/min"
         case .wristTemperatureCelsius, .bodyTemperatureCelsius,
              .basalBodyTemperatureCelsius:                  "°C"
@@ -243,7 +254,8 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
     /// temperature without one is useless.
     public var decimals: Int {
         switch self {
-        case .distanceKm, .vo2Max, .weightKg, .leanBodyMassKg,
+        case .sleepEfficiencyPercentage,
+             .distanceKm, .vo2Max, .weightKg, .leanBodyMassKg,
              .walkingSpeedKmh, .spo2Percentage, .bodyFatPercentage,
              .respiratoryRate, .walkingAsymmetryPercentage,
              .doubleSupportPercentage, .walkingSteadinessPercentage:

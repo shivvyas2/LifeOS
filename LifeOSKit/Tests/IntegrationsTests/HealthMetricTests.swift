@@ -74,3 +74,38 @@ import Testing
         #expect(HealthMetric.basalBodyTemperatureCelsius.needsCycleConsent)
     }
 }
+
+@Suite struct FitbitMetricsTests {
+
+    /// The three Fitbit reports that the vocabulary had no case for.
+    @Test func theNewMetricsDescribeThemselves() {
+        for metric in [HealthMetric.activeZoneMinutes, .sleepEfficiencyPercentage, .readinessScore] {
+            #expect(!metric.title.isEmpty)
+            #expect(HealthMetric.Group.allCases.contains(metric.group))
+        }
+        #expect(HealthMetric.activeZoneMinutes.group == .movement)
+        #expect(HealthMetric.sleepEfficiencyPercentage.group == .sleep)
+        #expect(HealthMetric.readinessScore.group == .heart)
+    }
+
+    @Test func theNewMetricsFormatWithTheirUnits() {
+        #expect(HealthMetric.activeZoneMinutes.formatted(42) == "42 min")
+        #expect(HealthMetric.sleepEfficiencyPercentage.formatted(91.4) == "91.4 %")
+    }
+
+    /// A strap measures a sleep stage and a phone infers it from movement, so
+    /// the strap outranks the phone now that one reports them.
+    @Test func sleepStagesAreClaimedByAStrap() {
+        for metric in [HealthMetric.deepSleepMinutes, .remSleepMinutes,
+                       .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes] {
+            #expect(metric.claimedByWearable, "\(metric.rawValue) is still phone-owned")
+        }
+    }
+
+    /// None of them are typed, so none of them are protected from a sync.
+    @Test func theNewMetricsAreNotHandEntered() {
+        for metric in [HealthMetric.activeZoneMinutes, .sleepEfficiencyPercentage, .readinessScore] {
+            #expect(!metric.acceptsManualEntry)
+        }
+    }
+}
