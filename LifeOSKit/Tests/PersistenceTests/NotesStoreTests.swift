@@ -253,6 +253,26 @@ import SwiftData
         #expect(try store.indexedTasks().isEmpty)
     }
 
+    /// Deleting a folder moves every page it held, which is a document
+    /// mutation that does not go through `touch`. Without a reindex there, the
+    /// rows keep the old `documentUpdatedAt` and every cross page list orders
+    /// those pages as though they had not been touched for years.
+    @Test func emptyingAFolderKeepsTheIndexCurrent() throws {
+        let store = try makeStore()
+        let folder = try store.createFolder(name: "Scratch", bucket: .projects)
+        let document = try store.createDocument(
+            title: "Kit list",
+            bucket: .projects,
+            folderID: folder.id,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        try store.delete(folder)
+
+        let row = try #require(try store.indexedTasks().first)
+        #expect(row.documentUpdatedAt == document.updatedAt)
+    }
+
     /// Ordering across pages comes from the page, not from the block offset.
     /// Sorting by sortOrder alone interleaved every page's first to-do, which
     /// is what this guards against.

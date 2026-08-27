@@ -400,6 +400,11 @@ public struct NotesStore {
         for document in try documents(includeArchived: true) where document.folderID == folder.id {
             document.folderID = folder.parentID
             document.updatedAt = .now
+            // These pages change outside `touch`, so the index has to be
+            // rewritten by hand here or their rows keep the old
+            // `documentUpdatedAt` and every cross page list orders them wrong.
+            // The single save at the end still covers the whole move.
+            try NoteIndexer.reindex(document, in: context)
         }
         for child in try folders() where child.parentID == folder.id {
             child.parentID = folder.parentID
