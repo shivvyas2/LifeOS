@@ -416,3 +416,15 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# The Whoop OAuth redirect bridge is hit by a browser following Whoop's 302,
+# which carries no Authorization header and cannot be made to. The CLI defaults
+# verify_jwt to true on every deploy, so without this the endpoint answers 401
+# and authorization dead-ends at the redirect. Stated here rather than passed as
+# --no-verify-jwt on the command line, so a deploy from anywhere gets it right.
+#
+# Safe: the function holds no secret and makes no decisions. PKCE and the state
+# check both happen in the app, so reaching this endpoint only earns a redirect
+# back to an app that will reject a state it did not issue.
+[functions.whoop-callback]
+verify_jwt = false
