@@ -261,4 +261,21 @@ final class SocialStubURLProtocol: URLProtocol {
         }
         #expect(SocialStubURLProtocol.seen.isEmpty)
     }
+
+    // MARK: - Inbox
+
+    @Test func theWholeMailboxComesBackNewestFirst() {
+        let request = SocialAPI.recentMessagesRequest(
+            baseURL: baseURL, anonKey: anonKey, accessToken: "token", limit: 200
+        )
+        let query = request.url?.query ?? ""
+        #expect(request.url?.path == "/rest/v1/messages")
+        #expect(query.contains("order=created_at.desc"))
+        #expect(query.contains("limit=200"))
+        // Deliberately unfiltered: the select policy on `messages` already
+        // restricts rows to conversations the caller is in, so a `sender` or
+        // `recipient` filter here would only narrow it further by mistake.
+        #expect(!query.contains("sender"))
+        #expect(!query.contains("recipient"))
+    }
 }

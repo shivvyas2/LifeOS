@@ -160,6 +160,24 @@ public struct SocialAPI: Sendable {
         return try Self.decoder.decode([SocialMessage].self, from: data)
     }
 
+    /// Every message the caller can see, newest first.
+    ///
+    /// One request for the whole inbox rather than one per friend. The select
+    /// policy on `messages` already restricts rows to conversations the caller
+    /// is in, so this returns exactly their own mail and nothing else, and a
+    /// person with thirty friends gets one round trip instead of thirty.
+    ///
+    /// The limit is on messages, not conversations, so a very busy thread can
+    /// crowd a quiet one off the end. That is the right failure: the inbox is
+    /// ordered by recency, and what falls off is what was least recent.
+    public func recentMessages(accessToken: String, limit: Int = 200) async throws -> [SocialMessage] {
+        let request = Self.recentMessagesRequest(
+            baseURL: baseURL, anonKey: anonKey, accessToken: accessToken, limit: limit
+        )
+        let data = try await perform(request)
+        return try Self.decoder.decode([SocialMessage].self, from: data)
+    }
+
     /// Sends a message. The `sender` column is required and RLS insists it
     /// equal `auth.uid()`, so it has to be in the body; the only place that
     /// identity is available here is the access token itself, whose `sub`
@@ -277,6 +295,21 @@ public struct SocialAPI: Sendable {
             URLQueryItem(name: "or", value: "(sender.eq.\(userID.uuidString),recipient.eq.\(userID.uuidString))"),
             URLQueryItem(name: "order", value: "created_at.asc"),
             URLQueryItem(name: "limit", value: "200"),
+        ]
+        var request = URLRequest(url: components?.url ?? baseURL)
+        applyHeaders(&request, anonKey: anonKey, accessToken: accessToken)
+        return request
+    }
+
+    static func recentMessagesRequest(
+        baseURL: URL, anonKey: String, accessToken: String, limit: Int
+    ) -> URLRequest {
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("rest/v1/messages"), resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [
+            URLQueryItem(name: "order", value: "created_at.desc"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
         ]
         var request = URLRequest(url: components?.url ?? baseURL)
         applyHeaders(&request, anonKey: anonKey, accessToken: accessToken)
