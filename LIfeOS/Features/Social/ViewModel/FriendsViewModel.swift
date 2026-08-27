@@ -111,22 +111,43 @@ final class FriendsViewModel {
         phase = .ready
     }
 
+    /// The in-flight request for the current `query`, if any.
+    ///
+    /// Search re-runs on every keystroke, so an older request can still be
+    /// waiting on the network when a newer one is issued. Without tracking
+    /// which query is in flight, a slow response for "al" could land after
+    /// the fast response for "alex" and silently replace the right results
+    /// with the wrong ones.
+    private var searchTask: Task<Void, Never>?
+
     /// Runs a search for the current `query`. Excludes the signed-in user:
     /// finding yourself in your own friends search is noise, not a result.
-    func search() async {
-        guard let api, let accessToken, let myUserID else { return }
+    ///
+    /// Cancels whatever search is already running, then only ever writes
+    /// `searchResults` if this call is still the most recent one by the time
+    /// its network round trip returns — a cancelled or superseded response is
+    /// dropped rather than applied.
+    func search() {
+        searchTask?.cancel()
+
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             searchResults = []
             return
         }
+        guard let api, let accessToken, let myUserID else { return }
 
-        do {
-            searchResults = try await api.search(trimmed, accessToken: accessToken)
-                .filter { $0.userID != myUserID }
-            errorMessage = nil
-        } catch {
-            errorMessage = "Search failed"
+        let issuedQuery = query
+        searchTask = Task {
+            do {
+                let results = try await api.search(trimmed, accessToken: accessToken)
+                guard !Task.isCancelled, issuedQuery == self.query else { return }
+                searchResults = results.filter { $0.userID != myUserID }
+                errorMessage = nil
+            } catch {
+                guard !Task.isCancelled, issuedQuery == self.query else { return }
+                errorMessage = "Search failed"
+            }
         }
     }
 

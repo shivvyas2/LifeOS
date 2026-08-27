@@ -38,7 +38,7 @@ struct FriendsScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.appear() }
         .onChange(of: viewModel.query) { _, _ in
-            Task { await viewModel.search() }
+            viewModel.search()
         }
     }
 
