@@ -38,34 +38,24 @@ struct ProfileScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    hero
-                    // Negative, so the card climbs over the photo's lower
-                    // edge. Without it these are two panels in a stack.
-                    card.padding(.top, -34)
+                    // The photo and the glass sit in one stack, bottom
+                    // aligned, so the panel frosts the photo it is on rather
+                    // than a colour behind it. That is the whole effect: you
+                    // can still read the image through the blur.
+                    ZStack(alignment: .bottom) {
+                        hero
+                        glassPanel
+                    }
+
+                    settingsBlock
                 }
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
             .ignoresSafeArea(edges: .top)
-            // No toolbar at all: a bar button sits in a strip the photo runs
-            // under, so it arrives as a pale pill floating on the image with
-            // nothing tying it to the design. The close control belongs on the
-            // photo, styled like the Edit control it sits opposite.
             .toolbar(.hidden, for: .navigationBar)
-            .overlay(alignment: .topLeading) {
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(LifeOSType.label.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(Circle().fill(.black.opacity(0.35)))
-                        .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                }
-                .padding(.leading, 20)
-                .padding(.top, 60)
-                .accessibilityLabel("Close")
-            }
+            .overlay(alignment: .top) { topControls }
         }
         .onChange(of: settings.draft) { settings.save() }
         .sheet(isPresented: $isEditing) {
@@ -76,6 +66,31 @@ struct ProfileScreen: View {
                 ProfilePhotoStore.save(newPhoto)
             }
         }
+    }
+
+    /// Circular glass controls in the corners, the way the reference does it.
+    /// A bar button would need a bar, and a bar would cut the photo off.
+    private var topControls: some View {
+        HStack {
+            circleButton("xmark", label: "Close") { dismiss() }
+            Spacer()
+            circleButton("pencil", label: "Edit profile") { isEditing = true }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+    }
+
+    private func circleButton(_ symbol: String, label: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(LifeOSType.label.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(.ultraThinMaterial.opacity(0.9)))
+                .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+        }
+        .accessibilityLabel(label)
     }
 
     // MARK: - Hero
@@ -108,14 +123,8 @@ struct ProfileScreen: View {
                 .padding(.bottom, 54)
             }
 
-            // The photo has to carry white text at its bottom edge whatever it
-            // is a photo of, so it gets a scrim rather than hope.
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.55)],
-                startPoint: .center, endPoint: .bottom
-            )
         }
-        .frame(height: 360)
+        .frame(height: 560)
         // Pinned to the container's width, not the image's.
         //
         // `scaledToFill` makes the image larger than its frame by design, and
@@ -146,42 +155,53 @@ struct ProfileScreen: View {
 
     // MARK: - Card
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
+    /// The frosted panel. Dark glass and white ink regardless of appearance,
+    /// because it sits on a photograph and a photograph has no light mode.
+    private var glassPanel: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let subtitle {
                     Text(subtitle)
                         .font(LifeOSType.secondary)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
             }
 
             if !stats.isEmpty { statRow }
-
-            Divider().opacity(0.4)
-
-            SettingsScreen(
-                model: settings, whoop: whoop, health: health, plaid: plaid,
-                onSignOut: onSignOut
-            )
-            .sections
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 26)
-        .padding(.bottom, 24)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: Radius.large, topTrailingRadius: Radius.large,
-                style: .continuous
-            )
-            .fill(LifeOSTokens.canvas.resolve(scheme))
+        .background {
+            // Two layers: the frost, then a dark wash. Frost alone over a
+            // bright photo leaves white text unreadable, and a flat dark panel
+            // loses the image entirely. Together the photo still shows through
+            // and the type still holds.
+            Rectangle().fill(.ultraThinMaterial)
+            Rectangle().fill(.black.opacity(0.28))
+        }
+        .overlay(alignment: .top) {
+            Rectangle().fill(.white.opacity(0.16)).frame(height: 1)
+        }
+    }
+
+    /// The settings, on solid ground below the glass.
+    ///
+    /// Deliberately not inside the panel: these are light-scheme cards with
+    /// their own surfaces, and stacking them on frosted glass over a
+    /// photograph makes both unreadable.
+    private var settingsBlock: some View {
+        SettingsScreen(
+            model: settings, whoop: whoop, health: health, plaid: plaid,
+            onSignOut: onSignOut
         )
+        .sections
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
     }
 
     /// Only what was actually filled in. A profile that pads itself with
@@ -212,10 +232,10 @@ struct ProfileScreen: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(stat.value)
                         .font(LifeOSType.numeral)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .foregroundStyle(.white)
                     Text(stat.label)
                         .font(LifeOSType.caption)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .foregroundStyle(.white.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
