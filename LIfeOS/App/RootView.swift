@@ -83,6 +83,7 @@ struct RootView: View {
     @State private var showCoach = false
     @State private var showAssistant = false
     @State private var showWhoop = false
+    @State private var showMonth = false
     @State private var eventSheet: EventSheetPresentation?
 
     /// Wide panes only. The rail floats over the content rather than taking
@@ -348,12 +349,24 @@ struct RootView: View {
                         isHealthConnected: health.isConnected
                     )
                     .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { showMonth = true } label: {
+                                Image(systemName: "calendar")
+                            }
+                            .accessibilityLabel("Month calendar")
+                        }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showSettings = true } label: {
                                 ProfileAvatar(photo: profilePhoto)
                             }
                             .accessibilityLabel("Profile and settings")
                         }
+                    }
+                    .navigationDestination(isPresented: $showMonth) {
+                        MonthScreen(
+                            onTapEvent: { eventSheet = .edit($0) },
+                            onAddEvent: { eventSheet = .create(on: $0) }
+                        )
                     }
                 }
             case .health:

@@ -20,6 +20,31 @@ public struct DotCell: Sendable, Equatable, Identifiable {
 }
 
 public enum MonthGridLayout {
+    /// Moves `date` by whole months, keeping the day number where the new
+    /// month is long enough for it and clamping to the last day where it is
+    /// not.
+    ///
+    /// `Calendar.date(byAdding: .month,)` already clamps, but a screen that
+    /// steps month by month has to hold its own anchor to be correct across
+    /// more than one step: clamping 31 March to 28 February and then stepping
+    /// on lands in March with the day silently reduced to 28, so walking a
+    /// year forward from the 31st arrives at the 28th. Keeping the requested
+    /// day and clamping only for display is what makes stepping reversible.
+    public static func stepping(
+        from date: Date, by months: Int, day: Int, calendar: Calendar
+    ) -> Date {
+        guard let moved = calendar.date(byAdding: .month, value: months, to: date),
+              let startOfMoved = calendar.date(
+                from: calendar.dateComponents([.year, .month], from: moved)
+              )
+        else { return date }
+
+        let length = calendar.range(of: .day, in: .month, for: startOfMoved)?.count ?? 28
+        return calendar.date(
+            byAdding: .day, value: min(day, length) - 1, to: startOfMoved
+        ) ?? startOfMoved
+    }
+
     /// Builds a whole number of 7-day rows for the month containing `date`.
     /// `status` is called only for past days; today and future days are
     /// assigned by position so a partially-logged today never renders as a miss.
