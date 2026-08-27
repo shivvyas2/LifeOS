@@ -86,12 +86,25 @@ struct NotesHubScreen: View {
 
     // MARK: - Shells
 
-    /// Three columns need room for a readable measure in each: a 268pt
-    /// library, a shelf wide enough for a card, and a page wide enough to write
-    /// in. Below that the page takes the shelf's place instead of standing
-    /// beside it.
+    private static let libraryWidth: CGFloat = 268
+    private static let minShelfWidth: CGFloat = 340
+    /// Below this the page stops being somewhere you would write. It is the
+    /// number the whole arrangement turns on, so it is stated rather than
+    /// buried in a threshold.
+    private static let minPageWidth: CGFloat = 520
+
+    /// Three columns only when all three can have the width they need.
+    ///
+    /// A single overall threshold was wrong: at 1024pt it read as wide enough,
+    /// but the library and the tab rail take 380 of that before the shelf and
+    /// the page have divided anything, leaving a 310pt column to write in.
+    /// Subtracting what is already spoken for is what makes collapsing the
+    /// library buy a third column on a screen that could not otherwise hold
+    /// one.
     private var isThreeColumn: Bool {
-        layout.isRegular && paneWidth >= 1000
+        guard layout.isRegular else { return false }
+        let spokenFor = layout.railInset + (isLibraryVisible ? Self.libraryWidth : 0)
+        return paneWidth - spokenFor >= Self.minShelfWidth + Self.minPageWidth
     }
 
     /// iPad and wide panes.
@@ -99,7 +112,7 @@ struct NotesHubScreen: View {
         HStack(spacing: 0) {
             if isLibraryVisible {
                 library
-                    .frame(width: 268)
+                    .frame(width: Self.libraryWidth)
                     .padding(.leading, layout.railInset)
                     .background(LifeOSTokens.canvas.resolve(scheme))
                     .transition(.move(edge: .leading).combined(with: .opacity))
@@ -114,7 +127,7 @@ struct NotesHubScreen: View {
                 // Bounded on both sides: below the minimum a card stops being
                 // legible, above the maximum the shelf starts stealing width
                 // from the thing being written.
-                .frame(minWidth: 340, idealWidth: 420, maxWidth: 480)
+                .frame(minWidth: Self.minShelfWidth, idealWidth: 420, maxWidth: 480)
 
                 columnRule
                 detailColumn
