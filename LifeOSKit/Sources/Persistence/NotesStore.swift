@@ -188,6 +188,37 @@ public struct NotesStore {
         }
     }
 
+    /// The indexed to-dos, newest page first and in written order within a
+    /// page. What the To-dos chip reads.
+    public func indexedTasks(openOnly: Bool = false) throws -> [NoteTask] {
+        let rows = try context.fetch(
+            FetchDescriptor<NoteTask>(
+                sortBy: [
+                    SortDescriptor(\.documentUpdatedAt, order: .reverse),
+                    SortDescriptor(\.sortOrder),
+                ]
+            )
+        )
+        return openOnly ? rows.filter { !$0.isChecked } : rows
+    }
+
+    /// Every link edge. The mindmap's input.
+    public func indexedLinks() throws -> [NoteLink] {
+        try context.fetch(FetchDescriptor<NoteLink>())
+    }
+
+    /// Captured and not yet filed, newest first. The phone's first screen.
+    ///
+    /// Newest first rather than `displayOrder`: the Inbox is a capture queue,
+    /// and the thing you just wrote is the thing you are still thinking about.
+    public func inbox() throws -> [NoteCardSnapshot] {
+        let names = try folderNames()
+        return try documents(includeArchived: false)
+            .filter(\.isInInbox)
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .map { card($0, folderNames: names) }
+    }
+
     /// The page a `[[link]]` points at, matched on title. Nil when nothing
     /// carries that title yet, which is the cue to offer creating it.
     public func document(titled title: String) throws -> NoteDocument? {
@@ -254,6 +285,7 @@ public struct NotesStore {
         )
         document.openedAt = .now
         context.insert(document)
+        try NoteIndexer.reindex(document, in: context)
         try context.save()
         return document
     }
@@ -316,6 +348,8 @@ public struct NotesStore {
     public func move(_ document: NoteDocument, to bucket: NoteBucket, folderID: UUID?) throws {
         document.bucket = bucket
         document.folderID = folderID
+        // Choosing a home is what files a page. Editing one never does.
+        if document.filedAt == nil { document.filedAt = .now }
         try touch(document)
     }
 
@@ -366,6 +400,11 @@ public struct NotesStore {
         for document in try documents(includeArchived: true) where document.folderID == folder.id {
             document.folderID = folder.parentID
             document.updatedAt = .now
+            // These pages change outside `touch`, so the index has to be
+            // rewritten by hand here or their rows keep the old
+            // `documentUpdatedAt` and every cross page list orders them wrong.
+            // The single save at the end still covers the whole move.
+            try NoteIndexer.reindex(document, in: context)
         }
         for child in try folders() where child.parentID == folder.id {
             child.parentID = folder.parentID
@@ -407,6 +446,10 @@ public struct NotesStore {
 
     private func touch(_ document: NoteDocument) throws {
         document.updatedAt = .now
+        // Every document mutation funnels through here, which is exactly why
+        // the index is rewritten here and nowhere else. A path that forgot to
+        // reindex would show a stale to-do list with no other symptom.
+        try NoteIndexer.reindex(document, in: context)
         try context.save()
     }
 

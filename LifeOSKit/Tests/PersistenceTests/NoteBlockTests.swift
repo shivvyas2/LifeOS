@@ -106,4 +106,33 @@ import Foundation
         #expect(NoteBlock(indent: 99).indent == NoteBlock.maxIndent)
         #expect(NoteBlock(indent: -4).indent == 0)
     }
+
+    /// Both fields are optional so a document written before they existed still
+    /// decodes. Synthesized Decodable uses decodeIfPresent for optionals, and
+    /// this is the test that keeps that true if the fields are ever reordered.
+    @Test func blocksWrittenBeforeDueDatesStillDecode() throws {
+        let legacy = """
+        [{"id":"6B29FC40-CA47-1067-B31D-00DD010662DA","kind":"todo",
+          "text":"Book the flight","isChecked":false,"indent":0}]
+        """.data(using: .utf8)!
+
+        let blocks = try JSONDecoder().decode([NoteBlock].self, from: legacy)
+
+        #expect(blocks.count == 1)
+        #expect(blocks[0].text == "Book the flight")
+        #expect(blocks[0].dueDate == nil)
+        #expect(blocks[0].goalID == nil)
+    }
+
+    @Test func aTodoCarriesItsDueDateAndGoalThroughARoundTrip() throws {
+        let goal = UUID()
+        let due = Date(timeIntervalSince1970: 1_800_000_000)
+        let block = NoteBlock(kind: .todo, text: "Long run", dueDate: due, goalID: goal)
+
+        let data = try JSONEncoder().encode([block])
+        let decoded = try JSONDecoder().decode([NoteBlock].self, from: data)
+
+        #expect(decoded[0].dueDate == due)
+        #expect(decoded[0].goalID == goal)
+    }
 }

@@ -143,6 +143,12 @@ public struct NoteDocumentRow: Equatable, Sendable {
             json["drawing"] = drawing.base64EncodedString()
         }
         if let height = block.sketchHeight { json["sketchHeight"] = height }
+        // Same reasoning for a to-do's own due date and goal: only a to-do
+        // carries them, and only when one was set. They are written by hand
+        // like every other field rather than as an opaque blob, so the column
+        // stays queryable JSON.
+        if let dueDate = block.dueDate { json["dueDate"] = SupabaseREST.timestamp(dueDate) }
+        if let goalID = block.goalID { json["goalID"] = goalID.uuidString.lowercased() }
         return json
     }
 
@@ -159,7 +165,9 @@ public struct NoteDocumentRow: Equatable, Sendable {
                 isChecked: entry["isChecked"] as? Bool ?? false,
                 indent: entry["indent"] as? Int ?? 0,
                 drawing: (entry["drawing"] as? String).flatMap { Data(base64Encoded: $0) },
-                sketchHeight: entry["sketchHeight"] as? Double
+                sketchHeight: entry["sketchHeight"] as? Double,
+                dueDate: (entry["dueDate"] as? String).flatMap(SupabaseREST.date),
+                goalID: (entry["goalID"] as? String).flatMap(UUID.init(uuidString:))
             )
         }
         return blocks.isEmpty ? NoteBlock.blank : blocks

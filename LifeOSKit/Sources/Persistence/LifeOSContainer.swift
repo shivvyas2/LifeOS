@@ -19,6 +19,8 @@ public enum LifeOSContainer {
         ChatMessage.self,
         NoteDocument.self,
         NoteFolder.self,
+        NoteTask.self,
+        NoteLink.self,
     ])
 
     /// In memory, for tests and previews.

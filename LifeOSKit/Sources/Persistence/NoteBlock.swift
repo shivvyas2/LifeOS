@@ -131,6 +131,13 @@ public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
     /// How tall the sketch is. Stored because a person can drag it taller and
     /// the ink would otherwise be cropped differently on another device.
     public var sketchHeight: Double?
+    /// When this to-do is meant to be done. To-do blocks only, and nil on
+    /// every other kind. Authored, so it lives here rather than on the
+    /// derived `NoteTask` row, which is rebuilt and would lose it.
+    public var dueDate: Date?
+    /// The goal this to-do counts towards, if any. Authored, for the same
+    /// reason as `dueDate`.
+    public var goalID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -139,7 +146,9 @@ public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
         isChecked: Bool = false,
         indent: Int = 0,
         drawing: Data? = nil,
-        sketchHeight: Double? = nil
+        sketchHeight: Double? = nil,
+        dueDate: Date? = nil,
+        goalID: UUID? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -148,6 +157,8 @@ public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
         self.indent = min(max(indent, 0), NoteBlock.maxIndent)
         self.drawing = drawing
         self.sketchHeight = sketchHeight
+        self.dueDate = dueDate
+        self.goalID = goalID
     }
 
     /// Sketches start at a comfortable drawing height and can be dragged

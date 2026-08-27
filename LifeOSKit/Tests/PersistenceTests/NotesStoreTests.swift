@@ -216,4 +216,119 @@ import SwiftData
         #expect(try store.cards(bucket: .projects, folder: .some(folder.id)).count == 1)
         #expect(try store.cards(bucket: .projects, folder: .some(nil)).first?.title == "Loose")
     }
+
+    @Test func editingAPageUpdatesItsIndex() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Marathon", bucket: .projects)
+
+        try store.update(document, blocks: [
+            NoteBlock(kind: .todo, text: "Long run"),
+            NoteBlock(text: "see [[Kit list]]"),
+        ])
+
+        #expect(try store.indexedTasks().map(\.text) == ["Long run"])
+        #expect(try store.indexedLinks().map(\.targetTitleFolded) == ["kit list"])
+    }
+
+    @Test func aNewPageIsIndexedAsItIsCreated() throws {
+        let store = try makeStore()
+        try store.createDocument(
+            title: "Trip",
+            bucket: .projects,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        #expect(try store.indexedTasks().count == 1)
+    }
+
+    @Test func deletingAPageTakesItsIndexWithIt() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(
+            bucket: .projects,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        try store.delete(document)
+
+        #expect(try store.indexedTasks().isEmpty)
+    }
+
+    /// Deleting a folder moves every page it held, which is a document
+    /// mutation that does not go through `touch`. Without a reindex there, the
+    /// rows keep the old `documentUpdatedAt` and every cross page list orders
+    /// those pages as though they had not been touched for years.
+    @Test func emptyingAFolderKeepsTheIndexCurrent() throws {
+        let store = try makeStore()
+        let folder = try store.createFolder(name: "Scratch", bucket: .projects)
+        let document = try store.createDocument(
+            title: "Kit list",
+            bucket: .projects,
+            folderID: folder.id,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        try store.delete(folder)
+
+        let row = try #require(try store.indexedTasks().first)
+        #expect(row.documentUpdatedAt == document.updatedAt)
+    }
+
+    /// Ordering across pages comes from the page, not from the block offset.
+    /// Sorting by sortOrder alone interleaved every page's first to-do, which
+    /// is what this guards against.
+    @Test func todosAcrossPagesAreNewestPageFirst() throws {
+        let store = try makeStore()
+        let older = try store.createDocument(title: "Older", bucket: .projects)
+        try store.update(older, blocks: [
+            NoteBlock(kind: .todo, text: "older first"),
+            NoteBlock(kind: .todo, text: "older second"),
+        ])
+        let newer = try store.createDocument(title: "Newer", bucket: .projects)
+        try store.update(newer, blocks: [NoteBlock(kind: .todo, text: "newer first")])
+
+        #expect(try store.indexedTasks().map(\.text)
+                == ["newer first", "older first", "older second"])
+    }
+
+    /// Capture first: a note starts unfiled, and stays that way while it is
+    /// only being written in. Deciding where it belongs is what files it.
+    @Test func aNewPageStartsInTheInbox() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        #expect(document.isInInbox)
+        #expect(try store.inbox().count == 1)
+    }
+
+    @Test func editingDoesNotFileAPage() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        try store.update(document, blocks: [NoteBlock(text: "more thinking")])
+
+        #expect(document.isInInbox)
+    }
+
+    @Test func movingAPageFilesIt() throws {
+        let store = try makeStore()
+        let folder = try store.createFolder(name: "Training", bucket: .areas)
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+
+        try store.move(document, to: .areas, folderID: folder.id)
+
+        #expect(!document.isInInbox)
+        #expect(try store.inbox().isEmpty)
+    }
+
+    /// Filing is a decision, and a decision is not unmade by a later edit.
+    @Test func filingSticksThroughLaterEdits() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+        try store.move(document, to: .areas, folderID: nil)
+        let filedAt = document.filedAt
+
+        try store.update(document, blocks: [NoteBlock(text: "more")])
+
+        #expect(document.filedAt == filedAt)
+    }
 }

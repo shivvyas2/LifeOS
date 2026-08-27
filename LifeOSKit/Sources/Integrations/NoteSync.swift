@@ -188,7 +188,9 @@ public final class NoteSync {
         context.insert(folder)
     }
 
-    private func apply(_ row: NoteDocumentRow, store: NotesStore) throws {
+    /// Internal rather than private so the index wiring can be tested without
+    /// standing up a network. Nothing outside this package calls it.
+    func apply(_ row: NoteDocumentRow, store: NotesStore) throws {
         let id = row.id
         let existing = try context.fetch(
             FetchDescriptor<NoteDocument>(predicate: #Predicate { $0.id == id })
@@ -197,6 +199,10 @@ public final class NoteSync {
         if let existing {
             guard row.updatedAt > existing.updatedAt else { return }
             if row.deletedAt != nil {
+                // Clear the index before the page goes, since a deleted row
+                // cannot be reindexed afterwards.
+                existing.deletedAt = row.deletedAt
+                try NoteIndexer.reindex(existing, in: context)
                 context.delete(existing)
                 return
             }
@@ -220,6 +226,9 @@ public final class NoteSync {
             existing.archivedAt = row.archivedAt
             existing.updatedAt = row.updatedAt
             existing.syncedAt = .now
+            // Derived rows never travel, so each device builds its own from
+            // whatever it just pulled.
+            try NoteIndexer.reindex(existing, in: context)
             return
         }
 
@@ -241,12 +250,19 @@ public final class NoteSync {
             createdAt: row.createdAt
         )
         document.drawingData = row.drawing
+        // A page arriving from another device was filed on the device that made
+        // it, so it is not new capture here and does not belong in this
+        // device's Inbox. `filed_at` is not on the wire in this phase; phase 3
+        // adds the real column and replaces this stand-in. Insert path only:
+        // an update must not refile a page the person has since unfiled.
+        document.filedAt = row.createdAt
         document.isFavorite = row.isFavorite
         document.openedAt = row.openedAt
         document.archivedAt = row.archivedAt
         document.updatedAt = row.updatedAt
         document.syncedAt = .now
         context.insert(document)
+        try NoteIndexer.reindex(document, in: context)
     }
 
     // MARK: - Model to row

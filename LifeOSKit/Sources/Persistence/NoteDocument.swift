@@ -139,6 +139,14 @@ public final class NoteDocument {
     /// bucket, so a restored page returns to the shelf it came from instead of
     /// needing to be refiled.
     public var archivedAt: Date?
+    /// When someone decided where this page belongs. Nil means it is still in
+    /// the Inbox.
+    ///
+    /// The whole Inbox is this one field. A bucket cannot answer the question,
+    /// because every page has a bucket from the moment it is created, whether
+    /// or not anyone chose it. Stamped by filing, never by editing, so a page
+    /// you keep writing in stays in the Inbox until you decide otherwise.
+    public var filedAt: Date?
     public var syncedAt: Date?
     public var deletedAt: Date?
 
@@ -216,6 +224,8 @@ public final class NoteDocument {
     }
 
     public var isArchived: Bool { archivedAt != nil }
+
+    public var isInInbox: Bool { filedAt == nil && archivedAt == nil }
 
     public var needsPush: Bool {
         guard let syncedAt else { return true }
