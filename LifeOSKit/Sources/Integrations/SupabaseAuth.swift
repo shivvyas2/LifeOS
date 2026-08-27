@@ -74,20 +74,43 @@ public struct SupabaseAuth: Sendable {
     /// `user_metadata` avoids needing a profiles table before there is anything
     /// else to put in one.
     public func updateProfile(
-        accessToken: String, firstName: String, lastName: String, country: String
+        accessToken: String, firstName: String, lastName: String, country: String,
+        birthDate: Date? = nil, heightCM: Double? = nil, gender: String? = nil
     ) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("auth/v1/user"))
         request.httpMethod = "PUT"
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "data": ["first_name": firstName, "last_name": lastName, "country": country]
-        ])
+
+        var fields: [String: Any] = [
+            "first_name": firstName, "last_name": lastName, "country": country,
+        ]
+        // Only what was actually given. Writing nulls for the optional fields
+        // would overwrite answers from an earlier pass with blanks, and this
+        // endpoint merges rather than replaces.
+        if let birthDate {
+            // ISO date only, no time: a birthday has no clock, and storing one
+            // makes the value shift by a day across time zones.
+            fields["birth_date"] = Self.birthDateFormatter.string(from: birthDate)
+        }
+        if let heightCM { fields["height_cm"] = Int(heightCM.rounded()) }
+        if let gender, !gender.isEmpty { fields["gender"] = gender }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["data": fields])
 
         let (data, response) = try await session.data(for: request)
         try check(response, data)
     }
+
+    /// Fixed to a POSIX calendar so the stored string does not change shape
+    /// with the device's locale.
+    private static let birthDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     private func postFunction(_ name: String, body: [String: Any]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/\(name)"))

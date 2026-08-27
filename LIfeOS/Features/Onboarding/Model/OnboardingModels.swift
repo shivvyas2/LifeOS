@@ -73,6 +73,16 @@ struct SignupDraft: Equatable {
     var lastName = ""
     var country = Locale.current.region?.identifier ?? "US"
 
+    /// A picked avatar, already downsized. Held as data rather than an image
+    /// so the draft stays a value type and can be compared for equality.
+    var photo: Data?
+    var birthDate: Date?
+    /// Always centimetres internally, whatever the field shows. Storing the
+    /// number in whichever unit the user happened to be typing is how a height
+    /// ends up silently wrong after a locale change.
+    var heightCM: Double?
+    var gender: Gender = .unspecified
+
     /// E.164, which is what Supabase expects for SMS.
     var e164: String { dialCode + phone.filter(\.isNumber) }
 
@@ -86,6 +96,10 @@ struct SignupDraft: Equatable {
 
     var canVerify: Bool { code.filter(\.isNumber).count >= 6 }
 
+    /// Name is the only requirement. Everything else on the profile step
+    /// sharpens what the app can say and none of it is worth blocking someone
+    /// at the door for: a signup that demands a birthday before it will let
+    /// you in is a signup people abandon.
     var canFinishProfile: Bool {
         !firstName.trimmingCharacters(in: .whitespaces).isEmpty
             && !lastName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -143,4 +157,35 @@ enum DialCountries {
         "BR": "+55", "MX": "+52", "AR": "+54", "CL": "+56", "CO": "+57", "PE": "+51",
         "IL": "+972", "JO": "+962", "LB": "+961",
     ]
+}
+
+/// How someone describes themselves, asked once so the app can address them
+/// properly rather than in the awkward neutral it would otherwise use forever.
+///
+/// Not a biological-sex field wearing a friendlier label. If health baselines
+/// ever need that, it is a different question with different answers and it
+/// belongs next to the health data, not in the signup form.
+///
+/// "Prefer not to say" is the default and a real answer: the app records
+/// nothing rather than a guess, and everything downstream already copes with
+/// having no value here.
+enum Gender: String, CaseIterable, Identifiable, Equatable {
+    case unspecified
+    case woman
+    case man
+    case nonBinary = "non_binary"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .unspecified: "Prefer not to say"
+        case .woman:       "Woman"
+        case .man:         "Man"
+        case .nonBinary:   "Non-binary"
+        }
+    }
+
+    /// What goes to the server. Nil for unspecified, so nothing is written.
+    var stored: String? { self == .unspecified ? nil : rawValue }
 }

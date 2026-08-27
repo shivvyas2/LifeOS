@@ -226,11 +226,21 @@ final class OnboardingViewModel {
         defer { isBusy = false }
 
         do {
+            // The photo is written first and locally. It is the one field that
+            // does not belong in user_metadata: that payload rides inside the
+            // JWT on every request, and a base64 avatar would bloat every call
+            // the app makes. Syncing it across devices needs a storage bucket,
+            // which is a bigger change than this step.
+            ProfilePhotoStore.save(draft.photo)
+
             try await auth.updateProfile(
                 accessToken: session.accessToken,
                 firstName: draft.firstName.trimmingCharacters(in: .whitespaces),
                 lastName: draft.lastName.trimmingCharacters(in: .whitespaces),
-                country: draft.country
+                country: draft.country,
+                birthDate: draft.birthDate,
+                heightCM: draft.heightCM,
+                gender: draft.gender.stored
             )
             step = .connections
         } catch let error as AuthError {
