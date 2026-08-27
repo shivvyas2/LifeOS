@@ -60,6 +60,17 @@ public final class DailyMetrics {
     /// reading, and nothing writes a zero to stand in for one.
     public var extrasData: Data?
 
+    /// Who wrote each value, as a JSON dictionary keyed by `HealthMetric.rawValue`.
+    ///
+    /// Parallel to `extrasData` rather than folded into it, because that bag is
+    /// `[String: Double]` and a source is a name. Optional, so a store written
+    /// before this existed migrates without a schema change and simply reports
+    /// no provenance, which the arbiter reads as "unattributed".
+    ///
+    /// A raw `String` rather than a typed source: `Persistence` sits below
+    /// `Integrations` and must not import it. The vocabulary lives up there.
+    public var sourcesData: Data?
+
     public var updatedAt: Date
     public var syncedAt: Date?
 
@@ -91,6 +102,31 @@ public final class DailyMetrics {
         var bag = extras
         if let value { bag[key] = value } else { bag.removeValue(forKey: key) }
         extras = bag
+    }
+
+    /// The provenance bag, decoded. Empty rather than throwing when the bytes
+    /// cannot be read, for the same reason `extras` is: a day whose
+    /// attribution is unreadable still has its numbers.
+    public var sources: [String: String] {
+        get {
+            guard let sourcesData, !sourcesData.isEmpty,
+                  let decoded = try? JSONDecoder().decode([String: String].self, from: sourcesData)
+            else { return [:] }
+            return decoded
+        }
+        set {
+            sourcesData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    public func source(_ key: String) -> String? { sources[key] }
+
+    /// Writing nil removes the key, so an absent attribution stays absent
+    /// rather than becoming a source with an empty name.
+    public func setSource(_ key: String, _ value: String?) {
+        var bag = sources
+        if let value { bag[key] = value } else { bag.removeValue(forKey: key) }
+        sources = bag
     }
 
     public var reading: DayReading {

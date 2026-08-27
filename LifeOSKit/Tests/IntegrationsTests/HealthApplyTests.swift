@@ -53,6 +53,12 @@ import SwiftData
             row.restingHR = 52
             row.hrvMs = 88
             row.sleepMinutes = 431
+            // Attributed, because Whoop attributes its writes now. An
+            // unattributed value ranks below every identified source, which is
+            // what re-attributes legacy rows on the first sync after upgrade.
+            for metric in [HealthMetric.restingHR, .hrvMs, .sleepMinutes] {
+                row.setSource(metric.rawValue, MetricSource.whoop.rawValue)
+            }
         }
 
         try HealthApply.write(
@@ -103,5 +109,53 @@ import SwiftData
         #expect(row.steps == 9771)
         #expect(row.exerciseMinutes == 31)
         #expect(row.sleepMinutes == 403)
+    }
+
+    /// The write records who wrote it, or the next sync cannot arbitrate.
+    @Test func aHealthWriteRecordsItsProvenance() throws {
+        let store = try store()
+        try HealthApply.write(HealthDay(date: day, values: [.steps: 9770, .restingHR: 55]), into: store)
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.source(HealthMetric.steps.rawValue) == MetricSource.appleHealth.rawValue)
+        #expect(row.source(HealthMetric.restingHR.rawValue) == MetricSource.appleHealth.rawValue)
+    }
+
+    /// A value Whoop wrote and attributed is not replaced by the phone.
+    @Test func anAttributedWhoopValueSurvivesAHealthSync() throws {
+        let store = try store()
+        try store.upsert(date: day) { row in
+            row.restingHR = 52
+            row.setSource(HealthMetric.restingHR.rawValue, MetricSource.whoop.rawValue)
+        }
+
+        try HealthApply.write(HealthDay(date: day, values: [.restingHR: 55]), into: store)
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.restingHR == 52)
+        #expect(row.source(HealthMetric.restingHR.rawValue) == MetricSource.whoop.rawValue)
+    }
+
+    /// The migration trap, at the level where it would actually bite: a weight
+    /// typed before provenance existed carries no attribution, and a sync must
+    /// still leave it alone.
+    @Test func anUnattributedWeightIsNotReplacedByASync() throws {
+        let store = try store()
+        try store.upsert(date: day) { row in row.weightKg = 74.2 }
+
+        try HealthApply.write(HealthDay(date: day, values: [.weightKg: 75.0]), into: store)
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.weightKg == 74.2)
+    }
+
+    /// Metrics in the extras bag get provenance too, not just the named columns.
+    @Test func theLongTailIsAttributedAsWell() throws {
+        let store = try store()
+        try HealthApply.write(HealthDay(date: day, values: [.vo2Max: 48.2]), into: store)
+
+        let row = try #require(try store.metrics(from: day, to: day).first)
+        #expect(row.extra(HealthMetric.vo2Max.rawValue) == 48.2)
+        #expect(row.source(HealthMetric.vo2Max.rawValue) == MetricSource.appleHealth.rawValue)
     }
 }

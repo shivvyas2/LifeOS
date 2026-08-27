@@ -78,35 +78,38 @@ public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
 
     public var id: String { rawValue }
 
-    /// How this reading is combined with what the day already holds.
-    public enum Precedence: Sendable, Equatable {
-        /// Something else is the authority. Health writes only into a gap.
-        ///
-        /// Two different reasons land here. Whoop measures resting HR, HRV,
-        /// SpO2, respiratory rate and sleep from a strap worn all night, and it
-        /// stays the source of truth for them. Water and weight can be typed
-        /// into the app by hand, and a background sync does not get to replace
-        /// something a person entered on purpose.
-        case fillGapsOnly
-        /// Health is the only source there is, so its latest reading is simply
-        /// the truth. Steps, active energy and exercise minutes are counted
-        /// passively by the phone and the watch, nobody types them, and the
-        /// number legitimately grows through the day. This precedence is what
-        /// lets the afternoon sync correct the morning's count.
-        case healthIsTheSource
+    /// Measured by a strap worn on the body, so a wearable outranks the phone.
+    ///
+    /// The phone infers these from a wrist it is not on, or does not measure
+    /// them at all. Everything else on the list is counted passively by the
+    /// phone itself, where the phone is the better authority.
+    ///
+    /// Sleep stages are deliberately absent for now: nothing writes them but
+    /// Apple Health today, and they join this list in slice 3 when Fitbit
+    /// starts reporting them.
+    public var claimedByWearable: Bool {
+        switch self {
+        case .restingHR, .hrvMs, .spo2Percentage, .respiratoryRate, .sleepMinutes:
+            true
+        default:
+            false
+        }
     }
 
-    public var precedence: Precedence {
+    /// A person can type this into the app, so a background sync must not
+    /// replace what they entered on purpose.
+    public var acceptsManualEntry: Bool {
         switch self {
-        // Whoop owns these, or a person types them.
-        case .weightKg, .waterML, .restingHR, .hrvMs,
-             .spo2Percentage, .respiratoryRate, .sleepMinutes:
-            .fillGapsOnly
-        // Everything else has no other writer in this app, so the latest
-        // reading from Health is simply what is true.
-        default:
-            .healthIsTheSource
+        case .weightKg, .waterML: true
+        default: false
         }
+    }
+
+    /// Health is the top authority among syncing sources: nothing else measures
+    /// this and nobody types it, so the latest reading is simply the truth.
+    /// This is what lets an afternoon sync correct the morning's step count.
+    public var healthIsAuthoritative: Bool {
+        !claimedByWearable && !acceptsManualEntry
     }
 
     /// Which panel the metric belongs to on screen.
