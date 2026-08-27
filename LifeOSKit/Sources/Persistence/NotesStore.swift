@@ -188,6 +188,19 @@ public struct NotesStore {
         }
     }
 
+    /// The indexed to-dos, newest page first. What the To-dos chip reads.
+    public func indexedTasks(openOnly: Bool = false) throws -> [NoteTask] {
+        let rows = try context.fetch(
+            FetchDescriptor<NoteTask>(sortBy: [SortDescriptor(\.sortOrder)])
+        )
+        return openOnly ? rows.filter { !$0.isChecked } : rows
+    }
+
+    /// Every link edge. The mindmap's input.
+    public func indexedLinks() throws -> [NoteLink] {
+        try context.fetch(FetchDescriptor<NoteLink>())
+    }
+
     /// The page a `[[link]]` points at, matched on title. Nil when nothing
     /// carries that title yet, which is the cue to offer creating it.
     public func document(titled title: String) throws -> NoteDocument? {
@@ -254,6 +267,7 @@ public struct NotesStore {
         )
         document.openedAt = .now
         context.insert(document)
+        try NoteIndexer.reindex(document, in: context)
         try context.save()
         return document
     }
@@ -407,6 +421,10 @@ public struct NotesStore {
 
     private func touch(_ document: NoteDocument) throws {
         document.updatedAt = .now
+        // Every document mutation funnels through here, which is exactly why
+        // the index is rewritten here and nowhere else. A path that forgot to
+        // reindex would show a stale to-do list with no other symptom.
+        try NoteIndexer.reindex(document, in: context)
         try context.save()
     }
 

@@ -216,4 +216,40 @@ import SwiftData
         #expect(try store.cards(bucket: .projects, folder: .some(folder.id)).count == 1)
         #expect(try store.cards(bucket: .projects, folder: .some(nil)).first?.title == "Loose")
     }
+
+    @Test func editingAPageUpdatesItsIndex() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Marathon", bucket: .projects)
+
+        try store.update(document, blocks: [
+            NoteBlock(kind: .todo, text: "Long run"),
+            NoteBlock(text: "see [[Kit list]]"),
+        ])
+
+        #expect(try store.indexedTasks().map(\.text) == ["Long run"])
+        #expect(try store.indexedLinks().map(\.targetTitleFolded) == ["kit list"])
+    }
+
+    @Test func aNewPageIsIndexedAsItIsCreated() throws {
+        let store = try makeStore()
+        try store.createDocument(
+            title: "Trip",
+            bucket: .projects,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        #expect(try store.indexedTasks().count == 1)
+    }
+
+    @Test func deletingAPageTakesItsIndexWithIt() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(
+            bucket: .projects,
+            blocks: [NoteBlock(kind: .todo, text: "Pack")]
+        )
+
+        try store.delete(document)
+
+        #expect(try store.indexedTasks().isEmpty)
+    }
 }
