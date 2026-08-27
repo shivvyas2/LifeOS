@@ -10,6 +10,10 @@ struct AssistantSheet: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @FocusState private var composing: Bool
+    /// Raised by a tap on an agenda card's row or its plus. The same sheet
+    /// Today uses, so an event edited from a conversation and one edited from
+    /// the day view are edited in one place.
+    @State private var eventSheet: EventSheetPresentation?
 
     var body: some View {
         NavigationStack {
@@ -53,6 +57,19 @@ struct AssistantSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+        .sheet(item: $eventSheet) { mode in
+            EventSheet(
+                mode: mode,
+                onSave: { draft in
+                    let id: UUID? = if case .edit(let event) = mode { event.id } else { nil }
+                    Task { await model.save(draft, editing: id) }
+                },
+                onDelete: {
+                    guard case .edit(let event) = mode else { return }
+                    Task { await model.delete(id: event.id) }
+                }
+            )
         }
         .task { await model.appear() }
     }
@@ -126,11 +143,12 @@ struct AssistantSheet: View {
             // own replies: a card under the question would be answering it
             // before the assistant has.
             if message.role == .assistant, let events = model.eventsByMessage[message.id], !events.isEmpty {
-                VStack(spacing: 8) {
-                    ForEach(events) { event in
-                        CalendarEventCard(event: event)
-                    }
-                }
+                AssistantAgendaCard(
+                    touched: events,
+                    events: { model.events(on: $0) },
+                    onTapEvent: { eventSheet = .edit($0) },
+                    onAddEvent: { eventSheet = .create(on: $0) }
+                )
                 .padding(.top, 2)
             }
 

@@ -37,7 +37,11 @@ extension CalendarEventSnapshot {
 /// The stretch of day an event belongs to. Groups the agenda the way the
 /// reference design groups its journey: a quiet label per part of the day,
 /// each with its own bubble colour, so a glance says when things cluster.
-private enum DayPart: Int, CaseIterable, Identifiable {
+///
+/// Internal rather than private to this file, because the assistant's agenda
+/// card draws its rows with the same icon and hue. One vocabulary for what a
+/// morning looks like, wherever the app draws a morning.
+enum DayPart: Int, CaseIterable, Identifiable {
     case allDay, morning, afternoon, evening
 
     var id: Int { rawValue }

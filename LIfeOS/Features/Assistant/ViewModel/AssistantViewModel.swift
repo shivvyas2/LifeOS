@@ -72,6 +72,41 @@ final class AssistantViewModel {
         Task { await broker.cancel(id) }
     }
 
+    /// One day's events, for the agenda card under a reply.
+    ///
+    /// Read straight from the store on every call rather than cached: the
+    /// card is asking about whichever day it is showing, and a person moving
+    /// across the strip is asking about seven different days in a few
+    /// seconds. A fetch of one day is a single indexed range query, and the
+    /// alternative is a cache that has to be invalidated by every write the
+    /// assistant makes.
+    func events(on day: Date) -> [CalendarEventSnapshot] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: day)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+        return (try? store.events(from: start, to: end)) ?? []
+    }
+
+    /// Creates or edits from the card's own sheet.
+    ///
+    /// Deliberately the same `CalendarSync` the assistant's tools write
+    /// through, so an event made by hand and one made by asking land in the
+    /// same place and come back through the same sync. The reload afterwards
+    /// is what repaints the card the edit was made from.
+    func save(_ draft: CalendarEventDraft, editing id: UUID?) async {
+        if let id {
+            _ = try? await sync.update(id: id, with: draft)
+        } else {
+            _ = try? await sync.create(draft)
+        }
+        reloadMessages()
+    }
+
+    func delete(id: UUID) async {
+        _ = try? await sync.delete(id: id)
+        reloadMessages()
+    }
+
     func send() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isThinking else { return }

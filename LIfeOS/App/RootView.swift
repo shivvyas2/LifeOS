@@ -341,7 +341,7 @@ struct RootView: View {
                         snapshot: today.snapshot,
                         onSelectDay: { today.select($0) },
                         onConnectCalendar: { requestCalendarAccess() },
-                        onAddEvent: { eventSheet = .create },
+                        onAddEvent: { eventSheet = .create(on: nil) },
                         onTapEvent: { eventSheet = .edit($0) },
                         onOpenToday: { today.select(.now) },
                         onConnectHealth: { Task { await health.connect() } },

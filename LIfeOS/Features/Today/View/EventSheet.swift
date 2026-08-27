@@ -7,7 +7,12 @@ import Persistence
 /// `today.detail`; a stable `id` keeps the enum from re-identifying itself
 /// (and resetting the form) across the reloads a save triggers.
 enum EventSheetPresentation: Identifiable {
-    case create
+    /// `on` is the day to open the pickers on, for the callers that have one:
+    /// the assistant's agenda card creates under the day being looked at, and
+    /// a new event there landing on today would be the wrong day every time
+    /// the card is showing any other. Nil means the next full hour from now,
+    /// which is what a plain "add event" has always meant.
+    case create(on: Date?)
     case edit(CalendarEventSnapshot)
 
     var id: String {
@@ -51,8 +56,8 @@ struct EventSheet: View {
         self.onDelete = onDelete
 
         switch mode {
-        case .create:
-            let start = Self.nextFullHour()
+        case .create(let day):
+            let start = Self.nextFullHour(on: day)
             _title = State(initialValue: "")
             _isAllDay = State(initialValue: false)
             _startDate = State(initialValue: start)
@@ -155,16 +160,27 @@ struct EventSheet: View {
     }
 
     /// Create's default start: the next full hour, so a fresh event never
-    /// lands mid-hour regardless of when "+ Add event" was tapped.
-    private static func nextFullHour(from date: Date = .now, calendar: Calendar = .current) -> Date {
-        let components = calendar.dateComponents([.year, .month, .day, .hour], from: date)
-        let thisHour = calendar.date(from: components) ?? date
-        return calendar.date(byAdding: .hour, value: 1, to: thisHour) ?? date
+    /// lands mid-hour regardless of when "+ Add event" was tapped, on `day`
+    /// when one is given.
+    ///
+    /// A day other than today gets 9am rather than the current clock time
+    /// carried across: "next Tuesday at 16:41" is nobody's intent, and the
+    /// hour someone happens to be holding the phone at says nothing about a
+    /// day they are not in yet.
+    private static func nextFullHour(
+        on day: Date? = nil, from date: Date = .now, calendar: Calendar = .current
+    ) -> Date {
+        guard let day, !calendar.isDate(day, inSameDayAs: date) else {
+            let components = calendar.dateComponents([.year, .month, .day, .hour], from: date)
+            let thisHour = calendar.date(from: components) ?? date
+            return calendar.date(byAdding: .hour, value: 1, to: thisHour) ?? date
+        }
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day) ?? day
     }
 }
 
 #Preview("Create") {
-    EventSheet(mode: .create, onSave: { _ in }, onDelete: {})
+    EventSheet(mode: .create(on: nil), onSave: { _ in }, onDelete: {})
 }
 
 #Preview("Edit") {
