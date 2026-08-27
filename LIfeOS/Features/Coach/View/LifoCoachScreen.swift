@@ -12,6 +12,8 @@ import DesignSystem
 struct LifoCoachScreen: View {
     @Bindable var model: CoachViewModel
     var onDismiss: () -> Void
+    /// Routes to the auth flow when the coach's failure is a signed-out one.
+    var onSignIn: () -> Void = {}
 
     /// The aura is dark in both appearances, so every token here resolves
     /// dark regardless of the system scheme.
@@ -126,11 +128,35 @@ struct LifoCoachScreen: View {
             }
 
             if let error = model.error {
-                Text(error)
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(LifoPalette.ink.opacity(0.85))
+                errorView(error)
                     .padding(.top, 4)
-                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The failure line, and the door out of it when there is one: a
+    /// signed-out failure gets a Sign in button rather than only a sentence
+    /// describing what signing in would do.
+    private func errorView(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(error)
+                .font(LifeOSType.label.weight(.regular))
+                .foregroundStyle(LifoPalette.ink.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+
+            if model.needsSignIn {
+                Button {
+                    close()
+                    onSignIn()
+                } label: {
+                    Text("Sign in")
+                        .font(LifeOSType.label.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(.white))
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -167,10 +193,7 @@ struct LifoCoachScreen: View {
             }
 
             if let error = model.error {
-                Text(error)
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(LifoPalette.ink.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
+                errorView(error)
             }
         }
     }
@@ -186,13 +209,15 @@ struct LifoCoachScreen: View {
         }
     }
 
+    /// White on the aura, not glass: your own words are the brightest thing
+    /// in the transcript, and the answer reads underneath them.
     private func bubble(_ text: String, isQuestion: Bool) -> some View {
         Text(text)
             .font(LifeOSType.label.weight(.semibold))
-            .foregroundStyle(LifoPalette.ink)
+            .foregroundStyle(.black)
             .padding(.vertical, 9)
             .padding(.horizontal, 14)
-            .glassPane(Capsule())
+            .background(Capsule().fill(.white))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -212,14 +237,17 @@ struct LifoCoachScreen: View {
             }
 
             HStack(spacing: 10) {
+                // The ask bar is solid white with black type: the one place
+                // on this screen where reading and writing must be effortless
+                // gets paper, not glass.
                 HStack(spacing: 10) {
                     TextField("Ask anything about your life…", text: $model.draft, axis: .vertical)
                         .font(LifeOSType.secondary)
                         .focused($typingFocused)
                         .autocorrectionDisabled()
                         .lineLimit(1...4)
-                        .foregroundStyle(LifoPalette.ink)
-                        .tint(LifoPalette.cyan)
+                        .foregroundStyle(.black)
+                        .tint(LifeOSTokens.accent)
                         .onSubmit { Task { await model.sendTyped() } }
 
                     if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -228,9 +256,9 @@ struct LifoCoachScreen: View {
                         } label: {
                             Image(systemName: "arrow.up")
                                 .font(LifeOSType.label.weight(.bold))
-                                .foregroundStyle(LifoPalette.night)
+                                .foregroundStyle(.white)
                                 .frame(width: 30, height: 30)
-                                .background(Circle().fill(LifoPalette.cyan))
+                                .background(Circle().fill(LifeOSTokens.accent))
                         }
                         .accessibilityLabel("Send")
                         .transition(.scale.combined(with: .opacity))
@@ -239,21 +267,24 @@ struct LifoCoachScreen: View {
                 .padding(.leading, 18)
                 .padding(.trailing, 6)
                 .padding(.vertical, 8)
-                .glassPane(Capsule(), highlight: 0.4)
+                .background(Capsule().fill(.white))
 
+                // The mic wears the app's warm accent, filled, in every
+                // state: it is the same button whether it is about to listen
+                // or about to stop, and colour is how you find it.
                 Button {
                     Task { await model.toggleListening() }
                 } label: {
                     Image(systemName: model.phase == .listening ? "stop.fill" : "mic.fill")
                         .font(LifeOSType.body.weight(.semibold))
-                        .foregroundStyle(model.phase == .listening ? LifoPalette.night : LifoPalette.ink)
+                        .foregroundStyle(.white)
                         .frame(width: 46, height: 46)
-                        .background {
+                        .background(Circle().fill(LifeOSTokens.accent))
+                        .overlay {
                             if model.phase == .listening {
-                                Circle().fill(LifoPalette.cyan)
+                                Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2)
                             }
                         }
-                        .glassPane(Circle(), highlight: model.phase == .listening ? 0.5 : 0.34)
                 }
                 .accessibilityLabel(model.phase == .listening ? "Stop listening" : "Speak instead")
             }
