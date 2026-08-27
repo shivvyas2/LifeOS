@@ -30,6 +30,7 @@ struct ProfileScreen: View {
     @State private var profile: LocalProfile = ProfileStore.load()
     @State private var isEditing = false
     @State private var showSettings = false
+    @State private var showFriends = false
 
     private var name: String {
         profile.fullName.isEmpty ? "Your profile" : profile.fullName
@@ -54,6 +55,9 @@ struct ProfileScreen: View {
                     model: settings, whoop: whoop, health: health, plaid: plaid,
                     onSignOut: onSignOut
                 )
+            }
+            .navigationDestination(isPresented: $showFriends) {
+                FriendsScreen()
             }
         }
         .sheet(isPresented: $isEditing) {
@@ -158,6 +162,16 @@ struct ProfileScreen: View {
                         .background(Capsule().fill(.white))
                 }
                 .buttonStyle(.plain)
+
+                Button { showFriends = true } label: {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .glassEffect(.regular.interactive())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Friends")
 
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape.fill")
