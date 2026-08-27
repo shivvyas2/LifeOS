@@ -37,6 +37,11 @@ final class CoachViewModel {
     var level: CGFloat = 0
 
     private var context: ModelContext?
+
+    /// Whether a session exists, read at the moment of failure rather than
+    /// held: it is only ever consulted to choose which sentence to show, and
+    /// a cached copy would tell a user who just signed in to sign in again.
+    private var isSignedIn: Bool { KeychainAuthSessionStore().load() != nil }
     /// The cloud tier, when the project is configured for it.
     ///
     /// `nil` is a real shipping state, not a stub: with no Supabase URL the
@@ -173,9 +178,17 @@ final class CoachViewModel {
             case .refused(let reason):
                 fail(reason)
             case .exhausted:
-                fail("LIFO cannot reach further right now.")
+                // The allowance, not the connection. Saying "cannot reach"
+                // invites a retry that cannot succeed until tomorrow.
+                fail("That is today's thinking budget used up. It resets tomorrow.")
             case .unavailable:
-                fail("LIFO needs Apple Intelligence on this device. You can still type — try again after it is on.")
+                // Three different causes wear this one case, and blaming Apple
+                // Intelligence for all of them was wrong the moment a cloud
+                // tier existed: a signed-out user has one fix, and it is not
+                // a device setting.
+                fail(isSignedIn
+                     ? "LIFO could not reach the cloud just now. Try again in a moment."
+                     : "Sign in and LIFO can think in the cloud. On this device alone it needs Apple Intelligence.")
             case .tooLarge:
                 fail("That covered too much at once. Try asking about a shorter stretch.")
             }
