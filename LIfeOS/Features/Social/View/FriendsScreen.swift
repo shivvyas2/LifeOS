@@ -10,10 +10,14 @@ import Integrations
 /// know. Pushed from the profile, not tabbed, the same way settings is: this
 /// is a place you go, not a home you live in.
 struct FriendsScreen: View {
-    var onOpenChat: (SocialProfile) -> Void = { _ in }
-
     @State private var viewModel = FriendsViewModel()
     @Environment(\.colorScheme) private var scheme
+
+    /// The friend a row was tapped for. `SocialProfile` isn't `Hashable`, so
+    /// this pairs a stored selection with `isPresented:` rather than using
+    /// `navigationDestination(item:)`.
+    @State private var openChat: SocialProfile?
+    @State private var showChat = false
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -39,6 +43,11 @@ struct FriendsScreen: View {
         .task { await viewModel.appear() }
         .onChange(of: viewModel.query) { _, _ in
             viewModel.search()
+        }
+        .navigationDestination(isPresented: $showChat) {
+            if let openChat {
+                FriendChatScreen(friend: openChat)
+            }
         }
     }
 
@@ -141,7 +150,10 @@ struct FriendsScreen: View {
                     .foregroundStyle(secondary)
             } else {
                 ForEach(viewModel.friends, id: \.profile.id) { entry in
-                    Button { onOpenChat(entry.profile) } label: {
+                    Button {
+                        openChat = entry.profile
+                        showChat = true
+                    } label: {
                         HStack(spacing: 12) {
                             initialBubble(entry.profile.displayName)
                             Text(entry.profile.displayName)
