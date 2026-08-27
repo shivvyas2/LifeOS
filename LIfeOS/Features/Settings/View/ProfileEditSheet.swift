@@ -161,11 +161,6 @@ struct ProfileEditSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Change photo")
-
-            if draftPhoto != nil {
-                Button("Remove photo", role: .destructive) { draftPhoto = nil }
-                    .font(LifeOSType.label.weight(.medium))
-            }
         }
     }
 
