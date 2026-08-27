@@ -63,7 +63,12 @@ struct LifeBoardScreen: View {
             }
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
             .navigationDestination(item: $openSector) { sector in
-                SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
+                switch model.mode {
+                case .closed:
+                    SectorDetailScreen(sector: sector, onOpenTab: openTabClosure(for: sector))
+                case .inFlight:
+                    InFlightSectorSheet(sector: sector)
+                }
             }
             // Reload on dismissal, not on completion. `MonthlyCloseScreen`
             // calls `onFinish` only after all nine sectors are walked, so
