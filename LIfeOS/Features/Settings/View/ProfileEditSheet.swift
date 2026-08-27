@@ -227,7 +227,12 @@ struct ProfileEditSheet: View {
         let side: CGFloat = 512
         let scale = min(side / image.size.width, side / image.size.height, 1)
         let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        draftPhoto = UIGraphicsImageRenderer(size: size).image { _ in
+        // Scale 1, because the renderer otherwise draws at the device's scale
+        // and a 512 point box becomes a 1536 pixel bitmap on a 3x phone. Nine
+        // times the pixels asked for, which undoes most of the downsizing.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        draftPhoto = UIGraphicsImageRenderer(size: size, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }.jpegData(compressionQuality: 0.8)
     }
