@@ -10,6 +10,7 @@ struct SettingsScreen: View {
 
     @Bindable var model: SettingsViewModel
     var whoop: WhoopConnectionViewModel?
+    var fitbit: FitbitConnectionViewModel?
     var health: HealthConnectionViewModel?
     var plaid: PlaidConnectionViewModel?
     var onSignOut: () -> Void = {}
@@ -298,19 +299,19 @@ struct SettingsScreen: View {
         }
     }
 
-    /// Three services, three rows, each showing its own state.
+    /// Every connected service, one row each, showing its own state.
     ///
     /// This used to be a single row with a chain-link icon reading "Whoop,
     /// Health, banks" over Whoop's status line, which said nothing about the
     /// other two: a connected bank and a broken Health permission looked
     /// identical from here, and the subtitle actively misreported them. The
     /// point of a settings summary is to answer "is everything on?" without
-    /// opening anything, so it has to show all three.
+    /// opening anything, so it has to show every one of them.
     @ViewBuilder
     private var connectionsRow: some View {
-        if let whoop, let health, let plaid {
+        if let whoop, let fitbit, let health, let plaid {
             NavigationLink {
-                ConnectionsSettingsScreen(whoop: whoop, health: health, plaid: plaid)
+                ConnectionsSettingsScreen(whoop: whoop, fitbit: fitbit, health: health, plaid: plaid)
             } label: {
                 VStack(spacing: 0) {
                     connectionLine(

@@ -12,6 +12,7 @@ import DesignSystem
 struct ProfileScreen: View {
     @Bindable var settings: SettingsViewModel
     var whoop: WhoopConnectionViewModel?
+    var fitbit: FitbitConnectionViewModel?
     var health: HealthConnectionViewModel?
     var plaid: PlaidConnectionViewModel?
     /// The three figures under the name. Passed in rather than computed here,
@@ -52,7 +53,7 @@ struct ProfileScreen: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showSettings) {
                 SettingsScreen(
-                    model: settings, whoop: whoop, health: health, plaid: plaid,
+                    model: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
                     onSignOut: onSignOut
                 )
             }

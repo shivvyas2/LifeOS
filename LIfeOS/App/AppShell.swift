@@ -20,6 +20,7 @@ struct AppShell: View {
 
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
+    @State private var fitbit = FitbitConnectionViewModel()
     @State private var health = HealthConnectionViewModel()
     /// Persisted, but the win is narrower than the name suggests: `isSignedIn`
     /// resolves synchronously (a keychain read), so on a relaunch that restores
@@ -41,7 +42,7 @@ struct AppShell: View {
     var body: some View {
         Group {
             if onboarding.isSignedIn && hasFinishedOnboarding {
-                RootView(whoop: whoop, health: health, onSignOut: {
+                RootView(whoop: whoop, fitbit: fitbit, health: health, onSignOut: {
                     hasFinishedOnboarding = false
                     onboarding.signOut()
                     onSignedOut()

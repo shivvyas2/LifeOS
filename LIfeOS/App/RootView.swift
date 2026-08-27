@@ -26,6 +26,7 @@ extension NoteSync: NoteSyncing {}
 /// actions into its foot. The screens themselves are identical in both.
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
+    @Bindable var fitbit: FitbitConnectionViewModel
     @Bindable var health: HealthConnectionViewModel
     var onSignOut: () -> Void = {}
 
@@ -127,7 +128,7 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $showSettings) {
             ProfileScreen(
-                settings: settings, whoop: whoop, health: health, plaid: plaid,
+                settings: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
                 stats: profileStats, highlights: profileHighlights,
                 allTime: profileAllTime, onSignOut: onSignOut
             )

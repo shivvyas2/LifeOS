@@ -39,5 +39,9 @@
 	<string>$(WHOOP_CLIENT_ID)</string>
 	<key>WhoopRedirectURI</key>
 	<string>$(WHOOP_REDIRECT_URI)</string>
+	<key>FitbitClientID</key>
+	<string>$(FITBIT_CLIENT_ID)</string>
+	<key>FitbitRedirectURI</key>
+	<string>$(FITBIT_REDIRECT_URI)</string>
 </dict>
 </plist>
