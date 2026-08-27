@@ -189,14 +189,31 @@ struct ProfileEditSheet: View {
         guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey,
               let session = KeychainAuthSessionStore().load() else { return }
 
-        try? await SupabaseAuth(baseURL: url, anonKey: key).updateProfile(
-            accessToken: session.accessToken,
+        let profiles = ProfileClient(baseURL: url, anonKey: key)
+        var profile = RemoteProfile(
             firstName: draft.firstName.trimmingCharacters(in: .whitespaces),
             lastName: draft.lastName.trimmingCharacters(in: .whitespaces),
             country: draft.country,
             birthDate: draft.birthDate,
             heightCM: draft.heightCM,
             gender: draft.gender
+        )
+
+        // The picture goes first, so the row never points at an object that
+        // does not exist. Removing one is a delete rather than a null: leaving
+        // the object behind would keep serving a face the person took down.
+        if let photo = draftPhoto {
+            profile.avatarPath = try? await profiles.uploadAvatar(
+                photo, userID: session.userID, accessToken: session.accessToken
+            )
+        } else {
+            try? await profiles.deleteAvatar(
+                userID: session.userID, accessToken: session.accessToken
+            )
+        }
+
+        try? await profiles.save(
+            profile, userID: session.userID, accessToken: session.accessToken
         )
     }
 

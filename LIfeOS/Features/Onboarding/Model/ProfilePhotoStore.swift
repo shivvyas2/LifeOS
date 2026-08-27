@@ -1,27 +1,35 @@
 import Foundation
+import Persistence
+import Integrations
 import OSLog
 
-/// Where the avatar lives.
+/// A local copy of the avatar, cached per account.
 ///
-/// On disk in the app's support directory, not in `user_metadata`: that
-/// payload is carried inside the JWT on every authenticated request, so a
-/// base64 image there would be paid for on every call the app makes. It is
-/// also not in UserDefaults, which is loaded whole into memory and is the
-/// wrong home for half a megabyte of JPEG.
+/// The picture itself lives in Supabase Storage now, so it follows the account
+/// to another device. This is the copy that means a profile screen draws
+/// instantly instead of after a round trip, and still draws with no network.
 ///
-/// The consequence, stated plainly because it will surprise someone: the photo
-/// does not follow the account to a second device. Making it do so needs a
-/// Supabase Storage bucket and its policies, which is a larger change than the
-/// signup step it was added to.
+/// Keyed by account. It was a single file at a fixed path, which was fine
+/// while one person could be signed in and became a leak the moment two could:
+/// the second account opened the first account's face.
 enum ProfilePhotoStore {
     private static let log = Logger(subsystem: "com.shivvyas.lifeos", category: "profile")
 
+    /// Inside the open account's own directory, beside its store, so it is
+    /// removed with the account and can never be shown to another one.
     private static var url: URL? {
-        try? FileManager.default.url(for: .applicationSupportDirectory,
-                                     in: .userDomainMask,
-                                     appropriateFor: nil,
-                                     create: true)
-            .appendingPathComponent("profile-photo.jpg")
+        guard let base = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ) else { return nil }
+
+        guard let id = UserDefaults.standard.string(
+            forKey: KeychainAuthSessionStore.currentAccountKey
+        ) else { return nil }
+
+        let directory = UserScope(id: id).directory(base: base)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("avatar.jpg")
     }
 
     /// Passing nil clears it, so removing a photo is the same call as setting
@@ -74,18 +82,97 @@ struct LocalProfile: Codable, Equatable {
     }
 }
 
+/// A local copy of the profile row, per account.
+///
+/// The row on the server is the source of truth. This exists so the profile
+/// screen has something to draw before the fetch returns and something to draw
+/// when there is no network, and it is written from whatever the server last
+/// confirmed rather than from what was typed.
+///
+/// Per account for the same reason the avatar is: in the shared suite, the
+/// second account to sign in was shown the first one's name.
 enum ProfileStore {
     private static let key = "localProfile"
 
     static func save(_ profile: LocalProfile) {
         guard let data = try? JSONEncoder().encode(profile) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        UserDefaults.currentAccount.set(data, forKey: key)
     }
 
     static func load() -> LocalProfile {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = UserDefaults.currentAccount.data(forKey: key),
               let profile = try? JSONDecoder().decode(LocalProfile.self, from: data)
         else { return LocalProfile() }
         return profile
+    }
+
+    /// Mirrors what the server confirmed, so the two cannot drift.
+    static func save(_ remote: RemoteProfile) {
+        save(LocalProfile(
+            firstName: remote.firstName,
+            lastName: remote.lastName,
+            country: remote.country,
+            heightCM: remote.heightCM,
+            birthDate: remote.birthDate,
+            gender: remote.gender
+        ))
+    }
+
+    static func remote() -> RemoteProfile {
+        let local = load()
+        return RemoteProfile(
+            firstName: local.firstName,
+            lastName: local.lastName,
+            country: local.country,
+            birthDate: local.birthDate,
+            heightCM: local.heightCM,
+            gender: local.gender
+        )
+    }
+}
+
+/// Brings the profile down from the server into the local caches.
+///
+/// The point of the whole change: signing in on a second phone, or as a second
+/// account on this one, used to produce a profile with no name and no picture,
+/// because both lived only on the device that typed them.
+///
+/// Runs on every launch that has a session. It is two small requests, the
+/// second only when there is a picture and it has changed, and it is what
+/// makes the server the source of truth rather than a place a copy was once
+/// sent to.
+enum ProfileSync {
+    private static let log = Logger(subsystem: "com.shivvyas.lifeos", category: "profile")
+
+    static func pull() async {
+        guard let url = AppConfig.supabaseURL,
+              let key = AppConfig.supabaseAnonKey,
+              let session = KeychainAuthSessionStore().load()
+        else { return }
+
+        let client = ProfileClient(baseURL: url, anonKey: key)
+        guard let remote = try? await client.load(
+            userID: session.userID, accessToken: session.accessToken
+        ) else { return }
+
+        ProfileStore.save(remote)
+
+        guard let path = remote.avatarPath else {
+            // The server says there is no picture, so neither should the
+            // device. Without this, removing a photo on one phone would leave
+            // it in place on the other forever.
+            ProfilePhotoStore.save(nil)
+            return
+        }
+
+        // Only when there is nothing cached. The avatar is one object per
+        // account and it changes rarely, so re-downloading it on every launch
+        // would spend bandwidth to learn nothing.
+        guard ProfilePhotoStore.load() == nil else { return }
+        if let data = try? await client.downloadAvatar(path: path) {
+            ProfilePhotoStore.save(data)
+        } else {
+            log.error("avatar download failed")
+        }
     }
 }

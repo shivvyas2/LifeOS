@@ -88,6 +88,9 @@ struct AppShell: View {
             // signup rather than making them prove themselves on every launch.
             if await onboarding.restoreSession() {
                 hasFinishedOnboarding = true
+                // The profile belongs to the account, not to the phone that
+                // typed it, so it is fetched rather than assumed present.
+                await ProfileSync.pull()
             }
             // No session means signup, and that is now the only way in.
             //

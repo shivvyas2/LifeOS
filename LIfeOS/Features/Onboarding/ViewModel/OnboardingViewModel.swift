@@ -35,6 +35,13 @@ final class OnboardingViewModel {
     private(set) var session: AuthSession?
 
     private let store: any AuthSessionStoring
+    /// Nil when the project is not configured, which is a development state
+    /// rather than a user one: signup still completes and the profile simply
+    /// stays on the device until there is somewhere to put it.
+    private var profiles: ProfileClient? {
+        guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey else { return nil }
+        return ProfileClient(baseURL: url, anonKey: key)
+    }
     private var auth: SupabaseAuth?
     /// The in-flight restore, so two callers share one refresh. Supabase rotates
     /// the refresh token on use, so a second concurrent refresh would present
@@ -231,26 +238,42 @@ final class OnboardingViewModel {
         defer { isBusy = false }
 
         do {
-            // The photo is written first and locally. It is the one field that
-            // does not belong in user_metadata: that payload rides inside the
-            // JWT on every request, and a base64 avatar would bloat every call
-            // the app makes. Syncing it across devices needs a storage bucket,
-            // which is a bigger change than this step.
-            ProfilePhotoStore.save(draft.photo)
-            ProfileStore.save(LocalProfile(
+            var profile = RemoteProfile(
                 firstName: draft.firstName.trimmingCharacters(in: .whitespaces),
                 lastName: draft.lastName.trimmingCharacters(in: .whitespaces),
                 country: draft.country,
-                heightCM: draft.heightCM,
                 birthDate: draft.birthDate,
+                heightCM: draft.heightCM,
                 gender: draft.gender.stored
-            ))
+            )
 
+            // The picture goes to storage before the row, so the row is never
+            // saved pointing at an object that does not exist. A failed upload
+            // costs the picture and not the profile.
+            if let photo = draft.photo, let profiles {
+                profile.avatarPath = try? await profiles.uploadAvatar(
+                    photo, userID: session.userID, accessToken: session.accessToken
+                )
+            }
+
+            if let profiles {
+                try await profiles.save(
+                    profile, userID: session.userID, accessToken: session.accessToken
+                )
+            }
+            // Written from what the server accepted, so the local copy is a
+            // cache of the row rather than a second opinion about it.
+            ProfileStore.save(profile)
+            ProfilePhotoStore.save(draft.photo)
+
+            // Names still go to user_metadata, because `hasProfile` is derived
+            // from it when a session is restored and that is what decides
+            // whether a returning user is sent through signup again.
             try await auth.updateProfile(
                 accessToken: session.accessToken,
-                firstName: draft.firstName.trimmingCharacters(in: .whitespaces),
-                lastName: draft.lastName.trimmingCharacters(in: .whitespaces),
-                country: draft.country,
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                country: profile.country,
                 birthDate: draft.birthDate,
                 heightCM: draft.heightCM,
                 gender: draft.gender.stored
