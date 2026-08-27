@@ -181,4 +181,44 @@ import SwiftData
 
         #expect(try links(in: context).map(\.targetTitleFolded) == ["marathon"])
     }
+
+    @Test func rebuildingIndexesEveryPage() throws {
+        let context = try makeContext()
+        for title in ["One", "Two", "Three"] {
+            context.insert(
+                NoteDocument(title: title, blocks: [NoteBlock(kind: .todo, text: "do \(title)")])
+            )
+        }
+
+        let count = try NoteIndexer.rebuildAll(context: context)
+
+        #expect(count == 3)
+        #expect(try tasks(in: context).count == 3)
+    }
+
+    /// The repair has to be safe to run on an index that is already right,
+    /// because that is the state it will usually be run in.
+    @Test func rebuildingTwiceLeavesOneRowPerTodo() throws {
+        let context = try makeContext()
+        context.insert(NoteDocument(blocks: [NoteBlock(kind: .todo, text: "Pack")]))
+
+        _ = try NoteIndexer.rebuildAll(context: context)
+        _ = try NoteIndexer.rebuildAll(context: context)
+
+        #expect(try tasks(in: context).count == 1)
+    }
+
+    /// Rows left behind by a page that no longer exists are the one thing a
+    /// per document reindex cannot clear, so the rebuild has to.
+    @Test func rebuildingClearsRowsWhosePageIsGone() throws {
+        let context = try makeContext()
+        context.insert(NoteTask(id: UUID(), documentID: UUID(), text: "orphan"))
+        context.insert(NoteLink(sourceID: UUID(), targetTitleFolded: "orphan"))
+        try context.save()
+
+        _ = try NoteIndexer.rebuildAll(context: context)
+
+        #expect(try tasks(in: context).isEmpty)
+        #expect(try links(in: context).isEmpty)
+    }
 }

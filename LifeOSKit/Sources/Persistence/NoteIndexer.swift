@@ -70,6 +70,28 @@ public enum NoteIndexer {
         }
     }
 
+    /// Throws the index away and builds it again from the documents.
+    ///
+    /// The repair for any inconsistency, and what runs once when the index is
+    /// introduced. Starting from empty rather than reindexing page by page is
+    /// what clears rows whose page has since been deleted: a per document
+    /// pass never visits a page that is not there.
+    @discardableResult
+    public static func rebuildAll(context: ModelContext) throws -> Int {
+        // The batch form is correct HERE, unlike inside `reindex`: this deletes
+        // everything before anything is inserted, and the rows it clears are
+        // already saved. Do not "fix" this to match reindex's fetch-and-delete.
+        try context.delete(model: NoteTask.self)
+        try context.delete(model: NoteLink.self)
+
+        let documents = try context.fetch(FetchDescriptor<NoteDocument>())
+        for document in documents {
+            try reindex(document, in: context)
+        }
+        try context.save()
+        return documents.count
+    }
+
     /// Live pages by folded title. Built once per reindex rather than fetched
     /// per link, since a page with twenty links would otherwise mean twenty
     /// fetches for one keystroke.
