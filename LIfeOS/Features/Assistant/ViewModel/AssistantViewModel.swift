@@ -156,14 +156,6 @@ final class AssistantViewModel {
                 .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
                                        text: $0.text) }
 
-            let remote: (any ChatEngine)? = {
-                guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey
-                else { return nil }
-                return RemoteChatEngine(baseURL: url, anonKey: key, accessToken: {
-                    KeychainAuthSessionStore().load()?.accessToken
-                })
-            }()
-
             let reply = try await AssistantTurn.run(
                 // The same text on both tiers: nothing in it is device-only,
                 // and the current date and time zone the context prefix
@@ -177,7 +169,7 @@ final class AssistantViewModel {
                 thread: thread,
                 tools: tools,
                 broker: broker,
-                remote: remote
+                remote: ChatTier.remote()
             )
             let events = await collector.collected()
             try? chat.append(

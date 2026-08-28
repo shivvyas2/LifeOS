@@ -82,15 +82,9 @@ final class CoachViewModel {
     private let conversationID = UUID()
 
     /// The cloud tier of the conversation, or nil when the project is not
-    /// configured. Same shape and same reasoning as `router` above: the token
-    /// is read per call because the session refreshes while the app runs.
-    private let chatRemote: (any ChatEngine)? = {
-        guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey
-        else { return nil }
-        return RemoteChatEngine(baseURL: url, anonKey: key, accessToken: {
-            KeychainAuthSessionStore().load()?.accessToken
-        })
-    }()
+    /// configured. Built by `ChatTier` so the calendar assistant and this
+    /// screen cannot drift apart in how they reach the cloud.
+    private let chatRemote: (any ChatEngine)? = ChatTier.remote()
 
     private let speech = SpeechListener()
 
