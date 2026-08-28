@@ -20,6 +20,11 @@ public enum AssistantTurn {
         }
     }
 
+    /// `preference` is the user's choice of tier, honoured here the way
+    /// `CoachRouter.run` honours it for one-shot tasks. The calendar
+    /// assistant obeys the same switch: it had no tier control of its own,
+    /// and event titles and times now leave the device.
+    ///
     /// `instructions` carries the user's own data, and it is carried per
     /// tier: whichever engine answers is handed the render meant for it.
     /// Both engines get one, which is the whole difference from the shape
@@ -34,7 +39,8 @@ public enum AssistantTurn {
         onDevice: (any ChatEngine)? = nil,
         availability: @Sendable () -> ModelAvailability = {
             ModelAvailability.from(SystemLanguageModel.default.availability)
-        }
+        },
+        preference: @Sendable () -> TierPreference = { .current }
     ) async throws -> Reply {
         let device = onDevice ?? OnDeviceChatEngine()
 
@@ -47,6 +53,30 @@ public enum AssistantTurn {
                 to: thread, instructions: instructions.onDevice,
                 tools: tools, invoker: invoker
             )
+        }
+
+        // Read now rather than captured, the way `CoachRouter` reads it: the
+        // switch can be flipped in Settings while this screen is still open.
+        switch preference() {
+        case .onDevice:
+            // The device and nothing else. Someone whose Settings say
+            // "nothing you ask ever leaves it" is owed exactly that, and a
+            // cloud call made on their behalf is the promise broken rather
+            // than a fallback.
+            return try await device.reply(
+                to: thread, instructions: instructions.onDevice,
+                tools: tools, invoker: invoker
+            )
+        case .cloud:
+            // No fallback, on purpose and identically to `CoachRouter`.
+            // Someone who chose the stronger model wants to be told when it
+            // did not answer, not quietly handed a weaker answer.
+            return try await remote.reply(
+                to: thread, instructions: instructions.cloud,
+                tools: tools, invoker: invoker
+            )
+        case .automatic:
+            break
         }
 
         do {

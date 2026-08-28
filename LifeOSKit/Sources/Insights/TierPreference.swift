@@ -37,4 +37,21 @@ public enum TierPreference: String, CaseIterable, Sendable, Identifiable {
     }
 
     public static let storageKey = "coachTierPreference"
+
+    /// What Settings has this device set to, read now.
+    ///
+    /// A computed property rather than a stored one, and every caller reads
+    /// it per request rather than capturing it: the switch can be flipped
+    /// while a screen holding a router is still on screen, and a captured
+    /// copy would keep answering on the tier the person just moved away
+    /// from until the next launch.
+    ///
+    /// `standard` rather than `currentAccount` deliberately. Which engine
+    /// answers is a property of the phone, not of whoever is signed in on
+    /// it, which is the rule `UserScope` states for device preferences.
+    public static var current: TierPreference {
+        TierPreference(
+            rawValue: UserDefaults.standard.string(forKey: storageKey) ?? ""
+        ) ?? .automatic
+    }
 }

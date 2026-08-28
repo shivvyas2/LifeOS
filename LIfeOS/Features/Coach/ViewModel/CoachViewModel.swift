@@ -72,11 +72,7 @@ final class CoachViewModel {
             remote: remote,
             // Read per request rather than captured, so changing it in Settings
             // takes effect on the next question instead of the next launch.
-            preference: {
-                TierPreference(
-                    rawValue: UserDefaults.standard.string(forKey: TierPreference.storageKey) ?? ""
-                ) ?? .automatic
-            }
+            preference: { .current }
         )
     }()
     /// This screen's own conversation. Not `ChatStore.latestConversationID()`,
