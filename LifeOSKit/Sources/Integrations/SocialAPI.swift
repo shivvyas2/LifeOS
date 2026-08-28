@@ -55,7 +55,26 @@ public struct SocialMessage: Codable, Sendable, Equatable, Identifiable {
 }
 
 public enum SocialAPIError: Error, Equatable {
-    case status(Int)
+    /// The status the server gave, and the sentence it gave with it.
+    ///
+    /// The message is carried because without it every refusal is the same
+    /// refusal. An expired token, a missing grant and a malformed filter all
+    /// arrive as "it did not work", and none of the three can be told apart
+    /// from a screenshot of a failed search. PostgREST always says which it
+    /// is; the only way to lose that is to drop it here.
+    ///
+    /// Empty when the body was not PostgREST's error shape, which is what a
+    /// proxy's HTML error page looks like.
+    case status(Int, message: String)
+}
+
+extension SocialAPIError: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .status(let code, let message):
+            message.isEmpty ? "HTTP \(code)" : "HTTP \(code): \(message)"
+        }
+    }
 }
 
 /// PostgREST over `URLSession`, for the three tables in the friends-and-messages
@@ -166,7 +185,7 @@ public struct SocialAPI: Sendable {
     /// claim is the caller's user id.
     public func send(_ body: String, to userID: UUID, accessToken: String) async throws {
         guard let sender = Self.subject(ofAccessToken: accessToken) else {
-            throw SocialAPIError.status(401)
+            throw SocialAPIError.status(401, message: "The access token carries no subject claim")
         }
         let request = try Self.sendMessageRequest(
             baseURL: baseURL, anonKey: anonKey, accessToken: accessToken,
@@ -340,9 +359,25 @@ public struct SocialAPI: Sendable {
 
     private func perform(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw SocialAPIError.status(-1) }
-        guard (200..<300).contains(http.statusCode) else { throw SocialAPIError.status(http.statusCode) }
+        guard let http = response as? HTTPURLResponse else { throw SocialAPIError.status(-1, message: "") }
+        guard (200..<300).contains(http.statusCode) else {
+            throw SocialAPIError.status(http.statusCode, message: Self.serverMessage(data))
+        }
         return data
+    }
+
+    /// PostgREST's own explanation, when the body is its error shape.
+    ///
+    /// Returns empty rather than throwing for anything else: a failure to read
+    /// why a request failed must never replace the status code with a decoding
+    /// error, which would hide the one fact we already have.
+    static func serverMessage(_ data: Data) -> String {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "" }
+        // `message` is the sentence; `hint` sometimes carries the useful half.
+        let message = json["message"] as? String ?? ""
+        let hint = json["hint"] as? String
+        guard let hint, !hint.isEmpty else { return message }
+        return message.isEmpty ? hint : "\(message) (\(hint))"
     }
 
     /// PostgREST emits timestamps with fractional seconds; the default

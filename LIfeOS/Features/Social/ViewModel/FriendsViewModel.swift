@@ -109,10 +109,27 @@ final class FriendsViewModel {
             outgoingPending = pendingOutgoing
             errorMessage = nil
         } catch {
-            errorMessage = "Could not load friends"
+            errorMessage = Self.reason("Could not load friends", error)
         }
 
         phase = .ready
+    }
+
+    /// A failure a person can act on, or at least report.
+    ///
+    /// "Search failed" is true of an expired session, a missing grant and a
+    /// dropped connection alike, which makes it useless for all three. The
+    /// server almost always says which; this puts that sentence where it can
+    /// be read instead of dropping it on the floor.
+    static func reason(_ prefix: String, _ error: Error) -> String {
+        if let api = error as? SocialAPIError {
+            return "\(prefix): \(api.description)"
+        }
+        let urlError = error as? URLError
+        if urlError?.code == .notConnectedToInternet || urlError?.code == .networkConnectionLost {
+            return "\(prefix): no connection"
+        }
+        return "\(prefix): \(error.localizedDescription)"
     }
 
     /// The in-flight request for the current `query`, if any.
@@ -139,7 +156,21 @@ final class FriendsViewModel {
             searchResults = []
             return
         }
-        guard let api, let accessToken, let myUserID else { return }
+        // Saying nothing here is what "it just spins" looks like from the
+        // outside: no results, no error, no spinner ending. Each of these
+        // three is a different problem and each is worth naming.
+        guard let api else {
+            errorMessage = "This build has no Supabase configuration"
+            return
+        }
+        guard let accessToken else {
+            errorMessage = "Signed out. Sign in again to search."
+            return
+        }
+        guard let myUserID else {
+            errorMessage = "Still working out who you are, try again in a moment"
+            return
+        }
 
         let issuedQuery = query
         searchTask = Task {
@@ -150,7 +181,7 @@ final class FriendsViewModel {
                 errorMessage = nil
             } catch {
                 guard !Task.isCancelled, issuedQuery == self.query else { return }
-                errorMessage = "Search failed"
+                errorMessage = Self.reason("Search failed", error)
             }
         }
     }
@@ -159,7 +190,21 @@ final class FriendsViewModel {
     /// the round trip, so the button's state does not flicker back to "Add"
     /// while the request is in flight.
     func add(_ profile: SocialProfile) async {
-        guard let api, let accessToken, let myUserID else { return }
+        // Saying nothing here is what "it just spins" looks like from the
+        // outside: no results, no error, no spinner ending. Each of these
+        // three is a different problem and each is worth naming.
+        guard let api else {
+            errorMessage = "This build has no Supabase configuration"
+            return
+        }
+        guard let accessToken else {
+            errorMessage = "Signed out. Sign in again to search."
+            return
+        }
+        guard let myUserID else {
+            errorMessage = "Still working out who you are, try again in a moment"
+            return
+        }
         outgoingPending.insert(profile.userID)
         do {
             try await api.request(from: myUserID, to: profile.userID, accessToken: accessToken)

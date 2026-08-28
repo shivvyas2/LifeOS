@@ -192,8 +192,32 @@ final class SocialStubURLProtocol: URLProtocol {
 
     @Test func aNonSuccessStatusMapsToSocialAPIErrorStatus() async throws {
         let api = makeAPI([.status(403, "{}")])
-        await #expect(throws: SocialAPIError.status(403)) {
+        await #expect(throws: SocialAPIError.status(403, message: "")) {
             _ = try await api.friendships(accessToken: "tok")
+        }
+    }
+
+    /// PostgREST says why it refused, in a `message` field. Throwing away that
+    /// sentence is what turns every failure into an indistinguishable "Search
+    /// failed": an expired token, a missing grant and a malformed filter all
+    /// look identical from the outside, and none can be diagnosed from a
+    /// screenshot.
+    @Test func aRefusalCarriesTheReasonTheServerGave() async throws {
+        let body = #"{"message":"JWT expired","code":"PGRST301"}"#
+        let api = makeAPI([.status(401, body)])
+
+        await #expect(throws: SocialAPIError.status(401, message: "JWT expired")) {
+            _ = try await api.search("ada", accessToken: "tok")
+        }
+    }
+
+    /// A body that is not the shape we expect must not lose the status code
+    /// as well. HTML from a proxy is the common case.
+    @Test func aRefusalWithNoParsableBodyStillCarriesItsStatus() async throws {
+        let api = makeAPI([.status(502, "<html>bad gateway</html>")])
+
+        await #expect(throws: SocialAPIError.status(502, message: "")) {
+            _ = try await api.search("ada", accessToken: "tok")
         }
     }
 
@@ -256,7 +280,7 @@ final class SocialStubURLProtocol: URLProtocol {
 
     @Test func sendWithAnUnreadableTokenFailsBeforeReachingTheNetwork() async throws {
         let api = makeAPI([.ok("{}")])
-        await #expect(throws: SocialAPIError.status(401)) {
+        await #expect(throws: SocialAPIError.status(401, message: "The access token carries no subject claim")) {
             try await api.send("hey", to: UUID(), accessToken: "not-a-jwt")
         }
         #expect(SocialStubURLProtocol.seen.isEmpty)
