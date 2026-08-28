@@ -1,19 +1,49 @@
 import Foundation
 
 /// A profile row as returned by search or by looking up a set of ids.
+///
+/// Everything past `displayName` is what the profile page shows about a
+/// person: the same fields their own profile shows about them. All optional,
+/// because every one of them is a question someone may decline to answer, and
+/// a profile that pads itself with placeholders for the fields somebody
+/// skipped looks broken rather than private.
+///
+/// Neither request sets `select`, so PostgREST returns the whole row and
+/// these arrive without a second round trip.
 public struct SocialProfile: Codable, Sendable, Equatable, Identifiable {
     public let userID: UUID
     public let displayName: String
+    public let firstName: String?
+    public let country: String?
+    public let birthDate: Date?
+    public let heightCM: Double?
+    /// The object's path inside the avatars bucket, which is public-read, so
+    /// a friend list can show faces without signing a URL per row.
+    public let avatarPath: String?
     public var id: UUID { userID }
 
-    public init(userID: UUID, displayName: String) {
+    public init(
+        userID: UUID, displayName: String,
+        firstName: String? = nil, country: String? = nil,
+        birthDate: Date? = nil, heightCM: Double? = nil, avatarPath: String? = nil
+    ) {
         self.userID = userID
         self.displayName = displayName
+        self.firstName = firstName
+        self.country = country
+        self.birthDate = birthDate
+        self.heightCM = heightCM
+        self.avatarPath = avatarPath
     }
 
     private enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case displayName = "display_name"
+        case firstName = "first_name"
+        case country
+        case birthDate = "birth_date"
+        case heightCM = "height_cm"
+        case avatarPath = "avatar_path"
     }
 }
 
@@ -382,7 +412,15 @@ public struct SocialAPI: Sendable {
 
     /// PostgREST emits timestamps with fractional seconds; the default
     /// `JSONDecoder` date strategy does not parse those.
-    private static let decoder: JSONDecoder = {
+    ///
+    /// A bare `date` column arrives as "2001-04-12" with no clock at all,
+    /// which neither ISO 8601 formatter accepts. `birth_date` is one, and
+    /// without this last branch a profile row carrying a birthday failed to
+    /// decode entirely, taking the person's name down with it.
+    /// Internal rather than private so the decoding tests can exercise the
+    /// date branches directly; the profile row is the only place the day
+    /// format appears and it is worth a test of its own.
+    static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -393,6 +431,7 @@ public struct SocialAPI: Sendable {
             let string = try container.decode(String.self)
             if let date = withFraction.date(from: string) { return date }
             if let date = plain.date(from: string) { return date }
+            if let date = SupabaseREST.day(from: string) { return date }
             throw DecodingError.dataCorruptedError(
                 in: container, debugDescription: "Expected an ISO 8601 date, got \(string)"
             )

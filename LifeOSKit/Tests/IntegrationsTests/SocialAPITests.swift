@@ -83,6 +83,46 @@ final class SocialStubURLProtocol: URLProtocol {
         #expect(profile.id == userID)
     }
 
+    /// The whole profile row, not just the name: the friend profile page
+    /// shows the same fields a person's own profile shows.
+    @Test func aProfileDecodesTheFieldsBehindTheName() throws {
+        let userID = UUID()
+        let json = """
+        {"user_id":"\(userID.uuidString)","display_name":"Ada Lovelace",
+         "first_name":"Ada","country":"GB","birth_date":"1815-12-10",
+         "height_cm":168.5,"avatar_path":"\(userID.uuidString)/avatar.jpg"}
+        """
+        let profile = try SocialAPI.decoder.decode(SocialProfile.self, from: Data(json.utf8))
+        #expect(profile.firstName == "Ada")
+        #expect(profile.country == "GB")
+        #expect(profile.heightCM == 168.5)
+        #expect(profile.avatarPath == "\(userID.uuidString)/avatar.jpg")
+
+        let year = Calendar(identifier: .gregorian).component(.year, from: try #require(profile.birthDate))
+        #expect(year == 1815)
+    }
+
+    /// A `date` column has no clock, which neither ISO 8601 formatter parses.
+    /// Before the day-format branch a birthday took the whole row down with
+    /// it, and search stopped returning anyone who had filled one in.
+    @Test func aBirthdayDoesNotTakeTheRowDownWithIt() throws {
+        let json = #"{"user_id":"\#(UUID().uuidString)","display_name":"Ada","birth_date":"2001-04-12"}"#
+        let profile = try SocialAPI.decoder.decode(SocialProfile.self, from: Data(json.utf8))
+        #expect(profile.displayName == "Ada")
+        #expect(profile.birthDate != nil)
+    }
+
+    /// Everything past the name is optional, and a row with none of it still
+    /// decodes: most profiles are exactly this.
+    @Test func aProfileWithNothingFilledInStillDecodes() throws {
+        let json = #"{"user_id":"\#(UUID().uuidString)","display_name":"Someone"}"#
+        let profile = try SocialAPI.decoder.decode(SocialProfile.self, from: Data(json.utf8))
+        #expect(profile.displayName == "Someone")
+        #expect(profile.firstName == nil)
+        #expect(profile.birthDate == nil)
+        #expect(profile.avatarPath == nil)
+    }
+
     @Test func aFriendshipDecodesFromRealisticJSON() throws {
         let requester = UUID()
         let addressee = UUID()
