@@ -57,9 +57,17 @@ public enum ChatWire {
         case toolCalls([ToolCall])
     }
 
+    /// `context` is the caller's instructions: the rendered data bundle, or
+    /// the calendar assistant's rules and the current date. It travels in a
+    /// field of its own rather than as a `{role: "system"}` message the
+    /// client wrote, because the server has to be able to tell the two
+    /// apart. A client-authored system message would land after the scope
+    /// guardrail and providers weight the later one heavily, which is a way
+    /// around the guardrail rather than a way to carry data. The server
+    /// wraps this in its own system message, behind `SCOPE`.
     public static func request(
         baseURL: URL, anonKey: String, accessToken: String,
-        messages: [Message], tools: [any CoachTool]
+        messages: [Message], tools: [any CoachTool], context: String = ""
     ) throws -> URLRequest {
         var request = URLRequest(
             url: baseURL.appendingPathComponent("functions/v1/lifo-agent")
@@ -69,11 +77,15 @@ public enum ChatWire {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "task": "chat",
             "messages": messages.map(\.payload),
             "tools": try tools.map { try ToolSchema.function(for: $0) },
-        ])
+        ]
+        // Absent rather than empty when there is nothing to say, so the
+        // server never builds a system message with no content in it.
+        if !context.isEmpty { body["context"] = context }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
     }
 

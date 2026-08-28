@@ -252,14 +252,17 @@ final class CoachViewModel {
 
             do {
                 let reply = try await AssistantTurn.run(
-                    instructions: """
-                    You answer questions about one person's life: their health \
-                    metrics, money, and life-sector scores.
-
-                    Here is what their data shows:
-
-                    \(bundle.promptLines(for: .offDevice))
-                    """,
+                    // One render per tier, not one render for both. The two
+                    // audiences carry different fields on purpose: `.onDevice`
+                    // includes HRV, SpO2, skin temperature and respiratory
+                    // rate, which are the raw Whoop series and stay on the
+                    // phone, and `.offDevice` leaves those out and carries the
+                    // money detail instead. Sending one render to both tiers
+                    // means picking which tier to be wrong for.
+                    instructions: ChatInstructions(
+                        onDevice: Self.coachInstructions(bundle, for: .onDevice),
+                        cloud: Self.coachInstructions(bundle, for: .offDevice)
+                    ),
                     thread: thread,
                     tools: [],
                     broker: ConfirmationBroker(),
@@ -292,6 +295,20 @@ final class CoachViewModel {
         } catch {
             fail("Could not load your metrics.")
         }
+    }
+
+    /// The data bundle as one tier is allowed to see it.
+    private static func coachInstructions(
+        _ bundle: ContextBundle, for audience: MetricsDigest.Audience
+    ) -> String {
+        """
+        You answer questions about one person's life: their health metrics, \
+        money, and life-sector scores.
+
+        Here is what their data shows:
+
+        \(bundle.promptLines(for: audience))
+        """
     }
 
     private func fail(_ message: String) {

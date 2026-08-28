@@ -91,6 +91,33 @@ private struct StubTool: CoachTool {
         #expect(messages[0]["tool_call_id"] as? String == "call_42")
     }
 
+    /// The whole of C1 on the wire. The instructions are the user's data,
+    /// and if they do not appear in the body the cloud model is answering
+    /// with none of it while being told to cite only what it was given.
+    @Test func theContextTravelsInItsOwnField() throws {
+        let request = try ChatWire.request(
+            baseURL: base, anonKey: "k", accessToken: "t",
+            messages: [ChatWire.Message(role: "user", content: "how did I sleep?")],
+            tools: [], context: "14-day baseline: sleep 6h20m"
+        )
+        let body = try body(request)
+        #expect(body["context"] as? String == "14-day baseline: sleep 6h20m")
+
+        // And never as a message the client wrote. A client-authored system
+        // message would land behind the server's guardrail, which is the
+        // injection this field exists to make unnecessary.
+        let messages = try #require(body["messages"] as? [[String: Any]])
+        #expect(!messages.contains { $0["role"] as? String == "system" })
+    }
+
+    @Test func noContextMeansTheKeyIsAbsentRatherThanEmpty() throws {
+        let request = try ChatWire.request(
+            baseURL: base, anonKey: "k", accessToken: "t",
+            messages: [ChatWire.Message(role: "user", content: "hi")], tools: []
+        )
+        #expect(try body(request)["context"] == nil)
+    }
+
     @Test func aTextReplyParses() throws {
         let data = Data(#"{"output":{"text":"Six hours, which is short for you."}}"#.utf8)
         #expect(try ChatWire.reply(data: data, status: 200)

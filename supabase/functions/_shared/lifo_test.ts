@@ -142,6 +142,41 @@ Deno.test("the chat body sends the thread behind the system prompt", () => {
   assertEquals(body.messages[1].role, "user");
 });
 
+// C1's server half. The device's data has to land in the prompt, and it has
+// to land BEHIND the scope guardrail: SCOPE first so a client cannot displace
+// it, the context after so the model has the numbers it is told to cite.
+Deno.test("the context becomes a system message behind the guardrail", () => {
+  const body = chatBody(
+    [{ role: "user", content: "how did I sleep?" }],
+    [],
+    "14-day baseline: sleep 6h20m",
+  ) as { messages: { role: string; content: string }[] };
+
+  assertEquals(body.messages[0].role, "system");
+  assertEquals(body.messages[0].content.includes("You are LIFO"), true);
+  assertEquals(body.messages[1].role, "system");
+  assertEquals(body.messages[1].content, "14-day baseline: sleep 6h20m");
+  assertEquals(body.messages[2].role, "user");
+});
+
+Deno.test("no context means no second system message", () => {
+  const body = chatBody([{ role: "user", content: "hi" }], []) as {
+    messages: { role: string }[];
+  };
+  assertEquals(body.messages.length, 2);
+  assertEquals(body.messages[1].role, "user");
+});
+
+Deno.test("a chat request carries the context through the door", () => {
+  const parsed = parseRequest({
+    task: "chat",
+    messages: [{ role: "user", content: "hi" }],
+    tools: [],
+    context: "14-day baseline: sleep 6h20m",
+  }) as { context: string };
+  assertEquals(parsed.context, "14-day baseline: sleep 6h20m");
+});
+
 // An empty tools array and an absent one mean different things to the
 // provider, and sending `tools: []` is rejected by some versions outright.
 Deno.test("no tools means the key is absent, not empty", () => {

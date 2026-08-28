@@ -7,9 +7,23 @@ private struct StubChatEngine: ChatEngine {
     let outcome: @Sendable () throws -> AssistantTurn.Reply
 
     func reply(
-        to thread: [ChatTurnMessage], tools: [any CoachTool], invoker: ToolInvoker
+        to thread: [ChatTurnMessage], instructions: String,
+        tools: [any CoachTool], invoker: ToolInvoker
     ) async throws -> AssistantTurn.Reply {
         try outcome()
+    }
+}
+
+/// Answers with whatever instructions it was handed, so a test can assert
+/// which render reached which tier rather than only that one arrived.
+private struct EchoingChatEngine: ChatEngine {
+    let prefix: String
+
+    func reply(
+        to thread: [ChatTurnMessage], instructions: String,
+        tools: [any CoachTool], invoker: ToolInvoker
+    ) async throws -> AssistantTurn.Reply {
+        AssistantTurn.Reply(text: prefix + instructions, toolSummaries: [])
     }
 }
 
@@ -84,6 +98,37 @@ private struct StubChatEngine: ChatEngine {
                 availability: .unavailablePermanently
             )
         }
+    }
+
+    /// C1. The cloud tier used to receive no instructions at all: the whole
+    /// data bundle was built, handed to `run`, and used only to construct
+    /// the on-device engine. On the default path for a signed-in user that
+    /// meant every remote answer was produced with none of the user's data,
+    /// while the server prompt told the model to cite only numbers it was
+    /// given.
+    @Test func theCloudTierIsHandedTheInstructions() async throws {
+        let result = try await AssistantTurn.run(
+            instructions: ChatInstructions(onDevice: "DEVICE", cloud: "CLOUD"),
+            thread: thread, tools: [], broker: ConfirmationBroker(),
+            remote: EchoingChatEngine(prefix: "cloud: "),
+            onDevice: EchoingChatEngine(prefix: "device: "),
+            availability: { .available }
+        )
+        #expect(result.text == "cloud: CLOUD")
+    }
+
+    /// C3. The two audiences do not carry the same fields, so each tier gets
+    /// the render meant for it: the device sees the HRV series that never
+    /// leaves the phone, the cloud sees the one built for travelling.
+    @Test func eachTierIsHandedItsOwnRender() async throws {
+        let result = try await AssistantTurn.run(
+            instructions: ChatInstructions(onDevice: "DEVICE", cloud: "CLOUD"),
+            thread: thread, tools: [], broker: ConfirmationBroker(),
+            remote: StubChatEngine { throw RemoteEngineError.unavailable },
+            onDevice: EchoingChatEngine(prefix: "device: "),
+            availability: { .available }
+        )
+        #expect(result.text == "device: DEVICE")
     }
 
     @Test func withNoCloudConfiguredTheDeviceIsTheOnlyTier() async throws {

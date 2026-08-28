@@ -2,18 +2,22 @@ import FoundationModels
 
 /// Apple's on-device model, driving the rounds itself.
 ///
-/// This is the body `AssistantTurn.run` used to be, moved without a change
-/// in behaviour. A session is created per turn because the conversation's
-/// memory lives in the thread we render, not in the session.
+/// The body came from `AssistantTurn.run`, but not unchanged: the input is a
+/// thread rather than a single prompt, and the style appended is
+/// `ResponseStyle.conversation` rather than `ResponseStyle.instruction`, so
+/// the model may refer back to what was said earlier instead of answering and
+/// stopping. Both are deliberate and both are the point of the move; the
+/// note matters because prompt drift is this file's entire risk surface.
+///
+/// A session is created per turn because the conversation's memory lives in
+/// the thread we render, not in the session.
 public struct OnDeviceChatEngine: ChatEngine {
-    private let instructions: String
 
-    public init(instructions: String) {
-        self.instructions = instructions
-    }
+    public init() {}
 
     public func reply(
         to thread: [ChatTurnMessage],
+        instructions: String,
         tools: [any CoachTool],
         invoker: ToolInvoker
     ) async throws -> AssistantTurn.Reply {

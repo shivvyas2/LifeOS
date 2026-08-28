@@ -28,8 +28,15 @@ public struct RemoteChatEngine: ChatEngine {
         self.transport = transport
     }
 
+    /// `instructions` is the user's own data, rendered for the off-device
+    /// audience by the caller. It is sent in the request's `context` field,
+    /// which the server places in a system message of its own behind the
+    /// scope guardrail. Without it the model is told to cite only numbers it
+    /// was given and then given none, which is how a coach ends up answering
+    /// "how did I sleep" with nothing.
     public func reply(
         to thread: [ChatTurnMessage],
+        instructions: String,
         tools: [any CoachTool],
         invoker: ToolInvoker
     ) async throws -> AssistantTurn.Reply {
@@ -47,7 +54,7 @@ public struct RemoteChatEngine: ChatEngine {
         for _ in 0...ToolInvoker.invocationLimit {
             let request = try ChatWire.request(
                 baseURL: baseURL, anonKey: anonKey, accessToken: token,
-                messages: messages, tools: tools
+                messages: messages, tools: tools, context: instructions
             )
 
             let data: Data

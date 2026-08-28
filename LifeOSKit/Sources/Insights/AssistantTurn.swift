@@ -20,8 +20,13 @@ public enum AssistantTurn {
         }
     }
 
+    /// `instructions` carries the user's own data, and it is carried per
+    /// tier: whichever engine answers is handed the render meant for it.
+    /// Both engines get one, which is the whole difference from the shape
+    /// this used to have, where the parameter reached only the device and
+    /// every cloud answer was produced with none of the user's data.
     public static func run(
-        instructions: String = "",
+        instructions: ChatInstructions = .none,
         thread: [ChatTurnMessage],
         tools: [any CoachTool],
         broker: ConfirmationBroker,
@@ -31,18 +36,24 @@ public enum AssistantTurn {
             ModelAvailability.from(SystemLanguageModel.default.availability)
         }
     ) async throws -> Reply {
-        let device = onDevice ?? OnDeviceChatEngine(instructions: instructions)
+        let device = onDevice ?? OnDeviceChatEngine()
 
         // One invoker per turn: the cap and the activity chips are turn
         // state, and a shared one would carry a previous turn's count.
         let invoker = ToolInvoker(tools: tools, broker: broker)
 
         guard let remote else {
-            return try await device.reply(to: thread, tools: tools, invoker: invoker)
+            return try await device.reply(
+                to: thread, instructions: instructions.onDevice,
+                tools: tools, invoker: invoker
+            )
         }
 
         do {
-            return try await remote.reply(to: thread, tools: tools, invoker: invoker)
+            return try await remote.reply(
+                to: thread, instructions: instructions.cloud,
+                tools: tools, invoker: invoker
+            )
         } catch RemoteEngineError.refused(let reason) {
             // Never falls back. The model answered and declined; asking a
             // second model is not a second opinion, it is a way around one.
@@ -53,7 +64,10 @@ public enum AssistantTurn {
             // spent rounds and collected chips for work whose reply never
             // arrived, and those must not be attributed to this answer.
             let retry = ToolInvoker(tools: tools, broker: broker)
-            return try await device.reply(to: thread, tools: tools, invoker: retry)
+            return try await device.reply(
+                to: thread, instructions: instructions.onDevice,
+                tools: tools, invoker: retry
+            )
         }
     }
 }

@@ -69,7 +69,7 @@ private final class ScriptedTransport: @unchecked Sendable {
         let transport = ScriptedTransport([#"{"output":{"text":"Six hours."}}"#])
         let reply = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "how did I sleep?")],
-            tools: [], invoker: invoker([])
+            instructions: "", tools: [], invoker: invoker([])
         )
         #expect(reply.text == "Six hours.")
         #expect(reply.toolSummaries.isEmpty)
@@ -87,7 +87,7 @@ private final class ScriptedTransport: @unchecked Sendable {
 
         let reply = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "what is on today?")],
-            tools: [tool], invoker: invoker([tool])
+            instructions: "", tools: [tool], invoker: invoker([tool])
         )
 
         let calls = await log.calls
@@ -108,7 +108,7 @@ private final class ScriptedTransport: @unchecked Sendable {
         ])
         _ = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "what is on today?")],
-            tools: [tool], invoker: invoker([tool])
+            instructions: "", tools: [tool], invoker: invoker([tool])
         )
 
         let body = try JSONSerialization.jsonObject(
@@ -145,7 +145,7 @@ private final class ScriptedTransport: @unchecked Sendable {
 
         _ = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "what is on today?")],
-            tools: [tool], invoker: invoker([tool])
+            instructions: "", tools: [tool], invoker: invoker([tool])
         )
 
         let body = try JSONSerialization.jsonObject(
@@ -169,7 +169,7 @@ private final class ScriptedTransport: @unchecked Sendable {
 
         let reply = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "loop")],
-            tools: [tool], invoker: invoker([tool])
+            instructions: "", tools: [tool], invoker: invoker([tool])
         )
 
         // Exactly the cap plus one is guaranteed when the script never
@@ -182,6 +182,46 @@ private final class ScriptedTransport: @unchecked Sendable {
         #expect(reply.text == "That turned into more steps than I can take in one go. Try asking for one thing at a time.")
     }
 
+    /// C1 on this side of the seam: the instructions the caller hands the
+    /// engine are the user's own data, and they must reach the request.
+    /// Before this, `reply` mapped the thread and sent nothing else, so
+    /// every cloud answer was produced with none of it.
+    @Test func theInstructionsTravelAsTheRequestContext() async throws {
+        let transport = ScriptedTransport([#"{"output":{"text":"Six hours."}}"#])
+        _ = try await engine(transport).reply(
+            to: [ChatTurnMessage(role: .user, text: "how did I sleep?")],
+            instructions: "14-day baseline: sleep 6h20m",
+            tools: [], invoker: invoker([])
+        )
+        let body = try JSONSerialization.jsonObject(
+            with: #require(transport.requests[0].httpBody)
+        ) as? [String: Any]
+        #expect(body?["context"] as? String == "14-day baseline: sleep 6h20m")
+    }
+
+    /// The context has to survive the rounds too. A tool-calling turn that
+    /// dropped it after the first request would answer the actual question,
+    /// the one that comes after the tools, with no data at all.
+    @Test func theContextIsRepeatedOnEveryRound() async throws {
+        let log = ToolLog()
+        let tool = RecordingTool(log: log)
+        let transport = ScriptedTransport([
+            #"{"tool_calls":[{"id":"call_1","name":"get_events","arguments":"{\"start\":\"2026-08-28\"}"}]}"#,
+            #"{"output":{"text":"Three."}}"#,
+        ])
+        _ = try await engine(transport).reply(
+            to: [ChatTurnMessage(role: .user, text: "what is on today?")],
+            instructions: "Today is Friday 28 August 2026.",
+            tools: [tool], invoker: invoker([tool])
+        )
+        for request in transport.requests {
+            let body = try JSONSerialization.jsonObject(
+                with: #require(request.httpBody)
+            ) as? [String: Any]
+            #expect(body?["context"] as? String == "Today is Friday 28 August 2026.")
+        }
+    }
+
     @Test func noSessionIsNotSignedIn() async {
         let transport = ScriptedTransport([])
         let engine = RemoteChatEngine(
@@ -191,8 +231,26 @@ private final class ScriptedTransport: @unchecked Sendable {
         await #expect(throws: RemoteEngineError.notSignedIn) {
             try await engine.reply(
                 to: [ChatTurnMessage(role: .user, text: "hi")],
-                tools: [], invoker: self.invoker([])
+                instructions: "", tools: [], invoker: self.invoker([])
             )
         }
+    }
+
+    /// The other half of the same guard. A session that exists but carries
+    /// an empty token is a signed-out state wearing a signed-in shape, and
+    /// sending it would spend a round trip to be told 401.
+    @Test func anEmptyTokenIsNotSignedInEither() async {
+        let transport = ScriptedTransport([])
+        let engine = RemoteChatEngine(
+            baseURL: base, anonKey: "k", accessToken: { "" },
+            transport: { try await transport.send($0) }
+        )
+        await #expect(throws: RemoteEngineError.notSignedIn) {
+            try await engine.reply(
+                to: [ChatTurnMessage(role: .user, text: "hi")],
+                instructions: "", tools: [], invoker: self.invoker([])
+            )
+        }
+        #expect(transport.requests.isEmpty)
     }
 }

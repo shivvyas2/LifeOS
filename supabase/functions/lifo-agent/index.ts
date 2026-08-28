@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
   if ((usage?.tokens ?? 0) >= DAILY_TOKEN_CAP) return json({ error: "exhausted" }, 429);
 
   const payload = parsed.kind === "chat"
-    ? chatBody(parsed.messages, parsed.tools)
+    ? chatBody(parsed.messages, parsed.tools, parsed.context)
     : openAIBody(parsed.task, parsed.prompt);
 
   const started = Date.now();

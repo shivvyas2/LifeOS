@@ -165,8 +165,15 @@ final class AssistantViewModel {
             }()
 
             let reply = try await AssistantTurn.run(
-                instructions: CalendarAssistant.instructions(authorized: isAuthorized)
-                    + "\n\n" + calendarContext(),
+                // The same text on both tiers: nothing in it is device-only,
+                // and the current date and time zone the context prefix
+                // carries are exactly what the cloud has no other way to
+                // know. Without them an update or a delete gets built
+                // against no notion of today.
+                instructions: ChatInstructions(
+                    CalendarAssistant.instructions(authorized: isAuthorized)
+                        + "\n\n" + calendarContext()
+                ),
                 thread: thread,
                 tools: tools,
                 broker: broker,

@@ -151,14 +151,25 @@ function toOpenAIMessage(message: unknown): unknown {
   };
 }
 
+// `context` is the device's rendered view of the user's own data, or the
+// calendar assistant's rules and the current date. It arrives in a field of
+// its own, never as a message, and it is placed here: a system message
+// behind SCOPE. Order is the point. SCOPE stays first so the guardrail is
+// never displaced by anything the client sent, and the context sits behind
+// it because the model is told to cite only numbers it was given, which
+// requires actually giving it some.
 export function chatBody(
   messages: unknown[],
   tools: unknown[],
+  context = "",
 ): Record<string, unknown> {
+  const system = [{ role: "system", content: TASKS.chat.system }];
+  if (context) system.push({ role: "system", content: context });
+
   const body: Record<string, unknown> = {
     model: TASKS.chat.model,
     messages: [
-      { role: "system", content: TASKS.chat.system },
+      ...system,
       ...messages.map(toOpenAIMessage),
     ],
   };
@@ -217,7 +228,11 @@ export function parseRequest(body: unknown) {
     const messages = Array.isArray(raw.messages) ? raw.messages : [];
     const tools = Array.isArray(raw.tools) ? raw.tools : [];
     if (messages.length === 0) return null;
-    return { kind: "chat" as const, messages, tools };
+    // A string or nothing. Anything else is a client that does not know the
+    // shape, and coercing it with String() would put "[object Object]" into
+    // a system message.
+    const context = typeof raw.context === "string" ? raw.context : "";
+    return { kind: "chat" as const, messages, tools, context };
   }
 
   const prompt = String(raw.prompt ?? "");
