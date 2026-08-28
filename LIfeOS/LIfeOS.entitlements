@@ -20,5 +20,17 @@
 	     estimates. Not something this app does. -->
 	<key>com.apple.developer.healthkit</key>
 	<true/>
+
+	<!-- Push, for the proactive nudge. Claimed here because the code that
+	     needs it ships alongside: PushService registers a token, device_tokens
+	     stores it, and lifo-nudge sends to it.
+
+	     development, not production. The value has to match the provisioning
+	     the build is signed with, and a development build talking to the
+	     production APNs host is 400 BadDeviceToken on every send. Xcode
+	     rewrites this for a distribution build; APNS_SANDBOX on the Edge
+	     Function picks the matching host. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

@@ -5,6 +5,13 @@
 	<!-- The app uses only standard HTTPS. That is exempt encryption, and saying
 	     so here stops App Store Connect prompting on every TestFlight upload.
 	     Xcode's capability editor dropped this key when it rewrote the file. -->
+	<!-- remote-notification, so a nudge that arrives while the app is
+	     backgrounded is delivered to the delegate rather than only shown.
+	     Claimed with the code that uses it, like the HealthKit keys. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<!-- Two schemes, and the app answers to both.

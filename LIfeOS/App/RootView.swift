@@ -213,6 +213,17 @@ struct RootView: View {
             attachAll()
             reloadAll()
             syncCalendar()
+            // Asked for here rather than at launch: by the time this runs the
+            // person is signed in and looking at their own data, so the prompt
+            // arrives with something behind it. A permission dialog on first
+            // run, before the app has shown anyone anything worth being
+            // interrupted about, is the fastest way to a permanent no.
+            await PushService.shared.requestAuthorization()
+        }
+        // The nudge from a tapped notification, opened as the first turn of a
+        // conversation rather than shown and dismissed.
+        .onChange(of: PushService.shared.pending) { _, nudge in
+            openNudge(nudge)
         }
         // Event-driven, not polled: a save is the only thing that can change
         // what these screens show while the app is running.
@@ -225,6 +236,14 @@ struct RootView: View {
             if phase == .active {
                 reloadAll()
                 syncCalendar()
+                // Re-pushed on every foreground, not only after sign in. The
+                // row carries the timezone the send hour is read in, so
+                // somebody who has flown somewhere would otherwise keep being
+                // nudged at eight in the morning where they used to live.
+                Task { await PushService.shared.syncRegistration() }
+                // A notification tapped from a cold launch lands in the inbox
+                // before this view exists, so onChange never fires for it.
+                openNudge(PushService.shared.pending)
             }
         }
 
@@ -492,6 +511,19 @@ struct RootView: View {
                     fanOpen = false
                 }
         }
+    }
+
+    /// Opens LIFO on a nudge and clears the inbox.
+    ///
+    /// The sentence is seeded, the numbers behind it are not: a phone that has
+    /// been offline for days would otherwise open on figures two days stale.
+    /// Whatever the conversation goes on to say is worked out here, now,
+    /// against the store as it currently stands.
+    private func openNudge(_ nudge: NudgePayload?) {
+        guard let nudge else { return }
+        PushService.shared.pending = nil
+        coach.seed(nudge.text)
+        showCoach = true
     }
 
     private func selectHealthDate(_ date: Date) {

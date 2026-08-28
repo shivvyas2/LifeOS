@@ -71,6 +71,45 @@ TASKS.chat = {
   system: `${SCOPE}\n\n${CONVERSATION}`,
 };
 
+// The nudge task: one sentence for a lock screen, from numbers a rule already
+// worked out.
+//
+// SCOPE and CONVERSATION first, exactly as chat has them. A notification is
+// still LIFO speaking about this person's own data, so it inherits the same
+// guardrail and the same typography prohibitions; a markdown asterisk reads
+// no better on a lock screen than it does in a bubble.
+//
+// The model's whole job here is phrasing. It is not given the rows, only the
+// figures the fired trigger carried, which is what keeps this call on the
+// order of 300 tokens in and 60 out.
+TASKS.nudge = {
+  model: "gpt-5-mini",
+  system: `${SCOPE}
+
+${CONVERSATION}
+
+You are writing a single notification. At most two sentences, under 180
+characters. Do not greet them and do not sign off. Use only the figures you
+are given; if a figure is not there, do not mention it.`,
+  schema: {
+    name: "lifo_nudge",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+      additionalProperties: false,
+    },
+  },
+};
+
+/// The nudge's own daily allowance, separate from DAILY_TOKEN_CAP.
+///
+/// The phrasing call is tiny, so this is not really a spend limit: it is a
+/// runaway guard. The reason it is a separate budget at all is that a heavy
+/// chat evening must not be able to eat the next morning's nudge.
+export const NUDGE_TOKEN_CAP = 4_000;
+
 export function taskConfig(task: string) {
   return TASKS[task] ?? null;
 }

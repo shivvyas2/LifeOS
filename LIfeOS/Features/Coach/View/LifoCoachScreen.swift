@@ -201,7 +201,12 @@ struct LifoCoachScreen: View {
 
     private func turnView(question: String, answer: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            bubble(question, isQuestion: true)
+            // A seeded nudge has no question above it, because LIFO spoke
+            // first. An empty bubble there reads as a message the person sent
+            // and then deleted.
+            if !question.isEmpty {
+                bubble(question, isQuestion: true)
+            }
             Text(answer)
                 .font(LifeOSType.secondary)
                 .foregroundStyle(LifoPalette.ink)
