@@ -216,6 +216,45 @@ export function parseChatReply(body: unknown) {
   return { kind: "text" as const, text: message.content, tokens };
 }
 
+// What a client is allowed to put in the thread. Notably not "system": a
+// system message from the client lands AFTER the server's own, and providers
+// weight the later one heavily, so accepting one is accepting that SCOPE can
+// be talked around by anybody who can edit a request body. The context field
+// exists so a client never needs to write a system message at all.
+const ALLOWED_CHAT_ROLES = new Set(["user", "assistant", "tool"]);
+
+// Bounds, not tuning knobs. Without them this endpoint is a general OpenAI
+// proxy on our key for any authenticated user: an unbounded thread, an
+// unbounded tool list, and an unbounded context are three ways to spend the
+// whole daily allowance in one request on something that is not coaching.
+// The device sends at most a 20 turn window plus its tool round trips, six
+// calendar tools, and a context the render budgets at 8000 characters.
+export const MAX_CHAT_MESSAGES = 64;
+export const MAX_CHAT_TOOLS = 16;
+export const MAX_CONTEXT_LENGTH = 32_000;
+
+function isAllowedChatMessage(message: unknown): boolean {
+  if (typeof message !== "object" || message === null || Array.isArray(message)) {
+    return false;
+  }
+  const raw = message as Record<string, unknown>;
+  if (typeof raw.role !== "string" || !ALLOWED_CHAT_ROLES.has(raw.role)) return false;
+  // Content is a string on every message the device sends, including the
+  // empty one that carries tool calls. Anything else is a shape we would be
+  // forwarding to the provider without having read it.
+  if (typeof raw.content !== "string") return false;
+  return true;
+}
+
+function isFunctionTool(tool: unknown): boolean {
+  if (typeof tool !== "object" || tool === null || Array.isArray(tool)) return false;
+  const raw = tool as Record<string, unknown>;
+  if (raw.type !== "function") return false;
+  const fn = raw.function;
+  if (typeof fn !== "object" || fn === null) return false;
+  return typeof (fn as Record<string, unknown>).name === "string";
+}
+
 // The door's whole validation, hoisted here so it is tested rather than
 // living inside Deno.serve where it is not.
 export function parseRequest(body: unknown) {
@@ -225,14 +264,21 @@ export function parseRequest(body: unknown) {
   if (!taskConfig(task)) return null;
 
   if (task === "chat") {
-    const messages = Array.isArray(raw.messages) ? raw.messages : [];
+    if (!Array.isArray(raw.messages) || raw.messages.length === 0) return null;
+    if (raw.messages.length > MAX_CHAT_MESSAGES) return null;
+    if (!raw.messages.every(isAllowedChatMessage)) return null;
+
     const tools = Array.isArray(raw.tools) ? raw.tools : [];
-    if (messages.length === 0) return null;
+    if (tools.length > MAX_CHAT_TOOLS) return null;
+    if (!tools.every(isFunctionTool)) return null;
+
     // A string or nothing. Anything else is a client that does not know the
     // shape, and coercing it with String() would put "[object Object]" into
     // a system message.
     const context = typeof raw.context === "string" ? raw.context : "";
-    return { kind: "chat" as const, messages, tools, context };
+    if (context.length > MAX_CONTEXT_LENGTH) return null;
+
+    return { kind: "chat" as const, messages: raw.messages, tools, context };
   }
 
   const prompt = String(raw.prompt ?? "");
