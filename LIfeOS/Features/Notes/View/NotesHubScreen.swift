@@ -26,6 +26,7 @@ struct NotesHubScreen: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
+    @Environment(\.modelContext) private var context
 
     /// Pushed navigation: the phone's whole journey, and the shelf column's
     /// own stack on an iPad. A page is only ever on here when there is no
@@ -47,11 +48,16 @@ struct NotesHubScreen: View {
     @State private var newFolderBucket: NoteBucket?
     @State private var renamingFolder: UUID?
     @State private var folderName = ""
+    /// The phone's Inbox stream, above the pushed Library. Owned here rather
+    /// than by `NoteInboxScreen` so the shell can hand it the same
+    /// `ModelContext` it hands everything else.
+    @State private var inbox = NoteInboxViewModel()
 
     enum NoteRoute: Hashable {
         case shelf
         case page(UUID)
         case habits
+        case library
     }
 
     var body: some View {
@@ -229,26 +235,23 @@ struct NotesHubScreen: View {
         )
     }
 
-    /// Phone. The library is the root screen, so the first thing someone sees
-    /// is the shape of the system rather than a page of one folder's contents.
+    /// Phone. The Inbox stream is the root screen, so the first thing someone
+    /// sees is a composer ready to write in, rather than a shelf to file into.
+    /// The Library is a push away rather than the front door.
     private var compactShell: some View {
         NavigationStack(path: $path) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Library")
-                    .font(LifeOSType.display)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.horizontal, layout.gutter)
-                    .padding(.top, 4)
-
-                library
-            }
+            NoteInboxScreen(
+                model: inbox,
+                library: model,
+                onOpen: { open($0) },
+                onOpenLibrary: { path.append(.library) }
+            )
             .padding(.bottom, layout.contentBottomInset)
             .background(LifeOSTokens.canvas.resolve(scheme))
             .navigationDestination(for: NoteRoute.self, destination: destination)
-            .onChange(of: model.query) { _, query in
-                // Typing in the rail's search field on a phone should show
-                // results, and results live on the shelf.
-                if !query.isEmpty, path.isEmpty { path = [.shelf] }
+            .onAppear {
+                inbox.attach(context)
+                inbox.load()
             }
         }
     }
@@ -271,6 +274,22 @@ struct NotesHubScreen: View {
                 onDelete: { plan.delete(id: $0) }
             )
             .navigationTitle("Habits")
+        case .library:
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Library")
+                    .font(LifeOSType.display)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .padding(.horizontal, layout.gutter)
+                    .padding(.top, 4)
+
+                library
+            }
+            .background(LifeOSTokens.canvas.resolve(scheme))
+            .onChange(of: model.query) { _, query in
+                // Typing in the rail's search field should show results, and
+                // results live on the shelf.
+                if !query.isEmpty { path.append(.shelf) }
+            }
         }
     }
 
