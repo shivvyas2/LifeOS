@@ -596,9 +596,6 @@ struct RootView: View {
         if events > 0 {
             figures.append(ProfileStat("Events", "\(events)"))
         }
-        if notes.snapshot.totalCount > 0 {
-            figures.append(ProfileStat("Pages", "\(notes.snapshot.totalCount)"))
-        }
         let scored = life.cards.count { $0.score != nil }
         if scored > 0 {
             figures.append(ProfileStat("Sectors scored", "\(scored)"))
