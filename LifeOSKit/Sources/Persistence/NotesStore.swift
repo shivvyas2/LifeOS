@@ -219,6 +219,26 @@ public struct NotesStore {
             .map { card($0, folderNames: names) }
     }
 
+    /// The rows one chip shows. The single place a chip's meaning lives, so
+    /// the view never decides what "All" includes.
+    public func stream(for chip: NoteStreamChip) throws -> NoteStream {
+        switch chip {
+        case .inbox:
+            return .cards(try inbox())
+
+        case .all:
+            let names = try folderNames()
+            return .cards(
+                try documents(includeArchived: false)
+                    .sorted { $0.updatedAt > $1.updatedAt }
+                    .map { card($0, folderNames: names) }
+            )
+
+        case .todos:
+            return .tasks(try indexedTasks(openOnly: true))
+        }
+    }
+
     /// The page a `[[link]]` points at, matched on title. Nil when nothing
     /// carries that title yet, which is the cue to offer creating it.
     public func document(titled title: String) throws -> NoteDocument? {
