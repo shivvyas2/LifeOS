@@ -94,6 +94,10 @@ struct RootView: View {
     ///
     /// Compact width never hides it: the bar lies along the bottom there, where
     /// it overlaps nothing that is being read.
+    /// Whether the collapsed action fan is open. Only ever true off the home
+    /// tab, which is the only place the fan is drawn.
+    @State private var fanOpen = false
+
     @State private var isRailVisible = true
     @State private var railReturnTask: Task<Void, Never>?
 
@@ -201,7 +205,10 @@ struct RootView: View {
             }
         }
         // A tab change is navigation, not content work, so the rail is wanted.
-        .onChange(of: tab) { _, _ in showRail() }
+        .onChange(of: tab) { _, _ in
+            showRail()
+            fanOpen = false
+        }
         .task {
             attachAll()
             reloadAll()
@@ -228,6 +235,8 @@ struct RootView: View {
         ZStack(alignment: .bottomTrailing) {
             content
 
+            fanScrim
+
             PillNavBar(selection: $tab, items: navItems)
                 .frame(maxWidth: .infinity)          // centers the pill
                 .padding(.bottom, 12)
@@ -243,14 +252,10 @@ struct RootView: View {
                 // and hands the space back.
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
-            VStack(spacing: 14) {
-                assistantButton
-                coachButton
-                quickLogButton
-            }
-            .padding(.trailing, metrics.gutter)
-            .padding(.bottom, metrics.fabBottomInset)
-            .ignoresSafeArea(.keyboard, edges: .bottom)
+            actionFan
+                .padding(.trailing, metrics.gutter)
+                .padding(.bottom, metrics.fabBottomInset)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
 
             whoopModal
         }
@@ -302,14 +307,11 @@ struct RootView: View {
                             .accessibilityAction { showRail() }
                     }
                 }
+                .overlay { fanScrim }
                 .overlay(alignment: .bottomTrailing) {
-                    VStack(spacing: 14) {
-                        assistantButton
-                        coachButton
-                        quickLogButton
-                    }
-                    .padding(.trailing, metrics.gutter)
-                    .padding(.bottom, metrics.fabBottomInset)
+                    actionFan
+                        .padding(.trailing, metrics.gutter)
+                        .padding(.bottom, metrics.fabBottomInset)
                 }
 
             whoopModal
@@ -355,6 +357,13 @@ struct RootView: View {
                                 Image(systemName: "calendar")
                             }
                             .accessibilityLabel("Month calendar")
+                        }
+                        // Home is the one screen that shows all three actions
+                        // at once, laid flat across the top. Everywhere else
+                        // they are collapsed into the corner fan, so this bar
+                        // is the only place the set is ever fully visible.
+                        ToolbarItem(placement: .topBarTrailing) {
+                            ActionFan(actions: quickActions, arrangement: .row)
                         }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showSettings = true } label: {
@@ -427,70 +436,62 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var coachButton: some View {
-        Button {
-            showCoach = true
-        } label: {
-            Image(systemName: "message.fill")
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Circle().strokeBorder(
-                                Color.white.opacity(scheme == .dark ? 0.2 : 0.55),
-                                lineWidth: 1
-                            )
-                        }
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16),
-                                radius: 10, y: 4)
-                )
-        }
-        .accessibilityLabel("LIFO")
+    /// The three free-floating actions, defined once and drawn in whichever
+    /// arrangement the current tab calls for.
+    ///
+    /// Quick log is the prominent one: it is the only one of the three that
+    /// writes something, and it is the one people reach for most.
+    private var quickActions: [QuickAction] {
+        [
+            // Not a bare `calendar`: the month button in Today's top bar is
+            // already that glyph, and on home the two now sit in the same bar.
+            QuickAction(id: "assistant", systemImage: "calendar.badge.clock", label: "Calendar assistant") {
+                showAssistant = true
+            },
+            QuickAction(id: "coach", systemImage: "message.fill", label: "LIFO") {
+                showCoach = true
+            },
+            QuickAction(id: "quickLog", systemImage: "plus", label: "Quick log", isProminent: true) {
+                showQuickLog = true
+            },
+        ]
     }
 
-    private var assistantButton: some View {
-        Button {
-            showAssistant = true
-        } label: {
-            Image(systemName: "calendar")
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Circle().strokeBorder(
-                                Color.white.opacity(scheme == .dark ? 0.2 : 0.55),
-                                lineWidth: 1
-                            )
-                        }
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.16),
-                                radius: 10, y: 4)
-                )
+    /// Off the home tab only. Home draws the same three actions flat across its
+    /// top bar, so a fan in the corner there would be the same three buttons
+    /// twice.
+    @ViewBuilder
+    private var actionFan: some View {
+        if tab != .today {
+            ActionFan(actions: quickActions, arrangement: .fan, isOpen: $fanOpen)
         }
-        .accessibilityLabel("Calendar assistant")
     }
 
-    private var quickLogButton: some View {
-        Button {
-            showQuickLog = true
-        } label: {
-            Image(systemName: "plus")
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
-                .frame(width: 56, height: 56)
-                .background(
-                    Circle()
-                        .fill(LifeOSTokens.fabFill.resolve(scheme))
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.2),
-                                radius: 10, y: 4)
-                )
+    /// Catches the tap that closes an open fan. Dims the content rather than
+    /// being invisible, because a fan that has taken over the corner has taken
+    /// over the screen and should say so.
+    ///
+    /// Deliberately below the pill bar in the compact shell: navigating away is
+    /// a reasonable thing to do with the fan open, and a scrim over the bar
+    /// would make that take two taps.
+    @ViewBuilder
+    private var fanScrim: some View {
+        if fanOpen {
+            Rectangle()
+                .fill(.black.opacity(scheme == .dark ? 0.34 : 0.16))
+                .ignoresSafeArea()
+                .transition(.opacity)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        fanOpen = false
+                    }
+                }
+                .accessibilityLabel("Close actions")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction {
+                    fanOpen = false
+                }
         }
-        .accessibilityLabel("Quick log")
     }
 
     private func selectHealthDate(_ date: Date) {
