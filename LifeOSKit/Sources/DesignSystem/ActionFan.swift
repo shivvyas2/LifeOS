@@ -56,11 +56,15 @@ public struct ActionFan: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The arc the items travel along, in degrees counterclockwise from the
-    /// trailing edge. Stops at 160 rather than 180 so the last item sits above
-    /// the pill bar instead of beside it.
+    /// trailing edge. Stops short of 180 so the last item sits above the pill
+    /// bar rather than beside it.
     private let arcStart: Double = 90
-    private let arcEnd: Double = 160
-    private let radius: CGFloat = 86
+    private let arcEnd: Double = 170
+    /// Set by the arc, not by taste. Adjacent items are `2r sin(dTheta/2)`
+    /// apart, so with three items across 80 degrees a radius under about 76
+    /// puts two 52pt circles through each other. 106 leaves roughly 20pt of
+    /// air between them, which is the difference between a fan and a pile.
+    private let radius: CGFloat = 106
     private let diameter: CGFloat = 52
     private let prominentDiameter: CGFloat = 56
     /// Fits a 44pt navigation bar with room either side.
@@ -89,7 +93,7 @@ public struct ActionFan: View {
     /// holds. A 52pt glass circle does not fit a 44pt bar, and three of them
     /// across the top of a screen is a toolbar pretending to be a dock.
     private var row: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             ForEach(actions) { action in
                 button(action)
             }
@@ -178,6 +182,7 @@ public struct ActionFan: View {
     // MARK: - The button, written once
 
     private func button(_ action: QuickAction, onTap: @escaping () -> Void = {}) -> some View {
+        let filled = isFilled(action)
         let size = self.size(prominent: action.isProminent)
         return Button {
             onTap()
@@ -186,12 +191,12 @@ public struct ActionFan: View {
             Image(systemName: action.systemImage)
                 .font(arrangement == .row ? LifeOSType.body.weight(.medium) : LifeOSType.sectionTitle)
                 .foregroundStyle(
-                    action.isProminent
+                    filled
                     ? LifeOSTokens.fabGlyph.resolve(scheme)
                     : LifeOSTokens.primaryText.resolve(scheme)
                 )
                 .frame(width: size, height: size)
-                .background(background(prominent: action.isProminent))
+                .background(background(prominent: filled))
         }
         .accessibilityLabel(action.label)
     }
@@ -199,8 +204,18 @@ public struct ActionFan: View {
     private func size(prominent: Bool) -> CGFloat {
         switch arrangement {
         case .row: rowDiameter
-        case .fan: prominent ? prominentDiameter : diameter
+        case .fan: diameter
         }
+    }
+
+    /// Prominence is a row idea only.
+    ///
+    /// In the fan the trigger is already the filled circle, and a second one
+    /// out on the arc reads as a second trigger rather than as the important
+    /// action. Uniform glass items also keep the arc evenly spaced, since one
+    /// item four points wider than its neighbours pushes into them.
+    private func isFilled(_ action: QuickAction) -> Bool {
+        arrangement == .row && action.isProminent
     }
 
     /// Glass in the fan, where the buttons float over somebody's content and
