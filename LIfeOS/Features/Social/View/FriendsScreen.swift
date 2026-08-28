@@ -69,6 +69,12 @@ struct FriendsScreen: View {
             VStack(alignment: .leading, spacing: 22) {
                 searchField
 
+                if let warning = viewModel.publishWarning {
+                    Text(warning)
+                        .font(LifeOSType.secondary)
+                        .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+                }
+
                 if let error = viewModel.errorMessage {
                     Text(error)
                         .font(LifeOSType.secondary)

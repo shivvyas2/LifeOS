@@ -26,6 +26,10 @@ struct ProfileEditSheet: View {
     @State private var draftPhoto: Data?
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var isSaving = false
+    /// Set when the row could not be published. The sheet stays open showing
+    /// this, because a profile that never reached the server is a profile
+    /// nobody can find, and that is not something to discover weeks later.
+    @State private var publishError: String?
 
     init(profile: LocalProfile, photo: Data?, onSave: @escaping (LocalProfile, Data?) -> Void) {
         self.profile = profile
@@ -40,6 +44,13 @@ struct ProfileEditSheet: View {
             GradientCanvas(hue: .habits) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
+                        if let publishError {
+                            Text(publishError)
+                                .font(LifeOSType.secondary)
+                                .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
                         photoPicker
                             .frame(maxWidth: .infinity)
 
@@ -124,10 +135,14 @@ struct ProfileEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    // "Close anyway" once a publish has failed: the local copy
+                    // is already written, so leaving costs only being findable,
+                    // and trapping someone in a sheet they cannot satisfy is
+                    // worse than letting them out informed.
+                    Button(publishError == nil ? "Cancel" : "Close anyway") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
+                    Button(publishError == nil ? "Save" : "Try again") { Task { await save() } }
                         .disabled(isSaving)
                 }
             }
@@ -185,14 +200,20 @@ struct ProfileEditSheet: View {
     private func save() async {
         isSaving = true
         defer { isSaving = false }
+        publishError = nil
 
         // Local first: this is what the app renders, so the change lands even
         // if the network does not.
         onSave(draft, draftPhoto)
-        dismiss()
 
+        // Dismissal waits for the publish, though, which it did not use to.
+        // The row is what friend search reads, so a save that only ever
+        // reached the device leaves someone invisible to everyone looking for
+        // them, while their own screen shows the new name back and tells them
+        // it worked. Waiting costs a spinner; not waiting cost a silence
+        // nobody could debug.
         guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey,
-              let session = KeychainAuthSessionStore().load() else { return }
+              let session = KeychainAuthSessionStore().load() else { dismiss(); return }
 
         let profiles = ProfileClient(baseURL: url, anonKey: key)
         var profile = RemoteProfile(
@@ -207,19 +228,36 @@ struct ProfileEditSheet: View {
         // The picture goes first, so the row never points at an object that
         // does not exist. Removing one is a delete rather than a null: leaving
         // the object behind would keep serving a face the person took down.
-        if let photo = draftPhoto {
-            profile.avatarPath = try? await profiles.uploadAvatar(
-                photo, userID: session.userID, accessToken: session.accessToken
-            )
-        } else {
-            try? await profiles.deleteAvatar(
-                userID: session.userID, accessToken: session.accessToken
-            )
-        }
+        do {
+            if let photo = draftPhoto {
+                profile.avatarPath = try await profiles.uploadAvatar(
+                    photo, userID: session.userID, accessToken: session.accessToken
+                )
+            } else {
+                try await profiles.deleteAvatar(
+                    userID: session.userID, accessToken: session.accessToken
+                )
+            }
 
-        try? await profiles.save(
-            profile, userID: session.userID, accessToken: session.accessToken
-        )
+            try await profiles.save(
+                profile, userID: session.userID, accessToken: session.accessToken
+            )
+            dismiss()
+        } catch {
+            // Kept open, with the reason. The local copy is already saved, so
+            // "Close anyway" loses nothing except being findable, and that is
+            // exactly the thing worth telling someone about.
+            publishError = ProfileEditSheet.publishReason(error)
+        }
+    }
+
+    /// A failure a person can act on, or at least report.
+    static func publishReason(_ error: Error) -> String {
+        let urlError = error as? URLError
+        if urlError?.code == .notConnectedToInternet || urlError?.code == .networkConnectionLost {
+            return "No connection, so your profile is saved on this device but not published yet. Others will not find you in search until it is."
+        }
+        return "Saved on this device, but publishing it failed: \(error.localizedDescription). Others will not find you in search until it succeeds."
     }
 
     /// Downsized before it is kept, the same as at signup: this is displayed

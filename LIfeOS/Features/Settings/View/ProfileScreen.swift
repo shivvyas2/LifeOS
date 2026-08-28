@@ -340,12 +340,20 @@ struct ProfileScreen: View {
             }
             .buttonStyle(.plain)
 
+            // Labelled, not a bare glyph. Two people in a circle is the icon
+            // every app uses for something different, and this was the only
+            // door to friends in the whole app: nobody found it, which is a
+            // feature that may as well not exist.
             Button { showFriends = true } label: {
-                Image(systemName: "person.2.fill")
-                    .font(LifeOSType.body.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .glassEffect(.regular.interactive())
+                HStack(spacing: 7) {
+                    Image(systemName: "person.2.fill")
+                    Text("Friends")
+                }
+                .font(LifeOSType.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(height: 52)
+                .glassEffect(.regular.interactive())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Friends")

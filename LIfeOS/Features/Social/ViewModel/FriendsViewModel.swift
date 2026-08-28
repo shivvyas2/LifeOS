@@ -32,6 +32,13 @@ final class FriendsViewModel {
     /// One quiet sentence for the screen. Never an alert: a failed friend
     /// request is not an emergency.
     private(set) var errorMessage: String?
+    /// Why this device's own profile row is not on the server, if it is not.
+    ///
+    /// Separate from `errorMessage` because `load()` clears that one whenever
+    /// a reload succeeds, and "nobody can find you" outlives a successful
+    /// friend list fetch. The two say different things and must not overwrite
+    /// each other.
+    private(set) var publishWarning: String?
 
     private let sessions: any AuthSessionStoring
     private var myUserID: UUID?
@@ -61,9 +68,22 @@ final class FriendsViewModel {
         }
         myUserID = userID
 
+        // Publishing this device's name is what makes the person findable, so
+        // a failure here is the difference between having friends and not. It
+        // used to be discarded.
         let name = ProfileStore.load().fullName
         if let api, !name.isEmpty {
-            try? await api.upsertMyProfile(accessToken: session.accessToken, userID: userID, displayName: name)
+            do {
+                try await api.upsertMyProfile(
+                    accessToken: session.accessToken, userID: userID, displayName: name
+                )
+                publishWarning = nil
+            } catch {
+                publishWarning = Self.reason("Others may not find you: publishing your profile failed", error)
+            }
+        } else if name.isEmpty {
+            // No name, no row, no search result. Silent until now.
+            publishWarning = "Add your name in Edit profile so people can find you."
         }
 
         await load()
