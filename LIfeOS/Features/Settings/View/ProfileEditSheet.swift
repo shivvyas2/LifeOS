@@ -110,6 +110,11 @@ struct ProfileEditSheet: View {
                             }
                         }
                     }
+                    // Capped and centred rather than filling the pane. An
+                    // iPad form sheet is wide enough that full-width rows put
+                    // a label and its value at opposite ends of the screen.
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 40)
