@@ -62,4 +62,32 @@ import Foundation
         let decoded = try JSONDecoder().decode(Evidence.self, from: data)
         #expect(decoded == original)
     }
+
+    @Test func proposedValueKeepsTheFractionThatProposedScoreRounds() {
+        let evidence = Evidence([
+            EvidenceRow(label: "a", value: "a", normalised: 0.64, weight: 1)
+        ])
+        #expect(evidence.proposedValue == 6.4)
+        #expect(evidence.proposedScore == 6)
+    }
+
+    @Test func proposedScoreIsAlwaysTheRoundedProposedValue() {
+        let evidence = Evidence([
+            EvidenceRow(label: "a", value: "a", normalised: 0.25, weight: 3),
+            EvidenceRow(label: "b", value: "b", normalised: 0.9, weight: 1),
+        ])
+        let value = try! #require(evidence.proposedValue)
+        #expect(evidence.proposedScore == Int(value.rounded()))
+    }
+
+    @Test func evidenceWithNoRowsHasNoProposedValue() {
+        #expect(Evidence().proposedValue == nil)
+    }
+
+    @Test func rowsWithNoWeightHaveNoProposedValue() {
+        let evidence = Evidence([
+            EvidenceRow(label: "context", value: "note", normalised: 0.8, weight: 0)
+        ])
+        #expect(evidence.proposedValue == nil)
+    }
 }

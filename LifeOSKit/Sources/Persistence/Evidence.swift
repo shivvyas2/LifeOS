@@ -34,15 +34,22 @@ public struct Evidence: Codable, Sendable, Equatable {
 
     public var isEmpty: Bool { rows.isEmpty }
 
-    /// The weighted mean of the rows, on a 0...10 scale.
+    /// The weighted mean of the rows, on a 0...10 scale, unrounded.
     ///
     /// `nil` when there is nothing to go on. Deliberately not zero: a sector
     /// with no evidence has not been judged badly, it has not been judged.
-    public var proposedScore: Int? {
+    public var proposedValue: Double? {
         guard !rows.isEmpty else { return nil }
         let totalWeight = rows.reduce(0) { $0 + $1.weight }
         guard totalWeight > 0 else { return nil }
         let weighted = rows.reduce(0) { $0 + $1.normalised * $1.weight }
-        return Int(((weighted / totalWeight) * 10).rounded())
+        return (weighted / totalWeight) * 10
+    }
+
+    /// `proposedValue`, rounded to the whole number a score is recorded as.
+    /// Expressed in terms of it so a projection sorting on the unrounded
+    /// value can never rank against a different number than the one shown.
+    public var proposedScore: Int? {
+        proposedValue.map { Int($0.rounded()) }
     }
 }
