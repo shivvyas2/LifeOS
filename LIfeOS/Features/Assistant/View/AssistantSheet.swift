@@ -125,31 +125,56 @@ struct AssistantSheet: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// The most recent thing LIFO said. It always carries an agenda card, even
+    /// when the turn called no tool: a reply about the schedule that draws no
+    /// schedule is the text-only answer this screen was changed to stop
+    /// producing. Older replies keep a card only if they actually touched
+    /// events, so scrolling back through twenty turns is not twenty week
+    /// strips.
+    private var latestAssistantID: UUID? {
+        model.messages.last { $0.role == .assistant }?.id
+    }
+
+    @ViewBuilder
     private func bubble(_ message: ChatMessageSnapshot) -> some View {
-        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
-            Text(message.text)
-                .font(LifeOSType.secondary)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(message.role == .user
-                              ? AnyShapeStyle(LifeOSTokens.fabFill.resolve(scheme).opacity(0.15))
-                              : AnyShapeStyle(.ultraThinMaterial))
-                )
-            // The events the turn actually looked at, drawn rather than left
-            // for the sentence above to describe. Only under the assistant's
-            // own replies: a card under the question would be answering it
-            // before the assistant has.
-            if message.role == .assistant, let events = model.eventsByMessage[message.id], !events.isEmpty {
+        switch message.role {
+        case .user: userBubble(message)
+        default: assistantReply(message)
+        }
+    }
+
+    /// Still a bubble, and deliberately: the question is a transcript entry,
+    /// and the one thing it must do is not compete with the answer under it.
+    private func userBubble(_ message: ChatMessageSnapshot) -> some View {
+        Text(message.text)
+            .font(LifeOSType.secondary)
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(LifeOSTokens.fabFill.resolve(scheme).opacity(0.15))
+            )
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func assistantReply(_ message: ChatMessageSnapshot) -> some View {
+        let touched = model.eventsByMessage[message.id] ?? []
+        let drawsAgenda = model.isAuthorized
+            && (!touched.isEmpty || message.id == latestAssistantID)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            InsightCallout(text: message.text)
+
+            // The events the turn was about, drawn rather than left for the
+            // sentence above to describe.
+            if drawsAgenda {
                 AssistantAgendaCard(
-                    touched: events,
+                    touched: touched,
                     events: { model.events(on: $0) },
                     onTapEvent: { eventSheet = .edit($0) },
                     onAddEvent: { eventSheet = .create(on: $0) }
                 )
-                .padding(.top, 2)
             }
 
             if !message.toolSummaries.isEmpty {
@@ -164,7 +189,7 @@ struct AssistantSheet: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func confirmationCard(_ write: PendingWrite) -> some View {
