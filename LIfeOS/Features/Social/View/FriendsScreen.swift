@@ -18,6 +18,7 @@ struct FriendsScreen: View {
     /// `navigationDestination(item:)`.
     @State private var openChat: SocialProfile?
     @State private var showChat = false
+    @State private var showInbox = false
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -40,6 +41,34 @@ struct FriendsScreen: View {
         }
         .navigationTitle("Friends")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showInbox = true } label: {
+                    Image(systemName: "tray")
+                        .overlay(alignment: .topTrailing) {
+                            // Counts requests only. A conversation is
+                            // something to return to, not something owed, and
+                            // badging it would make the app look like it is
+                            // asking for something whenever a friend says
+                            // hello.
+                            if viewModel.requests.count > 0 {
+                                Circle()
+                                    .fill(LifeOSTokens.accent)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 4, y: -3)
+                            }
+                        }
+                }
+                .accessibilityLabel(
+                    viewModel.requests.isEmpty
+                        ? "Inbox"
+                        : "Inbox, \(viewModel.requests.count) requests waiting"
+                )
+            }
+        }
+        .navigationDestination(isPresented: $showInbox) {
+            InboxScreen()
+        }
         .task { await viewModel.appear() }
         .onChange(of: viewModel.query) { _, _ in
             viewModel.search()
@@ -237,24 +266,7 @@ struct FriendsScreen: View {
             .foregroundStyle(secondary)
     }
 
-    /// A 38pt pastel circle carrying the first letter of a name, coloured by
-    /// a stable hash of that name so the same person is always the same
-    /// colour. `String.hashValue` is randomised per launch, which would make
-    /// a friend a different colour every time the app opens, so the hash is
-    /// hand-rolled from the name's bytes instead.
     private func initialBubble(_ name: String) -> some View {
-        let hue = Self.stableHue(for: name)
-        let letter = name.trimmingCharacters(in: .whitespaces).first.map(String.init)?.uppercased() ?? "?"
-        return Text(letter)
-            .font(LifeOSType.rowTitle)
-            .foregroundStyle(hue.top)
-            .frame(width: 38, height: 38)
-            .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
-    }
-
-    private static func stableHue(for name: String) -> ModuleHue {
-        let hash = name.utf8.reduce(0) { ($0 &* 31) &+ Int($1) }
-        let index = abs(hash) % ModuleHue.allCases.count
-        return ModuleHue.allCases[index]
+        InitialBubble(name: name)
     }
 }
