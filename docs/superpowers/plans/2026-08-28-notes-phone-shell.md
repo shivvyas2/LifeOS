@@ -173,7 +173,7 @@ The chip row needs one place that decides what each chip means, and it needs to 
 
 **Interfaces:**
 - Consumes: `NotesStore.inbox() throws -> [NoteCardSnapshot]`, `NotesStore.cards(...)`, `NotesStore.documents(includeArchived:)`, `NotesStore.indexedTasks(openOnly:) throws -> [NoteTask]`.
-- Produces: `NoteStreamChip` (`.inbox`, `.all`, `.todos`) with `title: String` and `static let all: [NoteStreamChip]`; `NoteStream` (`.cards([NoteCardSnapshot])`, `.tasks([NoteTask])`) with `isEmpty: Bool`; and `NotesStore.stream(for: NoteStreamChip) throws -> NoteStream`.
+- Produces: `NoteStreamChip` (`.inbox`, `.all`, `.todos`) with `title: String` and `static let rowOrder: [NoteStreamChip]` (NOT `all`, which would collide with the `.all` case and fail to compile); `NoteStream` (`.cards([NoteCardSnapshot])`, `.tasks([NoteTask])`) with `isEmpty: Bool`; and `NotesStore.stream(for: NoteStreamChip) throws -> NoteStream`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -191,9 +191,9 @@ import SwiftData
     }
 
     @Test func theChipRowReadsInboxAllToDos() {
-        #expect(NoteStreamChip.all == [.inbox, .all, .todos])
+        #expect(NoteStreamChip.rowOrder == [.inbox, .all, .todos])
         #expect(NoteStreamChip.inbox.title == "Inbox")
-        #expect(NoteStreamChip.all.first?.title == "Inbox")
+        #expect(NoteStreamChip.all.title == "All")
         #expect(NoteStreamChip.todos.title == "To-dos")
     }
 
@@ -308,7 +308,10 @@ public enum NoteStreamChip: String, Sendable, CaseIterable, Equatable, Identifia
 
     /// Reading order in the chip row. Kept separate from `allCases` so that
     /// adding a chip later cannot silently reshuffle the row.
-    public static let all: [NoteStreamChip] = [.inbox, .all, .todos]
+    ///
+    /// Named `rowOrder` rather than `all` because this enum already has an
+    /// `all` case, and a static of the same name is an invalid redeclaration.
+    public static let rowOrder: [NoteStreamChip] = [.inbox, .all, .todos]
 }
 
 /// What a chip resolves to. Two shapes because to-dos are rows mirrored out
@@ -564,7 +567,7 @@ struct NoteInboxScreen: View {
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Space.x1) {
-                ForEach(NoteStreamChip.all) { chip in
+                ForEach(NoteStreamChip.rowOrder) { chip in
                     let isOn = model.chip == chip
                     Button { model.chip = chip } label: {
                         Text(chip.title)
