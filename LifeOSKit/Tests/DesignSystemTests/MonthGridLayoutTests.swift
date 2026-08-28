@@ -90,4 +90,50 @@ import Foundation
         )
         #expect(cells.allSatisfy { ($0.date == nil) == ($0.state == .blank) })
     }
+
+    // MARK: - Stepping between months
+
+    @Test func steppingKeepsTheDayNumberWhenTheMonthIsLongEnough() {
+        let moved = MonthGridLayout.stepping(
+            from: date(2026, 3, 1), by: 1, day: 15, calendar: calendar
+        )
+        #expect(calendar.dateComponents([.year, .month, .day], from: moved) ==
+                DateComponents(year: 2026, month: 4, day: 15))
+    }
+
+    /// The 31st has nowhere to land in February, so it lands on the last day
+    /// rather than spilling into March.
+    @Test func steppingClampsToTheLastDayOfAShorterMonth() {
+        let moved = MonthGridLayout.stepping(
+            from: date(2026, 1, 31), by: 1, day: 31, calendar: calendar
+        )
+        #expect(calendar.dateComponents([.year, .month, .day], from: moved) ==
+                DateComponents(year: 2026, month: 2, day: 28))
+    }
+
+    @Test func steppingIntoALeapFebruaryReachesTheTwentyNinth() {
+        let moved = MonthGridLayout.stepping(
+            from: date(2028, 1, 31), by: 1, day: 31, calendar: calendar
+        )
+        #expect(calendar.dateComponents([.day], from: moved).day == 29)
+    }
+
+    /// The reason the day number is carried rather than re-read: stepping out
+    /// of a short month must restore the day it went in with, so a walk
+    /// forward and back returns where it started.
+    @Test func steppingThroughAShortMonthDoesNotReduceTheDay() {
+        let january = date(2026, 1, 31)
+        let february = MonthGridLayout.stepping(from: january, by: 1, day: 31, calendar: calendar)
+        let march = MonthGridLayout.stepping(from: february, by: 1, day: 31, calendar: calendar)
+        #expect(calendar.dateComponents([.month, .day], from: march) ==
+                DateComponents(month: 3, day: 31))
+    }
+
+    @Test func steppingBackwardsCrossesTheYearBoundary() {
+        let moved = MonthGridLayout.stepping(
+            from: date(2026, 1, 10), by: -1, day: 10, calendar: calendar
+        )
+        #expect(calendar.dateComponents([.year, .month, .day], from: moved) ==
+                DateComponents(year: 2025, month: 12, day: 10))
+    }
 }
