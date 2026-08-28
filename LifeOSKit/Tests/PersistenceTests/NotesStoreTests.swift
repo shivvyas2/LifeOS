@@ -331,4 +331,60 @@ import SwiftData
 
         #expect(document.filedAt == filedAt)
     }
+
+    @Test func captureLandsAThoughtInTheInbox() throws {
+        let store = try makeStore()
+        let captured = try #require(try store.capture("Ring the dentist"))
+
+        #expect(captured.isInInbox)
+        #expect(try store.inbox().map(\.id).contains(captured.id))
+    }
+
+    /// The title is left empty on purpose: `displayTitle` already falls back
+    /// to the first textual block, so writing the text into both would show
+    /// the same sentence twice on the card.
+    @Test func aCapturedThoughtTakesItsTitleFromItsOnlyLine() throws {
+        let store = try makeStore()
+        let captured = try #require(try store.capture("Ring the dentist"))
+
+        #expect(captured.title.isEmpty)
+        #expect(captured.blocks.count == 1)
+        #expect(captured.blocks.first?.text == "Ring the dentist")
+        #expect(captured.displayTitle == "Ring the dentist")
+    }
+
+    @Test func captureCanMakeAToDoRatherThanAParagraph() throws {
+        let store = try makeStore()
+        let paragraph = try #require(try store.capture("A thought"))
+        let todo = try #require(try store.capture("A task", isTodo: true))
+
+        #expect(paragraph.blocks.first?.kind == .paragraph)
+        #expect(todo.blocks.first?.kind == .todo)
+        #expect(todo.blocks.first?.isChecked == false)
+    }
+
+    /// Return on an empty composer must be a no-op, not a blank page in the
+    /// stream. Returning nil rather than throwing lets the composer bind
+    /// Return unconditionally.
+    @Test func captureIgnoresTextThatIsOnlyWhitespace() throws {
+        let store = try makeStore()
+        #expect(try store.capture("   \n  ") == nil)
+        #expect(try store.inbox().isEmpty)
+    }
+
+    @Test func captureTrimsTheEdgesOfWhatWasTyped() throws {
+        let store = try makeStore()
+        let captured = try #require(try store.capture("  Ring the dentist  "))
+        #expect(captured.blocks.first?.text == "Ring the dentist")
+    }
+
+    /// A captured to-do must reach the task index, or the To-dos chip would
+    /// not show a thought captured as a task.
+    @Test func aCapturedToDoIsIndexedAsATask() throws {
+        let store = try makeStore()
+        let captured = try #require(try store.capture("A task", isTodo: true))
+
+        let tasks = try store.indexedTasks(openOnly: true)
+        #expect(tasks.contains { $0.documentID == captured.id && $0.text == "A task" })
+    }
 }

@@ -290,6 +290,29 @@ public struct NotesStore {
         return document
     }
 
+    /// One line of text, straight into the Inbox.
+    ///
+    /// The title is deliberately left empty: `NoteDocument.displayTitle`
+    /// already falls back to the first textual block, so a captured thought
+    /// reads correctly on a card without storing the same sentence twice.
+    ///
+    /// `filedAt` is untouched, which is what puts the page in the Inbox.
+    /// Filing it later through `move(_:to:folderID:)` is what stamps it and
+    /// takes it out again.
+    ///
+    /// Returns nil for text that is empty once trimmed, so the composer can
+    /// bind Return unconditionally instead of guarding at the call site.
+    @discardableResult
+    public func capture(_ text: String, isTodo: Bool = false) throws -> NoteDocument? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        return try createDocument(
+            bucket: .areas,
+            blocks: [NoteBlock(kind: isTodo ? .todo : .paragraph, text: trimmed)]
+        )
+    }
+
     /// Today's journal entry, created on first write rather than on first
     /// launch: an empty page dated every day is noise, not a journal.
     @discardableResult
