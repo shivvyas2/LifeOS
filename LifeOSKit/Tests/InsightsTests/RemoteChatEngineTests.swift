@@ -115,10 +115,48 @@ private final class ScriptedTransport: @unchecked Sendable {
             with: #require(transport.requests[1].httpBody)
         ) as? [String: Any]
         let messages = try #require(body?["messages"] as? [[String: Any]])
+        #expect(messages.count == 3)
+
+        // The assistant turn that asked for the tool must precede its
+        // result, or the thread we resend is a `tool` message with no
+        // preceding assistant message carrying that call id, which OpenAI
+        // rejects outright.
+        let askingMessage = messages[1]
+        #expect(askingMessage["role"] as? String == "assistant")
+        let toolCalls = try #require(askingMessage["tool_calls"] as? [[String: Any]])
+        #expect(toolCalls.contains { $0["id"] as? String == "call_1" })
+
         let toolMessage = try #require(messages.last)
         #expect(toolMessage["role"] as? String == "tool")
         #expect(toolMessage["tool_call_id"] as? String == "call_1")
         #expect(toolMessage["content"] as? String == "3 events")
+    }
+
+    /// The subtlest branch in the file: arguments that will not parse must
+    /// still be answered, or the provider is left waiting on a result that
+    /// never arrives and simply asks again, burning the remaining rounds.
+    @Test func unparseableArgumentsAreStillAnsweredRatherThanStranded() async throws {
+        let log = ToolLog()
+        let tool = RecordingTool(log: log)
+        let transport = ScriptedTransport([
+            #"{"tool_calls":[{"id":"call_1","name":"get_events","arguments":"not json"}]}"#,
+            #"{"output":{"text":"Sorted."}}"#,
+        ])
+
+        _ = try await engine(transport).reply(
+            to: [ChatTurnMessage(role: .user, text: "what is on today?")],
+            tools: [tool], invoker: invoker([tool])
+        )
+
+        let body = try JSONSerialization.jsonObject(
+            with: #require(transport.requests[1].httpBody)
+        ) as? [String: Any]
+        let messages = try #require(body?["messages"] as? [[String: Any]])
+        let toolMessage = try #require(messages.last)
+        #expect(toolMessage["role"] as? String == "tool")
+        #expect(toolMessage["tool_call_id"] as? String == "call_1")
+        let content = try #require(toolMessage["content"] as? String)
+        #expect(!content.isEmpty)
     }
 
     /// A model that will not stop calling tools must not be able to spend an
@@ -129,12 +167,19 @@ private final class ScriptedTransport: @unchecked Sendable {
         let call = #"{"tool_calls":[{"id":"call_1","name":"get_events","arguments":"{\"start\":\"2026-08-28\"}"}]}"#
         let transport = ScriptedTransport(Array(repeating: call, count: 20))
 
-        _ = try await engine(transport).reply(
+        let reply = try await engine(transport).reply(
             to: [ChatTurnMessage(role: .user, text: "loop")],
             tools: [tool], invoker: invoker([tool])
         )
 
-        #expect(transport.requests.count <= ToolInvoker.invocationLimit + 1)
+        // Exactly the cap plus one is guaranteed when the script never
+        // converges: any fewer means the loop gave up early, any more means
+        // it is unbounded.
+        #expect(transport.requests.count == ToolInvoker.invocationLimit + 1)
+
+        // The fall-through exists precisely to avoid an empty bubble when
+        // the model will not stop; pin the text it is supposed to produce.
+        #expect(reply.text == "That turned into more steps than I can take in one go. Try asking for one thing at a time.")
     }
 
     @Test func noSessionIsNotSignedIn() async {
