@@ -215,10 +215,22 @@ struct NotesHubScreen: View {
                 get: { model.selection },
                 set: { selection in
                     model.selection = selection
-                    // Selecting in the rail returns to the shelf. Leaving an
-                    // open page beside a rail that highlights a different
-                    // folder is the state that makes split views confusing.
-                    path.removeAll()
+                    // On an iPad, the shelf is the interior stack's own root,
+                    // so returning to it is a clear. Leaving an open page
+                    // beside a rail that highlights a different folder is the
+                    // state that makes split views confusing.
+                    //
+                    // On a phone the Library is itself pushed onto `path`
+                    // (`path == [.library]`), so clearing it here would pop
+                    // the Library away and eject back to the Inbox having
+                    // gone nowhere. Pushing the shelf on top of the Library
+                    // instead lands on the selection while keeping the
+                    // Library one back-tap away.
+                    if layout.isRegular {
+                        path.removeAll()
+                    } else {
+                        path = [.library, .shelf]
+                    }
                     openPage = nil
                 }
             ),
@@ -253,6 +265,16 @@ struct NotesHubScreen: View {
                 inbox.attach(context)
                 inbox.load()
             }
+        }
+        // Every other tab's model is reloaded from `RootView`'s
+        // `ModelContext.didSave` fan-out, but the Inbox's view model belongs
+        // to the notes tab alone, and hoisting it into `RootView` would give
+        // the app shell a model nothing else uses. Reloading when the stack
+        // pops back to the stream instead catches the case that fan-out
+        // exists for: editing a page's title and returning leaves a stale
+        // row here otherwise.
+        .onChange(of: path) { _, newPath in
+            if newPath.isEmpty { inbox.load() }
         }
     }
 

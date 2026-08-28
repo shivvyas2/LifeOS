@@ -170,8 +170,28 @@ struct NoteInboxScreen: View {
                 .foregroundStyle(primary)
                 .focused($composerFocused)
                 .lineLimit(1...4)
-                .onSubmit { model.capture() }
+                .onSubmit(submit)
                 .submitLabel(.return)
+
+            // A vertical-axis TextField treats Return from the software
+            // keyboard as a newline rather than a submit, so `onSubmit` above
+            // never fires from it; a visible send button, shown once there is
+            // something to send, is the control that actually works on a
+            // phone. Follows `LifoCoachScreen`'s composer, which solves the
+            // same problem the same way. `onSubmit` stays wired for a
+            // hardware keyboard's Return key.
+            if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button(action: submit) {
+                    Image(systemName: "arrow.up")
+                        .font(LifeOSType.label.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(LifeOSTokens.accent))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Send")
+                .transition(.scale.combined(with: .opacity))
+            }
 
             Button {
                 // A sketch has nothing to type, so it makes a page holding a
@@ -185,6 +205,7 @@ struct NoteInboxScreen: View {
             .buttonStyle(.plain)
             .accessibilityLabel("New sketch")
         }
+        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.draft.isEmpty)
         .padding(.horizontal, layout.gutter)
         .padding(.vertical, Space.x1)
         .background(
@@ -192,6 +213,14 @@ struct NoteInboxScreen: View {
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    /// Shared by the send button and `onSubmit`. Refocuses the field after a
+    /// successful capture, so writing five thoughts in a row is five
+    /// sentences rather than five re-taps of the field; a failed capture
+    /// (an empty draft) leaves focus alone.
+    private func submit() {
+        if model.capture() != nil { composerFocused = true }
     }
 }
 
@@ -270,7 +299,7 @@ private struct FilingSheet: View {
                 ForEach(NoteBucket.allCases.filter { $0 != .archive }) { bucket in
                     Section(bucket.title) {
                         Button("On \(bucket.title)") { onPick(bucket, nil) }
-                        ForEach(snapshot.folders[bucket] ?? []) { folder in
+                        ForEach(snapshot.folders(in: bucket)) { folder in
                             Button(folder.name) { onPick(bucket, folder.id) }
                         }
                     }
