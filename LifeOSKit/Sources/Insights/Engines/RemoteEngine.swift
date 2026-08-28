@@ -46,9 +46,28 @@ public enum RemoteWire {
     /// Hoisted out of `result` rather than nested inside it: Swift does not
     /// allow a type declaration inside a generic function.
     private struct Reply<T: Decodable>: Decodable { let output: T }
-    private struct Failure: Decodable {
+    fileprivate struct Failure: Decodable {
         let error: String
         let message: String?
+    }
+
+    /// The error a response describes, or nil when it describes success.
+    ///
+    /// Shared with the chat path rather than copied into it. Two mappings
+    /// that are meant to agree and are written twice do not stay agreeing:
+    /// the day someone adds a status here, the other one is silently a
+    /// version behind.
+    public static func failure(data: Data, status: Int) -> RemoteEngineError? {
+        guard !(200..<300).contains(status) else { return nil }
+        let failure = try? JSONDecoder().decode(Failure.self, from: data)
+        switch (status, failure?.error) {
+        case (429, _), (_, "exhausted"):
+            return .exhausted
+        case (403, _), (_, "refused"):
+            return .refused(failure?.message ?? "LIFO declined that one.")
+        default:
+            return .unavailable
+        }
     }
 
     /// Decodes a reply, or throws the error the status describes.
@@ -57,17 +76,7 @@ public enum RemoteWire {
     /// and a body that fails to parse on a failure response must still produce
     /// the right error rather than collapsing into "unavailable".
     public static func result<Output: Decodable>(data: Data, status: Int) throws -> Output {
-        guard (200..<300).contains(status) else {
-            let failure = try? JSONDecoder().decode(Failure.self, from: data)
-            switch (status, failure?.error) {
-            case (429, _), (_, "exhausted"):
-                throw RemoteEngineError.exhausted
-            case (403, _), (_, "refused"):
-                throw RemoteEngineError.refused(failure?.message ?? "LIFO declined that one.")
-            default:
-                throw RemoteEngineError.unavailable
-            }
-        }
+        if let error = failure(data: data, status: status) { throw error }
         do {
             return try JSONDecoder().decode(Reply<Output>.self, from: data).output
         } catch {
