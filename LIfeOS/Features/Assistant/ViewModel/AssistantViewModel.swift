@@ -33,6 +33,32 @@ final class AssistantViewModel {
     private var conversationID = UUID()
     private var broker = ConfirmationBroker()
 
+    /// This screen's own persisted conversation. Not
+    /// `ChatStore.latestConversationID()`: that lookup is global across every
+    /// `ChatMessage` row, and the coach is now a second writer into the same
+    /// store, so "whichever conversation was written to last" is no longer
+    /// necessarily this screen's own. A durable id kept here, distinct from
+    /// the coach's, preserves the one behaviour users actually rely on
+    /// (the assistant resumes its own last conversation) without depending
+    /// on a lookup that another screen's writes can now steer wrong.
+    private static let conversationIDKey = "assistant.conversationID"
+
+    /// `currentAccount` rather than `standard`: a conversation is one
+    /// account's, and two people sharing a device would otherwise resume
+    /// into each other's transcript. The store the id points at is already
+    /// per account, so a shared id resolves to nothing on the second
+    /// account and the assistant silently forgets its own history.
+    private static func loadOrCreateConversationID() -> UUID {
+        let defaults = UserDefaults.currentAccount
+        if let stored = defaults.string(forKey: conversationIDKey),
+           let id = UUID(uuidString: stored) {
+            return id
+        }
+        let id = UUID()
+        defaults.set(id.uuidString, forKey: conversationIDKey)
+        return id
+    }
+
     init(context: ModelContext) {
         self.chat = ChatStore(context: context)
         self.store = CalendarStore(context: context)
@@ -45,7 +71,7 @@ final class AssistantViewModel {
     }
 
     func appear() async {
-        conversationID = (try? chat.latestConversationID()) ?? UUID()
+        conversationID = Self.loadOrCreateConversationID()
         reloadMessages()
         isAuthorized = await eventKit.isAuthorized
         if isAuthorized { await sync.sync() }
@@ -131,11 +157,24 @@ final class AssistantViewModel {
             : []
 
         do {
+            let thread = ((try? chat.recent(conversationID: conversationID)) ?? [])
+                .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
+                                       text: $0.text) }
+
             let reply = try await AssistantTurn.run(
-                instructions: CalendarAssistant.instructions(authorized: isAuthorized),
-                prompt: prompt(for: text),
+                // The same text on both tiers: nothing in it is device-only,
+                // and the current date and time zone the context prefix
+                // carries are exactly what the cloud has no other way to
+                // know. Without them an update or a delete gets built
+                // against no notion of today.
+                instructions: ChatInstructions(
+                    CalendarAssistant.instructions(authorized: isAuthorized)
+                        + "\n\n" + calendarContext()
+                ),
+                thread: thread,
                 tools: tools,
-                broker: broker
+                broker: broker,
+                remote: ChatTier.remote()
             )
             let events = await collector.collected()
             try? chat.append(
@@ -152,7 +191,7 @@ final class AssistantViewModel {
         reloadMessages()
     }
 
-    private func prompt(for text: String) -> String {
+    private func calendarContext() -> String {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: .now)
         let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: dayStart) ?? dayStart
@@ -160,18 +199,7 @@ final class AssistantViewModel {
         let today = (try? store.events(from: dayStart, to: tomorrowStart)) ?? []
         let tomorrow = (try? store.events(from: tomorrowStart, to: dayAfterTomorrow)) ?? []
 
-        let history = ((try? chat.recent(conversationID: conversationID)) ?? [])
-            .dropLast()  // the just-appended user message; it goes in as the question
-            .map { "\($0.role == .user ? "User" : "Assistant"): \($0.text)" }
-            .joined(separator: "\n")
-
-        return """
-        \(CalendarAssistant.contextPrefix(now: .now, timeZone: .current, today: today, tomorrow: tomorrow))
-
-        \(history)
-
-        User: \(text)
-        """
+        return CalendarAssistant.contextPrefix(now: .now, timeZone: .current, today: today, tomorrow: tomorrow)
     }
 
     private func reloadMessages() {

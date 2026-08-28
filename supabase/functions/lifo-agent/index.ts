@@ -1,11 +1,13 @@
 import { json, resolveUser, serviceClient } from "../_shared/supabase.ts";
 import {
+  chatBody,
   classifyOpenAIFailure,
   DAILY_TOKEN_CAP,
   LifoRefusal,
   openAIBody,
+  parseChatReply,
   parseOutput,
-  taskConfig,
+  parseRequest,
 } from "../_shared/lifo.ts";
 
 // The context bundle in `prompt` is used for this one completion and
@@ -20,15 +22,13 @@ Deno.serve(async (req: Request) => {
   const userID = await resolveUser(req);
   if (!userID) return json({ error: "unauthorized" }, 401);
 
-  let task = "", prompt = "";
+  let parsed: ReturnType<typeof parseRequest>;
   try {
-    const body = await req.json();
-    task = String(body.task ?? "");
-    prompt = String(body.prompt ?? "");
+    parsed = parseRequest(await req.json());
   } catch {
     return json({ error: "invalid_body" }, 400);
   }
-  if (!taskConfig(task) || !prompt) return json({ error: "unknown_task" }, 400);
+  if (!parsed) return json({ error: "unknown_task" }, 400);
 
   const db = serviceClient();
   const { data: usage, error: usageError } = await db
@@ -43,6 +43,10 @@ Deno.serve(async (req: Request) => {
   }
   if ((usage?.tokens ?? 0) >= DAILY_TOKEN_CAP) return json({ error: "exhausted" }, 429);
 
+  const payload = parsed.kind === "chat"
+    ? chatBody(parsed.messages, parsed.tools, parsed.context)
+    : openAIBody(parsed.task, parsed.prompt);
+
   const started = Date.now();
   let reply: Response;
   try {
@@ -52,7 +56,7 @@ Deno.serve(async (req: Request) => {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(openAIBody(task, prompt)),
+      body: JSON.stringify(payload),
     });
   } catch {
     // DNS, timeout, connection reset: no billable call happened, so nothing
@@ -83,10 +87,17 @@ Deno.serve(async (req: Request) => {
   if (debitError) console.error(`lifo debit failed: ${debitError.code}`);
 
   try {
-    const { output } = parseOutput(task, body);
-    console.log(
-      `lifo task=${task} tokens=${tokens} ms=${Date.now() - started}`,
-    );
+    if (parsed.kind === "chat") {
+      // Not `reply`: that name is taken by the provider's Response above, and
+      // shadowing it here reads as though this were the same object.
+      const parsedChat = parseChatReply(body);
+      console.log(`lifo task=chat kind=${parsedChat.kind} tokens=${tokens} ms=${Date.now() - started}`);
+      return parsedChat.kind === "text"
+        ? json({ output: { text: parsedChat.text }, tokens }, 200)
+        : json({ tool_calls: parsedChat.toolCalls, tokens }, 200);
+    }
+    const { output } = parseOutput(parsed.task, body);
+    console.log(`lifo task=${parsed.task} tokens=${tokens} ms=${Date.now() - started}`);
     return json({ output, tokens }, 200);
   } catch (failure) {
     if (failure instanceof LifoRefusal) {

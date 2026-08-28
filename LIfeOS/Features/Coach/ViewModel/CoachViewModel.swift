@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 import SwiftData
 import Insights
 import Integrations
@@ -71,13 +72,20 @@ final class CoachViewModel {
             remote: remote,
             // Read per request rather than captured, so changing it in Settings
             // takes effect on the next question instead of the next launch.
-            preference: {
-                TierPreference(
-                    rawValue: UserDefaults.standard.string(forKey: TierPreference.storageKey) ?? ""
-                ) ?? .automatic
-            }
+            preference: { .current }
         )
     }()
+    /// This screen's own conversation. Not `ChatStore.latestConversationID()`,
+    /// which is global: the coach and the calendar assistant share one store,
+    /// and reusing whichever id was written last would let each of them read
+    /// the other's turns as its own history.
+    private let conversationID = UUID()
+
+    /// The cloud tier of the conversation, or nil when the project is not
+    /// configured. Built by `ChatTier` so the calendar assistant and this
+    /// screen cannot drift apart in how they reach the cloud.
+    private let chatRemote: (any ChatEngine)? = ChatTier.remote()
+
     private let speech = SpeechListener()
 
     /// Set by RootView; pulls the money and sector context that live in other
@@ -225,37 +233,72 @@ final class CoachViewModel {
                 sectors: extras?.sectors ?? [],
                 firstName: extras?.firstName
             )
-            let result = await router.run(AnswerTask(question: question), bundle)
-            switch result {
-            case .answered(let output), .degraded(let output):
-                answer = output.answer
-                history.append(LifoTurn(question: question, answer: output.answer))
+            let store = ChatStore(context: context)
+            try? store.append(conversationID: conversationID, role: .user, text: question)
+
+            let thread = ((try? store.recent(conversationID: conversationID)) ?? [])
+                .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
+                                       text: $0.text) }
+
+            do {
+                let reply = try await AssistantTurn.run(
+                    // One render per tier, not one render for both. The two
+                    // audiences carry different fields on purpose: `.onDevice`
+                    // includes HRV, SpO2, skin temperature and respiratory
+                    // rate, which are the raw Whoop series and stay on the
+                    // phone, and `.offDevice` leaves those out and carries the
+                    // money detail instead. Sending one render to both tiers
+                    // means picking which tier to be wrong for.
+                    instructions: ChatInstructions(
+                        onDevice: Self.coachInstructions(bundle, for: .onDevice),
+                        cloud: Self.coachInstructions(bundle, for: .offDevice)
+                    ),
+                    thread: thread,
+                    tools: [],
+                    broker: ConfirmationBroker(),
+                    remote: chatRemote
+                )
+                try? store.append(conversationID: conversationID, role: .assistant,
+                                  text: reply.text)
+                answer = reply.text
+                history.append(LifoTurn(question: question, answer: reply.text))
                 phase = .answered
                 status = "LIFO"
-                speak(output.answer)
-            case .refused(let reason):
+                speak(reply.text)
+            } catch RemoteEngineError.refused(let reason) {
                 fail(reason)
-            case .exhausted:
-                // The allowance, not the connection. Saying "cannot reach"
-                // invites a retry that cannot succeed until tomorrow.
+            } catch RemoteEngineError.exhausted {
                 fail("That is today's thinking budget used up. It resets tomorrow.")
-            case .unavailable:
-                // Three different causes wear this one case, and blaming Apple
-                // Intelligence for all of them was wrong the moment a cloud
-                // tier existed: a signed-out user has one fix, and it is not
-                // a device setting.
+            } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
+                // The on-device model's context window, not the network: the
+                // cloud message above and the Apple Intelligence prompt below
+                // both misdiagnose this as a connectivity or settings problem.
+                fail("That covered too much at once. Try asking about a shorter stretch.")
+            } catch {
                 if isSignedIn {
                     fail("LIFO could not reach the cloud just now. Try again in a moment.")
                 } else {
                     fail("LIFO thinks on this device with Apple Intelligence. Turn it on in Settings, or sign in to think in the cloud.")
                     needsAppleIntelligence = true
                 }
-            case .tooLarge:
-                fail("That covered too much at once. Try asking about a shorter stretch.")
             }
         } catch {
             fail("Could not load your metrics.")
         }
+    }
+
+    /// The data bundle as one tier is allowed to see it.
+    private static func coachInstructions(
+        _ bundle: ContextBundle, for audience: MetricsDigest.Audience
+    ) -> String {
+        """
+        You answer questions about one person's life: their health metrics, \
+        money, and life-sector scores.
+
+        Here is what their data shows:
+
+        \(bundle.promptLines(for: audience))
+        """
     }
 
     private func fail(_ message: String) {
