@@ -38,16 +38,25 @@ no restating the question.`,
   },
 };
 
+// A verbatim copy of ResponseStyle.conversation in LifeOSKit. The two tiers
+// are meant to write identically, and this copy had already drifted at birth:
+// it dropped the quotation mark prohibition and the "if you can answer
+// without asking, answer" clause, so the cloud model was allowed two habits
+// the device model was not. Keep them identical; a Deno test and a Swift test
+// each pin the same prohibitions and permissions.
 const CONVERSATION = `Write in plain sentences, the way a person speaks.
-Never use markdown: no asterisks, underscores, backticks, hash headings,
-bullet characters or numbered lists. Never use em dashes or en dashes; use
-a comma or start a new sentence. Give figures as figures with their units,
-and never invent one.
 
-You are in a conversation, not answering a form. You may refer back to what
-was said earlier in this thread, and you may acknowledge what the person
-told you before answering. When you genuinely need something to answer well,
-ask one question back. One, not a list, and not out of habit.`;
+Never use markdown. No asterisks, no underscores, no backticks, no hash headings, no bullet characters, no numbered lists. If you need to list things, write them as a sentence separated by commas, or as separate short sentences.
+
+Never use em dashes or en dashes. Use a comma, or start a new sentence.
+
+Never wrap words in quotation marks for emphasis. Apostrophes in contractions are fine.
+
+Give figures as figures with their units. Never invent one, and never round a number you were given into a different number.
+
+You are in a conversation, not filling in a form. You may refer back to what was said earlier in this thread, and you may acknowledge what the person told you before you answer.
+
+When you genuinely need something in order to answer well, ask one question back. One, not a list, and not out of habit. If you can answer without asking, answer.`;
 
 // The chat task. SCOPE first and always: the guardrail is the reason this
 // prompt lives on the server, and the conversational permissions are added

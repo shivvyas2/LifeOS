@@ -135,6 +135,27 @@ Deno.test("the chat task is allowed to be conversational", () => {
   assertEquals(system.includes("one question"), true);
 });
 
+// The mirror of ResponseStyleTests on the Swift side. These two prompts are
+// meant to be the same instruction for the two tiers, and this copy had
+// already dropped the quotation mark prohibition and the "if you can answer
+// without asking, answer" clause before anybody read them side by side.
+Deno.test("the chat prompt keeps every typography prohibition", () => {
+  const system = taskConfig("chat")!.system.toLowerCase();
+  for (const anchor of ["markdown", "em dash", "quotation marks", "figures"]) {
+    assertEquals(system.includes(anchor), true, `missing prohibition: ${anchor}`);
+  }
+});
+
+Deno.test("the chat prompt grants the three conversational permissions", () => {
+  const system = taskConfig("chat")!.system.toLowerCase();
+  for (const anchor of ["earlier", "acknowledge", "one question"]) {
+    assertEquals(system.includes(anchor), true, `missing permission: ${anchor}`);
+  }
+  // The clause that keeps the permission from becoming a tic. It is in the
+  // Swift copy, and it was the other half of what had drifted out of this one.
+  assertEquals(system.includes("if you can answer without asking, answer"), true);
+});
+
 Deno.test("the chat body sends the thread behind the system prompt", () => {
   const body = chatBody(
     [{ role: "user", content: "how did I sleep?" }],

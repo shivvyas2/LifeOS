@@ -83,6 +83,7 @@ import Testing
         let text = ResponseStyle.conversation.lowercased()
         #expect(text.contains("markdown"))
         #expect(text.contains("em dash"))
+        #expect(text.contains("quotation marks"))
         #expect(text.contains("figures"))
     }
 
@@ -91,7 +92,10 @@ import Testing
     @Test func conversationGrantsTheThreeThingsTheOneShotStyleForbids() {
         let text = ResponseStyle.conversation.lowercased()
         #expect(text.contains("earlier"))
+        #expect(text.contains("acknowledge"))
         #expect(text.contains("one question"))
+        // And the clause that keeps the third from becoming a tic.
+        #expect(text.contains("if you can answer without asking, answer"))
     }
 
     /// The instruction that serves cards has not been relaxed by accident.
