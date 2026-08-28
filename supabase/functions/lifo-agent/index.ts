@@ -88,11 +88,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (parsed.kind === "chat") {
-      const reply = parseChatReply(body);
-      console.log(`lifo task=chat kind=${reply.kind} tokens=${tokens} ms=${Date.now() - started}`);
-      return reply.kind === "text"
-        ? json({ output: { text: reply.text }, tokens }, 200)
-        : json({ tool_calls: reply.toolCalls, tokens }, 200);
+      // Not `reply`: that name is taken by the provider's Response above, and
+      // shadowing it here reads as though this were the same object.
+      const parsedChat = parseChatReply(body);
+      console.log(`lifo task=chat kind=${parsedChat.kind} tokens=${tokens} ms=${Date.now() - started}`);
+      return parsedChat.kind === "text"
+        ? json({ output: { text: parsedChat.text }, tokens }, 200)
+        : json({ tool_calls: parsedChat.toolCalls, tokens }, 200);
     }
     const { output } = parseOutput(parsed.task, body);
     console.log(`lifo task=${parsed.task} tokens=${tokens} ms=${Date.now() - started}`);

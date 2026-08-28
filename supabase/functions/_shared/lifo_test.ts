@@ -120,6 +120,14 @@ Deno.test("a reply whose required property has the wrong type throws", () => {
   );
 });
 
+// The chat task has no output schema and never had one that was read.
+// `parseChatReply` does no shape validation, because a chat completion is
+// either prose or tool calls and there is no one shape to check.
+Deno.test("the chat task declares no schema, because it validates none", () => {
+  assertEquals(taskConfig("chat")!.schema, undefined);
+  assertThrows(() => openAIBody("chat", "hi"));
+});
+
 Deno.test("the chat task still carries the scope guardrail", () => {
   const system = taskConfig("chat")!.system;
   for (const anchor of ["their own", "decline", "diagnos", "invest"]) {

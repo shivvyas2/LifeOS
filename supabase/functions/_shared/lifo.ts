@@ -18,7 +18,12 @@ talking to a professional where it matters. Never recommend specific
 investments or securities; keep money talk at budgeting and pattern level.
 Cite only numbers that appear in the data given to you; never invent one.`;
 
-const TASKS: Record<string, { model: string; system: string; schema: Record<string, unknown> }> = {
+// `schema` is optional because the chat task genuinely has none. A chat
+// completion may come back as prose or as tool calls, so there is no single
+// output shape to validate it against, and `parseChatReply` does not try.
+// Pointing chat at the answer task's schema, as this used to, made the entry
+// read as though chat replies were validated when nothing ever looked at it.
+const TASKS: Record<string, { model: string; system: string; schema?: Record<string, unknown> }> = {
   answer: {
     model: "gpt-5-mini",
     system: `${SCOPE}
@@ -64,7 +69,6 @@ When you genuinely need something in order to answer well, ask one question back
 TASKS.chat = {
   model: "gpt-5-mini",
   system: `${SCOPE}\n\n${CONVERSATION}`,
-  schema: TASKS.answer.schema,
 };
 
 export function taskConfig(task: string) {
@@ -74,6 +78,10 @@ export function taskConfig(task: string) {
 export function openAIBody(task: string, prompt: string): Record<string, unknown> {
   const config = taskConfig(task);
   if (!config) throw new Error(`unknown task: ${task}`);
+  // A one-shot task without a schema would be asked for typed JSON and given
+  // no shape to produce, which is a programming error rather than a request
+  // this could serve. The chat task never comes through here.
+  if (!config.schema) throw new Error(`task has no schema: ${task}`);
   return {
     model: config.model,
     messages: [
@@ -120,6 +128,7 @@ export function parseOutput(
 ): { output: Record<string, unknown>; tokens: number } {
   const config = taskConfig(task);
   if (!config) throw new Error(`unknown task: ${task}`);
+  if (!config.schema) throw new Error(`task has no schema: ${task}`);
 
   const reply = body as {
     choices?: { message?: { content?: string; refusal?: string } }[];

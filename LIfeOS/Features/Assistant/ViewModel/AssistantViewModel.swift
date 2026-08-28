@@ -43,8 +43,13 @@ final class AssistantViewModel {
     /// on a lookup that another screen's writes can now steer wrong.
     private static let conversationIDKey = "assistant.conversationID"
 
+    /// `currentAccount` rather than `standard`: a conversation is one
+    /// account's, and two people sharing a device would otherwise resume
+    /// into each other's transcript. The store the id points at is already
+    /// per account, so a shared id resolves to nothing on the second
+    /// account and the assistant silently forgets its own history.
     private static func loadOrCreateConversationID() -> UUID {
-        let defaults = UserDefaults.standard
+        let defaults = UserDefaults.currentAccount
         if let stored = defaults.string(forKey: conversationIDKey),
            let id = UUID(uuidString: stored) {
             return id
