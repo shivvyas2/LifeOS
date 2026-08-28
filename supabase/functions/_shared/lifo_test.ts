@@ -1,10 +1,13 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
+  chatBody,
   classifyOpenAIFailure,
   DAILY_TOKEN_CAP,
   LifoRefusal,
   openAIBody,
+  parseChatReply,
   parseOutput,
+  parseRequest,
   taskConfig,
 } from "./lifo.ts";
 
@@ -112,4 +115,125 @@ Deno.test("a reply whose required property has the wrong type throws", () => {
       usage: { total_tokens: 1 },
     })
   );
+});
+
+Deno.test("the chat task still carries the scope guardrail", () => {
+  const system = taskConfig("chat")!.system;
+  for (const anchor of ["their own", "decline", "diagnos", "invest"]) {
+    assertEquals(system.toLowerCase().includes(anchor), true, `missing: ${anchor}`);
+  }
+});
+
+// The whole point of the slice. If this drifts back to the one-shot
+// instruction, LIFO goes back to being a box that answers and stops.
+Deno.test("the chat task is allowed to be conversational", () => {
+  const system = taskConfig("chat")!.system.toLowerCase();
+  assertEquals(system.includes("earlier"), true);
+  assertEquals(system.includes("one question"), true);
+});
+
+Deno.test("the chat body sends the thread behind the system prompt", () => {
+  const body = chatBody(
+    [{ role: "user", content: "how did I sleep?" }],
+    [],
+  ) as { model: string; messages: { role: string }[]; tools?: unknown[] };
+  assertEquals(body.model, "gpt-5-mini");
+  assertEquals(body.messages[0].role, "system");
+  assertEquals(body.messages[1].role, "user");
+});
+
+// An empty tools array and an absent one mean different things to the
+// provider, and sending `tools: []` is rejected by some versions outright.
+Deno.test("no tools means the key is absent, not empty", () => {
+  const body = chatBody([{ role: "user", content: "hi" }], []) as Record<string, unknown>;
+  assertEquals("tools" in body, false);
+});
+
+Deno.test("tools are passed through with an auto choice", () => {
+  const tool = { type: "function", function: { name: "get_events" } };
+  const body = chatBody([{ role: "user", content: "hi" }], [tool]) as Record<string, unknown>;
+  assertEquals(body.tools, [tool]);
+  assertEquals(body.tool_choice, "auto");
+});
+
+Deno.test("an assistant tool call is normalised into the shape OpenAI accepts", () => {
+  const body = chatBody(
+    [{
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_1", name: "get_events", arguments: '{"start":"2026-08-28"}' }],
+    }],
+    [],
+  ) as { messages: Record<string, unknown>[] };
+  const call = (body.messages[1].tool_calls as Record<string, unknown>[])[0];
+  assertEquals(call.id, "call_1");
+  assertEquals(call.type, "function");
+  assertEquals(call.function, { name: "get_events", arguments: '{"start":"2026-08-28"}' });
+});
+
+Deno.test("a tool result message is already in OpenAI's shape and is left alone", () => {
+  const message = { role: "tool", tool_call_id: "call_1", content: "3 events" };
+  const body = chatBody([message], []) as { messages: Record<string, unknown>[] };
+  assertEquals(body.messages[1], message);
+});
+
+Deno.test("a text completion parses as text", () => {
+  const parsed = parseChatReply({
+    choices: [{ message: { content: "Six hours." } }],
+    usage: { total_tokens: 120 },
+  });
+  assertEquals(parsed, { kind: "text", text: "Six hours.", tokens: 120 });
+});
+
+Deno.test("a tool call completion parses as tool calls", () => {
+  const parsed = parseChatReply({
+    choices: [{
+      message: {
+        tool_calls: [{
+          id: "call_42",
+          function: { name: "get_events", arguments: '{"start":"2026-08-28"}' },
+        }],
+      },
+    }],
+    usage: { total_tokens: 90 },
+  }) as { kind: string; toolCalls: { id: string; name: string; arguments: string }[] };
+  assertEquals(parsed.kind, "tool_calls");
+  assertEquals(parsed.toolCalls[0].id, "call_42");
+  assertEquals(parsed.toolCalls[0].name, "get_events");
+  assertEquals(parsed.toolCalls[0].arguments, '{"start":"2026-08-28"}');
+});
+
+Deno.test("a refusal is a refusal on the chat path too", () => {
+  assertThrows(
+    () => parseChatReply({ choices: [{ message: { refusal: "Not something I cover." } }] }),
+    LifoRefusal,
+  );
+});
+
+// Load-bearing regression guard. Slice 1 must not change how the one-shot
+// tasks are served, and this is the test that notices if it did.
+Deno.test("the old prompt shape still parses as a prompt request", () => {
+  const parsed = parseRequest({ task: "answer", prompt: "Question: how did I sleep?" });
+  assertEquals(parsed, {
+    kind: "prompt",
+    task: "answer",
+    prompt: "Question: how did I sleep?",
+  });
+});
+
+Deno.test("a chat request parses as a chat request", () => {
+  const parsed = parseRequest({
+    task: "chat",
+    messages: [{ role: "user", content: "hi" }],
+    tools: [],
+  }) as { kind: string; messages: unknown[] };
+  assertEquals(parsed.kind, "chat");
+  assertEquals(parsed.messages.length, 1);
+});
+
+Deno.test("a request naming no known task is refused before any spend", () => {
+  assertEquals(parseRequest({ task: "exfiltrate", prompt: "hi" }), null);
+  assertEquals(parseRequest({ task: "answer" }), null);
+  assertEquals(parseRequest({ task: "chat", messages: [] }), null);
+  assertEquals(parseRequest("not an object"), null);
 });

@@ -38,6 +38,26 @@ no restating the question.`,
   },
 };
 
+const CONVERSATION = `Write in plain sentences, the way a person speaks.
+Never use markdown: no asterisks, underscores, backticks, hash headings,
+bullet characters or numbered lists. Never use em dashes or en dashes; use
+a comma or start a new sentence. Give figures as figures with their units,
+and never invent one.
+
+You are in a conversation, not answering a form. You may refer back to what
+was said earlier in this thread, and you may acknowledge what the person
+told you before answering. When you genuinely need something to answer well,
+ask one question back. One, not a list, and not out of habit.`;
+
+// The chat task. SCOPE first and always: the guardrail is the reason this
+// prompt lives on the server, and the conversational permissions are added
+// behind it rather than in place of it.
+TASKS.chat = {
+  model: "gpt-5-mini",
+  system: `${SCOPE}\n\n${CONVERSATION}`,
+  schema: TASKS.answer.schema,
+};
+
 export function taskConfig(task: string) {
   return TASKS[task] ?? null;
 }
@@ -103,4 +123,104 @@ export function parseOutput(
   const output = JSON.parse(message.content) as Record<string, unknown>;
   validateShape(config.schema, output);
   return { output, tokens: reply.usage?.total_tokens ?? 0 };
+}
+
+// The device's own wire format keeps tool_calls flat: {id, name, arguments}.
+// That is our format, not OpenAI's; the phone never learns OpenAI's message
+// schema, matching how parseChatReply already hands tool calls back flat.
+// OpenAI's chat completions API requires the nested {id, type, function}
+// shape, so this is the seam that translates outbound, right before the
+// request leaves for the provider. Everything else, including a tool result
+// message ({role: "tool", tool_call_id, content}), is already in OpenAI's
+// shape and passes through untouched.
+function toOpenAIMessage(message: unknown): unknown {
+  if (typeof message !== "object" || message === null) return message;
+  const raw = message as Record<string, unknown>;
+  if (!Array.isArray(raw.tool_calls)) return message;
+  return {
+    ...raw,
+    tool_calls: raw.tool_calls.map((call: unknown) => {
+      if (typeof call !== "object" || call === null || !("name" in call)) return call;
+      const flat = call as { id: string; name: string; arguments: string };
+      return {
+        id: flat.id,
+        type: "function",
+        function: { name: flat.name, arguments: flat.arguments },
+      };
+    }),
+  };
+}
+
+export function chatBody(
+  messages: unknown[],
+  tools: unknown[],
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model: TASKS.chat.model,
+    messages: [
+      { role: "system", content: TASKS.chat.system },
+      ...messages.map(toOpenAIMessage),
+    ],
+  };
+  // Absent rather than empty. The two are not the same to the provider, and
+  // an empty array is rejected outright by some versions.
+  if (tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = "auto";
+  }
+  return body;
+}
+
+export function parseChatReply(body: unknown) {
+  const reply = body as {
+    choices?: {
+      message?: {
+        content?: string;
+        refusal?: string;
+        tool_calls?: { id: string; function: { name: string; arguments: string } }[];
+      };
+    }[];
+    usage?: { total_tokens?: number };
+  };
+  const message = reply.choices?.[0]?.message;
+  if (!message) throw new Error("no choices in reply");
+  if (message.refusal) throw new LifoRefusal(message.refusal);
+
+  const tokens = reply.usage?.total_tokens ?? 0;
+
+  // Tool calls before content. A completion carrying both wants the tool run
+  // before it commits to prose, and answering with the prose strands it.
+  if (message.tool_calls && message.tool_calls.length > 0) {
+    return {
+      kind: "tool_calls" as const,
+      toolCalls: message.tool_calls.map((call) => ({
+        id: call.id,
+        name: call.function.name,
+        arguments: call.function.arguments,
+      })),
+      tokens,
+    };
+  }
+  if (!message.content) throw new Error("empty content");
+  return { kind: "text" as const, text: message.content, tokens };
+}
+
+// The door's whole validation, hoisted here so it is tested rather than
+// living inside Deno.serve where it is not.
+export function parseRequest(body: unknown) {
+  if (typeof body !== "object" || body === null) return null;
+  const raw = body as Record<string, unknown>;
+  const task = String(raw.task ?? "");
+  if (!taskConfig(task)) return null;
+
+  if (task === "chat") {
+    const messages = Array.isArray(raw.messages) ? raw.messages : [];
+    const tools = Array.isArray(raw.tools) ? raw.tools : [];
+    if (messages.length === 0) return null;
+    return { kind: "chat" as const, messages, tools };
+  }
+
+  const prompt = String(raw.prompt ?? "");
+  if (!prompt) return null;
+  return { kind: "prompt" as const, task, prompt };
 }
