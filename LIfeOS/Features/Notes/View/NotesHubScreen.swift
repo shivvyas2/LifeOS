@@ -287,8 +287,11 @@ struct NotesHubScreen: View {
             .background(LifeOSTokens.canvas.resolve(scheme))
             .onChange(of: model.query) { _, query in
                 // Typing in the rail's search field should show results, and
-                // results live on the shelf.
-                if !query.isEmpty { path.append(.shelf) }
+                // results live on the shelf. Guarded on the top of the stack,
+                // not on emptiness: the library is itself on the path by the
+                // time this fires, so an emptiness check would never pass,
+                // and no check at all stacks one shelf per keystroke.
+                if !query.isEmpty, path.last != .shelf { path.append(.shelf) }
             }
         }
     }
