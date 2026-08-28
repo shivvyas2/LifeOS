@@ -132,9 +132,17 @@ public struct SharedStatsClient: Sendable {
 
     private func perform(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw SocialAPIError.status(0) }
+        // Carries the server's sentence, the way `SocialAPI.perform` does.
+        // `SocialAPIError.status` gained its `message` on main while this
+        // branch was out, and the whole point of that change was that a
+        // refusal which does not say why is indistinguishable from any other
+        // refusal. Passing an empty string here would compile and quietly
+        // undo it for this client.
+        guard let http = response as? HTTPURLResponse else {
+            throw SocialAPIError.status(-1, message: "")
+        }
         guard (200..<300).contains(http.statusCode) else {
-            throw SocialAPIError.status(http.statusCode)
+            throw SocialAPIError.status(http.statusCode, message: SocialAPI.serverMessage(data))
         }
         return data
     }
