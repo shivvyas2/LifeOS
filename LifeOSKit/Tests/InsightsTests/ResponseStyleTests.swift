@@ -76,4 +76,35 @@ import Testing
             #expect(ResponseStyle.instruction.lowercased().contains(forbidden.lowercased()))
         }
     }
+
+    /// The typography rules are the half that must not relax. A conversation
+    /// is allowed to be warmer; it is not allowed to start emitting markdown.
+    @Test func conversationKeepsEveryTypographyProhibition() {
+        let text = ResponseStyle.conversation.lowercased()
+        #expect(text.contains("markdown"))
+        #expect(text.contains("em dash"))
+        #expect(text.contains("figures"))
+    }
+
+    /// The three permissions this whole slice exists to grant. If these
+    /// disappear, LIFO is a box that answers and stops again.
+    @Test func conversationGrantsTheThreeThingsTheOneShotStyleForbids() {
+        let text = ResponseStyle.conversation.lowercased()
+        #expect(text.contains("earlier"))
+        #expect(text.contains("one question"))
+    }
+
+    /// The instruction that serves cards has not been relaxed by accident.
+    @Test func theOneShotInstructionStillSaysToStop() {
+        #expect(ResponseStyle.instruction.contains("Answer, then stop."))
+    }
+
+    /// The cleaner is shared, so conversational output is held to the same
+    /// output guarantees as everything else.
+    @Test func conversationalOutputIsStillCleaned() {
+        let dirty = "**Six hours.** That is short for you - worth a look."
+        let clean = ResponseStyle.clean(dirty)
+        #expect(!clean.contains("*"))
+        #expect(!clean.contains(" - "))
+    }
 }
