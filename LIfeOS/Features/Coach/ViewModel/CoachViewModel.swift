@@ -1,4 +1,5 @@
 import Foundation
+import FoundationModels
 import SwiftData
 import Insights
 import Integrations
@@ -275,6 +276,11 @@ final class CoachViewModel {
                 fail(reason)
             } catch RemoteEngineError.exhausted {
                 fail("That is today's thinking budget used up. It resets tomorrow.")
+            } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
+                // The on-device model's context window, not the network: the
+                // cloud message above and the Apple Intelligence prompt below
+                // both misdiagnose this as a connectivity or settings problem.
+                fail("That covered too much at once. Try asking about a shorter stretch.")
             } catch {
                 if isSignedIn {
                     fail("LIFO could not reach the cloud just now. Try again in a moment.")

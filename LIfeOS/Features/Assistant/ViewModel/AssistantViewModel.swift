@@ -33,6 +33,27 @@ final class AssistantViewModel {
     private var conversationID = UUID()
     private var broker = ConfirmationBroker()
 
+    /// This screen's own persisted conversation. Not
+    /// `ChatStore.latestConversationID()`: that lookup is global across every
+    /// `ChatMessage` row, and the coach is now a second writer into the same
+    /// store, so "whichever conversation was written to last" is no longer
+    /// necessarily this screen's own. A durable id kept here, distinct from
+    /// the coach's, preserves the one behaviour users actually rely on
+    /// (the assistant resumes its own last conversation) without depending
+    /// on a lookup that another screen's writes can now steer wrong.
+    private static let conversationIDKey = "assistant.conversationID"
+
+    private static func loadOrCreateConversationID() -> UUID {
+        let defaults = UserDefaults.standard
+        if let stored = defaults.string(forKey: conversationIDKey),
+           let id = UUID(uuidString: stored) {
+            return id
+        }
+        let id = UUID()
+        defaults.set(id.uuidString, forKey: conversationIDKey)
+        return id
+    }
+
     init(context: ModelContext) {
         self.chat = ChatStore(context: context)
         self.store = CalendarStore(context: context)
@@ -45,7 +66,7 @@ final class AssistantViewModel {
     }
 
     func appear() async {
-        conversationID = (try? chat.latestConversationID()) ?? UUID()
+        conversationID = Self.loadOrCreateConversationID()
         reloadMessages()
         isAuthorized = await eventKit.isAuthorized
         if isAuthorized { await sync.sync() }
