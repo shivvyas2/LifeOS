@@ -89,6 +89,15 @@ public enum AssistantTurn {
             // second model is not a second opinion, it is a way around one.
             throw RemoteEngineError.refused(reason)
         } catch {
+            // A gated write the user already approved has already happened.
+            // Retrying on the device starts a fresh invoker, so the first
+            // attempt's tool summaries are gone from the transcript and the
+            // device model is free to ask for the same create again. That is
+            // a second card, in front of someone with no evidence the first
+            // one landed, and two identical events when they say yes.
+            // Surfacing the failure honestly beats re-attempting a side
+            // effect.
+            guard await invoker.didExecuteGatedWrite == false else { throw error }
             guard availability() == .available else { throw error }
             // A fresh invoker for the second attempt: the first one may have
             // spent rounds and collected chips for work whose reply never

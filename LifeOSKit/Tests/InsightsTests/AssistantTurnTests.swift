@@ -1,6 +1,7 @@
 // LifeOSKit/Tests/InsightsTests/AssistantTurnTests.swift
 import Testing
 import Foundation
+import FoundationModels
 @testable import Insights
 
 private struct StubChatEngine: ChatEngine {
@@ -24,6 +25,58 @@ private struct EchoingChatEngine: ChatEngine {
         tools: [any CoachTool], invoker: ToolInvoker
     ) async throws -> AssistantTurn.Reply {
         AssistantTurn.Reply(text: prefix + instructions, toolSummaries: [])
+    }
+}
+
+@Generable private struct EventArgs {
+    @Guide(description: "Event title") var title: String
+}
+
+/// A gated write, so a test can drive the confirmation path the way a real
+/// create_event does.
+private struct GatedWriteTool: CoachTool {
+    let name = "create_event"
+    let description = "Creates a calendar event."
+    var parameters: GenerationSchema { EventArgs.generationSchema }
+    let requiresConfirmation = true
+    let ran: ToolRunLog
+
+    func summary(_ arguments: GeneratedContent) -> String { "Created an event" }
+
+    func call(_ arguments: GeneratedContent) async throws -> String {
+        await ran.record()
+        return "Created."
+    }
+}
+
+/// Holds the broker so the pending callback can answer it. The callback
+/// fires from inside `decision(for:)`, before the continuation exists, so
+/// the confirm has to happen on a task of its own.
+private actor Approver {
+    private var broker: ConfirmationBroker?
+    func use(_ broker: ConfirmationBroker) { self.broker = broker }
+    func confirm(_ id: UUID) async { await broker?.confirm(id) }
+}
+
+private actor ToolRunLog {
+    private(set) var count = 0
+    func record() { count += 1 }
+}
+
+/// Runs a gated tool through the invoker and then fails, which is the shape
+/// of the bug: the write landed, the reply did not.
+private struct WritesThenFailsEngine: ChatEngine {
+    let arguments: String
+
+    func reply(
+        to thread: [ChatTurnMessage], instructions: String,
+        tools: [any CoachTool], invoker: ToolInvoker
+    ) async throws -> AssistantTurn.Reply {
+        _ = await invoker.invoke(
+            name: "create_event",
+            arguments: try GeneratedContent(json: arguments)
+        )
+        throw RemoteEngineError.unavailable
     }
 }
 
@@ -193,6 +246,54 @@ private struct EchoingChatEngine: ChatEngine {
             preference: .automatic
         )
         #expect(device.text == "device")
+    }
+
+    // I3. One broker is shared across the two invokers, so the chain is:
+    // the remote round runs a gated create, the user confirms, the event
+    // exists, the transport then fails, the device retry starts with a fresh
+    // invoker that knows nothing about it, the device model asks for the same
+    // create, a second card appears, and the user says yes because from their
+    // side the first one looks like it did not take.
+
+    @Test func aConfirmedWriteIsNeverRetriedOnTheOtherTier() async {
+        let ran = ToolRunLog()
+        let tool = GatedWriteTool(ran: ran)
+
+        // Confirms whatever is raised, which is the user in the failing case:
+        // the card looks the same both times and there is nothing on screen
+        // saying the first one already happened.
+        let approver = Approver()
+        let broker = ConfirmationBroker { write in
+            Task { await approver.confirm(write.id) }
+        }
+        await approver.use(broker)
+
+        await #expect(throws: RemoteEngineError.unavailable) {
+            try await AssistantTurn.run(
+                thread: [ChatTurnMessage(role: .user, text: "put lunch in for tomorrow")],
+                tools: [tool], broker: broker,
+                remote: WritesThenFailsEngine(arguments: #"{"title":"Lunch"}"#),
+                onDevice: StubChatEngine {
+                    Issue.record("the device retried a turn that had already written")
+                    return AssistantTurn.Reply(text: "device", toolSummaries: [])
+                },
+                availability: { .available }, preference: { .automatic }
+            )
+        }
+
+        let count = await ran.count
+        #expect(count == 1)
+    }
+
+    /// The guard is about writes, not about failures. A remote attempt that
+    /// executed nothing gated still falls back, which is the whole reason the
+    /// device tier exists.
+    @Test func aFailureWithNoWriteStillFallsBack() async throws {
+        let result = try await run(
+            remote: StubChatEngine { throw RemoteEngineError.unavailable },
+            onDevice: StubChatEngine { self.reply("device") }
+        )
+        #expect(result.text == "device")
     }
 
     /// The floor still wins over the preference, as it does in
