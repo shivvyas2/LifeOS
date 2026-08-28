@@ -131,11 +131,25 @@ final class AssistantViewModel {
             : []
 
         do {
+            let thread = ((try? chat.recent(conversationID: conversationID)) ?? [])
+                .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
+                                       text: $0.text) }
+
+            let remote: (any ChatEngine)? = {
+                guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey
+                else { return nil }
+                return RemoteChatEngine(baseURL: url, anonKey: key, accessToken: {
+                    KeychainAuthSessionStore().load()?.accessToken
+                })
+            }()
+
             let reply = try await AssistantTurn.run(
-                instructions: CalendarAssistant.instructions(authorized: isAuthorized),
-                prompt: prompt(for: text),
+                instructions: CalendarAssistant.instructions(authorized: isAuthorized)
+                    + "\n\n" + calendarContext(),
+                thread: thread,
                 tools: tools,
-                broker: broker
+                broker: broker,
+                remote: remote
             )
             let events = await collector.collected()
             try? chat.append(
@@ -152,7 +166,7 @@ final class AssistantViewModel {
         reloadMessages()
     }
 
-    private func prompt(for text: String) -> String {
+    private func calendarContext() -> String {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: .now)
         let dayAfterTomorrow = calendar.date(byAdding: .day, value: 2, to: dayStart) ?? dayStart
@@ -160,18 +174,7 @@ final class AssistantViewModel {
         let today = (try? store.events(from: dayStart, to: tomorrowStart)) ?? []
         let tomorrow = (try? store.events(from: tomorrowStart, to: dayAfterTomorrow)) ?? []
 
-        let history = ((try? chat.recent(conversationID: conversationID)) ?? [])
-            .dropLast()  // the just-appended user message; it goes in as the question
-            .map { "\($0.role == .user ? "User" : "Assistant"): \($0.text)" }
-            .joined(separator: "\n")
-
-        return """
-        \(CalendarAssistant.contextPrefix(now: .now, timeZone: .current, today: today, tomorrow: tomorrow))
-
-        \(history)
-
-        User: \(text)
-        """
+        return CalendarAssistant.contextPrefix(now: .now, timeZone: .current, today: today, tomorrow: tomorrow)
     }
 
     private func reloadMessages() {
