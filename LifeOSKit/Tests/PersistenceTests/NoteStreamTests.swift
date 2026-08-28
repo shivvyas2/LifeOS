@@ -102,8 +102,21 @@ import SwiftData
         #expect(todos.map(\.documentID) == [live.id])
     }
 
-    @Test func anEmptyStreamSaysSoWhicheverShapeItIs() {
-        #expect(NoteStream.cards([]).isEmpty)
-        #expect(NoteStream.tasks([]).isEmpty)
+    /// Creating a page inside a folder is choosing a home for it, so it must
+    /// not also turn up in the Inbox asking to be filed into the folder it is
+    /// already in. Only a capture is unfiled.
+    @Test func onlyACaptureLandsUnfiled() throws {
+        let store = try makeStore()
+        let deliberate = try store.createDocument(title: "On purpose", bucket: .projects)
+        let captured = try #require(try store.capture("A thought"))
+
+        #expect(deliberate.isInInbox == false)
+        #expect(captured.isInInbox)
+
+        guard case .cards(let inbox) = try store.stream(for: .inbox) else {
+            Issue.record("inbox should be cards")
+            return
+        }
+        #expect(inbox.map(\.id) == [captured.id])
     }
 }

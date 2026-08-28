@@ -212,9 +212,17 @@ public struct NotesStore {
     /// Newest first rather than `displayOrder`: the Inbox is a capture queue,
     /// and the thing you just wrote is the thing you are still thinking about.
     public func inbox() throws -> [NoteCardSnapshot] {
+        try cardsNewestFirst(filter: \.isInInbox)
+    }
+
+    /// Live pages, newest first, mapped to cards. `inbox()` and
+    /// `stream(for: .all)` differ only in which documents qualify, so the
+    /// sort and the mapping to a card live here once rather than twice
+    /// slowly drifting apart.
+    private func cardsNewestFirst(filter: (NoteDocument) -> Bool = { _ in true }) throws -> [NoteCardSnapshot] {
         let names = try folderNames()
         return try documents(includeArchived: false)
-            .filter(\.isInInbox)
+            .filter(filter)
             .sorted { $0.updatedAt > $1.updatedAt }
             .map { card($0, folderNames: names) }
     }
@@ -227,12 +235,7 @@ public struct NotesStore {
             return .cards(try inbox())
 
         case .all:
-            let names = try folderNames()
-            return .cards(
-                try documents(includeArchived: false)
-                    .sorted { $0.updatedAt > $1.updatedAt }
-                    .map { card($0, folderNames: names) }
-            )
+            return .cards(try cardsNewestFirst())
 
         case .todos:
             // The index keeps a page's task rows when it is archived, so the
@@ -285,7 +288,8 @@ public struct NotesStore {
         blocks: [NoteBlock] = NoteBlock.blank,
         entryDate: Date? = nil,
         dueDate: Date? = nil,
-        status: PlanStatus = .todo
+        status: PlanStatus = .todo,
+        filed: Bool = true
     ) throws -> NoteDocument {
         // A page inherits its folder's colour, so a shelf reads as a set of
         // coloured groups rather than as confetti.
@@ -309,6 +313,12 @@ public struct NotesStore {
             sortOrder: 0
         )
         document.openedAt = .now
+        // Creating a page directly into a bucket (and maybe a folder) is
+        // already choosing its home, exactly as `move` is below. A daily
+        // journal page, a wiki-link stub, and a page someone deliberately
+        // makes inside a folder are all filed the moment they exist; only
+        // `capture`, which has no home yet, passes `filed: false` to opt out.
+        if filed { document.filedAt = .now }
         context.insert(document)
         try NoteIndexer.reindex(document, in: context)
         try context.save()
@@ -321,9 +331,9 @@ public struct NotesStore {
     /// already falls back to the first textual block, so a captured thought
     /// reads correctly on a card without storing the same sentence twice.
     ///
-    /// `filedAt` is untouched, which is what puts the page in the Inbox.
-    /// Filing it later through `move(_:to:folderID:)` is what stamps it and
-    /// takes it out again.
+    /// Passes `filed: false`: a capture has not chosen a home, which is what
+    /// puts it in the Inbox. Filing it later through `move(_:to:folderID:)`
+    /// is what stamps `filedAt` and takes it out again.
     ///
     /// Returns nil for text that is empty once trimmed, so the composer can
     /// bind Return unconditionally instead of guarding at the call site.
@@ -334,7 +344,8 @@ public struct NotesStore {
 
         return try createDocument(
             bucket: .areas,
-            blocks: [NoteBlock(kind: isTodo ? .todo : .paragraph, text: trimmed)]
+            blocks: [NoteBlock(kind: isTodo ? .todo : .paragraph, text: trimmed)],
+            filed: false
         )
     }
 

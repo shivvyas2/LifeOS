@@ -290,19 +290,20 @@ import SwiftData
                 == ["newer first", "older first", "older second"])
     }
 
-    /// Capture first: a note starts unfiled, and stays that way while it is
-    /// only being written in. Deciding where it belongs is what files it.
-    @Test func aNewPageStartsInTheInbox() throws {
+    /// Creating a page directly into a bucket is already choosing its home,
+    /// so it starts filed. Only `capture`, which has not chosen a home yet,
+    /// starts in the Inbox.
+    @Test func aNewPageStartsFiled() throws {
         let store = try makeStore()
         let document = try store.createDocument(title: "Idea", bucket: .projects)
 
-        #expect(document.isInInbox)
-        #expect(try store.inbox().count == 1)
+        #expect(!document.isInInbox)
+        #expect(try store.inbox().isEmpty)
     }
 
     @Test func editingDoesNotFileAPage() throws {
         let store = try makeStore()
-        let document = try store.createDocument(title: "Idea", bucket: .projects)
+        let document = try #require(try store.capture("Idea"))
 
         try store.update(document, blocks: [NoteBlock(text: "more thinking")])
 
@@ -312,7 +313,7 @@ import SwiftData
     @Test func movingAPageFilesIt() throws {
         let store = try makeStore()
         let folder = try store.createFolder(name: "Training", bucket: .areas)
-        let document = try store.createDocument(title: "Idea", bucket: .projects)
+        let document = try #require(try store.capture("Idea"))
 
         try store.move(document, to: .areas, folderID: folder.id)
 

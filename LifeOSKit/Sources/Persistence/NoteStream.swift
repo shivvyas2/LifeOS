@@ -6,7 +6,7 @@ import Foundation
 /// Deliberately small. The spec's Goals chip and the person's own collection
 /// chips arrive with the phases that build those models; adding cases here
 /// before then would mean a chip that routes to nothing.
-public enum NoteStreamChip: String, Sendable, CaseIterable, Equatable, Identifiable {
+public enum NoteStreamChip: String, Sendable, Equatable, Identifiable {
     case inbox, all, todos
 
     public var id: String { rawValue }
@@ -33,11 +33,4 @@ public enum NoteStreamChip: String, Sendable, CaseIterable, Equatable, Identifia
 public enum NoteStream {
     case cards([NoteCardSnapshot])
     case tasks([NoteTask])
-
-    public var isEmpty: Bool {
-        switch self {
-        case .cards(let cards): cards.isEmpty
-        case .tasks(let tasks): tasks.isEmpty
-        }
-    }
 }
