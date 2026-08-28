@@ -288,8 +288,7 @@ public struct NotesStore {
         blocks: [NoteBlock] = NoteBlock.blank,
         entryDate: Date? = nil,
         dueDate: Date? = nil,
-        status: PlanStatus = .todo,
-        filed: Bool = true
+        status: PlanStatus = .todo
     ) throws -> NoteDocument {
         // A page inherits its folder's colour, so a shelf reads as a set of
         // coloured groups rather than as confetti.
@@ -313,12 +312,12 @@ public struct NotesStore {
             sortOrder: 0
         )
         document.openedAt = .now
-        // Creating a page directly into a bucket (and maybe a folder) is
-        // already choosing its home, exactly as `move` is below. A daily
-        // journal page, a wiki-link stub, and a page someone deliberately
-        // makes inside a folder are all filed the moment they exist; only
-        // `capture`, which has no home yet, passes `filed: false` to opt out.
-        if filed { document.filedAt = .now }
+        // Choosing a folder is choosing a home, so a page created into one is
+        // already filed. A page created loose on a shelf is not: phase 1's
+        // rule is that a note starts unfiled and stays that way while it is
+        // only being written in, and deciding where it belongs is what files
+        // it. Only an explicit folder counts as that decision.
+        if folderID != nil { document.filedAt = .now }
         context.insert(document)
         try NoteIndexer.reindex(document, in: context)
         try context.save()
@@ -331,9 +330,9 @@ public struct NotesStore {
     /// already falls back to the first textual block, so a captured thought
     /// reads correctly on a card without storing the same sentence twice.
     ///
-    /// Passes `filed: false`: a capture has not chosen a home, which is what
-    /// puts it in the Inbox. Filing it later through `move(_:to:folderID:)`
-    /// is what stamps `filedAt` and takes it out again.
+    /// `filedAt` is untouched, which is what puts the page in the Inbox.
+    /// Filing it later through `move(_:to:folderID:)` is what stamps it and
+    /// takes it out again.
     ///
     /// Returns nil for text that is empty once trimmed, so the composer can
     /// bind Return unconditionally instead of guarding at the call site.
@@ -344,8 +343,7 @@ public struct NotesStore {
 
         return try createDocument(
             bucket: .areas,
-            blocks: [NoteBlock(kind: isTodo ? .todo : .paragraph, text: trimmed)],
-            filed: false
+            blocks: [NoteBlock(kind: isTodo ? .todo : .paragraph, text: trimmed)]
         )
     }
 

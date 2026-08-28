@@ -104,19 +104,24 @@ import SwiftData
 
     /// Creating a page inside a folder is choosing a home for it, so it must
     /// not also turn up in the Inbox asking to be filed into the folder it is
-    /// already in. Only a capture is unfiled.
-    @Test func onlyACaptureLandsUnfiled() throws {
+    /// already in. A page created loose on a shelf has chosen nothing yet, so
+    /// it stays in the Inbox: that is phase 1's capture-first rule and it
+    /// still holds.
+    @Test func onlyAPageGivenAFolderIsBornFiled() throws {
         let store = try makeStore()
-        let deliberate = try store.createDocument(title: "On purpose", bucket: .projects)
+        let folder = try store.createFolder(name: "Q3", bucket: .projects)
+        let inFolder = try store.createDocument(title: "Filed", bucket: .projects, folderID: folder.id)
+        let loose = try store.createDocument(title: "Loose", bucket: .projects)
         let captured = try #require(try store.capture("A thought"))
 
-        #expect(deliberate.isInInbox == false)
+        #expect(inFolder.isInInbox == false)
+        #expect(loose.isInInbox)
         #expect(captured.isInInbox)
 
         guard case .cards(let inbox) = try store.stream(for: .inbox) else {
             Issue.record("inbox should be cards")
             return
         }
-        #expect(inbox.map(\.id) == [captured.id])
+        #expect(Set(inbox.map(\.id)) == Set([loose.id, captured.id]))
     }
 }
