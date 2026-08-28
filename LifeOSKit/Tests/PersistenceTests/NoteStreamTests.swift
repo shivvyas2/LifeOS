@@ -73,15 +73,33 @@ import SwiftData
     @Test func anArchivedPageLeavesEveryStream() throws {
         let store = try makeStore()
         let captured = try #require(try store.capture("Gone"))
+        let task = try #require(try store.capture("Gone too", isTodo: true))
         try store.archive(captured)
+        try store.archive(task)
 
         guard case .cards(let inbox) = try store.stream(for: .inbox),
-              case .cards(let all) = try store.stream(for: .all) else {
-            Issue.record("both should be cards")
+              case .cards(let all) = try store.stream(for: .all),
+              case .tasks(let todos) = try store.stream(for: .todos) else {
+            Issue.record("unexpected stream shapes")
             return
         }
         #expect(inbox.isEmpty)
         #expect(all.isEmpty)
+        #expect(todos.isEmpty)
+    }
+
+    /// The filter must remove archived pages' to-dos and nothing else.
+    @Test func aLivePageKeepsItsToDosInTheChip() throws {
+        let store = try makeStore()
+        let live = try #require(try store.capture("Still here", isTodo: true))
+        let archived = try #require(try store.capture("Gone", isTodo: true))
+        try store.archive(archived)
+
+        guard case .tasks(let todos) = try store.stream(for: .todos) else {
+            Issue.record("todos should be tasks")
+            return
+        }
+        #expect(todos.map(\.documentID) == [live.id])
     }
 
     @Test func anEmptyStreamSaysSoWhicheverShapeItIs() {

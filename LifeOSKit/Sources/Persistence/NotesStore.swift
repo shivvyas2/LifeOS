@@ -235,7 +235,12 @@ public struct NotesStore {
             )
 
         case .todos:
-            return .tasks(try indexedTasks(openOnly: true))
+            // The index keeps a page's task rows when it is archived, so the
+            // filter belongs here. Clearing rows on archive instead would
+            // change what the index means for sync and for every future
+            // consumer, which is a far larger change than this chip needs.
+            let live = Set(try documents(includeArchived: false).map(\.id))
+            return .tasks(try indexedTasks(openOnly: true).filter { live.contains($0.documentID) })
         }
     }
 
