@@ -45,7 +45,12 @@ None of this is code. All of it is credentials or a one-time setup step.
    `APNS_TEAM_ID`, `APNS_BUNDLE_ID`. Set `APNS_SANDBOX=true` while the build
    is signed for development; the entitlement and the host have to agree or
    every send is `400 BadDeviceToken`.
-3. **Apply the migration.** `supabase db push`.
+3. ~~**Apply the migration.**~~ Done on 2026-08-29. `supabase db push
+   --include-all` applied `20260830090000_proactive_nudges` along with three
+   migrations that had been orphaned: a repair of `20260829120000` after a
+   partial failure had moved the remote cursor past `avatars_signed_in_only`,
+   `fitbit_connections` and `fitbit_lock`. Local and remote histories now
+   match. `device_tokens` and `nudge_log` exist and deny anon reads.
 4. **Schedule the job.** Run `supabase/functions/lifo-nudge/schedule.sql` once,
    after storing the service role key and project URL in Vault. It is not a
    migration because it needs both, and neither belongs in git.
@@ -57,9 +62,12 @@ noisy.
 
 ## What has not been verified
 
-- **The migration has not run against a database.** There is no Docker on this
-  machine, so it is reviewed SQL rather than applied SQL. The riskiest line is
-  the primary key swap on `lifo_usage`; check it on a branch database first.
+- **`lifo-agent` has not been redeployed.** The database now has `kind` in
+  `lifo_usage`'s key, but the deployed function is the version from before that
+  change. It still works: its two argument `lifo_debit` call resolves through
+  the new default, and its unscoped `maybeSingle()` finds one row while no
+  nudge rows exist. It breaks the first time a nudge is written, so deploy
+  `lifo-agent` before, not after, `lifo-nudge`.
 - **No real push has been delivered.** Everything up to the APNs request is
   tested, including the signature. The request itself needs a key.
 - **Whether a given sentence was worth interrupting someone for.** The spec
