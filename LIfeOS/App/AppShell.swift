@@ -43,6 +43,16 @@ struct AppShell: View {
         Group {
             if onboarding.isSignedIn && hasFinishedOnboarding {
                 RootView(whoop: whoop, fitbit: fitbit, health: health, onSignOut: {
+                    // Before the session goes, not after: deleting this
+                    // device's push row needs the access token of the account
+                    // whose row it is. Left behind, that row would push one
+                    // person's sleep data onto a phone now showing somebody
+                    // else's name. The token is captured by value here, so the
+                    // request still authenticates once the keychain is cleared
+                    // a line later.
+                    if let accessToken = KeychainAuthSessionStore().load()?.accessToken {
+                        Task { await PushService.shared.deregister(accessToken: accessToken) }
+                    }
                     hasFinishedOnboarding = false
                     onboarding.signOut()
                     onSignedOut()

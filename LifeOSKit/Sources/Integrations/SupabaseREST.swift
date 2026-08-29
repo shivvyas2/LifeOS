@@ -99,6 +99,35 @@ public struct SupabaseREST: Sendable {
         return try await perform(request)
     }
 
+    /// Deletes the rows where `column` equals `value`.
+    ///
+    /// Narrow on purpose: the one thing this app deletes over REST is its own
+    /// push registration, and a general filter builder would be a way to
+    /// delete a great deal more than that by accident. RLS is still the real
+    /// boundary, and it scopes the delete to the caller's own rows whatever
+    /// this asks for.
+    public func delete(
+        table: String,
+        column: String,
+        equals value: String,
+        accessToken: String
+    ) async throws {
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("rest/v1/\(table)"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: column, value: "eq.\(value)")]
+        guard let url = components?.url else { throw RESTError.encoding }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+
+        _ = try await perform(request)
+    }
+
     private func authorized(path: String, accessToken: String) throws -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.setValue(anonKey, forHTTPHeaderField: "apikey")

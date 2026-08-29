@@ -31,11 +31,17 @@ Deno.serve(async (req: Request) => {
   if (!parsed) return json({ error: "unknown_task" }, 400);
 
   const db = serviceClient();
+  // Scoped to the chat kind. `lifo_usage` is keyed on (user_id, day, kind)
+  // since the nudge job got its own allowance, so a day with a nudge on it has
+  // two rows and an unscoped maybeSingle() would fail rather than read one.
+  // Chat and nudges do not share a budget on purpose: a heavy chat evening
+  // must not eat the next morning's nudge.
   const { data: usage, error: usageError } = await db
     .from("lifo_usage")
     .select("tokens")
     .eq("user_id", userID)
     .eq("day", new Date().toISOString().slice(0, 10))
+    .eq("kind", "chat")
     .maybeSingle();
   if (usageError) {
     console.error(`lifo usage lookup failed: ${usageError.code}`);
@@ -83,6 +89,7 @@ Deno.serve(async (req: Request) => {
   const { error: debitError } = await db.rpc("lifo_debit", {
     p_user: userID,
     p_tokens: tokens,
+    p_kind: "chat",
   });
   if (debitError) console.error(`lifo debit failed: ${debitError.code}`);
 

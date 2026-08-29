@@ -22,6 +22,11 @@ struct LIfeOSApp: App {
     /// above it.
     @State private var session = AccountSession()
 
+    /// APNs has no SwiftUI entry point: the device token arrives through a
+    /// UIKit delegate callback and nowhere else. This is the whole reason the
+    /// app has a delegate at all.
+    @UIApplicationDelegateAdaptor(PushDelegate.self) private var pushDelegate
+
     init() {
         // Demo default for TestFlight: the Money tab opens on sample figures,
         // so there is something to walk a person through before any bank is

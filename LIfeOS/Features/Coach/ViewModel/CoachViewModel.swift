@@ -200,6 +200,37 @@ final class CoachViewModel {
         voicePlayer.stop()
     }
 
+    /// Opens the conversation with something LIFO said first.
+    ///
+    /// This is the point of the whole proactive design. A notification that
+    /// only shows a sentence is a reminder, and the app does not need another
+    /// reminder; seeded as the first assistant turn it becomes an opening line
+    /// that can be answered, and it is only answerable because the thread
+    /// below carries it into the next prompt.
+    ///
+    /// Written into the store, not just into `history`: the store is what
+    /// `send` renders into `messages[]`, so a nudge that skipped it would be
+    /// on screen and invisible to the model answering the reply to it.
+    func seed(_ text: String) {
+        let sentence = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sentence.isEmpty else { return }
+        // Already the opening line. A second tap on the same notification
+        // should reopen the conversation, not repeat it.
+        guard history.first?.answer != sentence else { return }
+
+        if let context {
+            try? ChatStore(context: context)
+                .append(conversationID: conversationID, role: .assistant, text: sentence)
+        }
+        // An empty question, because there was none: LIFO spoke first. The
+        // transcript draws no bubble above an answer with nothing to quote.
+        history.append(LifoTurn(question: "", answer: sentence))
+        answer = sentence
+        phase = .answered
+        status = "LIFO"
+        error = nil
+    }
+
     func send(_ text: String) async {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
