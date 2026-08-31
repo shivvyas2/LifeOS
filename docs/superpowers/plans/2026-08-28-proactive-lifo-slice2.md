@@ -60,6 +60,33 @@ Until step 2 is done, `lifo-nudge` returns `apns_not_configured` and sends
 nothing. That is deliberate: a deployment without keys should be quiet, not
 noisy.
 
+## Proving delivery works
+
+Silence is the common outcome by design, so waiting for a real trigger is a bad
+way to find out whether the APNs half is wired up. `lifo-nudge` takes a forced
+send, behind the same service role gate as everything else:
+
+```
+curl -X POST "$SUPABASE_URL/functions/v1/lifo-nudge" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"test_user_id":"<uuid>","text":"optional custom sentence"}'
+```
+
+It bypasses the triggers, the cooldown and the send hour, writes no `nudge_log`
+row and spends no model tokens, so it cannot consume the day's real nudge.
+
+Answers worth knowing:
+- `{"error":"no_device_tokens"}` means the phone never registered. Check that
+  the build carries the entitlement and that notifications were granted.
+- `{"sent":0,"failures":[400]}` is almost always the sandbox mismatch: the
+  `aps-environment` the app is signed with and `APNS_SANDBOX` disagree.
+- `{"sent":1}` means the whole chain works and only the triggers are left to
+  wait on.
+
+**A physical device is required.** The simulator is never issued a real APNs
+token, so `device_tokens` stays empty there no matter what.
+
 ## What has not been verified
 
 - **`lifo-agent` has not been redeployed.** The database now has `kind` in

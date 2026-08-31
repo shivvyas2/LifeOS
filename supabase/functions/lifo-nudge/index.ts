@@ -51,9 +51,39 @@ interface TokenRow {
   timezone: string;
 }
 
+/// A forced send, for proving delivery works.
+///
+/// Silence is the common outcome by design, so without this the only way to
+/// find out whether the APNs half is wired correctly is to wait for a real
+/// trigger to fire, which may be days and may never happen for a given
+/// account. This bypasses the triggers, the cooldown, and the send hour.
+///
+/// It writes no `nudge_log` row and spends no model tokens, so a test send
+/// cannot consume the day's real nudge. No new exposure either: it sits behind
+/// the same service role gate as the rest of the function, and a caller with
+/// that key can already do anything this does.
+interface TestRequest {
+  test_user_id: string;
+  text?: string;
+}
+
+function parseTestRequest(body: unknown): TestRequest | null {
+  if (typeof body !== "object" || body === null) return null;
+  const candidate = body as Record<string, unknown>;
+  if (typeof candidate.test_user_id !== "string") return null;
+  return {
+    test_user_id: candidate.test_user_id,
+    text: typeof candidate.text === "string" ? candidate.text : undefined,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   if (!isAuthorized(req)) return json({ error: "unauthorized" }, 401);
+
+  // Read once: the body is consumed by whichever path takes it.
+  const body = await req.json().catch(() => ({}));
+  const test = parseTestRequest(body);
 
   const apns = apnsConfigFromEnv();
   // Not an error. A deployment without APNs keys should evaluate nothing and
@@ -65,6 +95,34 @@ Deno.serve(async (req: Request) => {
 
   const db = serviceClient();
   const now = new Date();
+
+  if (test) {
+    const { data: rows, error } = await db
+      .from("device_tokens")
+      .select("token")
+      .eq("user_id", test.test_user_id);
+    if (error) {
+      console.error(`lifo-nudge test lookup failed: ${error.code}`);
+      return json({ error: "storage_failed" }, 500);
+    }
+    const targets = (rows ?? []) as { token: string }[];
+    // The most useful answer when nothing arrives: the phone never registered.
+    if (targets.length === 0) return json({ error: "no_device_tokens", sent: 0 }, 404);
+
+    const text = test.text ?? "This is LIFO checking the line works.";
+    const payload = notificationPayload(text, "test", now.toISOString().slice(0, 10));
+    let sent = 0;
+    const failures: number[] = [];
+    for (const target of targets) {
+      const result = await sendPush(apns, target.token, payload, now);
+      if (result.unregistered) {
+        await db.from("device_tokens").delete().eq("token", target.token);
+      }
+      if (result.status < 300) sent += 1;
+      else failures.push(result.status);
+    }
+    return json({ tokens: targets.length, sent, failures }, 200);
+  }
 
   const { data: tokens, error: tokenError } = await db
     .from("device_tokens")
