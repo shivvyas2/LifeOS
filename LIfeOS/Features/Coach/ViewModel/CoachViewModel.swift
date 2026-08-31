@@ -36,7 +36,7 @@ final class CoachViewModel {
     var phase: LifoPhase = .idle
     var liveTranscript = ""
     var answer = ""
-    var status = "Tap the mic, or type."
+    var status = "Tap the mic and talk, or type."
     var error: String?
     var history: [LifoTurn] = []
     var isTyping = false
@@ -106,6 +106,16 @@ final class CoachViewModel {
         speech.onLevel = { [weak self] level in
             self?.level = level
         }
+        // The mic closes itself when the sentence ends, and the screen has to
+        // say so at that moment. Waiting for the transcript would leave it
+        // claiming to listen through the whole upload, which reads as the app
+        // having missed what was just said.
+        speech.onEndOfSpeech = { [weak self] in
+            guard let self, self.phase == .listening else { return }
+            self.phase = .thinking
+            self.status = "Hearing that back\u{2026}"
+            self.level = 0
+        }
         speech.onError = { [weak self] message in
             self?.error = message
             self?.phase = .idle
@@ -148,7 +158,7 @@ final class CoachViewModel {
         liveTranscript = ""
         isTyping = false
         phase = .listening
-        status = "Go ahead, I'm listening…"
+        status = "Go ahead. I stop when you do."
         await speech.start()
         if !speech.isRunning, phase == .listening {
             phase = .idle
