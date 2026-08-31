@@ -1,10 +1,15 @@
 import AVFoundation
 import CoreGraphics
 import Foundation
+import Insights
 import OSLog
 import Speech
 
 /// Microphone capture for LIFO.
+///
+/// One tap opens the mic and no second tap is needed: the listener watches the
+/// level, decides when the sentence is over, and transcribes what it recorded.
+/// The stop button stays for the times someone wants out early.
 ///
 /// ElevenLabs Scribe is primary. Apple Speech is the backup when there is no
 /// key, the network call fails, or the clip is too short for Scribe.
@@ -18,6 +23,11 @@ final class SpeechListener: @unchecked Sendable {
     var onFinal: ((String) -> Void)?
     var onLevel: ((CGFloat) -> Void)?
     var onError: ((String) -> Void)?
+    /// Fires the moment the endpointer calls the sentence finished, which is
+    /// before any transcript exists. The screen has to stop claiming to listen
+    /// then, not when the text lands: the second or two spent uploading the
+    /// clip otherwise looks like the mic ignoring you.
+    var onEndOfSpeech: (() -> Void)?
 
     private let lock = NSLock()
     private var session = UUID()
@@ -31,9 +41,18 @@ final class SpeechListener: @unchecked Sendable {
     private var usesElevenLabs = false
     private var recordingURL: URL?
     private var audioFile: AVAudioFile?
-    private var heardSpeech = false
-    private var lastVoiceAt = Date.distantPast
     private var completing = false
+
+    /// When the turn is over. Read and written only under `lock`, from the
+    /// audio thread, once per buffer. The rule itself lives in `Insights`
+    /// where it can be run against a made-up room in a test.
+    private var endpointer = SpeechEndpointer()
+    /// Seconds of audio seen, which is the endpointer's clock.
+    private var elapsedAudio: TimeInterval = 0
+    private var sampleRate: Double = 0
+    /// The newest live transcript from Apple's recognizer, kept because the
+    /// task is cancelled at teardown and its final result never arrives.
+    private var lastPartial = ""
 
     /// All `AVAudioSession` activate/deactivate and engine start/stop run here.
     /// `setActive` on the main thread logs AVAudioSession_iOS.mm:978 and can stall the UI.
@@ -49,7 +68,10 @@ final class SpeechListener: @unchecked Sendable {
             session = id
             running = false
             completing = false
-            heardSpeech = false
+            endpointer = SpeechEndpointer()
+            elapsedAudio = 0
+            sampleRate = 0
+            lastPartial = ""
             usesElevenLabs = AppConfig.elevenLabsAPIKey?.isEmpty == false
         }
 
@@ -136,6 +158,7 @@ final class SpeechListener: @unchecked Sendable {
             recordingURL = nil
         }
 
+        emitEndOfSpeech()
         await runOnSessionQueue { Self.release(snapshot) }
         emitLevel(0)
 
@@ -146,25 +169,50 @@ final class SpeechListener: @unchecked Sendable {
             return
         }
 
-        if snapshot.usesElevenLabs, let url = snapshot.recordingURL {
+        guard let url = snapshot.recordingURL else {
+            emitError("Could not hear that. Type instead, or try the mic again.")
+            return
+        }
+
+        if snapshot.usesElevenLabs {
             await transcribeRecorded(url: url, session: id)
+        } else {
+            await finalizeApple(url: url, session: id)
         }
     }
 
-    private func maybeCompleteFromSilence(rms: CGFloat, session id: UUID) {
-        let shouldFinish = lock.withLock { () -> Bool in
-            guard usesElevenLabs, running, session == id, !completing else { return false }
-            if rms > 0.06 {
-                heardSpeech = true
-                lastVoiceAt = Date()
-                return false
+    /// Close the mic on a turn where nobody said anything. Not `complete`:
+    /// there is no clip worth uploading, and no answer worth waiting for.
+    private func abandon(session id: UUID) {
+        guard still(id) else { return }
+        cancel()
+        emitError("I did not hear anything. Tap the mic and try again.")
+    }
+
+    /// Feeds the endpointer one reading per audio buffer and does what it says.
+    ///
+    /// The clock is the audio itself, buffer frames over the sample rate,
+    /// rather than the wall. A thread busy elsewhere would otherwise put time
+    /// into a silence the speaker never left, and end the turn on top of them.
+    private func observe(rms: CGFloat, frames: AVAudioFrameCount, session id: UUID) {
+        let verdict = lock.withLock { () -> SpeechEndpointer.Verdict in
+            guard running, session == id, !completing, sampleRate > 0 else {
+                return .keepListening
             }
-            guard heardSpeech, Date().timeIntervalSince(lastVoiceAt) > 1.35 else { return false }
-            completing = true
-            return true
+            elapsedAudio += Double(frames) / sampleRate
+            let verdict = endpointer.observe(level: Double(rms), at: elapsedAudio)
+            if verdict != .keepListening { completing = true }
+            return verdict
         }
-        guard shouldFinish else { return }
-        Task { await self.complete(session: id, alreadyMarked: true) }
+
+        switch verdict {
+        case .keepListening:
+            return
+        case .finished:
+            Task { await self.complete(session: id, alreadyMarked: true) }
+        case .nothingHeard:
+            Task { self.abandon(session: id) }
+        }
     }
 
     private func transcribeRecorded(url: URL, session id: UUID) async {
@@ -172,7 +220,10 @@ final class SpeechListener: @unchecked Sendable {
         guard still(id) else { return }
 
         let wav = (try? Data(contentsOf: url)) ?? Data()
-        guard wav.count > 1024 else { return }
+        guard wav.count > 1024 else {
+            emitError("That was too short to hear. Try the mic again.")
+            return
+        }
 
         if let key = AppConfig.elevenLabsAPIKey {
             do {
@@ -186,6 +237,32 @@ final class SpeechListener: @unchecked Sendable {
         }
 
         guard still(id) else { return }
+        if let text = await appleTranscribe(url: url), still(id) {
+            await emitFinal(text)
+            return
+        }
+        guard still(id) else { return }
+        emitError("Could not hear that. Type instead, or try the mic again.")
+    }
+
+    /// Finish a turn that ran on Apple's recognizer.
+    ///
+    /// The live task is cancelled during teardown and never delivers its final
+    /// result, so the last partial is the sentence. It is also already on
+    /// screen and costs nothing, which makes this the fast path; recognising
+    /// the recorded file again is the fallback for a turn that produced no
+    /// partials at all.
+    private func finalizeApple(url: URL, session id: UUID) async {
+        defer { try? FileManager.default.removeItem(at: url) }
+        guard still(id) else { return }
+
+        let heard = lock.withLock { lastPartial }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !heard.isEmpty {
+            await emitFinal(heard)
+            return
+        }
+
         if let text = await appleTranscribe(url: url), still(id) {
             await emitFinal(text)
             return
@@ -313,15 +390,15 @@ final class SpeechListener: @unchecked Sendable {
             return
         }
 
-        var recordingURL: URL?
-        var audioFile: AVAudioFile?
+        // Recorded on both paths. Apple's live recognizer is cancelled at
+        // teardown and can lose the tail of a sentence, so the file is what
+        // makes a second pass possible when the partials came back empty.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lifo-\(id.uuidString).wav")
+        let audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
+
         var appleRequest: SFSpeechAudioBufferRecognitionRequest?
-        if elevenLabs {
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("lifo-\(id.uuidString).wav")
-            audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
-            recordingURL = url
-        } else {
+        if !elevenLabs {
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
             request.requiresOnDeviceRecognition = false
@@ -330,12 +407,10 @@ final class SpeechListener: @unchecked Sendable {
 
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             appleRequest?.append(buffer)
-            if let audioFile {
-                do { try audioFile.write(from: buffer) } catch { /* drop this frame */ }
-            }
+            do { try audioFile.write(from: buffer) } catch { /* drop this frame */ }
             let rms = Self.rms(buffer)
             self?.emitLevelThrottled(rms)
-            self?.maybeCompleteFromSilence(rms: rms, session: id)
+            self?.observe(rms: rms, frames: buffer.frameLength, session: id)
         }
 
         engine.prepare()
@@ -358,8 +433,9 @@ final class SpeechListener: @unchecked Sendable {
             self.request = appleRequest
             self.tapInstalled = true
             self.running = true
-            self.recordingURL = recordingURL
+            self.recordingURL = url
             self.audioFile = audioFile
+            self.sampleRate = format.sampleRate
         }
 
         if let appleRequest, let recognizer {
@@ -367,6 +443,9 @@ final class SpeechListener: @unchecked Sendable {
                 guard let self else { return }
                 if let result {
                     let text = result.bestTranscription.formattedString
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        self.lock.withLock { self.lastPartial = text }
+                    }
                     if result.isFinal {
                         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                         Task { await self.emitFinal(text) }
@@ -403,6 +482,12 @@ final class SpeechListener: @unchecked Sendable {
                 self?.onFinal?(text)
                 continuation.resume()
             }
+        }
+    }
+
+    private func emitEndOfSpeech() {
+        DispatchQueue.main.async { [weak self] in
+            self?.onEndOfSpeech?()
         }
     }
 
