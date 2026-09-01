@@ -128,6 +128,7 @@ struct NotesHubScreen: View {
             if isThreeColumn {
                 NavigationStack(path: $path) {
                     shelf
+                        .quickActionsToolbar()
                         .navigationDestination(for: NoteRoute.self, destination: destination)
                 }
                 // Bounded on both sides: below the minimum a card stops being
@@ -140,6 +141,7 @@ struct NotesHubScreen: View {
             } else {
                 NavigationStack(path: $path) {
                     shelf
+                        .quickActionsToolbar()
                         .navigationDestination(for: NoteRoute.self, destination: destination)
                 }
             }
@@ -260,6 +262,7 @@ struct NotesHubScreen: View {
             )
             .padding(.bottom, layout.contentBottomInset)
             .background(LifeOSTokens.canvas.resolve(scheme))
+            .quickActionsToolbar()
             .navigationDestination(for: NoteRoute.self, destination: destination)
             .onAppear {
                 inbox.attach(context)
