@@ -52,12 +52,18 @@ struct NotesHubScreen: View {
     /// than by `NoteInboxScreen` so the shell can hand it the same
     /// `ModelContext` it hands everything else.
     @State private var inbox = NoteInboxViewModel()
+    /// The phone's library drawer. Open, it slides in from the leading edge
+    /// and pushes the stack to the right by its own width; nothing is
+    /// covered, the page moves over. Closed, it sits just off screen.
+    @State private var isDrawerOpen = false
+    /// The live finger offset while a drag is in flight, in points along the
+    /// drawer's axis. Zero whenever nothing is being dragged.
+    @State private var drawerDrag: CGFloat = 0
 
     enum NoteRoute: Hashable {
         case shelf
         case page(UUID)
         case habits
-        case library
     }
 
     var body: some View {
@@ -222,16 +228,16 @@ struct NotesHubScreen: View {
                     // beside a rail that highlights a different folder is the
                     // state that makes split views confusing.
                     //
-                    // On a phone the Library is itself pushed onto `path`
-                    // (`path == [.library]`), so clearing it here would pop
-                    // the Library away and eject back to the Inbox having
-                    // gone nowhere. Pushing the shelf on top of the Library
-                    // instead lands on the selection while keeping the
-                    // Library one back-tap away.
+                    // On a phone the Library is a drawer beside the stack,
+                    // not a screen on it, so the stack is set to the shelf
+                    // outright and the drawer closes to reveal it.
                     if layout.isRegular {
                         path.removeAll()
                     } else {
-                        path = [.library, .shelf]
+                        // Picking a shelf is what the drawer was opened for:
+                        // it closes, and the shelf is what is left standing.
+                        path = [.shelf]
+                        setDrawer(open: false)
                     }
                     openPage = nil
                 }
@@ -239,7 +245,10 @@ struct NotesHubScreen: View {
             query: $model.query,
             isSearchFocused: $isSearchFocused,
             onNewFolder: { newFolderBucket = $0 },
-            onOpenHabits: { path.append(.habits) },
+            onOpenHabits: {
+                if !layout.isRegular { setDrawer(open: false) }
+                path.append(.habits)
+            },
             habitCount: plan.snapshot.habits.count,
             onRenameFolder: startRename,
             onDeleteFolder: { model.deleteFolder($0) },
@@ -251,14 +260,126 @@ struct NotesHubScreen: View {
 
     /// Phone. The Inbox stream is the root screen, so the first thing someone
     /// sees is a composer ready to write in, rather than a shelf to file into.
-    /// The Library is a push away rather than the front door.
+    /// The Library is a drawer off the leading edge rather than the front
+    /// door: the nav bar's leading button, or a swipe in from that edge,
+    /// slides it in and pushes the stack over to make room.
     private var compactShell: some View {
+        GeometryReader { proxy in
+            let width = Self.drawerWidth(in: proxy.size.width)
+            let offset = drawerOffset(width: width)
+            let progress = offset / width
+
+            ZStack(alignment: .leading) {
+                compactLibrary
+                    .frame(width: width)
+                    .offset(x: offset - width)
+                    // Hidden from the accessibility tree while closed, so
+                    // VoiceOver does not read a rail that is off screen.
+                    .accessibilityHidden(!isDrawerOpen)
+
+                compactStack
+                    // The corners round as the page moves, so the pushed
+                    // stack reads as a card lifted off the drawer under it.
+                    .clipShape(RoundedRectangle(cornerRadius: 28 * progress, style: .continuous))
+                    .shadow(color: .black.opacity(0.18 * progress), radius: 24, x: -8)
+                    .overlay {
+                        // A scrim over the pushed stack: tap it to close, and
+                        // it says the page is not the thing to touch right now.
+                        Color.black
+                            .opacity(0.22 * progress)
+                            .ignoresSafeArea()
+                            .allowsHitTesting(isDrawerOpen)
+                            .onTapGesture { setDrawer(open: false) }
+                            .accessibilityLabel("Close library")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityHidden(!isDrawerOpen)
+                    }
+                    .offset(x: offset)
+            }
+            .simultaneousGesture(drawerDragGesture(width: width))
+            .animation(drawerDrag == 0 ? .spring(response: 0.38, dampingFraction: 0.86) : nil,
+                       value: isDrawerOpen)
+        }
+        // A query typed in the drawer shows its results on the shelf, so the
+        // shelf is put up behind the drawer as soon as there is a query. Not
+        // closing the drawer: the field keeps focus, and the results are one
+        // swipe away rather than replacing the thing being typed into.
+        .onChange(of: model.query) { _, query in
+            guard !layout.isRegular, !query.isEmpty, path.last != .shelf else { return }
+            path.append(.shelf)
+        }
+    }
+
+    /// Three quarters of the screen, capped so a large phone in landscape
+    /// does not open a drawer wider than the library needs.
+    private static func drawerWidth(in available: CGFloat) -> CGFloat {
+        min(available * 0.78, 320)
+    }
+
+    /// Where the drawer's leading edge sits: 0 closed, `width` open, and
+    /// anywhere between while a finger has it.
+    private func drawerOffset(width: CGFloat) -> CGFloat {
+        let resting: CGFloat = isDrawerOpen ? width : 0
+        return min(max(resting + drawerDrag, 0), width)
+    }
+
+    private func setDrawer(open: Bool) {
+        drawerDrag = 0
+        isDrawerOpen = open
+    }
+
+    /// Open from the leading edge, close from anywhere. Only on the Inbox
+    /// root: further in, the leading edge belongs to the navigation stack's
+    /// own back swipe, and two gestures claiming it would fight.
+    private func drawerDragGesture(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                if isDrawerOpen {
+                    drawerDrag = min(value.translation.width, 0)
+                } else if path.isEmpty, value.startLocation.x < 32 {
+                    drawerDrag = max(value.translation.width, 0)
+                }
+            }
+            .onEnded { value in
+                guard drawerDrag != 0 else { return }
+                // Where the finger was heading, not just where it stopped: a
+                // quick flick that has not crossed halfway still means "open".
+                let projected = drawerOffset(width: width)
+                    + (value.predictedEndTranslation.width - value.translation.width) * 0.6
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                    setDrawer(open: projected > width / 2)
+                }
+            }
+    }
+
+    /// The drawer's contents: the title and the shared library rail.
+    private var compactLibrary: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Library")
+                .font(LifeOSType.display)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .padding(.horizontal, layout.gutter)
+                .padding(.top, 4)
+
+            library
+        }
+        .padding(.bottom, layout.contentBottomInset)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+    }
+
+    /// The phone's navigation stack, unchanged by the drawer around it.
+    private var compactStack: some View {
         NavigationStack(path: $path) {
             NoteInboxScreen(
                 model: inbox,
                 library: model,
                 onOpen: { open($0) },
-                onOpenLibrary: { path.append(.library) }
+                onOpenLibrary: {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                        setDrawer(open: true)
+                    }
+                }
             )
             .padding(.bottom, layout.contentBottomInset)
             .background(LifeOSTokens.canvas.resolve(scheme))
@@ -299,25 +420,6 @@ struct NotesHubScreen: View {
                 onDelete: { plan.delete(id: $0) }
             )
             .navigationTitle("Habits")
-        case .library:
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Library")
-                    .font(LifeOSType.display)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.horizontal, layout.gutter)
-                    .padding(.top, 4)
-
-                library
-            }
-            .background(LifeOSTokens.canvas.resolve(scheme))
-            .onChange(of: model.query) { _, query in
-                // Typing in the rail's search field should show results, and
-                // results live on the shelf. Guarded on the top of the stack,
-                // not on emptiness: the library is itself on the path by the
-                // time this fires, so an emptiness check would never pass,
-                // and no check at all stacks one shelf per keystroke.
-                if !query.isEmpty, path.last != .shelf { path.append(.shelf) }
-            }
         }
     }
 
@@ -344,10 +446,12 @@ struct NotesHubScreen: View {
             focusSearch: {
                 // The field lives in the library, so raising it has to raise
                 // the library first or the caret goes somewhere invisible.
-                isLibraryVisible = true
+                if layout.isRegular { isLibraryVisible = true } else { setDrawer(open: true) }
                 isSearchFocused = true
             },
-            toggleLibrary: { isLibraryVisible.toggle() },
+            toggleLibrary: {
+                if layout.isRegular { isLibraryVisible.toggle() } else { setDrawer(open: !isDrawerOpen) }
+            },
             selectBucket: { bucket in
                 model.selection = .bucket(bucket)
                 path.removeAll()

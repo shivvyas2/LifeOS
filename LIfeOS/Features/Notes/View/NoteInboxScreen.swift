@@ -43,8 +43,12 @@ struct NoteInboxScreen: View {
         .navigationTitle("Notes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            // On the leading side, apart from the quick-actions pill on the
+            // trailing one: it opens the library drawer from that edge, so
+            // the button sits where the thing it summons comes from.
+            ToolbarItem(placement: .topBarLeading) {
                 Button("Library", systemImage: "sidebar.left", action: onOpenLibrary)
+                    .accessibilityHint("Slides the library in from the left")
             }
         }
         .sheet(item: $filing) { target in
