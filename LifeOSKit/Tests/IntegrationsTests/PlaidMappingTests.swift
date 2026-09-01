@@ -109,4 +109,19 @@ import Persistence
         #expect(calendar.component(.day, from: stored) == 1)
         #expect(calendar.component(.month, from: stored) == 9)
     }
+
+    @Test func aResolvedMerchantCarriesItsEntityID() throws {
+        let rows = try PlaidMapping.ingestRows(from: delta().added)
+        let coffee = try #require(rows.first { $0.externalID == "txn_coffee" })
+        #expect(coffee.merchantID == "mch_bluebottle")
+    }
+
+    @Test func anUnresolvedMerchantCarriesNoEntityID() throws {
+        // Not an empty string. Recurring detection falls back per row to the
+        // merchant name; a shared empty key would merge every unresolved
+        // descriptor into one merchant that does not exist.
+        let rows = try PlaidMapping.ingestRows(from: delta().added)
+        let payroll = try #require(rows.first { $0.externalID == "txn_payroll" })
+        #expect(payroll.merchantID == nil)
+    }
 }

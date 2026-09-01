@@ -54,6 +54,7 @@ public enum PlaidMapping {
                 merchant: transaction.merchant_name ?? transaction.name,
                 category: PlaidCategory.display(primary: transaction.personal_finance_category?.primary),
                 categoryCode: transaction.personal_finance_category?.detailed,
+                merchantID: transaction.merchant_entity_id,
                 pending: transaction.pending,
                 accountID: transaction.account_id,
                 accountName: namesByID[transaction.account_id],

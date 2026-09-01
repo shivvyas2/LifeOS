@@ -17,13 +17,14 @@ public struct MoneyIngestRow: Sendable, Equatable {
     public let merchant: String
     public let category: String?
     public let categoryCode: String?
+    public let merchantID: String?
     public let pending: Bool
     public let accountID: String?
     public let accountName: String?
     public let currencyCode: String
 
     public init(externalID: String, date: Date, amount: Double, merchant: String,
-                category: String?, categoryCode: String?, pending: Bool,
+                category: String?, categoryCode: String?, merchantID: String?, pending: Bool,
                 accountID: String?, accountName: String?, currencyCode: String) {
         self.externalID = externalID
         self.date = date
@@ -31,6 +32,7 @@ public struct MoneyIngestRow: Sendable, Equatable {
         self.merchant = merchant
         self.category = category
         self.categoryCode = categoryCode
+        self.merchantID = merchantID
         self.pending = pending
         self.accountID = accountID
         self.accountName = accountName
@@ -162,6 +164,7 @@ public struct MoneyStore {
             entry.merchant = row.merchant
             entry.category = row.category
             entry.categoryCode = row.categoryCode
+            entry.merchantID = row.merchantID
             entry.pending = row.pending
             entry.accountID = row.accountID
             entry.accountName = row.accountName

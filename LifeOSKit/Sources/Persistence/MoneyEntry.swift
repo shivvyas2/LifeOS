@@ -34,6 +34,14 @@ public final class MoneyEntry {
     /// `category` is a display string: keying the rollup rule off display text
     /// would mean renaming a label silently changes the savings rate.
     public var categoryCode: String?
+    /// Plaid's `merchant_entity_id`: one stable id for a merchant across every
+    /// spelling of its descriptor. Nil for a manual entry, and nil when Plaid
+    /// could not resolve one.
+    ///
+    /// Optional on purpose, and a lightweight SwiftData migration because of
+    /// it: rows written before this existed read back nil rather than needing
+    /// a migration step.
+    public var merchantID: String?
     public var accountID: String?
     public var accountName: String?
     public var pending: Bool
@@ -47,6 +55,7 @@ public final class MoneyEntry {
         merchant: String,
         category: String? = nil,
         categoryCode: String? = nil,
+        merchantID: String? = nil,
         currencyCode: String = "USD",
         source: MoneySource = .manual,
         externalID: String? = nil,
@@ -63,6 +72,7 @@ public final class MoneyEntry {
         self.merchant = merchant
         self.category = category
         self.categoryCode = categoryCode
+        self.merchantID = merchantID
         self.accountID = accountID
         self.accountName = accountName
         self.pending = pending

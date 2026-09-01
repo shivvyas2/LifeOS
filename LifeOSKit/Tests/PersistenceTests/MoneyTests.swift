@@ -54,11 +54,11 @@ import SwiftData
         let store = try makeStore()
         try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -20,
                                          merchant: "Cafe", category: nil, categoryCode: nil,
-                                         pending: true, accountID: nil, accountName: nil,
+                                         merchantID: nil, pending: true, accountID: nil, accountName: nil,
                                          currencyCode: "USD")])
         try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -22.5,
                                          merchant: "Cafe", category: "Food", categoryCode: nil,
-                                         pending: false, accountID: nil, accountName: nil,
+                                         merchantID: nil, pending: false, accountID: nil, accountName: nil,
                                          currencyCode: "USD")])
 
         let rows = try store.entries(from: day, to: day)
@@ -136,14 +136,14 @@ import SwiftData
         let store = try makeStore()
         let row = MoneyIngestRow(externalID: "txn_1", date: day, amount: -42,
                                  merchant: "Cafe", category: "Food & drink",
-                                 categoryCode: "FOOD_AND_DRINK_COFFEE", pending: true,
+                                 categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, pending: true,
                                  accountID: "acc_1", accountName: "Checking",
                                  currencyCode: "USD")
         try store.ingest([row])
 
         let settled = MoneyIngestRow(externalID: "txn_1", date: day, amount: -44,
                                      merchant: "Cafe", category: "Food & drink",
-                                     categoryCode: "FOOD_AND_DRINK_COFFEE", pending: false,
+                                     categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, pending: false,
                                      accountID: "acc_1", accountName: "Checking",
                                      currencyCode: "USD")
         try store.ingest([settled])
@@ -164,11 +164,11 @@ import SwiftData
         try store.ingest([
             MoneyIngestRow(externalID: "pending_1", date: day, amount: -30,
                            merchant: "Shop", category: nil, categoryCode: nil,
-                           pending: true, accountID: nil, accountName: nil,
+                           merchantID: nil, pending: true, accountID: nil, accountName: nil,
                            currencyCode: "USD"),
             MoneyIngestRow(externalID: "posted_1", date: day, amount: -30,
                            merchant: "Shop", category: nil, categoryCode: nil,
-                           pending: false, accountID: nil, accountName: nil,
+                           merchantID: nil, pending: false, accountID: nil, accountName: nil,
                            currencyCode: "USD"),
         ])
 
@@ -204,5 +204,36 @@ import SwiftData
         #expect(accounts.count == 2)
         // Net worth subtracts what is owed on the card.
         #expect(summarise(entries: [], accounts: accounts).netWorth == 1_800)
+    }
+
+    @Test func ingestStoresTheMerchantEntityAndUpdatesItOnResync() throws {
+        // Plaid backfills a merchant entity onto a transaction it had not
+        // resolved when it first sent it, so a re-sync must move the value
+        // rather than keep the first answer.
+        let store = try makeStore()
+        let row = MoneyIngestRow(
+            externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
+            category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
+            merchantID: nil, pending: false,
+            accountID: "acc_card", accountName: "Card", currencyCode: "USD"
+        )
+        try store.ingest([row])
+
+        let resolved = MoneyIngestRow(
+            externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
+            category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
+            merchantID: "mch_bluebottle", pending: false,
+            accountID: "acc_card", accountName: "Card", currencyCode: "USD"
+        )
+        try store.ingest([resolved])
+
+        let entries = try store.monthEntries(containing: day)
+        #expect(entries.count == 1)
+        #expect(entries.first?.merchantID == "mch_bluebottle")
+    }
+
+    @Test func aManualEntryHasNoMerchantEntity() throws {
+        let entry = MoneyEntry(date: day, amount: -12, merchant: "Cash")
+        #expect(entry.merchantID == nil)
     }
 }
