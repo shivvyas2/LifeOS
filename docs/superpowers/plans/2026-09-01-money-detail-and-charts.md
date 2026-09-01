@@ -1784,3 +1784,15 @@ Boot the iPhone 17 (OS 26.0) simulator, install the Debug build, open the Money 
 git add docs
 git commit -m "docs(money): record that merchant logos superseded the no-logo decision"
 ```
+
+---
+
+## Addendum: tasks added during the build
+
+Executed on the same branch after Task 9, from requests made while the plan
+ran. See the spec's Section 9 for the reasoning.
+
+- **Task 10:** `MoneyCard`, `PersistedMoneyCard`, `MoneyBandStack`, `MoneyDayCards` (`MoneySections.swift`, `MerchantTile.swift`, `MoneyDetailScreen.swift`). Collapsible chart and list cards; adaptive grid on regular widths; a fresh scroll view per section.
+- **Task 11:** `MoneyParts` (`LifeOSKit/Sources/Persistence/MoneyParts.swift`, `MoneyPartsTests.swift`), and `MoneyFigure` drawing from it.
+- **Task 12:** Single-line rows: amounts `fixedSize`, names `lineLimit(1)` with `minimumScaleFactor(0.8)`.
+- **Task 13:** Sample data removed: `SampleMoneyData.swift`, the Settings toggle, the `LIfeOSApp` registered default, `MoneySnapshot.isSample`, the badge, and the detail page's sample fallback.

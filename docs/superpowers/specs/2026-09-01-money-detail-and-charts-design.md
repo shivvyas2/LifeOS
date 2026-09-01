@@ -184,3 +184,18 @@ from being fetched on every scroll.
 - Editing or recategorising a transaction.
 - A search box over the ledger.
 - Grouping recurring detection by `merchantID` (its own slice).
+
+## 9. Revisions made during the build (2026-09-01)
+
+Asked for in conversation while the slice was being built, and folded in on
+the same branch.
+
+| Ask | What changed |
+|---|---|
+| Collapsible cards | Any band holding a chart or a list is a `MoneyCard`: the header (eyebrow and figure) stays, the body folds under it. Chart cards remember their state (`money.card.collapsed.<id>` in `UserDefaults`); a day of transactions is per visit. Every card starts open, and collapsing hides, never drops. |
+| Adaptive cards | `MoneyBandStack`: one column on a phone, an adaptive grid (340 to 620 points per cell) on a regular width, each band with its own corners there. Chart heights and the donut size scale with the width class. |
+| Nothing crumpled or removed | The ledger is the whole month. The donut folds to five plus "Other" but every category keeps its band. The day header shows the settled net with sign and counts pending beside it rather than dropping it. |
+| Fonts: no double lines, no mid-word breaks | Every name in a row is one line: the amount is drawn at its full size first (`fixedSize`), the name takes the rest, scales to 0.8, then trails off. Figures never shrink in rows. |
+| Numbers exact to the cent | `MoneyParts` in the kit does the split: total cents as an integer first, then whole and cents. Tested against `19.995`, `999.999`, `0.1 + 0.2`, thirty `19.99`s, negatives and zero. `MoneyFigure` only draws what it is handed. Percentages round rather than truncate. |
+| Remove the sample data pill | Gone. |
+| Remove the sample data, make transactions real | `SampleMoneyData.swift`, the Settings toggle, the registered default, `isSample`, and the detail page's sample fallback are all deleted. The Money tab renders only rows that happened, from Plaid or entered by hand, and shows its empty state otherwise. |
