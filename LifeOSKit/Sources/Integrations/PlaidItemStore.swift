@@ -24,6 +24,9 @@ public protocol PlaidItemStoring: Sendable {
     /// Adds the Item, or updates its institution name while keeping its cursor.
     func upsert(_ item: PlaidStoredItem)
     func setCursor(_ cursor: String, for itemID: String)
+    /// Forgets every cursor and keeps every item, so the next sync replays
+    /// full history through the same upsert.
+    func resetCursors()
     func remove(itemID: String)
     func clear()
 }
@@ -79,6 +82,14 @@ public struct UserDefaultsPlaidItemStore: PlaidItemStoring {
         guard let index = current.firstIndex(where: { $0.itemID == itemID }) else { return }
         current[index].cursor = cursor
         write(current)
+    }
+
+    public func resetCursors() {
+        lock.lock()
+        defer { lock.unlock() }
+        write(loadItems().map {
+            PlaidStoredItem(itemID: $0.itemID, institutionName: $0.institutionName, cursor: nil)
+        })
     }
 
     public func remove(itemID: String) {
