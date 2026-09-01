@@ -53,6 +53,9 @@ final class SpeechListener: @unchecked Sendable {
     /// The newest live transcript from Apple's recognizer, kept because the
     /// task is cancelled at teardown and its final result never arrives.
     private var lastPartial = ""
+    /// The answer to the speech-recognition prompt, kept so `installEngine`
+    /// can build the capture plan once it also knows what the device offers.
+    private var speechAuthorized = false
 
     /// All `AVAudioSession` activate/deactivate and engine start/stop run here.
     /// `setActive` on the main thread logs AVAudioSession_iOS.mm:978 and can stall the UI.
@@ -72,6 +75,7 @@ final class SpeechListener: @unchecked Sendable {
             elapsedAudio = 0
             sampleRate = 0
             lastPartial = ""
+            speechAuthorized = false
             usesElevenLabs = AppConfig.elevenLabsAPIKey?.isEmpty == false
         }
 
@@ -82,16 +86,29 @@ final class SpeechListener: @unchecked Sendable {
             return
         }
 
-        if !lock.withLock({ usesElevenLabs }) {
-            let speechStatus: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
-            }
-            guard still(id) else { return }
-            guard speechStatus == .authorized else {
-                emitError("Microphone permission is needed to talk to LIFO.")
-                return
-            }
+        // Asked on both paths, not just Apple's. Scribe transcribes a clip
+        // that is only uploaded once the turn is over, so it cannot put a word
+        // on screen while someone is still talking. Apple's recognizer runs
+        // alongside it to do exactly that and nothing else.
+        let speechStatus: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
         }
+        guard still(id) else { return }
+        // Optimistic about availability, which is not known until the engine
+        // is built. The only question being asked here is whether a refusal on
+        // its own should stop the turn, and on the Scribe path it should not.
+        let authorized = speechStatus == .authorized
+        let provisional = SpeechCapturePlan(
+            hasScribeKey: lock.withLock { usesElevenLabs },
+            speechAuthorized: authorized,
+            recognizerAvailable: true,
+            supportsOnDeviceRecognition: false
+        )
+        guard provisional.canListen else {
+            emitError("Microphone permission is needed to talk to LIFO.")
+            return
+        }
+        lock.withLock { speechAuthorized = authorized }
 
         do {
             try await tryOnSessionQueue { try self.installEngine(session: id) }
@@ -367,15 +384,24 @@ final class SpeechListener: @unchecked Sendable {
     private func installEngine(session id: UUID) throws {
         guard still(id) else { return }
 
-        let elevenLabs = lock.withLock { usesElevenLabs }
-        if !elevenLabs {
-            let recognizer = SFSpeechRecognizer()
-            guard let recognizer, recognizer.isAvailable else {
-                emitError("Speech recognition is not available right now.")
-                return
-            }
-            self.recognizer = recognizer
+        // Wanted on both paths now: as the transcriber when there is no Scribe
+        // key, and as the words under the waveform when there is.
+        let (hasScribeKey, authorized) = lock.withLock {
+            (usesElevenLabs, speechAuthorized)
         }
+        let candidate = authorized ? SFSpeechRecognizer() : nil
+        let plan = SpeechCapturePlan(
+            hasScribeKey: hasScribeKey,
+            speechAuthorized: authorized,
+            recognizerAvailable: candidate?.isAvailable == true,
+            supportsOnDeviceRecognition: candidate?.supportsOnDeviceRecognition == true
+        )
+        guard plan.canListen else {
+            emitError("Speech recognition is not available right now.")
+            return
+        }
+        let recognizer = plan.appleRole == .off ? nil : candidate
+        self.recognizer = recognizer
 
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
@@ -398,10 +424,10 @@ final class SpeechListener: @unchecked Sendable {
         let audioFile = try AVAudioFile(forWriting: url, settings: format.settings)
 
         var appleRequest: SFSpeechAudioBufferRecognitionRequest?
-        if !elevenLabs {
+        if let recognizer {
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
-            request.requiresOnDeviceRecognition = false
+            request.requiresOnDeviceRecognition = plan.requiresOnDeviceRecognition
             appleRequest = request
         }
 
@@ -447,6 +473,11 @@ final class SpeechListener: @unchecked Sendable {
                         self.lock.withLock { self.lastPartial = text }
                     }
                     if result.isFinal {
+                        // Scribe owns the sentence that gets sent. Letting this
+                        // one through as well would race it, and the answer
+                        // would come back to whichever transcript won rather
+                        // than to the better of the two.
+                        guard plan.emitsFinalTranscript else { return }
                         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                         Task { await self.emitFinal(text) }
                     } else {
@@ -458,6 +489,10 @@ final class SpeechListener: @unchecked Sendable {
                     if ns.code == 1 || ns.code == 209 || ns.code == 216 { return }
                     if !self.isRunning { return }
                     Self.log.error("recognition failed: \(error.localizedDescription, privacy: .public)")
+                    // Only the live text is lost when Scribe is transcribing,
+                    // and a recording still in progress must not be torn down
+                    // over a screen decoration failing.
+                    guard plan.failureEndsTheTurn else { return }
                     self.emitError(error.localizedDescription)
                     self.cancel()
                 }
