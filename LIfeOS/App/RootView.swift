@@ -709,6 +709,13 @@ struct RootView: View {
         }
     }
 
+    /// Only while its page is up. Off screen it is six months of rows nobody
+    /// is looking at, run on every save in the app.
+    private func reloadMoneyDetail() {
+        guard let openMoney else { return }
+        moneyDetail.load(openMoney)
+    }
+
     private func reloadAll() {
         today.load()
         // Only while its page is up. Off screen it is a year of bucketing
@@ -719,11 +726,11 @@ struct RootView: View {
         recovery.load()
         wellness.load()
         money.load(connection: plaid)
-        if let openMoney { moneyDetail.load(openMoney) }
+        reloadMoneyDetail()
         Task {
             await plaid.syncIfDue()
             money.load(connection: plaid)
-            if let openMoney { moneyDetail.load(openMoney) }
+            reloadMoneyDetail()
         }
         plan.load()
         notes.load()

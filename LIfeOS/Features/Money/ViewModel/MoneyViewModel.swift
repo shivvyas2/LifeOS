@@ -16,28 +16,14 @@ final class MoneyViewModel {
         self.calendar = calendar
     }
 
-    /// Shared with the Settings toggle that writes it. Delete alongside
-    /// `SampleMoneyData.swift` when Plaid lands.
-    static let sampleDataKey = "useSampleFinanceData"
-
     func attach(_ context: ModelContext) {
         self.context = context
     }
 
+    /// Real rows only. The invented sample month that used to stand in
+    /// before a bank was connected is gone: every figure on the Money tab is
+    /// now something that happened.
     func load(connection: PlaidConnectionViewModel? = nil) {
-        // On by default (registered in LIfeOSApp), so a fresh TestFlight
-        // install has a Money tab worth showing before any bank exists. An
-        // attached bank always wins over the flag: invented figures may never
-        // sit in front of real ones, and the screen badges the month as
-        // sample whenever they show.
-        let bankAttached: Bool = switch connection?.state {
-        case .connected, .needsReconnect: true
-        default: false
-        }
-        if UserDefaults.currentAccount.bool(forKey: Self.sampleDataKey), !bankAttached {
-            snapshot = .sample
-            return
-        }
         guard let context else { return }
         let store = MoneyStore(context: context, calendar: calendar)
 
