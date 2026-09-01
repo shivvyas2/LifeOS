@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import DesignSystem
+import Insights
 
 /// The coach. Text first, voice second.
 ///
@@ -46,7 +47,8 @@ struct LifoCoachScreen: View {
                                 .transition(.scale(scale: 0.8).combined(with: .opacity))
                         }
 
-                        if model.history.isEmpty && model.answer.isEmpty {
+                        if model.history.isEmpty && model.answer.isEmpty
+                            && model.pendingQuestion.isEmpty {
                             opening
                         } else {
                             transcript
@@ -178,18 +180,34 @@ struct LifoCoachScreen: View {
     private var transcript: some View {
         VStack(alignment: .leading, spacing: 18) {
             ForEach(model.history) { turn in
-                turnView(question: turn.question, answer: turn.answer)
+                turnView(question: turn.question, answer: turn.answer, sent: turn.sent)
             }
 
-            if model.phase == .thinking {
-                if !model.liveTranscript.isEmpty {
-                    bubble(model.liveTranscript, isQuestion: true)
-                }
-                HStack(spacing: 8) {
-                    ProgressView().tint(LifoPalette.ink)
-                    Text("Thinking…")
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifoPalette.quietInk)
+            // The turn in flight. The question is drawn from
+            // `pendingQuestion`, which is set the instant it is asked, so it
+            // is on screen through the whole wait rather than appearing with
+            // the answer it was waiting for.
+            if !model.pendingQuestion.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    bubble(model.pendingQuestion, isQuestion: true)
+
+                    if model.answer.isEmpty {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(LifoPalette.ink)
+                            Text("Thinking…")
+                                .font(LifeOSType.label.weight(.regular))
+                                .foregroundStyle(LifoPalette.quietInk)
+                        }
+                    } else {
+                        // The answer as it is written. No cursor and no
+                        // per-character animation: the text arrives fast
+                        // enough that animating it would slow it down.
+                        Text(model.answer)
+                            .font(LifeOSType.secondary)
+                            .foregroundStyle(LifoPalette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
             }
 
@@ -199,7 +217,7 @@ struct LifoCoachScreen: View {
         }
     }
 
-    private func turnView(question: String, answer: String) -> some View {
+    private func turnView(question: String, answer: String, sent: SentContext?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             // A seeded nudge has no question above it, because LIFO spoke
             // first. An empty bubble there reads as a message the person sent
@@ -212,7 +230,34 @@ struct LifoCoachScreen: View {
                 .foregroundStyle(LifoPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
+
+            if let sent {
+                sentView(sent)
+            }
         }
+    }
+
+    /// What this answer was produced from, closed by default and openable.
+    ///
+    /// Closed, because a line of provenance under every answer would bury the
+    /// answers. Openable, because "your own data" is a claim, and the only
+    /// honest way to make it is to show the thing itself rather than a
+    /// description of it that can drift from what was actually sent.
+    private func sentView(_ sent: SentContext) -> some View {
+        DisclosureGroup {
+            Text(sent.text)
+                .font(LifeOSType.caption)
+                .foregroundStyle(LifoPalette.quietInk)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding(.top, 8)
+        } label: {
+            Label(sent.headline, systemImage: sent.tier == .cloud ? "cloud" : "iphone")
+                .font(LifeOSType.caption.weight(.medium))
+                .foregroundStyle(LifoPalette.quietInk)
+        }
+        .tint(LifoPalette.quietInk)
+        .padding(.top, 2)
     }
 
     /// White on the aura, not glass: your own words are the brightest thing

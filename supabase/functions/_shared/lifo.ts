@@ -215,10 +215,30 @@ function toOpenAIMessage(message: unknown): unknown {
 // never displaced by anything the client sent, and the context sits behind
 // it because the model is told to cite only numbers it was given, which
 // requires actually giving it some.
+/// The two parameters that are worth having and are not worth an outage.
+///
+/// Split out and named so `withoutTuning` below can lift them back off a body
+/// the provider rejected. A model that stops accepting one of these must cost
+/// a slower answer, never no answer at all.
+const TUNING = {
+  reasoning_effort: "low",
+  verbosity: "low",
+} as const;
+
+/// The same body with the tuning removed, for the one retry after a 400.
+export function withoutTuning(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const stripped = { ...body };
+  for (const key of Object.keys(TUNING)) delete stripped[key];
+  return stripped;
+}
+
 export function chatBody(
   messages: unknown[],
   tools: unknown[],
   context = "",
+  stream = false,
 ): Record<string, unknown> {
   const system = [{ role: "system", content: TASKS.chat.system }];
   if (context) system.push({ role: "system", content: context });
@@ -229,7 +249,20 @@ export function chatBody(
       ...system,
       ...messages.map(toOpenAIMessage),
     ],
+    // The default is medium, and medium is most of the wait. A coaching
+    // question over a week of the user's own numbers is not a reasoning
+    // problem; the thinking that matters already happened on the device when
+    // the digest was built. Low also spends fewer tokens, which is the same
+    // lever as the daily cap pulled from the other end.
+    ...TUNING,
   };
+  if (stream) {
+    body.stream = true;
+    // Usage arrives only in a final chunk, and without it a streamed turn
+    // would cost the user nothing against the daily cap: an unmetered path
+    // is a free one, and the cap is what keeps this affordable.
+    body.stream_options = { include_usage: true };
+  }
   // Absent rather than empty. The two are not the same to the provider, and
   // an empty array is rejected outright by some versions.
   if (tools.length > 0) {
@@ -237,6 +270,59 @@ export function chatBody(
     body.tool_choice = "auto";
   }
   return body;
+}
+
+/// One chunk of the provider's stream, reduced to what we forward.
+///
+/// Pure, so the reassembly is testable without a network — the same division
+/// the rest of this file keeps. A chunk carries at most one of these: a piece
+/// of text, a refusal, or the usage that closes the stream.
+export function parseStreamChunk(
+  chunk: unknown,
+): { delta?: string; refusal?: string; tokens?: number } {
+  const body = chunk as {
+    choices?: { delta?: { content?: string; refusal?: string } }[];
+    usage?: { total_tokens?: number };
+  };
+  const out: { delta?: string; refusal?: string; tokens?: number } = {};
+  const delta = body.choices?.[0]?.delta;
+  // Deliberately not `if (delta.content)`: an empty string is a real chunk and
+  // dropping it is harmless, but a nullish check that also swallows "0" is the
+  // bug this shape invites.
+  if (typeof delta?.content === "string" && delta.content.length > 0) {
+    out.delta = delta.content;
+  }
+  if (typeof delta?.refusal === "string" && delta.refusal.length > 0) {
+    out.refusal = delta.refusal;
+  }
+  // The final chunk, sent because `stream_options.include_usage` asked for it.
+  // It carries no choices, which is why usage is read independently above.
+  if (typeof body.usage?.total_tokens === "number") {
+    out.tokens = body.usage.total_tokens;
+  }
+  return out;
+}
+
+/// Pulls complete `data:` payloads out of a growing buffer.
+///
+/// Returns the payloads found and whatever tail is left over, because an SSE
+/// frame is split across network reads far more often than not and a parser
+/// that forgets the tail silently loses a word in the middle of a sentence.
+export function drainSSE(
+  buffer: string,
+): { payloads: string[]; rest: string } {
+  const payloads: string[] = [];
+  let rest = buffer;
+  let index = rest.indexOf("\n\n");
+  while (index !== -1) {
+    const frame = rest.slice(0, index);
+    rest = rest.slice(index + 2);
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("data:")) payloads.push(line.slice(5).trim());
+    }
+    index = rest.indexOf("\n\n");
+  }
+  return { payloads, rest };
 }
 
 export function parseChatReply(body: unknown) {
@@ -335,7 +421,15 @@ export function parseRequest(body: unknown) {
     const context = typeof raw.context === "string" ? raw.context : "";
     if (context.length > MAX_CONTEXT_LENGTH) return null;
 
-    return { kind: "chat" as const, messages: raw.messages, tools, context };
+    // Streaming is the client asking to be handed text as it arrives, and it
+    // is only ever honoured for a turn with no tools. A tool call arrives in
+    // a stream as fragments of a JSON argument string spread across chunks,
+    // and reassembling those on the server would put half the device's round
+    // loop up here. The coach passes no tools and is the screen someone
+    // watches; the calendar assistant passes tools and is not.
+    const stream = raw.stream === true && tools.length === 0;
+
+    return { kind: "chat" as const, messages: raw.messages, tools, context, stream };
   }
 
   const prompt = String(raw.prompt ?? "");

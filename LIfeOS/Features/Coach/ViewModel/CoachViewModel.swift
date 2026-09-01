@@ -4,6 +4,9 @@ import SwiftData
 import Insights
 import Integrations
 import Persistence
+import OSLog
+
+private let coachLog = Logger(subsystem: "com.shivvyas.lifeos", category: "coach")
 
 enum LifoPhase: Equatable {
     case idle
@@ -16,11 +19,41 @@ struct LifoTurn: Identifiable, Equatable {
     let id: UUID
     let question: String
     let answer: String
+    /// What left the phone for this turn, and where it went. Nil for a seeded
+    /// opening line, which is LIFO speaking first and sends nothing.
+    let sent: SentContext?
 
-    init(id: UUID = UUID(), question: String, answer: String) {
+    init(id: UUID = UUID(), question: String, answer: String, sent: SentContext? = nil) {
         self.id = id
         self.question = question
         self.answer = answer
+        self.sent = sent
+    }
+}
+
+/// Exactly what one question was answered with, and by which model.
+///
+/// The app already decided that the two tiers are owed different renders of
+/// somebody's data — `.onDevice` carries the raw Whoop series, `.offDevice`
+/// does not — and then never showed anyone either. A coach that reads your
+/// sleep and your bank balance and will not say which of them it just sent
+/// somewhere is asking for trust it has not earned.
+///
+/// `text` is the verbatim string, not a description of it. A summary of what
+/// was sent is a second thing that can be wrong; the thing itself cannot be.
+struct SentContext: Equatable {
+    let text: String
+    let tier: AssistantTurn.Tier
+
+    /// The one-line version, for the row that is shown before it is opened.
+    var headline: String {
+        let place = tier == .cloud ? "the cloud" : "this device"
+        // Lines rather than characters: "1,847 characters" is a number nobody
+        // has a feel for, and the render is one fact per line.
+        let facts = text.split(separator: "\n").filter {
+            !$0.trimmingCharacters(in: .whitespaces).isEmpty
+        }.count
+        return "\(facts) lines of your data, answered on \(place)"
     }
 }
 
@@ -39,6 +72,17 @@ final class CoachViewModel {
     var status = "Tap the mic and talk, or type."
     var error: String?
     var history: [LifoTurn] = []
+    /// The question being answered right now, held separately from `history`
+    /// so it can go on screen the instant it is asked.
+    ///
+    /// It used to wait for the answer, because a turn was only appended once
+    /// there was something to append it with. That meant the one moment you
+    /// most want to see what you said — while it is being thought about — was
+    /// the one moment nothing showed it, and a spoken question vanished
+    /// entirely between the mic closing and the reply landing.
+    var pendingQuestion = ""
+    /// What was sent with `pendingQuestion`, available before the answer is.
+    var pendingSent: SentContext?
     var isTyping = false
     var draft = ""
     var level: CGFloat = 0
@@ -247,6 +291,12 @@ final class CoachViewModel {
         speech.stop()
         stopSpeaking()
         liveTranscript = question
+        // Pinned before anything else happens, including the store reads
+        // below. Whatever the rest of this method does or fails to do, the
+        // question is on screen from the moment it was asked.
+        pendingQuestion = question
+        pendingSent = nil
+        answer = ""
         phase = .thinking
         status = "Thinking…"
         level = 0
@@ -281,6 +331,9 @@ final class CoachViewModel {
                 .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
                                        text: $0.text) }
 
+            let onDevice = Self.coachInstructions(bundle, for: .onDevice)
+            let cloud = Self.coachInstructions(bundle, for: .offDevice)
+
             do {
                 let reply = try await AssistantTurn.run(
                     // One render per tier, not one render for both. The two
@@ -290,19 +343,32 @@ final class CoachViewModel {
                     // phone, and `.offDevice` leaves those out and carries the
                     // money detail instead. Sending one render to both tiers
                     // means picking which tier to be wrong for.
-                    instructions: ChatInstructions(
-                        onDevice: Self.coachInstructions(bundle, for: .onDevice),
-                        cloud: Self.coachInstructions(bundle, for: .offDevice)
-                    ),
+                    instructions: ChatInstructions(onDevice: onDevice, cloud: cloud),
                     thread: thread,
                     tools: [],
                     broker: ConfirmationBroker(),
-                    remote: chatRemote
+                    remote: chatRemote,
+                    // The answer as it is written. Assigned, never appended:
+                    // the engine hands over the whole of it each time, so a
+                    // frame that arrives out of order cannot duplicate a
+                    // clause or leave one behind.
+                    onPartial: { [weak self] text in
+                        Task { @MainActor in
+                            guard let self, self.phase == .thinking else { return }
+                            self.answer = text
+                        }
+                    }
+                )
+                let sent = SentContext(
+                    text: reply.tier == .cloud ? cloud : onDevice,
+                    tier: reply.tier
                 )
                 try? store.append(conversationID: conversationID, role: .assistant,
                                   text: reply.text)
                 answer = reply.text
-                history.append(LifoTurn(question: question, answer: reply.text))
+                history.append(LifoTurn(question: question, answer: reply.text, sent: sent))
+                pendingQuestion = ""
+                pendingSent = nil
                 phase = .answered
                 status = "LIFO"
                 speak(reply.text)
@@ -315,7 +381,18 @@ final class CoachViewModel {
                 // cloud message above and the Apple Intelligence prompt below
                 // both misdiagnose this as a connectivity or settings problem.
                 fail("That covered too much at once. Try asking about a shorter stretch.")
+            } catch RemoteEngineError.notSignedIn {
+                // Its own case, not the network one below. The message used to
+                // be "could not reach the cloud", which sent someone whose
+                // session had simply lapsed to check their wifi.
+                fail("Your session has expired. Sign in again to think in the cloud.")
             } catch {
+                // The one place the real reason is visible. Every failure past
+                // this point renders as the same sentence, so without this
+                // line a lapsed token, a 500 from the function and a plane
+                // journey are indistinguishable from the outside — which is
+                // how "LIFO could not reach the cloud" becomes unanswerable.
+                coachLog.error("cloud turn failed: \(String(describing: error), privacy: .public)")
                 if isSignedIn {
                     fail("LIFO could not reach the cloud just now. Try again in a moment.")
                 } else {
@@ -347,5 +424,10 @@ final class CoachViewModel {
         phase = .idle
         status = message
         isTyping = true
+        // A streamed answer that broke off half way is not an answer. Leaving
+        // the fragment on screen under a failure line reads as though LIFO
+        // said something and then contradicted itself.
+        answer = ""
+        pendingSent = nil
     }
 }

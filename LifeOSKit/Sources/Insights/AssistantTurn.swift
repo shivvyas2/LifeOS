@@ -10,13 +10,27 @@ import FoundationModels
 /// questions this app gets asked, the device is what still works when the
 /// cloud will not, and a refusal is never re-asked of a second model.
 public enum AssistantTurn {
+    /// Which model actually wrote the answer.
+    ///
+    /// Reported rather than inferred. The router's choice is not the whole
+    /// story: an automatic turn falls back to the device when the cloud will
+    /// not answer, so a screen that worked out the tier from the preference
+    /// would name the wrong one exactly when it mattered — and this is what
+    /// labels the "what was sent" disclosure, where being wrong is a claim
+    /// about where somebody's data went.
+    public enum Tier: String, Sendable, Equatable {
+        case cloud, onDevice
+    }
+
     public struct Reply: Sendable, Equatable {
         public let text: String
         public let toolSummaries: [String]
+        public let tier: Tier
 
-        public init(text: String, toolSummaries: [String]) {
+        public init(text: String, toolSummaries: [String], tier: Tier = .onDevice) {
             self.text = text
             self.toolSummaries = toolSummaries
+            self.tier = tier
         }
     }
 
@@ -40,7 +54,11 @@ public enum AssistantTurn {
         availability: @Sendable () -> ModelAvailability = {
             ModelAvailability.from(SystemLanguageModel.default.availability)
         },
-        preference: @Sendable () -> TierPreference = { .current }
+        preference: @Sendable () -> TierPreference = { .current },
+        /// Handed the answer so far, whichever tier is writing it. Cumulative,
+        /// so a screen assigns rather than appends and cannot end up holding
+        /// half a sentence twice.
+        onPartial: @escaping @Sendable (String) -> Void = { _ in }
     ) async throws -> Reply {
         let device = onDevice ?? OnDeviceChatEngine()
 
@@ -51,7 +69,7 @@ public enum AssistantTurn {
         guard let remote else {
             return try await device.reply(
                 to: thread, instructions: instructions.onDevice,
-                tools: tools, invoker: invoker
+                tools: tools, invoker: invoker, onPartial: onPartial
             )
         }
 
@@ -65,7 +83,7 @@ public enum AssistantTurn {
             // than a fallback.
             return try await device.reply(
                 to: thread, instructions: instructions.onDevice,
-                tools: tools, invoker: invoker
+                tools: tools, invoker: invoker, onPartial: onPartial
             )
         case .cloud:
             // No fallback, on purpose and identically to `CoachRouter`.
@@ -73,7 +91,7 @@ public enum AssistantTurn {
             // did not answer, not quietly handed a weaker answer.
             return try await remote.reply(
                 to: thread, instructions: instructions.cloud,
-                tools: tools, invoker: invoker
+                tools: tools, invoker: invoker, onPartial: onPartial
             )
         case .automatic:
             break
@@ -82,7 +100,7 @@ public enum AssistantTurn {
         do {
             return try await remote.reply(
                 to: thread, instructions: instructions.cloud,
-                tools: tools, invoker: invoker
+                tools: tools, invoker: invoker, onPartial: onPartial
             )
         } catch RemoteEngineError.refused(let reason) {
             // Never falls back. The model answered and declined; asking a
@@ -103,9 +121,14 @@ public enum AssistantTurn {
             // spent rounds and collected chips for work whose reply never
             // arrived, and those must not be attributed to this answer.
             let retry = ToolInvoker(tools: tools, broker: broker)
+            // Cleared first. The cloud attempt may have streamed a sentence or
+            // two onto the screen before it failed, and leaving those there
+            // while the device writes its own answer under them shows one
+            // question answered twice.
+            onPartial("")
             return try await device.reply(
                 to: thread, instructions: instructions.onDevice,
-                tools: tools, invoker: retry
+                tools: tools, invoker: retry, onPartial: onPartial
             )
         }
     }
