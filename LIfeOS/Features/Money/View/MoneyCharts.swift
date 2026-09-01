@@ -61,8 +61,8 @@ struct MoneyWeekChart: View {
 
 struct MoneyDonut: View {
     let slices: [CategorySlice]
-    var onSelect: (CategorySlice) -> Void = { _ in }
     var size: CGFloat = 128
+    var onSelect: (CategorySlice) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
     @State private var selectedAmount: Double?
 
@@ -129,7 +129,7 @@ struct MoneyMonthsChart: View {
                     .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(month.isCurrent ? 1 : 0.32))
                     .cornerRadius(4)
                     .annotation(position: .top, spacing: 4) {
-                        if month.isCurrent {
+                        if month.isCurrent, month.amount > 0 {
                             Text(month.amount, format: .currency(code: "USD").precision(.fractionLength(0)))
                                 .font(LifeOSType.eyebrow.weight(.semibold))
                                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))

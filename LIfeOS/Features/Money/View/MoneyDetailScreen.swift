@@ -25,7 +25,7 @@ struct MoneyDetailScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
+            MoneyBandStack {
                 headline
                 trend
                 transactions
@@ -55,7 +55,8 @@ struct MoneyDetailScreen: View {
                     Text(filter.title)
                         .font(LifeOSType.sectionTitle.weight(.bold))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                        .lineLimit(2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     if case .merchant = filter, let category = snapshot.category {
                         Text(category).moneyEyebrow(scheme)
                     }
@@ -72,9 +73,11 @@ struct MoneyDetailScreen: View {
     }
 
     private var trend: some View {
-        MoneyBand(tone: MoneyPalette.stone) {
+        PersistedMoneyCard(id: "trend", tone: MoneyPalette.stone, name: "Six months") {
             Text("Six months").moneyEyebrow(scheme)
-            MoneyMonthsChart(months: snapshot.months, average: snapshot.average)
+        } content: {
+            MoneyMonthsChart(months: snapshot.months, average: snapshot.average,
+                             height: layout.isRegular ? 180 : 140)
                 .padding(.top, Space.half)
             if let average = snapshot.average {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -97,22 +100,10 @@ struct MoneyDetailScreen: View {
         if snapshot.transactions.isEmpty {
             MoneyEmptyBand(tone: MoneyPalette.stone, line: "Nothing this month.")
         } else {
-            ForEach(MoneyDayGroup.group(snapshot.transactions), id: \.label) { day in
-                Text(day.label)
-                    .moneyEyebrow(scheme)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Space.x2)
-                    .padding(.top, Space.x2)
-                    .padding(.bottom, Space.half)
-                    .background(MoneyPalette.stone.resolve(scheme))
-                ForEach(day.rows) { row in
-                    // No tap: a merchant page opening a merchant page is a loop.
-                    // A category page could open a merchant, but two depths of
-                    // the same list is one more than anyone asked for.
-                    MoneyTransactionRow(row: row)
-                }
-            }
-            Color.clear.frame(height: Space.x1).background(MoneyPalette.stone.resolve(scheme))
+            // No tap on these rows: a merchant page opening a merchant page
+            // is a loop, and two depths of the same list is one more than
+            // anyone asked for.
+            MoneyDayCards(rows: snapshot.transactions)
         }
     }
 }
