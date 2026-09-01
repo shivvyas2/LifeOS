@@ -51,6 +51,10 @@ final class HealthConnectionViewModel {
     /// The in-flight sync, so a launch task and a foreground transition
     /// arriving together do one pass rather than two.
     private var running: Task<Void, Never>?
+    /// The foreground watch on Health. One at a time; `startWatching` is
+    /// idempotent so a tab change and a foreground transition cannot start a
+    /// second.
+    private var watching: Task<Void, Never>?
 
     /// Per account, because the sync cursor, the cycle switch and whether
     /// permission has been asked for are all facts about one person rather
@@ -146,6 +150,9 @@ final class HealthConnectionViewModel {
             return
         }
         await sync()
+        // Straight after the first read, so the person who just connected sees
+        // the numbers move rather than waiting for the next foreground.
+        startWatching()
     }
 
     /// Re-reads the window since the last sync. Safe to call on every launch:
@@ -153,6 +160,38 @@ final class HealthConnectionViewModel {
     func syncIfConnected() async {
         guard reader.isAvailable, defaults.bool(forKey: Self.hasAskedKey) else { return }
         await sync()
+    }
+
+    /// Re-reads today whenever Health records something, for as long as the
+    /// app is in front.
+    ///
+    /// This is what makes a step count on screen climb rather than sit at
+    /// whatever it was when the tab was opened. The pass writes through
+    /// `MetricsStore`, which saves, and `RootView` reloads every snapshot on
+    /// `ModelContext.didSave` — so nothing here knows about a screen, and the
+    /// tiles repaint through the path they already used.
+    func startWatching() {
+        guard watching == nil, reader.isAvailable,
+              defaults.bool(forKey: Self.hasAskedKey) else { return }
+        watching = Task { [weak self, reader] in
+            for await _ in await reader.changes() {
+                guard let self, !Task.isCancelled else { return }
+                await self.syncIfConnected()
+                // A day's steps arrive in dozens of batches, and re-reading ten
+                // metrics for each one would spend the afternoon in HealthKit
+                // to move a numeral. The stream buffers one event, so whatever
+                // landed during this pause is still waiting when it ends.
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
+    }
+
+    /// Stops the watch. Called when the app leaves the foreground, so a phone
+    /// in a pocket is not running ten queries a quarter minute.
+    func stopWatching() {
+        watching?.cancel()
+        watching = nil
+        Task { [reader] in await reader.stopObserving() }
     }
 
     /// Runs once, after the first authorisation, when nothing has been decided

@@ -99,6 +99,69 @@ public actor HealthKitReader {
         (try? store.biologicalSex().biologicalSex) == .female
     }
 
+    // MARK: - Watching
+
+    /// The observer queries currently running, so they can be stopped. Actor
+    /// state rather than a local, because `HKObserverQuery` is not `Sendable`
+    /// and the stream's termination handler must not carry one across.
+    private var observers: [HKObserverQuery] = []
+
+    /// Fires whenever Health records or corrects a sample for one of `metrics`.
+    ///
+    /// An observer rather than a timer. A step count changes dozens of times
+    /// an hour and not at all overnight, so any interval short enough to look
+    /// live is mostly wasted queries and any interval cheap enough to run is
+    /// not live. HealthKit already knows when something arrived; this asks it
+    /// to say so.
+    ///
+    /// Foreground only, deliberately. `enableBackgroundDelivery` needs an
+    /// entitlement and wakes the app to write rows nobody is looking at; the
+    /// launch and foreground syncs already cover the time the app was away.
+    ///
+    /// The buffer holds one event. A batch of samples landing together is one
+    /// reason to re-read the day, not thirty, and a consumer that throttles
+    /// itself must not come back to a queue of stale notifications.
+    public func changes(
+        for metrics: [HealthMetric] = HealthMetric.universal
+    ) -> AsyncStream<Void> {
+        let (stream, continuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        let types = Set(metrics.compactMap(Self.sampleType))
+        guard isAvailable, !types.isEmpty else {
+            continuation.finish()
+            return stream
+        }
+
+        for type in types {
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
+                if let error {
+                    Self.log.error("observer failed: \(error.localizedDescription, privacy: .public)")
+                } else {
+                    continuation.yield()
+                }
+                // Always, even on the error path. HealthKit retries a query
+                // whose handler never completed, and a silent leak of those is
+                // how an app ends up with a hundred live observers.
+                completion()
+            }
+            store.execute(query)
+            observers.append(query)
+        }
+
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.stopObserving() }
+        }
+        return stream
+    }
+
+    /// Tears the observers down. Called when the stream ends, and safe to call
+    /// when none are running.
+    public func stopObserving() {
+        for query in observers { store.stop(query) }
+        observers.removeAll()
+    }
+
     /// Every metric for one day, skipping the ones with nothing recorded.
     ///
     /// A metric that errors is dropped rather than failing the day: one
