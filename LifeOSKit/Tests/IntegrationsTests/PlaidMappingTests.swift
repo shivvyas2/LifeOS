@@ -146,7 +146,6 @@ import Persistence
 
         #expect(checking.availableBalance == 2_100.50)
         #expect(card.availableBalance == nil)
-        // The existing fallback is unchanged: a null current balance is still 0.
         #expect(checking.currentBalance == 2_450.75)
     }
 }

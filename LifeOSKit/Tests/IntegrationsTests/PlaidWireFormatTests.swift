@@ -49,4 +49,26 @@ import Foundation
         #expect(checking.balances.available == 2_100.50)
         #expect(card.balances.available == nil)
     }
+
+    @Test func anAccountWithoutMaskOrSubtypeStillDecodes() throws {
+        // Both fixture accounts carry mask and subtype, so nothing else proves
+        // an institution that omits them decodes rather than throwing.
+        let json = """
+        {
+            "account_id": "acc_bare",
+            "name": "Bare Account",
+            "type": "depository",
+            "balances": {
+                "current": 100.00,
+                "iso_currency_code": "USD"
+            }
+        }
+        """
+        let account = try JSONDecoder().decode(PlaidAccount.self, from: Data(json.utf8))
+
+        #expect(account.mask == nil)
+        #expect(account.subtype == nil)
+        #expect(account.balances.available == nil)
+        #expect(account.balances.limit == nil)
+    }
 }
