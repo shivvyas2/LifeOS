@@ -19,6 +19,9 @@ struct MoneyScreen: View {
     var onConnect: () -> Void = {}
     var onSync: () -> Void = {}
     var onEditBudgets: () -> Void = {}
+    /// A category, merchant or transaction was tapped. The stack that owns
+    /// this screen pushes the detail page.
+    var onOpen: (MoneyDetailFilter) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
@@ -85,12 +88,12 @@ struct MoneyScreen: View {
                     Group {
                         switch section {
                         case .flow:       MoneyFlowSection(snapshot: snapshot)
-                        case .categories: MoneyCategoriesSection(snapshot: snapshot)
-                        case .repeating:  MoneyRecurringSection(snapshot: snapshot)
+                        case .categories: MoneyCategoriesSection(snapshot: snapshot, onOpen: onOpen)
+                        case .repeating:  MoneyRecurringSection(snapshot: snapshot, onOpen: onOpen)
                         case .goal:       MoneyGoalSection(snapshot: snapshot, onEdit: onEditBudgets)
                         case .pressure:   MoneyPressureSection(points: snapshot.pressurePoints,
                                                                onEditBudgets: onEditBudgets)
-                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd)
+                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd, onOpen: onOpen)
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))

@@ -68,8 +68,17 @@ struct MoneyFlowSection: View {
                 }
             }
 
-            if let rate = snapshot.savingsRate {
+            if !snapshot.week.isEmpty {
                 MoneyBand(tone: MoneyPalette.stone) {
+                    Text("This week").moneyEyebrow(scheme)
+                    MoneyFigure(amount: snapshot.week.reduce(0) { $0 + $1.amount }, size: 28)
+                    MoneyWeekChart(days: snapshot.week)
+                        .padding(.top, Space.half)
+                }
+            }
+
+            if let rate = snapshot.savingsRate {
+                MoneyBand(tone: MoneyPalette.butter) {
                     Text("Kept").moneyEyebrow(scheme)
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("\(Int(rate * 100))")
@@ -96,13 +105,25 @@ struct MoneyFlowSection: View {
 
 struct MoneyCategoriesSection: View {
     let snapshot: MoneySnapshot
+    var onOpen: (MoneyDetailFilter) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 0) {
             MoneyBand(tone: MoneyPalette.mist) {
-                Text("Spent · \(snapshot.monthLabel)").moneyEyebrow(scheme)
-                MoneyFigure(amount: snapshot.expenses, size: 40)
+                HStack(alignment: .center, spacing: Space.x2) {
+                    VStack(alignment: .leading, spacing: Space.x1) {
+                        Text("Spent · \(snapshot.monthLabel)").moneyEyebrow(scheme)
+                        MoneyFigure(amount: snapshot.expenses, size: 34)
+                        Text("\(snapshot.spendCount) transaction\(snapshot.spendCount == 1 ? "" : "s")")
+                            .font(LifeOSType.label.weight(.semibold))
+                            .foregroundStyle(MoneyPalette.quietInk(scheme))
+                    }
+                    Spacer(minLength: 0)
+                    if !snapshot.slices.isEmpty {
+                        MoneyDonut(slices: snapshot.slices) { onOpen(.category($0.name)) }
+                    }
+                }
             }
 
             if snapshot.categories.isEmpty {
@@ -112,23 +133,46 @@ struct MoneyCategoriesSection: View {
                 )
             } else {
                 ForEach(snapshot.categories) { row in
-                    MoneyBand(tone: MoneyPalette.stone) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(row.name)
-                                .font(LifeOSType.body.weight(.semibold))
-                                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                            Spacer(minLength: Space.x1)
-                            MoneyFigure(amount: row.amount, size: 20)
+                    Button { onOpen(.category(row.name)) } label: {
+                        MoneyBand(tone: MoneyPalette.stone) {
+                            HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
+                                if let opacity = swatchOpacity(for: row) {
+                                    Circle()
+                                        .fill(MoneyPalette.ink.resolve(scheme).opacity(opacity))
+                                        .frame(width: 10, height: 10)
+                                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                                }
+                                Text(row.name)
+                                    .font(LifeOSType.body.weight(.semibold))
+                                    .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                                Text("\(row.count)")
+                                    .font(LifeOSType.eyebrow.weight(.regular))
+                                    .foregroundStyle(MoneyPalette.quietInk(scheme))
+                                Spacer(minLength: Space.x1)
+                                MoneyFigure(amount: row.amount, size: 20)
+                                Image(systemName: "chevron.right")
+                                    .font(LifeOSType.caption.weight(.semibold))
+                                    .foregroundStyle(MoneyPalette.quietInk(scheme))
+                            }
+                            Pinstripes(fraction: row.share)
+                                .frame(height: 18)
+                            Text("\(Int((row.share * 100).rounded()))% of spending")
+                                .font(LifeOSType.eyebrow.weight(.regular))
+                                .foregroundStyle(MoneyPalette.quietInk(scheme))
                         }
-                        Pinstripes(fraction: row.share)
-                            .frame(height: 18)
-                        Text("\(Int(row.share * 100))% of spending")
-                            .font(LifeOSType.eyebrow.weight(.regular))
-                            .foregroundStyle(MoneyPalette.quietInk(scheme))
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens every charge in \(row.name)")
                 }
             }
         }
+    }
+
+    /// The band's swatch matches its slice. A category folded into "Other"
+    /// has no slice of its own and gets no swatch.
+    private func swatchOpacity(for row: CategoryRow) -> Double? {
+        snapshot.slices.first { $0.name == row.name && !$0.isOther }?.opacity
     }
 }
 
@@ -136,6 +180,7 @@ struct MoneyCategoriesSection: View {
 
 struct MoneyRecurringSection: View {
     let snapshot: MoneySnapshot
+    var onOpen: (MoneyDetailFilter) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
 
     private var monthlyTotal: Double {
@@ -161,24 +206,35 @@ struct MoneyRecurringSection: View {
                 )
             } else {
                 ForEach(snapshot.recurring) { row in
-                    MoneyBand(tone: MoneyPalette.stone) {
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(row.merchant)
-                                    .font(LifeOSType.body.weight(.semibold))
-                                    .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                                Text(row.category ?? "Uncategorised")
-                                    .moneyEyebrow(scheme)
-                            }
-                            Spacer(minLength: Space.x1)
-                            VStack(alignment: .trailing, spacing: 2) {
-                                MoneyFigure(amount: row.amount, size: 20)
-                                Text("\(row.months) months")
-                                    .font(LifeOSType.eyebrow.weight(.regular))
+                    Button { onOpen(.merchant(row.merchant)) } label: {
+                        MoneyBand(tone: MoneyPalette.stone) {
+                            HStack(spacing: Space.x2 - 4) {
+                                MerchantTile(logoURL: row.logoURL,
+                                             glyph: MoneyLedgerSection.glyph(for: row.category))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.merchant)
+                                        .font(LifeOSType.body.weight(.semibold))
+                                        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                                        .lineLimit(1)
+                                    Text(row.category ?? "Uncategorised")
+                                        .moneyEyebrow(scheme)
+                                }
+                                Spacer(minLength: Space.x1)
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    MoneyFigure(amount: row.amount, size: 20)
+                                    Text("\(row.months) months")
+                                        .font(LifeOSType.eyebrow.weight(.regular))
+                                        .foregroundStyle(MoneyPalette.quietInk(scheme))
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(LifeOSType.caption.weight(.semibold))
                                     .foregroundStyle(MoneyPalette.quietInk(scheme))
                             }
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens every charge from \(row.merchant)")
                 }
 
                 MoneyBand(tone: MoneyPalette.sage) {
@@ -332,6 +388,7 @@ struct MoneyPressureSection: View {
 struct MoneyLedgerSection: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
+    var onOpen: (MoneyDetailFilter) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -339,8 +396,8 @@ struct MoneyLedgerSection: View {
             MoneyBand(tone: MoneyPalette.stone) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Recent").moneyEyebrow(scheme)
-                        Text("\(snapshot.recent.count) transactions")
+                        Text(snapshot.monthLabel).moneyEyebrow(scheme)
+                        Text("\(snapshot.recent.count) transaction\(snapshot.recent.count == 1 ? "" : "s")")
                             .font(LifeOSType.sectionTitle.weight(.bold))
                             .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     }
@@ -354,33 +411,21 @@ struct MoneyLedgerSection: View {
             if snapshot.recent.isEmpty {
                 MoneyEmptyBand(tone: MoneyPalette.mist, line: "Nothing logged this month yet.")
             } else {
-                ForEach(snapshot.recent) { row in
-                    // The left glyph rail from the reference: a fixed square of
-                    // deeper tone that turns a list of text into a list of
-                    // rows the eye can run down.
-                    HStack(spacing: 0) {
-                        Image(systemName: MoneyLedgerSection.glyph(for: row.category))
-                            .font(LifeOSType.rowTitle)
-                            .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.75))
-                            .frame(width: 52, height: 62)
-                            .background(MoneyPalette.sage.resolve(scheme))
-
-                        HStack(alignment: .center) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(row.merchant)
-                                    .font(LifeOSType.rowTitle)
-                                    .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                                Text(row.category ?? "Uncategorised").moneyEyebrow(scheme)
-                            }
-                            Spacer(minLength: Space.x1)
-                            MoneyFigure(amount: row.amount, size: 18, showsSign: true)
-                                .opacity(row.pending ? 0.45 : 1)
-                        }
+                // The whole month, by day. Eight undated rows was the old
+                // list, and "what did I spend" has no answer without dates.
+                ForEach(MoneyDayGroup.group(snapshot.recent), id: \.label) { day in
+                    Text(day.label)
+                        .moneyEyebrow(scheme)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, Space.x2)
-                        .frame(height: 62)
+                        .padding(.top, Space.x2)
+                        .padding(.bottom, Space.half)
                         .background(MoneyPalette.stone.resolve(scheme))
+                    ForEach(day.rows) { row in
+                        MoneyTransactionRow(row: row, onOpen: onOpen)
                     }
                 }
+                Color.clear.frame(height: Space.x1).background(MoneyPalette.stone.resolve(scheme))
             }
         }
     }
