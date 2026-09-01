@@ -19,16 +19,30 @@ public struct OnDeviceChatEngine: ChatEngine {
         to thread: [ChatTurnMessage],
         instructions: String,
         tools: [any CoachTool],
-        invoker: ToolInvoker
+        invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -> Void
     ) async throws -> AssistantTurn.Reply {
         let session = LanguageModelSession(
             tools: tools.map { SessionTool($0, invoker: invoker) },
             instructions: instructions + "\n\n" + ResponseStyle.conversation
         )
-        let response = try await session.respond(to: Self.prompt(from: thread))
+        // Streamed rather than awaited whole, so the device tier reaches the
+        // screen the same way the cloud one does. FoundationModels yields
+        // snapshots of the whole answer so far, which is exactly the shape
+        // `onPartial` is defined in; there is nothing to accumulate here.
+        var latest = ""
+        let stream = session.streamResponse(to: Self.prompt(from: thread))
+        for try await snapshot in stream {
+            latest = snapshot.content
+            // Cleaned on the way past, not only at the end: the model emits
+            // markdown mid-sentence and a screen showing raw asterisks for a
+            // second before they vanish reads as a rendering bug.
+            onPartial(ResponseStyle.clean(latest))
+        }
         return AssistantTurn.Reply(
-            text: ResponseStyle.clean(response.content),
-            toolSummaries: await invoker.toolSummaries()
+            text: ResponseStyle.clean(latest),
+            toolSummaries: await invoker.toolSummaries(),
+            tier: .onDevice
         )
     }
 

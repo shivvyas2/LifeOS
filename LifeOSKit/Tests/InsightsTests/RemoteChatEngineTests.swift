@@ -50,6 +50,54 @@ private final class ScriptedTransport: @unchecked Sendable {
     }
 }
 
+/// Plays back a scripted event stream, so the streamed path can be driven
+/// without a network exactly as the round loop can.
+private final class ScriptedStream: @unchecked Sendable {
+    private let lock = NSLock()
+    private let lines: [String]
+    private let status: Int
+    private(set) var requests: [URLRequest] = []
+
+    /// `lines` are whole SSE lines, blank separators included, because that is
+    /// what a line-splitting reader is handed and a test that skips them is
+    /// not testing the reader that ships.
+    init(lines: [String], status: Int = 200) {
+        self.lines = lines
+        self.status = status
+    }
+
+    /// The deltas, wrapped as the server wraps them.
+    static func text(_ pieces: [String]) -> ScriptedStream {
+        var lines: [String] = []
+        for piece in pieces {
+            lines.append("data: {\"delta\": \(jsonString(piece))}")
+            lines.append("")
+        }
+        lines.append("data: [DONE]")
+        lines.append("")
+        return ScriptedStream(lines: lines)
+    }
+
+    private static func jsonString(_ value: String) -> String {
+        String(data: try! JSONSerialization.data(withJSONObject: [value]), encoding: .utf8)!
+            .dropFirst().dropLast().description
+    }
+
+    func send(_ request: URLRequest) async throws
+        -> (RemoteChatEngine.LineStream, URLResponse) {
+        lock.withLock { requests.append(request) }
+        let scripted = lines
+        let stream = RemoteChatEngine.LineStream { continuation in
+            for line in scripted { continuation.yield(line) }
+            continuation.finish()
+        }
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil
+        )!
+        return (stream, response as URLResponse)
+    }
+}
+
 @Suite struct RemoteChatEngineTests {
 
     private let base = URL(string: "https://example.supabase.co")!
@@ -61,18 +109,110 @@ private final class ScriptedTransport: @unchecked Sendable {
         )
     }
 
+    private func engine(_ stream: ScriptedStream) -> RemoteChatEngine {
+        RemoteChatEngine(
+            baseURL: base, anonKey: "k", accessToken: { "jwt" },
+            // Deliberately fatal: a turn with no tools must take the streamed
+            // path, and a test that silently fell back to the round loop would
+            // pass while the shipping behaviour changed.
+            transport: { _ in fatalError("a no-tool turn must stream") },
+            streamTransport: { try await stream.send($0) }
+        )
+    }
+
     private func invoker(_ tools: [any CoachTool]) -> ToolInvoker {
         ToolInvoker(tools: tools, broker: ConfirmationBroker())
     }
 
     @Test func aPlainReplyComesBackAsText() async throws {
-        let transport = ScriptedTransport([#"{"output":{"text":"Six hours."}}"#])
-        let reply = try await engine(transport).reply(
+        let stream = ScriptedStream.text(["Six ", "hours."])
+        let reply = try await engine(stream).reply(
             to: [ChatTurnMessage(role: .user, text: "how did I sleep?")],
             instructions: "", tools: [], invoker: invoker([])
         )
         #expect(reply.text == "Six hours.")
         #expect(reply.toolSummaries.isEmpty)
+    }
+
+    /// The point of the stream: the caller sees the answer being written,
+    /// not only the finished thing.
+    @Test func theAnswerArrivesInPiecesAndEachOneIsTheWholeOfItSoFar() async throws {
+        let seen = Partials()
+        let stream = ScriptedStream.text(["Six ", "hours ", "on average."])
+        let reply = try await engine(stream).reply(
+            to: [ChatTurnMessage(role: .user, text: "how did I sleep?")],
+            instructions: "", tools: [], invoker: invoker([]),
+            onPartial: { text in seen.append(text) }
+        )
+        // Cumulative, never incremental: a screen assigns what it is handed,
+        // so each one has to stand alone as the answer so far.
+        #expect(seen.values == ["Six", "Six hours", "Six hours on average."])
+        #expect(reply.text == "Six hours on average.")
+    }
+
+    /// A turn with no tools asks for a stream, and one with tools does not.
+    @Test func onlyAToollessTurnAsksForAStream() async throws {
+        let stream = ScriptedStream.text(["ok"])
+        _ = try await engine(stream).reply(
+            to: [ChatTurnMessage(role: .user, text: "hi")],
+            instructions: "", tools: [], invoker: invoker([])
+        )
+        let streamed = try JSONSerialization.jsonObject(
+            with: #require(stream.requests[0].httpBody)
+        ) as? [String: Any]
+        #expect(streamed?["stream"] as? Bool == true)
+
+        let tool = RecordingTool(log: ToolLog())
+        let transport = ScriptedTransport([#"{"output":{"text":"done"}}"#])
+        _ = try await engine(transport).reply(
+            to: [ChatTurnMessage(role: .user, text: "hi")],
+            instructions: "", tools: [tool], invoker: invoker([tool])
+        )
+        let looped = try JSONSerialization.jsonObject(
+            with: #require(transport.requests[0].httpBody)
+        ) as? [String: Any]
+        #expect(looped?["stream"] == nil)
+    }
+
+    /// A failure still arrives as an ordinary body with a status on it, and
+    /// must be classified the same way whichever path read it.
+    @Test func aSpentBudgetIsStillTheBudgetOnTheStreamedPath() async throws {
+        let stream = ScriptedStream(lines: [#"{"error":"exhausted"}"#], status: 429)
+        await #expect(throws: RemoteEngineError.exhausted) {
+            try await engine(stream).reply(
+                to: [ChatTurnMessage(role: .user, text: "hi")],
+                instructions: "", tools: [], invoker: invoker([])
+            )
+        }
+    }
+
+    /// A refusal travels inside the stream rather than as a status, because
+    /// by the time the model declines the response is already a 200.
+    @Test func aRefusalInsideTheStreamIsARefusal() async throws {
+        let stream = ScriptedStream(lines: [
+            #"data: {"error":"refused","message":"That is outside what I can help with."}"#,
+            "",
+            "data: [DONE]",
+            "",
+        ])
+        await #expect(throws: RemoteEngineError.refused("That is outside what I can help with.")) {
+            try await engine(stream).reply(
+                to: [ChatTurnMessage(role: .user, text: "write me a poem")],
+                instructions: "", tools: [], invoker: invoker([])
+            )
+        }
+    }
+
+    /// An empty bubble is not an answer. A 200 that carried no text is the
+    /// server having gone wrong, which is what a retry is for.
+    @Test func aStreamThatSaidNothingIsUnavailableRatherThanAnEmptyAnswer() async throws {
+        let stream = ScriptedStream(lines: ["data: [DONE]", ""])
+        await #expect(throws: RemoteEngineError.unavailable) {
+            try await engine(stream).reply(
+                to: [ChatTurnMessage(role: .user, text: "hi")],
+                instructions: "", tools: [], invoker: invoker([])
+            )
+        }
     }
 
     /// The round trip that is the whole point: the model asks for a tool, the
@@ -187,14 +327,14 @@ private final class ScriptedTransport: @unchecked Sendable {
     /// Before this, `reply` mapped the thread and sent nothing else, so
     /// every cloud answer was produced with none of it.
     @Test func theInstructionsTravelAsTheRequestContext() async throws {
-        let transport = ScriptedTransport([#"{"output":{"text":"Six hours."}}"#])
-        _ = try await engine(transport).reply(
+        let stream = ScriptedStream.text(["Six hours."])
+        _ = try await engine(stream).reply(
             to: [ChatTurnMessage(role: .user, text: "how did I sleep?")],
             instructions: "14-day baseline: sleep 6h20m",
             tools: [], invoker: invoker([])
         )
         let body = try JSONSerialization.jsonObject(
-            with: #require(transport.requests[0].httpBody)
+            with: #require(stream.requests[0].httpBody)
         ) as? [String: Any]
         #expect(body?["context"] as? String == "14-day baseline: sleep 6h20m")
     }
@@ -253,4 +393,17 @@ private final class ScriptedTransport: @unchecked Sendable {
         }
         #expect(transport.requests.isEmpty)
     }
+}
+
+
+/// Collects what `onPartial` was handed.
+///
+/// A lock rather than an actor: the callback is synchronous, and hopping onto
+/// an actor to record each one would let the assertion run before the last
+/// hop landed — which is a race in the test, not in the thing being tested.
+private final class Partials: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String] = []
+    var values: [String] { lock.withLock { storage } }
+    func append(_ text: String) { lock.withLock { storage.append(text) } }
 }

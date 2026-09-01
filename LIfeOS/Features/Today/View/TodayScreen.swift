@@ -22,6 +22,11 @@ struct TodayScreen: View {
     /// day is not told to connect something they have connected.
     var isHealthConnected = false
 
+    /// Raised when a stat tile is tapped. The screen names the metric and
+    /// stops there: what a metric opens is the shell's decision, the same way
+    /// a tapped day is.
+    var onSelectMetric: (TodayMetric) -> Void = { _ in }
+
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
     private let calendar = Calendar.current
@@ -136,47 +141,74 @@ struct TodayScreen: View {
         )
     }
 
+    /// Every tile is a way into that metric's own page, so the grid is built
+    /// from `TodayMetric` rather than written out four times. What each one
+    /// looks like — icon, hue, unit, how the figure is written — belongs to the
+    /// metric, which is what keeps the tile and the page it opens agreeing.
     private func statGrid(columns: Int) -> some View {
         LazyVGrid(
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns),
             spacing: 12
         ) {
-            TrendStatTile(
-                icon: "figure.walk",
-                hue: .activity,
-                label: "Steps",
-                value: snapshot.steps.map { $0.formatted() },
-                series: snapshot.stepsWeek,
-                goal: snapshot.stepsTarget
-            )
-            TrendStatTile(
-                icon: "moon.fill",
-                hue: .nutrition,
-                label: "Sleep",
-                value: snapshot.sleepMinutes.map(Self.duration),
-                series: snapshot.sleepWeek,
-                goal: snapshot.sleepTargetMinutes
-            )
-            TrendStatTile(
-                icon: "scalemass.fill",
-                hue: .body,
-                label: "Weight",
-                value: snapshot.weightKg.map { String(format: "%.1f", $0) },
-                unit: "kg",
-                series: snapshot.weightWeek,
-                // Weight has no target to hit and never nears nought, so it is
-                // read against its own week rather than against zero.
-                baseline: .windowMinimum
-            )
-            TrendStatTile(
-                icon: "bolt.heart.fill",
-                hue: .recovery,
-                label: "Recovery",
-                value: snapshot.recoveryPct.map { "\(Int($0))" },
-                unit: "%",
-                series: snapshot.recoveryWeek
-            )
+            ForEach(TodayMetric.allCases) { metric in
+                Button { onSelectMetric(metric) } label: {
+                    tile(metric)
+                }
+                // Plain, or the card takes the accent tint and the whole grid
+                // turns blue on press. The tile is already the affordance.
+                .buttonStyle(.plain)
+                .accessibilityLabel(accessibilityLabel(metric))
+                .accessibilityHint("Opens \(metric.title.lowercased()) history")
+            }
         }
+    }
+
+    private func tile(_ metric: TodayMetric) -> some View {
+        TrendStatTile(
+            icon: metric.icon,
+            hue: metric.hue,
+            label: metric.title,
+            value: latest(metric).map(metric.format),
+            unit: metric.unit,
+            series: series(metric),
+            goal: goal(metric),
+            baseline: metric.baseline
+        )
+    }
+
+    /// Today's figure for a metric. Held on the snapshot as separate fields
+    /// rather than a dictionary, so this is the one place they are matched up.
+    private func latest(_ metric: TodayMetric) -> Double? {
+        switch metric {
+        case .steps:    snapshot.steps.map(Double.init)
+        case .sleep:    snapshot.sleepMinutes.map(Double.init)
+        case .weight:   snapshot.weightKg
+        case .recovery: snapshot.recoveryPct
+        }
+    }
+
+    private func series(_ metric: TodayMetric) -> TrendSeries {
+        switch metric {
+        case .steps:    snapshot.stepsWeek
+        case .sleep:    snapshot.sleepWeek
+        case .weight:   snapshot.weightWeek
+        case .recovery: snapshot.recoveryWeek
+        }
+    }
+
+    private func goal(_ metric: TodayMetric) -> Double? {
+        switch metric {
+        case .steps:              snapshot.stepsTarget
+        case .sleep:              snapshot.sleepTargetMinutes
+        case .weight, .recovery:  nil
+        }
+    }
+
+    /// The tile reads as an icon, a word and a numeral, which VoiceOver would
+    /// otherwise announce as three separate things inside a button.
+    private func accessibilityLabel(_ metric: TodayMetric) -> String {
+        guard let value = latest(metric) else { return "\(metric.title), no reading" }
+        return "\(metric.title), \(metric.format(value))\(metric.unit.map { " \($0)" } ?? "")"
     }
 
     private var streakLine: some View {

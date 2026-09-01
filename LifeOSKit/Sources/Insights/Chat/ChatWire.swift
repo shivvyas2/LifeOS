@@ -65,9 +65,16 @@ public enum ChatWire {
     /// guardrail and providers weight the later one heavily, which is a way
     /// around the guardrail rather than a way to carry data. The server
     /// wraps this in its own system message, behind `SCOPE`.
+    /// `stream` asks the server to hand text back as it arrives.
+    ///
+    /// Only ever true for a turn with no tools, and the server enforces that
+    /// independently rather than trusting the flag: a tool call arrives in a
+    /// stream as fragments of a JSON argument string spread across chunks, and
+    /// the round loop below needs whole ones.
     public static func request(
         baseURL: URL, anonKey: String, accessToken: String,
-        messages: [Message], tools: [any CoachTool], context: String = ""
+        messages: [Message], tools: [any CoachTool], context: String = "",
+        stream: Bool = false
     ) throws -> URLRequest {
         var request = URLRequest(
             url: baseURL.appendingPathComponent("functions/v1/lifo-agent")
@@ -85,8 +92,44 @@ public enum ChatWire {
         // Absent rather than empty when there is nothing to say, so the
         // server never builds a system message with no content in it.
         if !context.isEmpty { body["context"] = context }
+        if stream { body["stream"] = true }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// One frame of the server's own event stream.
+    ///
+    /// Deliberately our shape, not the provider's: the function re-emits what
+    /// it reads so the device never learns a provider's chunk format, and
+    /// changing providers stays a deploy rather than an app release.
+    public enum StreamEvent: Sendable, Equatable {
+        case delta(String)
+        case refused(String)
+        case done
+    }
+
+    /// Reads one `data:` payload. Returns nil for a frame that carries
+    /// nothing we act on, which is not an error: a keep-alive comment and an
+    /// unparseable frame both mean "no text yet", and failing the turn over
+    /// one would throw away the sentence around it.
+    public static func streamEvent(payload: String) -> StreamEvent? {
+        let trimmed = payload.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed == "[DONE]" { return .done }
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        if let message = object["message"] as? String, object["error"] as? String == "refused" {
+            return .refused(message)
+        }
+        if let delta = object["delta"] as? String { return .delta(delta) }
+        return nil
+    }
+
+    /// The payload of one SSE line, or nil for a line that is not data.
+    public static func payload(inLine line: String) -> String? {
+        guard line.hasPrefix("data:") else { return nil }
+        return String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
     }
 
     private struct TextReply: Decodable {

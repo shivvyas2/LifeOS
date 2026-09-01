@@ -62,6 +62,7 @@ struct LifeBoardScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
             }
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+            .quickActionsToolbar()
             .navigationDestination(item: $openSector) { sector in
                 switch model.mode {
                 case .closed:

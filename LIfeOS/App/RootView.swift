@@ -21,9 +21,10 @@ extension NoteSync: NoteSyncing {}
 /// gear on Today rather than spending a slot.
 ///
 /// Two shells over one set of screens. A phone gets the bar floating over the
-/// content along the bottom, with the actions in the corner; a wide pane gets a
-/// left rail that takes its space out of the width and absorbs those same
-/// actions into its foot. The screens themselves are identical in both.
+/// content along the bottom; a wide pane gets a left rail that takes its space
+/// out of the width. The screens themselves are identical in both, and the
+/// actions sit across the top of every one of them rather than in either
+/// shell's corner.
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
     @Bindable var fitbit: FitbitConnectionViewModel
@@ -79,6 +80,10 @@ struct RootView: View {
     @State private var profilePhoto: Data? = ProfilePhotoStore.load()
     @State private var showAddPlan = false
     @State private var showAddMoney = false
+    /// The metric whose page is open, pushed on Today's own stack. A value
+    /// rather than four booleans, so the destination is a function of it.
+    @State private var openMetric: TodayMetric?
+    @State private var metricDetail = MetricDetailViewModel()
     @State private var showBudgets = false
     @State private var showJournal = false
     @State private var showCoach = false
@@ -94,10 +99,6 @@ struct RootView: View {
     ///
     /// Compact width never hides it: the bar lies along the bottom there, where
     /// it overlaps nothing that is being read.
-    /// Whether the collapsed action fan is open. Only ever true off the home
-    /// tab, which is the only place the fan is drawn.
-    @State private var fanOpen = false
-
     @State private var isRailVisible = true
     @State private var railReturnTask: Task<Void, Never>?
 
@@ -186,6 +187,10 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        // Injected rather than passed: Notes and Life own their own
+        // navigation stacks several levels down, and a toolbar has to be
+        // attached inside the stack it belongs to.
+        .environment(\.quickActions, quickActions)
         // Typing is the other way of working with the pane, and the one where
         // the rail is most in the way: on a landscape iPad the keyboard takes
         // half the height and the note being written is what is left.
@@ -207,7 +212,6 @@ struct RootView: View {
         // A tab change is navigation, not content work, so the rail is wanted.
         .onChange(of: tab) { _, _ in
             showRail()
-            fanOpen = false
         }
         .task {
             attachAll()
@@ -219,6 +223,9 @@ struct RootView: View {
             // run, before the app has shown anyone anything worth being
             // interrupted about, is the fastest way to a permanent no.
             await PushService.shared.requestAuthorization()
+            // Foreground only: the watch is what keeps a step count on screen
+            // climbing, and it is stopped again below when the app goes away.
+            health.startWatching()
         }
         // The nudge from a tapped notification, opened as the first turn of a
         // conversation rather than shown and dismissed.
@@ -244,6 +251,9 @@ struct RootView: View {
                 // A notification tapped from a cold launch lands in the inbox
                 // before this view exists, so onChange never fires for it.
                 openNudge(PushService.shared.pending)
+                health.startWatching()
+            } else {
+                health.stopWatching()
             }
         }
 
@@ -253,8 +263,6 @@ struct RootView: View {
     private var compactShell: some View {
         ZStack(alignment: .bottomTrailing) {
             content
-
-            fanScrim
 
             PillNavBar(selection: $tab, items: navItems)
                 .frame(maxWidth: .infinity)          // centers the pill
@@ -269,11 +277,6 @@ struct RootView: View {
                 // actually looking at. Neither control is reachable while
                 // typing anyway, so hiding behind the keyboard costs nothing
                 // and hands the space back.
-                .ignoresSafeArea(.keyboard, edges: .bottom)
-
-            actionFan
-                .padding(.trailing, metrics.gutter)
-                .padding(.bottom, metrics.fabBottomInset)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
             whoopModal
@@ -326,12 +329,6 @@ struct RootView: View {
                             .accessibilityAction { showRail() }
                     }
                 }
-                .overlay { fanScrim }
-                .overlay(alignment: .bottomTrailing) {
-                    actionFan
-                        .padding(.trailing, metrics.gutter)
-                        .padding(.bottom, metrics.fabBottomInset)
-                }
 
             whoopModal
         }
@@ -368,21 +365,19 @@ struct RootView: View {
                         onTapEvent: { eventSheet = .edit($0) },
                         onOpenToday: { today.select(.now) },
                         onConnectHealth: { Task { await health.connect() } },
-                        isHealthConnected: health.isConnected
+                        isHealthConnected: health.isConnected,
+                        onSelectMetric: { openMetric = $0 }
                     )
+                    // Applied before the bar items below, so the actions sit
+                    // inboard of the avatar rather than being pushed past it:
+                    // toolbar items appear in the order their modifiers run.
+                    .quickActionsToolbar()
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button { showMonth = true } label: {
                                 Image(systemName: "calendar")
                             }
                             .accessibilityLabel("Month calendar")
-                        }
-                        // Home is the one screen that shows all three actions
-                        // at once, laid flat across the top. Everywhere else
-                        // they are collapsed into the corner fan, so this bar
-                        // is the only place the set is ever fully visible.
-                        ToolbarItem(placement: .topBarTrailing) {
-                            ActionFan(actions: quickActions, arrangement: .row)
                         }
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { showSettings = true } label: {
@@ -396,6 +391,12 @@ struct RootView: View {
                             onTapEvent: { eventSheet = .edit($0) },
                             onAddEvent: { eventSheet = .create(on: $0) }
                         )
+                    }
+                    // Pushed on Today's stack rather than presented as a sheet:
+                    // it is a place inside the day's numbers, not an errand
+                    // that interrupts them, and a push keeps the way back.
+                    .navigationDestination(item: $openMetric) { metric in
+                        MetricDetailScreen(metric: metric, model: metricDetail)
                     }
                 }
             case .health:
@@ -413,15 +414,22 @@ struct RootView: View {
                             set: { healthDate = $0; selectHealthDate($0) }
                         )
                     )
+                    .quickActionsToolbar()
                 }
             case .money:
-                MoneyScreen(
-                    snapshot: money.snapshot,
-                    onAdd: { showAddMoney = true },
-                    onConnect: { plaid.connect() },
-                    onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
-                    onEditBudgets: { showBudgets = true }
-                )
+                // Wrapped here rather than in `MoneyScreen`: the stack exists
+                // only to carry the bar the actions live in, and the screen
+                // itself pushes nothing.
+                NavigationStack {
+                    MoneyScreen(
+                        snapshot: money.snapshot,
+                        onAdd: { showAddMoney = true },
+                        onConnect: { plaid.connect() },
+                        onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
+                        onEditBudgets: { showBudgets = true }
+                    )
+                    .quickActionsToolbar()
+                }
             case .notes:
                 NotesHubScreen(
                     model: notes,
@@ -455,8 +463,13 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// The three free-floating actions, defined once and drawn in whichever
-    /// arrangement the current tab calls for.
+    /// The three actions, defined once and injected into the environment so
+    /// every tab draws the same set across the top of its own bar.
+    ///
+    /// They used to be laid flat on home and collapsed into a bottom-corner
+    /// fan everywhere else, which put the control people reach for most in a
+    /// different place depending on which tab they were on, and hid it behind
+    /// a trigger on four of the five. One place, always open.
     ///
     /// Quick log is the prominent one: it is the only one of the three that
     /// writes something, and it is the one people reach for most.
@@ -474,43 +487,6 @@ struct RootView: View {
                 showQuickLog = true
             },
         ]
-    }
-
-    /// Off the home tab only. Home draws the same three actions flat across its
-    /// top bar, so a fan in the corner there would be the same three buttons
-    /// twice.
-    @ViewBuilder
-    private var actionFan: some View {
-        if tab != .today {
-            ActionFan(actions: quickActions, arrangement: .fan, isOpen: $fanOpen)
-        }
-    }
-
-    /// Catches the tap that closes an open fan. Dims the content rather than
-    /// being invisible, because a fan that has taken over the corner has taken
-    /// over the screen and should say so.
-    ///
-    /// Deliberately below the pill bar in the compact shell: navigating away is
-    /// a reasonable thing to do with the fan open, and a scrim over the bar
-    /// would make that take two taps.
-    @ViewBuilder
-    private var fanScrim: some View {
-        if fanOpen {
-            Rectangle()
-                .fill(.black.opacity(scheme == .dark ? 0.34 : 0.16))
-                .ignoresSafeArea()
-                .transition(.opacity)
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        fanOpen = false
-                    }
-                }
-                .accessibilityLabel("Close actions")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction {
-                    fanOpen = false
-                }
-        }
     }
 
     /// Opens LIFO on a nudge and clears the inbox.
@@ -638,6 +614,7 @@ struct RootView: View {
 
     private func attachAll() {
         today.attach(context)
+        metricDetail.attach(context)
         weight.attach(context)
         activity.attach(context)
         recovery.attach(context)
@@ -727,6 +704,9 @@ struct RootView: View {
 
     private func reloadAll() {
         today.load()
+        // Only while its page is up. Off screen it is a year of bucketing
+        // nobody is looking at, run on every save in the app.
+        if let openMetric { metricDetail.load(openMetric) }
         weight.load()
         activity.load()
         recovery.load()

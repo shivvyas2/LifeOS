@@ -59,11 +59,35 @@ public struct ChatInstructions: Sendable, Equatable {
 /// hand each tier its own render of the same context. An engine built once
 /// and reused across turns would otherwise be stuck with whatever the first
 /// turn was told.
+///
+/// `onPartial` is handed the answer *so far*, not the piece that just
+/// arrived. Cumulative rather than incremental because that is what both
+/// tiers can honestly produce — FoundationModels yields snapshots and the
+/// cloud yields deltas — and because a screen that assigns the text it is
+/// given cannot lose a fragment the way one that appends can.
 public protocol ChatEngine: Sendable {
     func reply(
         to thread: [ChatTurnMessage],
         instructions: String,
         tools: [any CoachTool],
-        invoker: ToolInvoker
+        invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -> Void
     ) async throws -> AssistantTurn.Reply
+}
+
+public extension ChatEngine {
+    /// For callers with nothing to show mid-flight: the daily brief, the
+    /// nudge job, and every test written before the answer could arrive in
+    /// pieces.
+    func reply(
+        to thread: [ChatTurnMessage],
+        instructions: String,
+        tools: [any CoachTool],
+        invoker: ToolInvoker
+    ) async throws -> AssistantTurn.Reply {
+        try await reply(
+            to: thread, instructions: instructions,
+            tools: tools, invoker: invoker, onPartial: { _ in }
+        )
+    }
 }

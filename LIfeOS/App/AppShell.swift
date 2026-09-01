@@ -17,6 +17,16 @@ struct AppShell: View {
     /// open is a decision above it.
     var onSignedIn: (Account, AuthSession) -> Void = { _, _ in }
     var onSignedOut: () -> Void = {}
+    /// Whether a store is actually open for this scene.
+    ///
+    /// The second lock, and the one that turns a bad state into a wrong screen
+    /// rather than a dead process. A session alone is not enough to build the
+    /// tab hierarchy: every screen below `RootView` reads through a
+    /// `ModelContext`, and mounting it in a scene with no container gets as far
+    /// as the first fetch before CoreData throws an `NSException` for an
+    /// entity it cannot find in an empty schema. That is not catchable from
+    /// Swift, so it is the whole process.
+    var hasStore = false
 
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
@@ -41,7 +51,7 @@ struct AppShell: View {
 
     var body: some View {
         Group {
-            if onboarding.isSignedIn && hasFinishedOnboarding {
+            if onboarding.isSignedIn && hasFinishedOnboarding && hasStore {
                 RootView(whoop: whoop, fitbit: fitbit, health: health, onSignOut: {
                     // Before the session goes, not after: deleting this
                     // device's push row needs the access token of the account
@@ -97,7 +107,10 @@ struct AppShell: View {
             health.attach(context)
             // A returning user has a session already; renew it and skip past
             // signup rather than making them prove themselves on every launch.
-            if await onboarding.restoreSession() {
+            // Only when there is somewhere for the restored account's data to
+            // live. Without the second clause a session found in a scene with
+            // no store promotes straight past the gate above.
+            if await onboarding.restoreSession(), hasStore {
                 hasFinishedOnboarding = true
                 // The profile belongs to the account, not to the phone that
                 // typed it, so it is fetched rather than assumed present.
@@ -126,6 +139,35 @@ struct AppShell: View {
         // went into the background is often stale by the time it comes back.
         // Renewing first keeps the sync that follows it authorised; concurrent
         // calls are coalesced inside each view model.
+        // Renews the session before it lapses, rather than only at launch and
+        // on the way back from the background.
+        //
+        // An access token lives an hour. Somebody who keeps the app open for
+        // longer than that used to pass the whole hour with neither of those
+        // events firing, and every authenticated request from that point on
+        // came back `HTTP 401: JWT expired` — friends would not load, the
+        // coach reported it could not reach the cloud, notes stopped syncing.
+        // Nothing was watching the clock.
+        //
+        // Keyed on the sign-in state so the loop starts the moment somebody
+        // signs in and stops the moment they sign out, rather than waking on a
+        // timer behind the signup screen.
+        .task(id: onboarding.isSignedIn) {
+            guard onboarding.isSignedIn else { return }
+            while !Task.isCancelled {
+                guard let expiresAt = KeychainAuthSessionStore().load()?.expiresAt else { return }
+                try? await Task.sleep(for: .seconds(
+                    SessionKeepAlive.delay(untilExpiry: expiresAt)
+                ))
+                guard !Task.isCancelled else { return }
+                // Coalesced inside the view model with the launch and
+                // foreground restores, so a wake that races one of those makes
+                // one request rather than two. Supabase rotates the refresh
+                // token on use, and two concurrent refreshes would have the
+                // second present a token the first just retired.
+                guard await onboarding.restoreSession() else { return }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {

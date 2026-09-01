@@ -39,7 +39,8 @@ struct LIfeOSApp: App {
         WindowGroup {
             if let container = session.container {
                 AppShell(onSignedIn: { session.signIn($0, session: $1) },
-                         onSignedOut: { session.signOut() })
+                         onSignedOut: { session.signOut() },
+                         hasStore: true)
                     .modelContainer(container)
                     // Re-rooted per account, so no screen carries the previous
                     // account's view models or scroll position into the next
@@ -53,7 +54,8 @@ struct LIfeOSApp: App {
                 // nothing to read and nowhere to put anything until there is
                 // an account to put it in.
                 AppShell(onSignedIn: { session.signIn($0, session: $1) },
-                         onSignedOut: { session.signOut() })
+                         onSignedOut: { session.signOut() },
+                         hasStore: false)
             }
         }
         // Hardware keyboard support lives in the scene so the shortcuts work

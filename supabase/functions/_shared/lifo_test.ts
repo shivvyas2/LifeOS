@@ -11,7 +11,10 @@ import {
   parseChatReply,
   parseOutput,
   parseRequest,
+  parseStreamChunk,
+  drainSSE,
   taskConfig,
+  withoutTuning,
 } from "./lifo.ts";
 
 Deno.test("the answer task maps to the mini model with a strict schema", () => {
@@ -411,4 +414,90 @@ Deno.test("a request naming no known task is refused before any spend", () => {
   assertEquals(parseRequest({ task: "answer" }), null);
   assertEquals(parseRequest({ task: "chat", messages: [] }), null);
   assertEquals(parseRequest("not an object"), null);
+});
+
+
+Deno.test("a chat body asks for low reasoning effort", () => {
+  const body = chatBody([{ role: "user", content: "hi" }], []);
+  assertEquals(body.reasoning_effort, "low");
+  assertEquals(body.verbosity, "low");
+});
+
+Deno.test("the tuning can be lifted off for the retry, and nothing else with it", () => {
+  const body = chatBody([{ role: "user", content: "hi" }], [], "context");
+  const plain = withoutTuning(body);
+  assertEquals("reasoning_effort" in plain, false);
+  assertEquals("verbosity" in plain, false);
+  assertEquals(plain.model, body.model);
+  assertEquals(plain.messages, body.messages);
+  // The original is untouched: the retry must not mutate the body the first
+  // attempt was made with, or a third caller would see a stripped one.
+  assertEquals(body.reasoning_effort, "low");
+});
+
+Deno.test("streaming is off unless asked for, and carries the usage option when on", () => {
+  const plain = chatBody([{ role: "user", content: "hi" }], []);
+  assertEquals("stream" in plain, false);
+  assertEquals("stream_options" in plain, false);
+
+  const streamed = chatBody([{ role: "user", content: "hi" }], [], "", true);
+  assertEquals(streamed.stream, true);
+  assertEquals(streamed.stream_options, { include_usage: true });
+});
+
+Deno.test("a stream is only granted to a turn with no tools", () => {
+  const withoutTools = parseRequest({
+    task: "chat",
+    messages: [{ role: "user", content: "hi" }],
+    stream: true,
+  });
+  assertEquals(withoutTools && "stream" in withoutTools ? withoutTools.stream : null, true);
+
+  const withTools = parseRequest({
+    task: "chat",
+    messages: [{ role: "user", content: "hi" }],
+    stream: true,
+    tools: [{ type: "function", function: { name: "get_events" } }],
+  });
+  assertEquals(withTools && "stream" in withTools ? withTools.stream : null, false);
+
+  const unasked = parseRequest({
+    task: "chat",
+    messages: [{ role: "user", content: "hi" }],
+  });
+  assertEquals(unasked && "stream" in unasked ? unasked.stream : null, false);
+});
+
+Deno.test("a stream chunk yields its text, and the closing one its usage", () => {
+  assertEquals(
+    parseStreamChunk({ choices: [{ delta: { content: "Your sleep" } }] }),
+    { delta: "Your sleep" },
+  );
+  // The final chunk carries no choices at all.
+  assertEquals(parseStreamChunk({ choices: [], usage: { total_tokens: 812 } }), {
+    tokens: 812,
+  });
+  assertEquals(parseStreamChunk({ choices: [{ delta: {} }] }), {});
+  assertEquals(
+    parseStreamChunk({ choices: [{ delta: { refusal: "I can't help with that." } }] }),
+    { refusal: "I can't help with that." },
+  );
+});
+
+Deno.test("a frame split across reads is not lost", () => {
+  // The provider does not send whole frames, and a parser that assumes it
+  // does drops a word in the middle of a sentence.
+  const first = drainSSE('data: {"a":1}\n\ndata: {"b"');
+  assertEquals(first.payloads, ['{"a":1}']);
+  assertEquals(first.rest, 'data: {"b"');
+
+  const second = drainSSE(first.rest + ':2}\n\n');
+  assertEquals(second.payloads, ['{"b":2}']);
+  assertEquals(second.rest, "");
+});
+
+Deno.test("the done sentinel comes through as a payload like any other", () => {
+  const { payloads, rest } = drainSSE("data: [DONE]\n\n");
+  assertEquals(payloads, ["[DONE]"]);
+  assertEquals(rest, "");
 });

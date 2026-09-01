@@ -28,6 +28,10 @@ public struct LayoutMetrics: Sendable, Equatable {
     /// Manager panes.
     public let maxContentWidth: CGFloat
     public let heroScale: CGFloat
+    /// How far a bottom-corner overlay sits off the floor. Nothing in the app
+    /// claims this corner any more — the actions moved into each screen's top
+    /// bar — but the number is the one a phone needs for anything that does,
+    /// and it is what `contentBottomInset` is checked against.
     public let fabBottomInset: CGFloat
     /// Bottom padding for a screen's scrolling content. In compact width it
     /// clears the floating pill bar, which overlaps the scroll view rather than
@@ -37,9 +41,9 @@ public struct LayoutMetrics: Sendable, Equatable {
     /// Extra leading room for the side rail. Zero in compact width, where the
     /// bar lies along the bottom and `contentBottomInset` already pays for it.
     ///
-    /// Only the rail is paid for. The coach and quick-log buttons keep the
-    /// bottom corner and float over the content on every size, exactly as they
-    /// do on a phone, so nothing is reserved for them on the trailing side.
+    /// Only the rail is paid for. Nothing is reserved on the trailing side:
+    /// the actions live in each screen's navigation bar, which takes its own
+    /// room out of the top.
     ///
     /// Stated as a number the screens apply rather than as a safe area inset,
     /// because a safe area does not survive the trip through a
@@ -73,8 +77,8 @@ public struct LayoutMetrics: Sendable, Equatable {
                           railInset: 0,
                           statColumns: 2, tileColumns: 3, isRegular: false)
         case .regular:
-            // The floating button clears a sidebar rather than a bottom tab bar,
-            // so it no longer needs to sit a tab bar's height off the floor.
+            // A bottom-corner overlay clears a sidebar rather than a bottom tab
+            // bar, so it does not need a tab bar's height off the floor.
             LayoutMetrics(gutter: 32, sectionSpacing: 30,
                           maxContentWidth: 1060, heroScale: 1.3,
                           fabBottomInset: 28, contentBottomInset: 32,

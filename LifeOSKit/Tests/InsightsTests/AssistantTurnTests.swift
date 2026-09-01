@@ -9,7 +9,8 @@ private struct StubChatEngine: ChatEngine {
 
     func reply(
         to thread: [ChatTurnMessage], instructions: String,
-        tools: [any CoachTool], invoker: ToolInvoker
+        tools: [any CoachTool], invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -> Void
     ) async throws -> AssistantTurn.Reply {
         try outcome()
     }
@@ -22,7 +23,8 @@ private struct EchoingChatEngine: ChatEngine {
 
     func reply(
         to thread: [ChatTurnMessage], instructions: String,
-        tools: [any CoachTool], invoker: ToolInvoker
+        tools: [any CoachTool], invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -> Void
     ) async throws -> AssistantTurn.Reply {
         AssistantTurn.Reply(text: prefix + instructions, toolSummaries: [])
     }
@@ -70,7 +72,8 @@ private struct WritesThenFailsEngine: ChatEngine {
 
     func reply(
         to thread: [ChatTurnMessage], instructions: String,
-        tools: [any CoachTool], invoker: ToolInvoker
+        tools: [any CoachTool], invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -> Void
     ) async throws -> AssistantTurn.Reply {
         _ = await invoker.invoke(
             name: "create_event",
