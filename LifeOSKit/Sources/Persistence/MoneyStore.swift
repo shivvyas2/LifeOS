@@ -46,15 +46,28 @@ public struct MoneyAccountRow: Sendable, Equatable {
     public let name: String
     /// depository, credit, investment or loan.
     public let type: String
+    /// checking, savings, credit card, mortgage. See MoneyAccount.subtype.
+    public let subtype: String?
+    public let mask: String?
     public let currentBalance: Double
+    public let availableBalance: Double?
+    /// Nil where the institution does not report one. Never zero. See
+    /// MoneyAccount.creditLimit.
+    public let creditLimit: Double?
     public let currencyCode: String
 
     public init(externalID: String, name: String, type: String,
-                currentBalance: Double, currencyCode: String) {
+                subtype: String?, mask: String?,
+                currentBalance: Double, availableBalance: Double?,
+                creditLimit: Double?, currencyCode: String) {
         self.externalID = externalID
         self.name = name
         self.type = type
+        self.subtype = subtype
+        self.mask = mask
         self.currentBalance = currentBalance
+        self.availableBalance = availableBalance
+        self.creditLimit = creditLimit
         self.currencyCode = currencyCode
     }
 }
@@ -216,6 +229,10 @@ public struct MoneyStore {
 
             account.name = row.name
             account.type = row.type
+            account.subtype = row.subtype
+            account.mask = row.mask
+            account.availableBalance = row.availableBalance
+            account.creditLimit = row.creditLimit
             account.currentBalance = row.currentBalance
             account.currencyCode = row.currencyCode
             account.updatedAt = .now

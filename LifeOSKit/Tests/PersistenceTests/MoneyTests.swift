@@ -191,13 +191,19 @@ import SwiftData
         let store = try makeStore()
         try store.upsertAccounts([
             MoneyAccountRow(externalID: "acc_1", name: "Checking", type: "depository",
-                            currentBalance: 2_000, currencyCode: "USD"),
+                            subtype: nil, mask: nil,
+                            currentBalance: 2_000, availableBalance: nil,
+                            creditLimit: nil, currencyCode: "USD"),
         ])
         try store.upsertAccounts([
             MoneyAccountRow(externalID: "acc_1", name: "Checking", type: "depository",
-                            currentBalance: 2_400, currencyCode: "USD"),
+                            subtype: nil, mask: nil,
+                            currentBalance: 2_400, availableBalance: nil,
+                            creditLimit: nil, currencyCode: "USD"),
             MoneyAccountRow(externalID: "acc_2", name: "Card", type: "credit",
-                            currentBalance: 600, currencyCode: "USD"),
+                            subtype: nil, mask: nil,
+                            currentBalance: 600, availableBalance: nil,
+                            creditLimit: nil, currencyCode: "USD"),
         ])
 
         let accounts = try store.accounts()
@@ -235,5 +241,37 @@ import SwiftData
     @Test func aManualEntryHasNoMerchantEntity() throws {
         let entry = MoneyEntry(date: day, amount: -12, merchant: "Cash")
         #expect(entry.merchantID == nil)
+    }
+
+    @Test func upsertMovesABalanceAndALimitOnTheSameAccount() throws {
+        // A limit rises when the issuer raises it, and a balance moves every
+        // sync. Both must update in place rather than creating a second
+        // account, which would double net worth.
+        let store = try makeStore()
+        try store.upsertAccounts([
+            MoneyAccountRow(externalID: "acc_card", name: "Card", type: "credit",
+                            subtype: "credit card", mask: "4127",
+                            currentBalance: 610.25, availableBalance: nil,
+                            creditLimit: 2_000, currencyCode: "USD")
+        ])
+        try store.upsertAccounts([
+            MoneyAccountRow(externalID: "acc_card", name: "Card", type: "credit",
+                            subtype: "credit card", mask: "4127",
+                            currentBalance: 720.00, availableBalance: nil,
+                            creditLimit: 3_000, currencyCode: "USD")
+        ])
+
+        let accounts = try store.accounts()
+        #expect(accounts.count == 1)
+        #expect(accounts.first?.currentBalance == 720.00)
+        #expect(accounts.first?.creditLimit == 3_000)
+    }
+
+    @Test func netWorthStillReadsTypeNotSubtype() throws {
+        // A mortgage is type loan with a balance and no utilisation. Net worth
+        // must keep subtracting it, so this asserts the rule that must not
+        // migrate to subtype.
+        let mortgage = MoneyAccount(name: "Mortgage", type: "loan", currentBalance: 240_000)
+        #expect(mortgage.netWorthContribution == -240_000)
     }
 }

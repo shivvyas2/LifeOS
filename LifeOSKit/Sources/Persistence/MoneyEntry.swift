@@ -98,6 +98,29 @@ public final class MoneyAccount {
     public var name: String
     /// Plaid's `type`: depository, credit, investment or loan.
     public var type: String
+    /// Plaid's fine classification: checking, savings, credit card, mortgage.
+    ///
+    /// Kept beside `type` rather than replacing it because the two answer
+    /// different questions. `netWorthContribution` asks "is this money owed"
+    /// and reads `type`; utilisation asks "is this a credit card" and reads
+    /// this. A mortgage is a loan with a balance and no meaningful utilisation,
+    /// so neither rule can be written in terms of the other.
+    public var subtype: String?
+    /// The last two to four characters of the account number, for telling two
+    /// cards apart on screen.
+    public var mask: String?
+    /// What can actually be spent, as opposed to what the account holds.
+    ///
+    /// Nil where the institution does not report it, and nil is not zero: an
+    /// account summed as holding nothing understates available cash, and that
+    /// is the direction that makes someone spend money they do not have.
+    public var availableBalance: Double?
+    /// The card's credit limit. Nil where the institution does not report it.
+    ///
+    /// Never defaulted to zero. Utilisation against a limit of zero computes to
+    /// 100% and means nothing, and a screen that states it is confidently wrong
+    /// rather than visibly broken.
+    public var creditLimit: Double?
     public var currentBalance: Double
     public var currencyCode: String
     public var updatedAt: Date
@@ -105,6 +128,10 @@ public final class MoneyAccount {
     public init(
         name: String,
         type: String,
+        subtype: String? = nil,
+        mask: String? = nil,
+        availableBalance: Double? = nil,
+        creditLimit: Double? = nil,
         currentBalance: Double,
         currencyCode: String = "USD",
         externalID: String? = nil
@@ -113,6 +140,10 @@ public final class MoneyAccount {
         self.externalID = externalID
         self.name = name
         self.type = type
+        self.subtype = subtype
+        self.mask = mask
+        self.availableBalance = availableBalance
+        self.creditLimit = creditLimit
         self.currentBalance = currentBalance
         self.currencyCode = currencyCode
         self.updatedAt = .now
