@@ -46,6 +46,8 @@
 	<string>$(WHOOP_CLIENT_ID)</string>
 	<key>WhoopRedirectURI</key>
 	<string>$(WHOOP_REDIRECT_URI)</string>
+	<key>PlaidRedirectURI</key>
+	<string>$(PLAID_REDIRECT_URI)</string>
 	<key>FitbitClientID</key>
 	<string>$(FITBIT_CLIENT_ID)</string>
 	<key>FitbitRedirectURI</key>

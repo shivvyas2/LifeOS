@@ -39,6 +39,13 @@ final class PlaidConnectionViewModel {
 
     func attach(_ context: ModelContext) {
         self.context = context
+        // A bank's OAuth login can outlive the process. When it does, the Link
+        // session resumed on relaunch has no completion closure left to call,
+        // because the one `connect` handed over died with the old process.
+        // This is where the replacement comes from.
+        PlaidLinkPresenter.onResumedConnect = { [weak self] result in
+            Task { await self?.finishConnect(result) }
+        }
         refreshState()
     }
 

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Return to LifeOS</title>
+<!--
+  Almost nobody sees this page.
+
+  It exists at the end of a bank's OAuth login, where Plaid sends the browser
+  once the bank is done. When the universal link resolves, iOS hands the URL
+  straight to LifeOS and this HTML is never rendered. It renders only when the
+  handoff fails: a stale apple-app-site-association, a device without the app,
+  or a desktop browser.
+
+  So its whole job is to tell a stranded person what to do next. It must not
+  look like an error, and it must never claim the connection failed, because
+  by this point Plaid has usually already succeeded.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: #f2f1ed;
+    color: #16150f;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 26rem; text-align: center; }
+  h1 { margin: 0 0 .75rem; font-size: 1.6rem; letter-spacing: -0.02em; }
+  p { margin: 0 0 1rem; color: #55534b; }
+  a.button {
+    display: inline-block;
+    margin-top: .5rem;
+    padding: .85rem 1.6rem;
+    border-radius: 999px;
+    background: #16150f;
+    color: #f2f1ed;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #16150f; color: #f2f1ed; }
+    p { color: #a3a099; }
+    a.button { background: #f2f1ed; color: #16150f; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>You can head back to LifeOS</h1>
+  <p>Your bank has finished signing you in. Open the LifeOS app to pick up where you left off.</p>
+  <a class="button" href="almanac://plaid-oauth">Open LifeOS</a>
+</main>
+</body>
+</html>
