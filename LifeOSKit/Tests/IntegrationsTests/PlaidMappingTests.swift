@@ -125,6 +125,14 @@ import Persistence
         #expect(payroll.merchantID == nil)
     }
 
+    @Test func aLogoRidesTheIngestRow() throws {
+        let rows = try PlaidMapping.ingestRows(from: delta().added)
+        let coffee = try #require(rows.first { $0.externalID == "txn_coffee" })
+        #expect(coffee.logoURL == "https://plaid-merchant-logos.plaid.com/blue_bottle_1234.png")
+        let payroll = try #require(rows.first { $0.externalID == "txn_payroll" })
+        #expect(payroll.logoURL == nil)
+    }
+
     @Test func aCardCarriesItsLimitAndACheckingAccountCarriesNone() throws {
         // The pair that matters. currentBalance already falls back to 0 for a
         // null, which is right for a balance and catastrophic for a limit:

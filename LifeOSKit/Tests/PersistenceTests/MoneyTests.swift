@@ -54,11 +54,11 @@ import SwiftData
         let store = try makeStore()
         try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -20,
                                          merchant: "Cafe", category: nil, categoryCode: nil,
-                                         merchantID: nil, pending: true, accountID: nil, accountName: nil,
+                                         merchantID: nil, logoURL: nil, pending: true, accountID: nil, accountName: nil,
                                          currencyCode: "USD")])
         try store.ingest([MoneyIngestRow(externalID: "txn_1", date: day, amount: -22.5,
                                          merchant: "Cafe", category: "Food", categoryCode: nil,
-                                         merchantID: nil, pending: false, accountID: nil, accountName: nil,
+                                         merchantID: nil, logoURL: nil, pending: false, accountID: nil, accountName: nil,
                                          currencyCode: "USD")])
 
         let rows = try store.entries(from: day, to: day)
@@ -136,14 +136,14 @@ import SwiftData
         let store = try makeStore()
         let row = MoneyIngestRow(externalID: "txn_1", date: day, amount: -42,
                                  merchant: "Cafe", category: "Food & drink",
-                                 categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, pending: true,
+                                 categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, logoURL: nil, pending: true,
                                  accountID: "acc_1", accountName: "Checking",
                                  currencyCode: "USD")
         try store.ingest([row])
 
         let settled = MoneyIngestRow(externalID: "txn_1", date: day, amount: -44,
                                      merchant: "Cafe", category: "Food & drink",
-                                     categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, pending: false,
+                                     categoryCode: "FOOD_AND_DRINK_COFFEE", merchantID: nil, logoURL: nil, pending: false,
                                      accountID: "acc_1", accountName: "Checking",
                                      currencyCode: "USD")
         try store.ingest([settled])
@@ -164,11 +164,11 @@ import SwiftData
         try store.ingest([
             MoneyIngestRow(externalID: "pending_1", date: day, amount: -30,
                            merchant: "Shop", category: nil, categoryCode: nil,
-                           merchantID: nil, pending: true, accountID: nil, accountName: nil,
+                           merchantID: nil, logoURL: nil, pending: true, accountID: nil, accountName: nil,
                            currencyCode: "USD"),
             MoneyIngestRow(externalID: "posted_1", date: day, amount: -30,
                            merchant: "Shop", category: nil, categoryCode: nil,
-                           merchantID: nil, pending: false, accountID: nil, accountName: nil,
+                           merchantID: nil, logoURL: nil, pending: false, accountID: nil, accountName: nil,
                            currencyCode: "USD"),
         ])
 
@@ -220,7 +220,7 @@ import SwiftData
         let row = MoneyIngestRow(
             externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
             category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
-            merchantID: nil, pending: false,
+            merchantID: nil, logoURL: nil, pending: false,
             accountID: "acc_card", accountName: "Card", currencyCode: "USD"
         )
         try store.ingest([row])
@@ -228,7 +228,7 @@ import SwiftData
         let resolved = MoneyIngestRow(
             externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
             category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
-            merchantID: "mch_bluebottle", pending: false,
+            merchantID: "mch_bluebottle", logoURL: nil, pending: false,
             accountID: "acc_card", accountName: "Card", currencyCode: "USD"
         )
         try store.ingest([resolved])
@@ -241,6 +241,37 @@ import SwiftData
     @Test func aManualEntryHasNoMerchantEntity() throws {
         let entry = MoneyEntry(date: day, amount: -12, merchant: "Cash")
         #expect(entry.merchantID == nil)
+    }
+
+    @Test func ingestStoresTheLogoAndMovesItOnResync() throws {
+        // The one-time cursor reset replays history so old rows gain their
+        // logo; that only works if a re-sync writes the field onto an
+        // existing row rather than keeping the first nil.
+        let store = try makeStore()
+        let bare = MoneyIngestRow(
+            externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
+            category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
+            merchantID: "mch_bluebottle", logoURL: nil, pending: false,
+            accountID: "acc_card", accountName: "Card", currencyCode: "USD"
+        )
+        try store.ingest([bare])
+        #expect(try store.monthEntries(containing: day).first?.logoURL == nil)
+
+        let withLogo = MoneyIngestRow(
+            externalID: "txn_1", date: day, amount: -6.75, merchant: "Blue Bottle Coffee",
+            category: "Food & drink", categoryCode: "FOOD_AND_DRINK_COFFEE",
+            merchantID: "mch_bluebottle", logoURL: "https://example.com/bb.png", pending: false,
+            accountID: "acc_card", accountName: "Card", currencyCode: "USD"
+        )
+        try store.ingest([withLogo])
+
+        let entries = try store.monthEntries(containing: day)
+        #expect(entries.count == 1)
+        #expect(entries.first?.logoURL == "https://example.com/bb.png")
+    }
+
+    @Test func aManualEntryHasNoLogo() {
+        #expect(MoneyEntry(date: day, amount: -12, merchant: "Cash").logoURL == nil)
     }
 
     @Test func upsertMovesABalanceAndALimitOnTheSameAccount() throws {

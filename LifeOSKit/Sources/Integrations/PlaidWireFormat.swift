@@ -50,12 +50,17 @@ public struct PlaidTransaction: Decodable, Sendable {
     /// merchant name does not: `NETFLIX.COM` and `Netflix` are one entity here
     /// and two strings anywhere else.
     public let merchant_entity_id: String?
+    /// Plaid's merchant mark, a 100 by 100 PNG, when it resolved one. Nil is
+    /// ordinary: an unresolved descriptor has no logo, and a resolved one may
+    /// still lack an image.
+    public let logo_url: String?
     public let pending: Bool
     public let personal_finance_category: PlaidPFC?
 
     public init(transaction_id: String, account_id: String, amount: Double,
                 iso_currency_code: String?, date: String, name: String,
                 merchant_name: String?, merchant_entity_id: String? = nil,
+                logo_url: String? = nil,
                 pending: Bool,
                 personal_finance_category: PlaidPFC?) {
         self.transaction_id = transaction_id
@@ -66,6 +71,7 @@ public struct PlaidTransaction: Decodable, Sendable {
         self.name = name
         self.merchant_name = merchant_name
         self.merchant_entity_id = merchant_entity_id
+        self.logo_url = logo_url
         self.pending = pending
         self.personal_finance_category = personal_finance_category
     }
