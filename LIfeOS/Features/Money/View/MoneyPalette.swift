@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Persistence
 
 /// The Money tab's own palette.
 ///
@@ -83,18 +84,14 @@ struct MoneyFigure: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        // Round to cents FIRST, then split. Splitting before rounding lets
-        // .995 carry into a fraction of 100 and render as "$19.100". Money
-        // that displays as the wrong number is the worst bug this screen
-        // could have, so the arithmetic is done in the order that carries.
-        let magnitude = (abs(amount) * 100).rounded() / 100
-        let whole = Int(magnitude)
-        let cents = Int(((magnitude - Double(whole)) * 100).rounded())
-        let sign = showsSign ? (amount < 0 ? "-" : "+") : ""
+        // The split lives in the kit (`MoneyParts`) where the carry and the
+        // float noise are tested. This view only decides how to draw it.
+        let parts = MoneyParts(amount)
+        let sign = showsSign ? (parts.isNegative ? "-" : "+") : ""
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("\(sign)$\(whole.formatted(.number.grouping(.automatic)))")
-            Text(".\(cents < 10 ? "0" : "")\(cents)")
+            Text("\(sign)$\(parts.wholeText)")
+            Text(".\(parts.centsText)")
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.35))
         }
         .font(LifeOSType.numeral(size))
@@ -102,6 +99,7 @@ struct MoneyFigure: View {
         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
+        .accessibilityLabel("\(sign)\(parts.wholeText) dollars \(parts.cents) cents")
     }
 }
 
