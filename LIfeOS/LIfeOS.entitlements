@@ -32,5 +32,22 @@
 	     Function picks the matching host. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- The domain that owns the Plaid OAuth redirect.
+
+	     Banks like Chase do not take a login inside Plaid Link. Link sends the
+	     user to the bank, and the bank sends the browser to a redirect URI
+	     registered with Plaid in advance. A custom scheme cannot be registered
+	     there and would not survive the hop through Safari, so the redirect is
+	     an https universal link and this entitlement is what makes iOS hand it
+	     to the app instead of opening it in Safari.
+
+	     The matching claim is served from web/, at
+	     https://almanac.shivvyas.com/.well-known/apple-app-site-association.
+	     Both sides have to name the same domain or the redirect silently opens
+	     in Safari and the connection is abandoned half finished. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:almanac.shivvyas.com</string>
+	</array>
 </dict>
 </plist>

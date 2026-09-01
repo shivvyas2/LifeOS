@@ -191,9 +191,26 @@ struct AppShell: View {
         .onOpenURL { url in
             // Logged at the door: if nothing appears here, the redirect never
             // reached the app at all and the problem is upstream of our code.
-            // Only Whoop uses the scheme now that email is a code, not a link.
             shellLog.info("opened url host=\(url.host ?? "?", privacy: .public)")
-            whoop.handleCallback(url)
+            handle(url)
         }
+        // A universal link does not always arrive as a plain URL. Plaid's OAuth
+        // redirect is an https link on our own domain, and iOS is entitled to
+        // deliver it as a browsing activity instead, so both doors are open.
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL else { return }
+            shellLog.info("continued activity host=\(url.host ?? "?", privacy: .public)")
+            handle(url)
+        }
+    }
+
+    /// One door for every link the app is handed.
+    ///
+    /// Plaid goes first: its redirect is the only one that can arrive while a
+    /// half finished bank connection is waiting on it, and `resume` returns
+    /// false for anything that is not that redirect, so Whoop loses nothing.
+    private func handle(_ url: URL) {
+        guard PlaidLinkPresenter.resume(from: url) == false else { return }
+        whoop.handleCallback(url)
     }
 }

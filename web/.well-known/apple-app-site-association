@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["Z42YU5W6WY.com.shivvyas.lifeos"],
+        "components": [
+          {
+            "/": "/plaid-oauth*",
+            "comment": "The only path this domain claims. Plaid sends the browser here at the end of a bank's OAuth login and iOS hands it to the app instead of Safari."
+          }
+        ]
+      }
+    ]
+  }
+}

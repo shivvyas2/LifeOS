@@ -53,6 +53,24 @@ enum AppConfig {
         supabaseURL?.appendingPathComponent("functions/v1")
     }
 
+    /// Where a bank's OAuth login sends the browser when it is done.
+    ///
+    /// An https universal link rather than a custom scheme, because Plaid will
+    /// not register a custom scheme as a redirect URI. Empty when OAuth banks
+    /// are not set up, which is a working configuration: institutions that
+    /// take a password inside Link still connect.
+    static var plaidRedirectURI: URL? {
+        string("PlaidRedirectURI").flatMap(URL.init(string:))
+    }
+
+    /// True for the redirect at the end of a bank's OAuth login, and false for
+    /// every other link the app is handed. Compares host and path rather than
+    /// the whole string because Plaid appends its own query parameters.
+    static func isPlaidRedirect(_ url: URL) -> Bool {
+        guard let redirect = plaidRedirectURI, let host = redirect.host else { return false }
+        return url.host == host && url.path == redirect.path
+    }
+
     static var isPlaidConfigured: Bool { plaidFunctionsBase != nil }
 
     /// Every scheme the app answers to, in the order the bundle declares them.
