@@ -138,4 +138,51 @@ import Persistence
         #expect(store.accounts.isEmpty)
         #expect(store.currentScope == nil)
     }
+
+    /// The bug that made logging out impossible.
+    ///
+    /// The pre-accounts session sits in a slot with no user id on it, so
+    /// `remove(_:)` — which works in terms of an account — never reached it.
+    /// It outlived every sign out, and the next launch adopted it and signed
+    /// the same person straight back in.
+    @Test func signingOutClearsThePreAccountSessionToo() throws {
+        let (store, keyring, _) = makeStore()
+        // The shape of a device that upgraded: a session in the legacy slot,
+        // adopted into the roster under its user id.
+        try keyring.store(KeychainAuthSessionStore.legacyAccount).save(session("alice"))
+        try store.add(Account(userID: "alice", label: "alice@example.com"), session: session("alice"))
+
+        store.remove("alice")
+
+        #expect(store.accounts.isEmpty)
+        #expect(store.currentScope == nil)
+        #expect(store.session(for: "alice") == nil)
+        // The one that used to survive.
+        #expect(store.legacySession() == nil)
+    }
+
+    /// Signing one account out must not disturb the others, legacy slot or no.
+    @Test func signingOneOutLeavesTheOthersSignedIn() throws {
+        let (store, keyring, _) = makeStore()
+        try keyring.store(KeychainAuthSessionStore.legacyAccount).save(session("alice"))
+        try store.add(Account(userID: "alice", label: "alice@example.com"), session: session("alice"))
+        try store.add(Account(userID: "bob", label: "bob@example.com"), session: session("bob"))
+
+        store.remove("alice")
+
+        #expect(store.accounts.map(\.userID) == ["bob"])
+        #expect(store.session(for: "bob") != nil)
+        #expect(store.legacySession() == nil)
+    }
+
+    /// The adoption is a move, not a copy. Reading it and leaving it is what
+    /// let it be adopted again after a sign out.
+    @Test func theLegacySessionIsReadableAndClearable() throws {
+        let (store, keyring, _) = makeStore()
+        try keyring.store(KeychainAuthSessionStore.legacyAccount).save(session("alice"))
+
+        #expect(store.legacySession()?.userID == "alice")
+        store.clearLegacySession()
+        #expect(store.legacySession() == nil)
+    }
 }

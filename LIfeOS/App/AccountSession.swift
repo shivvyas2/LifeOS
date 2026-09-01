@@ -36,8 +36,7 @@ final class AccountSession {
     /// everything they had written.
     private func adoptExistingSessionIfNeeded() {
         guard accounts.accounts.isEmpty else { return }
-        let legacy = KeychainAuthSessionStore(account: KeychainAuthSessionStore.legacyAccount)
-        guard let session = legacy.load() else { return }
+        guard let session = accounts.legacySession() else { return }
 
         let account = Account(
             userID: session.userID,
@@ -45,6 +44,14 @@ final class AccountSession {
         )
         do {
             try accounts.add(account, session: session)
+            // The move is only finished once the source is gone. Left in
+            // place, the legacy slot outlives every sign out — nothing else
+            // knows to clear a session with no user id on it — and the next
+            // launch adopts it again and signs the person back in. That is
+            // what made logging out impossible, and the app died on the way:
+            // the restored session put the tab hierarchy on screen in a scene
+            // that has no store open, and the first note fetch threw.
+            accounts.clearLegacySession()
             if try LifeOSContainer.adoptLegacyStore(into: account.scope) {
                 accountLog.info("adopted the pre-account store for the existing session")
             }
@@ -83,6 +90,11 @@ final class AccountSession {
     /// alone. Lands on whichever account is left, or on signup when none is.
     func signOut() {
         if let scope { accounts.remove(scope.id) }
+        // Belt and braces for a device that adopted the legacy session under
+        // the build that left it behind: `remove` clears it too, but only when
+        // there was a scope to remove, and a shell with none must not be able
+        // to resurrect one either.
+        accounts.clearLegacySession()
         adopt(accounts.currentScope ?? accounts.accounts.first.map(\.scope))
         if let remaining = accounts.accounts.first, accounts.currentScope == nil {
             _ = accounts.setCurrent(remaining.userID)

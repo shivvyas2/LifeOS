@@ -115,12 +115,33 @@ public final class AccountStore {
     /// request to delete a year of notes, and someone who signs back in
     /// expects to find them; removing the account from the device is a
     /// different, louder action.
+    ///
+    /// The legacy slot goes with it. It has no user id, so it is not "one
+    /// account's" session and `keychain(for:)` never reaches it — which is
+    /// exactly how it survived a sign out and signed the same person straight
+    /// back in on the next launch. A credential that can restore an account
+    /// is that account's session whatever slot it sits in.
     public func remove(_ userID: String) {
         keychain(for: userID).clear()
+        clearLegacySession()
         write(accounts.filter { $0.userID != userID })
         if defaults.string(forKey: Self.currentKey) == userID {
             defaults.removeObject(forKey: Self.currentKey)
         }
+    }
+
+    /// The pre-accounts session, if this device still has one.
+    ///
+    /// Only two things may touch it: the one-time adoption that moves it into
+    /// the roster, and sign out. Everything else works in terms of an account.
+    public func legacySession() -> AuthSession? {
+        keychain(for: KeychainAuthSessionStore.legacyAccount).load()
+    }
+
+    /// Removes it. Called after it has been adopted, and again on sign out for
+    /// the devices that adopted it before this method existed.
+    public func clearLegacySession() {
+        keychain(for: KeychainAuthSessionStore.legacyAccount).clear()
     }
 
     // MARK: - Sessions
