@@ -125,8 +125,29 @@ public struct SupabaseAuth: Sendable {
         return data
     }
 
+    /// An auth URL, with a query string that is still a query string.
+    ///
+    /// Deliberately not `appendingPathComponent` on the whole path.  That
+    /// treats what it is given as a single component and percent-encodes the
+    /// `?` into `%3F`, which sent the one call that carries a query to
+    /// POST /auth/v1/token%3Fgrant_type=refresh_token.  GoTrue answers 404 to
+    /// that, so a stored session could never be renewed: an hour after signing
+    /// in the access token expired and every authenticated call began failing
+    /// 401, the coach's turn among them.  The other callers pass a bare path
+    /// and are unaffected, which is why signing in always looked fine.
+    private func authURL(_ path: String) throws -> URL {
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        var components = URLComponents(
+            url: baseURL.appendingPathComponent("auth/v1/\(parts[0])"),
+            resolvingAgainstBaseURL: false
+        )
+        if parts.count > 1 { components?.query = String(parts[1]) }
+        guard let url = components?.url else { throw AuthError.transport }
+        return url
+    }
+
     private func post(_ path: String, body: [String: Any]) async throws -> Data {
-        var request = URLRequest(url: baseURL.appendingPathComponent("auth/v1/\(path)"))
+        var request = URLRequest(url: try authURL(path))
         request.httpMethod = "POST"
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
