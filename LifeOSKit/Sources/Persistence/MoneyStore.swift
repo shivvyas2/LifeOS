@@ -17,13 +17,14 @@ public struct MoneyIngestRow: Sendable, Equatable {
     public let merchant: String
     public let category: String?
     public let categoryCode: String?
+    public let merchantID: String?
     public let pending: Bool
     public let accountID: String?
     public let accountName: String?
     public let currencyCode: String
 
     public init(externalID: String, date: Date, amount: Double, merchant: String,
-                category: String?, categoryCode: String?, pending: Bool,
+                category: String?, categoryCode: String?, merchantID: String?, pending: Bool,
                 accountID: String?, accountName: String?, currencyCode: String) {
         self.externalID = externalID
         self.date = date
@@ -31,6 +32,7 @@ public struct MoneyIngestRow: Sendable, Equatable {
         self.merchant = merchant
         self.category = category
         self.categoryCode = categoryCode
+        self.merchantID = merchantID
         self.pending = pending
         self.accountID = accountID
         self.accountName = accountName
@@ -44,15 +46,28 @@ public struct MoneyAccountRow: Sendable, Equatable {
     public let name: String
     /// depository, credit, investment or loan.
     public let type: String
+    /// checking, savings, credit card, mortgage. See MoneyAccount.subtype.
+    public let subtype: String?
+    public let mask: String?
     public let currentBalance: Double
+    public let availableBalance: Double?
+    /// Nil where the institution does not report one. Never zero. See
+    /// MoneyAccount.creditLimit.
+    public let creditLimit: Double?
     public let currencyCode: String
 
     public init(externalID: String, name: String, type: String,
-                currentBalance: Double, currencyCode: String) {
+                subtype: String?, mask: String?,
+                currentBalance: Double, availableBalance: Double?,
+                creditLimit: Double?, currencyCode: String) {
         self.externalID = externalID
         self.name = name
         self.type = type
+        self.subtype = subtype
+        self.mask = mask
         self.currentBalance = currentBalance
+        self.availableBalance = availableBalance
+        self.creditLimit = creditLimit
         self.currencyCode = currencyCode
     }
 }
@@ -162,6 +177,7 @@ public struct MoneyStore {
             entry.merchant = row.merchant
             entry.category = row.category
             entry.categoryCode = row.categoryCode
+            entry.merchantID = row.merchantID
             entry.pending = row.pending
             entry.accountID = row.accountID
             entry.accountName = row.accountName
@@ -213,6 +229,10 @@ public struct MoneyStore {
 
             account.name = row.name
             account.type = row.type
+            account.subtype = row.subtype
+            account.mask = row.mask
+            account.availableBalance = row.availableBalance
+            account.creditLimit = row.creditLimit
             account.currentBalance = row.currentBalance
             account.currencyCode = row.currencyCode
             account.updatedAt = .now

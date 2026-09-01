@@ -1,8 +1,13 @@
 import Foundation
 
 /// A real Sandbox `/transactions/sync` page, wrapped in the per-Item envelope
-/// `plaid-sync` returns. Held as a literal rather than a bundled resource so
-/// the test target needs no resource configuration.
+/// `plaid-sync` returns, with optional fields present on some rows and absent
+/// on others on purpose: `txn_coffee` carries a merchant entity and the other
+/// three do not, `acc_card` reports a credit limit and `acc_checking` does not,
+/// and `acc_checking` reports an available balance while `acc_card` does not.
+/// Uniform presence would let a decoder that mishandles absence pass. Held as
+/// a literal rather than a bundled resource so the test target needs no
+/// resource configuration.
 ///
 /// Note the amounts: Plaid is positive for money leaving the account. The
 /// payroll deposit is negative here and must come out of the mapper positive.
@@ -21,13 +26,25 @@ enum PlaidFixtures {
               "account_id": "acc_checking",
               "name": "Plaid Checking",
               "type": "depository",
-              "balances": { "current": 2450.75, "iso_currency_code": "USD" }
+              "subtype": "checking",
+              "mask": "0000",
+              "balances": {
+                "current": 2450.75,
+                "available": 2100.50,
+                "iso_currency_code": "USD"
+              }
             },
             {
               "account_id": "acc_card",
               "name": "Plaid Credit Card",
               "type": "credit",
-              "balances": { "current": 610.25, "iso_currency_code": "USD" }
+              "subtype": "credit card",
+              "mask": "4127",
+              "balances": {
+                "current": 610.25,
+                "limit": 2000.00,
+                "iso_currency_code": "USD"
+              }
             }
           ],
           "added": [
@@ -53,6 +70,7 @@ enum PlaidFixtures {
               "date": "2026-08-20",
               "name": "SQ *BLUE BOTTLE",
               "merchant_name": "Blue Bottle Coffee",
+              "merchant_entity_id": "mch_bluebottle",
               "pending": true,
               "personal_finance_category": {
                 "primary": "FOOD_AND_DRINK",

@@ -54,6 +54,7 @@ public enum PlaidMapping {
                 merchant: transaction.merchant_name ?? transaction.name,
                 category: PlaidCategory.display(primary: transaction.personal_finance_category?.primary),
                 categoryCode: transaction.personal_finance_category?.detailed,
+                merchantID: transaction.merchant_entity_id,
                 pending: transaction.pending,
                 accountID: transaction.account_id,
                 accountName: namesByID[transaction.account_id],
@@ -68,9 +69,16 @@ public enum PlaidMapping {
                 externalID: account.account_id,
                 name: account.name,
                 type: account.type,
+                subtype: account.subtype,
+                mask: account.mask,
                 // A null balance means Plaid could not read it this time. Zero is
                 // the honest placeholder; the next sync corrects it.
                 currentBalance: account.balances.current ?? 0,
+                // Deliberately NOT given the same fallback. A zero balance is a
+                // wrong number that the next sync fixes; a zero limit is a wrong
+                // number that renders as 100% utilised and looks like a fact.
+                availableBalance: account.balances.available,
+                creditLimit: account.balances.limit,
                 currencyCode: account.balances.iso_currency_code ?? "USD"
             )
         }

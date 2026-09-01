@@ -109,4 +109,43 @@ import Persistence
         #expect(calendar.component(.day, from: stored) == 1)
         #expect(calendar.component(.month, from: stored) == 9)
     }
+
+    @Test func aResolvedMerchantCarriesItsEntityID() throws {
+        let rows = try PlaidMapping.ingestRows(from: delta().added)
+        let coffee = try #require(rows.first { $0.externalID == "txn_coffee" })
+        #expect(coffee.merchantID == "mch_bluebottle")
+    }
+
+    @Test func anUnresolvedMerchantCarriesNoEntityID() throws {
+        // Not an empty string. Recurring detection falls back per row to the
+        // merchant name; a shared empty key would merge every unresolved
+        // descriptor into one merchant that does not exist.
+        let rows = try PlaidMapping.ingestRows(from: delta().added)
+        let payroll = try #require(rows.first { $0.externalID == "txn_payroll" })
+        #expect(payroll.merchantID == nil)
+    }
+
+    @Test func aCardCarriesItsLimitAndACheckingAccountCarriesNone() throws {
+        // The pair that matters. currentBalance already falls back to 0 for a
+        // null, which is right for a balance and catastrophic for a limit:
+        // 610.25 against a limit of 0 renders as fully utilised.
+        let rows = PlaidMapping.accountRows(from: try delta().accounts)
+        let card = try #require(rows.first { $0.externalID == "acc_card" })
+        let checking = try #require(rows.first { $0.externalID == "acc_checking" })
+
+        #expect(card.creditLimit == 2_000)
+        #expect(card.mask == "4127")
+        #expect(card.subtype == "credit card")
+        #expect(checking.creditLimit == nil)
+    }
+
+    @Test func anAvailableBalanceIsCarriedAndItsAbsenceStaysAbsent() throws {
+        let rows = PlaidMapping.accountRows(from: try delta().accounts)
+        let checking = try #require(rows.first { $0.externalID == "acc_checking" })
+        let card = try #require(rows.first { $0.externalID == "acc_card" })
+
+        #expect(checking.availableBalance == 2_100.50)
+        #expect(card.availableBalance == nil)
+        #expect(checking.currentBalance == 2_450.75)
+    }
 }

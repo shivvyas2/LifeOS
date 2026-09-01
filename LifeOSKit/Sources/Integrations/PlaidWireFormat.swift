@@ -42,12 +42,21 @@ public struct PlaidTransaction: Decodable, Sendable {
     public let name: String
     /// Plaid's cleaned-up merchant, when it has one.
     public let merchant_name: String?
+    /// Plaid's stable identifier for the merchant behind this descriptor.
+    ///
+    /// Nil when Plaid could not resolve one, which is common enough that no
+    /// caller may assume presence. It is the right grouping key for recurring
+    /// detection because it survives a descriptor changing spelling, which a
+    /// merchant name does not: `NETFLIX.COM` and `Netflix` are one entity here
+    /// and two strings anywhere else.
+    public let merchant_entity_id: String?
     public let pending: Bool
     public let personal_finance_category: PlaidPFC?
 
     public init(transaction_id: String, account_id: String, amount: Double,
                 iso_currency_code: String?, date: String, name: String,
-                merchant_name: String?, pending: Bool,
+                merchant_name: String?, merchant_entity_id: String? = nil,
+                pending: Bool,
                 personal_finance_category: PlaidPFC?) {
         self.transaction_id = transaction_id
         self.account_id = account_id
@@ -56,6 +65,7 @@ public struct PlaidTransaction: Decodable, Sendable {
         self.date = date
         self.name = name
         self.merchant_name = merchant_name
+        self.merchant_entity_id = merchant_entity_id
         self.pending = pending
         self.personal_finance_category = personal_finance_category
     }
@@ -75,10 +85,28 @@ public struct PlaidAccount: Decodable, Sendable {
     public let name: String
     /// depository, credit, investment or loan.
     public let type: String
+    /// The last two to four characters of the account number. What tells two
+    /// cards apart on screen.
+    public let mask: String?
+    /// Plaid's fine classification: checking, savings, credit card, mortgage.
+    ///
+    /// Kept alongside `type` rather than replacing it. `type` answers "is this
+    /// money owed", which is what net worth needs; `subtype` answers "is this a
+    /// credit card", which is what utilisation needs, and a mortgage is a loan
+    /// with a balance and no meaningful utilisation.
+    public let subtype: String?
     public let balances: PlaidBalances
 }
 
 public struct PlaidBalances: Decodable, Sendable {
     public let current: Double?
+    /// What can actually be withdrawn, as opposed to what the account holds.
+    /// Nil where the institution does not distinguish the two.
+    public let available: Double?
+    /// The credit limit on a card, or the overdraft limit on a depository
+    /// account. Nil at institutions that do not report it, and nil is not zero:
+    /// utilisation against a limit of zero is 100% by arithmetic and unknowable
+    /// in fact.
+    public let limit: Double?
     public let iso_currency_code: String?
 }
