@@ -49,6 +49,8 @@ struct RootView: View {
     @State private var recovery = RecoveryViewModel()
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
+    @State private var moneyDetail = MoneyDetailViewModel()
+    @State private var openMoney: MoneyDetailFilter?
     @State private var plaid = PlaidConnectionViewModel()
     @State private var plan = PlanViewModel()
     @State private var notes = NotesViewModel()
@@ -417,18 +419,22 @@ struct RootView: View {
                     .quickActionsToolbar()
                 }
             case .money:
-                // Wrapped here rather than in `MoneyScreen`: the stack exists
-                // only to carry the bar the actions live in, and the screen
-                // itself pushes nothing.
+                // Wrapped here rather than in `MoneyScreen`: the stack carries
+                // the bar the actions live in and the detail page a category
+                // or merchant opens onto.
                 NavigationStack {
                     MoneyScreen(
                         snapshot: money.snapshot,
                         onAdd: { showAddMoney = true },
                         onConnect: { plaid.connect() },
                         onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
-                        onEditBudgets: { showBudgets = true }
+                        onEditBudgets: { showBudgets = true },
+                        onOpen: { openMoney = $0 }
                     )
                     .quickActionsToolbar()
+                    .navigationDestination(item: $openMoney) { filter in
+                        MoneyDetailScreen(filter: filter, model: moneyDetail)
+                    }
                 }
             case .notes:
                 NotesHubScreen(
@@ -620,6 +626,7 @@ struct RootView: View {
         recovery.attach(context)
         wellness.attach(context)
         money.attach(context)
+        moneyDetail.attach(context)
         plaid.attach(context)
         plan.attach(context)
         life.attach(context)
@@ -712,9 +719,11 @@ struct RootView: View {
         recovery.load()
         wellness.load()
         money.load(connection: plaid)
+        if let openMoney { moneyDetail.load(openMoney) }
         Task {
             await plaid.syncIfDue()
             money.load(connection: plaid)
+            if let openMoney { moneyDetail.load(openMoney) }
         }
         plan.load()
         notes.load()
