@@ -46,7 +46,7 @@ upload finishes, which wastes the whole round trip. Bump
 
 ```
 MARKETING_VERSION       1.0   → user-facing, bump for real releases
-CURRENT_PROJECT_VERSION 16    → bump for EVERY upload, even a re-upload
+CURRENT_PROJECT_VERSION 17    → bump for EVERY upload, even a re-upload
 ```
 
 Committing it is the part that was being skipped. Through build 15 the number
