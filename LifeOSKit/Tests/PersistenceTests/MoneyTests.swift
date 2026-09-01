@@ -274,6 +274,26 @@ import SwiftData
         #expect(MoneyEntry(date: day, amount: -12, merchant: "Cash").logoURL == nil)
     }
 
+    @Test func isSpendingMatchesWhatTheSummaryCountsAsExpense() {
+        // The category list is built from this and the "Spent" figure from
+        // summarise. If they ever disagree, the parts stop summing to the whole.
+        let cases: [(MoneyEntry, Bool)] = [
+            (MoneyEntry(date: day, amount: -40, merchant: "Coffee"), true),
+            (MoneyEntry(date: day, amount: 3_000, merchant: "Salary"), false),
+            (MoneyEntry(date: day, amount: -40, merchant: "Hold", pending: true), false),
+            (MoneyEntry(date: day, amount: -400, merchant: "Card",
+                        categoryCode: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"), false),
+            (MoneyEntry(date: day, amount: -200, merchant: "Savings",
+                        categoryCode: "TRANSFER_OUT_ACCOUNT_TRANSFER"), false),
+            (MoneyEntry(date: day, amount: -900, merchant: "Car loan",
+                        categoryCode: "LOAN_PAYMENTS_CAR_PAYMENT"), true),
+        ]
+        for (entry, expected) in cases {
+            #expect(entry.isSpending == expected, "\(entry.merchant)")
+            #expect(summarise(entries: [entry]).expenses == (expected ? -entry.amount : 0))
+        }
+    }
+
     @Test func upsertMovesABalanceAndALimitOnTheSameAccount() throws {
         // A limit rises when the issuer raises it, and a balance moves every
         // sync. Both must update in place rather than creating a second
