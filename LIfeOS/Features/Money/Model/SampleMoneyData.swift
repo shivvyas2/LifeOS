@@ -34,6 +34,9 @@ extension MoneySnapshot {
             unclaimed: sampleUnclaimed,
             categories: sampleCategories,
             recurring: sampleRecurring,
+            week: sampleWeek,
+            slices: MoneyViewModel.slices(from: sampleCategories),
+            spendCount: 23,
             goal: SavingsGoal(name: "Emergency fund", target: 6_000, saved: 1_768.42),
             monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
             isSample: true,
@@ -75,6 +78,10 @@ extension MoneySnapshot {
             ("Blue Bottle Coffee", "Dining",           -18.50, 5, false),
             ("Spotify",            "Subscriptions",    -11.99, 6, false),
             ("Trader Joe's",       "Groceries",        -86.31, 8, false),
+            ("Netflix",            "Entertainment",    -19.99, 9, false),
+            ("Amazon",             "Shopping",         -64.20, 10, false),
+            ("Shell",              "Transport",        -48.00, 12, false),
+            ("Sweetgreen",         "Dining",           -15.75, 12, false),
         ]
 
         return entries.map { merchant, category, amount, daysAgo, pending in
@@ -84,8 +91,26 @@ extension MoneySnapshot {
                 category: category,
                 amount: amount,
                 date: Date.now.addingTimeInterval(-daysAgo * day),
-                pending: pending
+                pending: pending,
+                accountName: "Checking"
             )
+        }
+    }
+
+    /// A week with a clear peak and today somewhere in the middle, so the
+    /// chart's three states (past, today, still to come) are all visible.
+    private static var sampleWeek: [DaySpend] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: .now)
+        guard let interval = calendar.dateInterval(of: .weekOfYear, for: today) else { return [] }
+        let amounts: [Double] = [42.10, 118.40, 12.99, 86.31, 27.85, 64.00, 0]
+        return (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: interval.start) else {
+                return nil
+            }
+            let isFuture = day > today
+            return DaySpend(date: day, amount: isFuture ? 0 : amounts[offset],
+                            isFuture: isFuture, isToday: day == today)
         }
     }
 
@@ -94,17 +119,17 @@ extension MoneySnapshot {
     /// screen contradicting itself in front of the person reading it.
     private static var sampleCategories: [CategoryRow] {
         let total = 4_431.58
-        let parts: [(String, Double)] = [
-            ("Rent", 1_850.00),
-            ("Groceries", 412.87),
-            ("Transport", 163.15),
-            ("Eating out", 238.40),
-            ("Subscriptions", 47.97),
-            ("Health", 128.00),
-            ("Uncategorised", 1_591.19),
+        let parts: [(String, Double, Int)] = [
+            ("Rent", 1_850.00, 1),
+            ("Groceries", 412.87, 6),
+            ("Transport", 163.15, 5),
+            ("Eating out", 238.40, 4),
+            ("Subscriptions", 47.97, 3),
+            ("Health", 128.00, 1),
+            ("Uncategorised", 1_591.19, 3),
         ]
         return parts.map {
-            CategoryRow(id: $0.0, name: $0.0, amount: $0.1, share: $0.1 / total)
+            CategoryRow(id: $0.0, name: $0.0, amount: $0.1, share: $0.1 / total, count: $0.2)
         }
     }
 

@@ -72,7 +72,7 @@ extension View {
 
 /// A figure at display size, with the decimal ghosted.
 ///
-/// The reference sets every amount as `$1,894.0` with the fractional part in a
+/// The reference sets every amount as `$1,894.00` with the cents in a
 /// lighter tint, which is what stops a wall of numbers reading as a
 /// spreadsheet: the eye lands on the magnitude and the cents stay available
 /// without competing.
@@ -83,19 +83,18 @@ struct MoneyFigure: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        // Round to one decimal FIRST, then split. Splitting before rounding
-        // lets a fraction of .99 round to a tenth of 10 and render as
-        // "$19.10" for 19.99: the carry never reaches the whole part. Money
+        // Round to cents FIRST, then split. Splitting before rounding lets
+        // .995 carry into a fraction of 100 and render as "$19.100". Money
         // that displays as the wrong number is the worst bug this screen
         // could have, so the arithmetic is done in the order that carries.
-        let magnitude = (abs(amount) * 10).rounded() / 10
+        let magnitude = (abs(amount) * 100).rounded() / 100
         let whole = Int(magnitude)
-        let tenth = Int(((magnitude - Double(whole)) * 10).rounded())
+        let cents = Int(((magnitude - Double(whole)) * 100).rounded())
         let sign = showsSign ? (amount < 0 ? "-" : "+") : ""
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text("\(sign)$\(whole.formatted(.number.grouping(.automatic)))")
-            Text(".\(tenth)")
+            Text(".\(cents < 10 ? "0" : "")\(cents)")
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.35))
         }
         .font(LifeOSType.numeral(size))

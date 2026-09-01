@@ -186,11 +186,11 @@ struct MoneyScreen: View {
     }
 
     static func money(_ value: Double) -> String? {
-        value.formatted(.currency(code: "USD").precision(.fractionLength(0)))
+        value.formatted(.currency(code: "USD").precision(.fractionLength(2)))
     }
 
     static func signed(_ value: Double) -> String {
-        let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(0)))
+        let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(2)))
         return value >= 0 ? "+\(formatted)" : "-\(formatted)"
     }
 }
