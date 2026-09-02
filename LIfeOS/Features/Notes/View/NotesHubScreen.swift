@@ -285,14 +285,18 @@ struct NotesHubScreen: View {
                     .overlay {
                         // A scrim over the pushed stack: tap it to close, and
                         // it says the page is not the thing to touch right now.
-                        Color.black
-                            .opacity(0.22 * progress)
-                            .ignoresSafeArea()
-                            .allowsHitTesting(isDrawerOpen)
-                            .onTapGesture { setDrawer(open: false) }
+                        // Present only while open, so a closed drawer leaves
+                        // the stack's own touches alone.
+                        if isDrawerOpen {
+                            Button { setDrawer(open: false) } label: {
+                                Color.black
+                                    .opacity(0.22 * progress)
+                                    .ignoresSafeArea()
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                             .accessibilityLabel("Close library")
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityHidden(!isDrawerOpen)
+                        }
                     }
                     .offset(x: offset)
             }
