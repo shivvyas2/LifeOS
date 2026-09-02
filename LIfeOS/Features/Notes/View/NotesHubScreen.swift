@@ -317,7 +317,7 @@ struct NotesHubScreen: View {
     /// Three quarters of the screen, capped so a large phone in landscape
     /// does not open a drawer wider than the library needs.
     private static func drawerWidth(in available: CGFloat) -> CGFloat {
-        min(available * 0.78, 320)
+        min(available * 0.82, 320)
     }
 
     /// Where the drawer's leading edge sits: 0 closed, `width` open, and
@@ -356,20 +356,50 @@ struct NotesHubScreen: View {
             }
     }
 
-    /// The drawer's contents: the title and the shared library rail.
+    /// The drawer's contents: a header that mirrors the nav bar, then the
+    /// shared library rail.
+    ///
+    /// Drawn to look like the screen it slides out of rather than a panel
+    /// from somewhere else: the same canvas, the same type, and a glass
+    /// circle in exactly the spot the nav bar's Library button occupies, so
+    /// the button reads as having stayed put while the panel grew out from
+    /// behind it. Tapping that circle closes the drawer.
     private var compactLibrary: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Library")
-                .font(LifeOSType.display)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .padding(.horizontal, layout.gutter)
-                .padding(.top, 4)
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                        setDrawer(open: false)
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(LifeOSType.body.weight(.medium))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("Close library")
+
+                Text("Library")
+                    .font(LifeOSType.sectionTitle.weight(.semibold))
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            // The system bar's leading item sits this far from the edge and
+            // this tall; matching both is what makes the circle line up.
+            .padding(.horizontal, 16)
+            .frame(height: 52)
 
             library
         }
         .padding(.bottom, layout.contentBottomInset)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .overlay(alignment: .trailing) { columnRule.ignoresSafeArea() }
     }
 
     /// The phone's navigation stack, unchanged by the drawer around it.
