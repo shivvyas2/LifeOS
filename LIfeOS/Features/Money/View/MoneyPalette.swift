@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Persistence
 
 /// The Money tab's own palette.
 ///
@@ -72,7 +73,7 @@ extension View {
 
 /// A figure at display size, with the decimal ghosted.
 ///
-/// The reference sets every amount as `$1,894.0` with the fractional part in a
+/// The reference sets every amount as `$1,894.00` with the cents in a
 /// lighter tint, which is what stops a wall of numbers reading as a
 /// spreadsheet: the eye lands on the magnitude and the cents stay available
 /// without competing.
@@ -83,19 +84,14 @@ struct MoneyFigure: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        // Round to one decimal FIRST, then split. Splitting before rounding
-        // lets a fraction of .99 round to a tenth of 10 and render as
-        // "$19.10" for 19.99: the carry never reaches the whole part. Money
-        // that displays as the wrong number is the worst bug this screen
-        // could have, so the arithmetic is done in the order that carries.
-        let magnitude = (abs(amount) * 10).rounded() / 10
-        let whole = Int(magnitude)
-        let tenth = Int(((magnitude - Double(whole)) * 10).rounded())
-        let sign = showsSign ? (amount < 0 ? "-" : "+") : ""
+        // The split lives in the kit (`MoneyParts`) where the carry and the
+        // float noise are tested. This view only decides how to draw it.
+        let parts = MoneyParts(amount)
+        let sign = showsSign ? (parts.isNegative ? "-" : "+") : ""
 
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("\(sign)$\(whole.formatted(.number.grouping(.automatic)))")
-            Text(".\(tenth)")
+            Text("\(sign)$\(parts.wholeText)")
+            Text(".\(parts.centsText)")
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.35))
         }
         .font(LifeOSType.numeral(size))
@@ -103,6 +99,7 @@ struct MoneyFigure: View {
         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         .lineLimit(1)
         .minimumScaleFactor(0.6)
+        .accessibilityLabel("\(sign)\(parts.wholeText) dollars \(parts.cents) cents")
     }
 }
 

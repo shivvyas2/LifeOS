@@ -16,28 +16,14 @@ final class MoneyViewModel {
         self.calendar = calendar
     }
 
-    /// Shared with the Settings toggle that writes it. Delete alongside
-    /// `SampleMoneyData.swift` when Plaid lands.
-    static let sampleDataKey = "useSampleFinanceData"
-
     func attach(_ context: ModelContext) {
         self.context = context
     }
 
+    /// Real rows only. The invented sample month that used to stand in
+    /// before a bank was connected is gone: every figure on the Money tab is
+    /// now something that happened.
     func load(connection: PlaidConnectionViewModel? = nil) {
-        // On by default (registered in LIfeOSApp), so a fresh TestFlight
-        // install has a Money tab worth showing before any bank exists. An
-        // attached bank always wins over the flag: invented figures may never
-        // sit in front of real ones, and the screen badges the month as
-        // sample whenever they show.
-        let bankAttached: Bool = switch connection?.state {
-        case .connected, .needsReconnect: true
-        default: false
-        }
-        if UserDefaults.currentAccount.bool(forKey: Self.sampleDataKey), !bankAttached {
-            snapshot = .sample
-            return
-        }
         guard let context else { return }
         let store = MoneyStore(context: context, calendar: calendar)
 
@@ -75,20 +61,24 @@ final class MoneyViewModel {
             default: bankNames = []
             }
 
+            let logos = Self.logoMap(from: entries)
+            let rows = Self.rows(from: entries, logos: logos)
+            let categories = Self.categories(from: entries, expenses: summary.expenses)
+
             snapshot = MoneySnapshot(
                 income: summary.income,
                 expenses: summary.expenses,
                 net: summary.net,
                 savingsRate: summary.savingsRate,
                 netWorth: summary.netWorth,
-                recent: entries.prefix(8).map {
-                    MoneyRow(id: $0.id, merchant: $0.merchant, category: $0.category,
-                             amount: $0.amount, date: $0.date, pending: $0.pending)
-                },
+                recent: rows,
                 budgets: budgetRows,
                 unclaimed: unclaimedRows,
-                categories: Self.categories(from: entries, expenses: summary.expenses),
-                recurring: Self.recurring(from: entries, calendar: calendar),
+                categories: categories,
+                recurring: Self.recurring(from: entries, calendar: calendar, logos: logos),
+                week: Self.week(from: entries, now: .now, calendar: calendar),
+                slices: Self.slices(from: categories),
+                spendCount: entries.filter(\.isSpending).count,
                 goal: Self.goal(saved: summary.net),
                 monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
                 // A bank linked seconds ago has no transactions yet. Falling back
@@ -196,31 +186,95 @@ final class MoneyViewModel {
 
     /// Spending grouped by category, largest first.
     ///
-    /// Uncategorised spend is kept rather than dropped: a category list whose
-    /// parts do not add up to the total shown above it is the screen arguing
-    /// with itself, and the gap is exactly the spend nobody has labelled.
+    /// Built from `isSpending` only, the same predicate as `summarise`, so
+    /// the list sums to the "Spent" figure above it. Uncategorised spend is
+    /// kept rather than dropped for the same reason: the gap is exactly the
+    /// spend nobody has labelled.
     static func categories(from entries: [MoneyEntry], expenses: Double) -> [CategoryRow] {
         guard expenses > 0 else { return [] }
-        let spend = entries.filter { $0.amount < 0 }
-        let grouped = Dictionary(grouping: spend) { $0.category ?? "Uncategorised" }
+        let grouped = Dictionary(grouping: entries.filter(\.isSpending)) { $0.category ?? "Uncategorised" }
 
         return grouped.map { name, rows in
             let amount = rows.reduce(0) { $0 + abs($1.amount) }
             return CategoryRow(id: name, name: name, amount: amount,
-                               share: amount / expenses)
+                               share: amount / expenses, count: rows.count)
         }
         .sorted { ($0.amount, $1.name) > ($1.amount, $0.name) }
     }
 
     /// Merchants billing every month, detected from history by `RecurringSpend`.
-    static func recurring(from entries: [MoneyEntry], calendar: Calendar) -> [RecurringRow] {
+    static func recurring(from entries: [MoneyEntry], calendar: Calendar,
+                          logos: [String: URL] = [:]) -> [RecurringRow] {
         let lines = entries.map {
             RecurringSpend.Line(merchant: $0.merchant, category: $0.category,
                                 amount: $0.amount, date: $0.date)
         }
         return RecurringSpend.charges(in: lines, calendar: calendar).map {
             RecurringRow(id: $0.merchant, merchant: $0.merchant, category: $0.category,
-                         amount: $0.typicalAmount, months: $0.months)
+                         amount: $0.typicalAmount, months: $0.months,
+                         logoURL: logos[Self.logoKey(merchant: $0.merchant)])
+        }
+    }
+
+    /// Every logo in the window, keyed twice: by merchant entity where Plaid
+    /// gave one, and by lowercased merchant name always. A row Plaid sent
+    /// without a logo borrows from any sibling that has one; a manual "Netflix"
+    /// picks up the mark from the Plaid rows. A borrowed logo never changes
+    /// grouping: it is a picture beside a name, not an identity.
+    static func logoMap(from entries: [MoneyEntry]) -> [String: URL] {
+        var map: [String: URL] = [:]
+        for entry in entries {
+            guard let raw = entry.logoURL, let url = URL(string: raw) else { continue }
+            if let id = entry.merchantID { map["id:\(id)"] = map["id:\(id)"] ?? url }
+            let key = Self.logoKey(merchant: entry.merchant)
+            map[key] = map[key] ?? url
+        }
+        return map
+    }
+
+    static func logoKey(merchant: String) -> String {
+        "name:" + merchant.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
+    static func logo(for entry: MoneyEntry, in logos: [String: URL]) -> URL? {
+        if let raw = entry.logoURL, let url = URL(string: raw) { return url }
+        if let id = entry.merchantID, let url = logos["id:\(id)"] { return url }
+        return logos[Self.logoKey(merchant: entry.merchant)]
+    }
+
+    static func rows(from entries: [MoneyEntry], logos: [String: URL]) -> [MoneyRow] {
+        entries.map {
+            MoneyRow(id: $0.id, merchant: $0.merchant, category: $0.category,
+                     amount: $0.amount, date: $0.date, pending: $0.pending,
+                     logoURL: Self.logo(for: $0, in: logos), accountName: $0.accountName)
+        }
+    }
+
+    /// The week from the month's own entries. A week that begins in the
+    /// previous month reads zero for those days; the tab loads one month,
+    /// and a straddling week is six days a year.
+    static func week(from entries: [MoneyEntry], now: Date, calendar: Calendar) -> [DaySpend] {
+        let today = calendar.startOfDay(for: now)
+        let lines = entries.filter(\.isSpending).map { SpendSeries.Line(amount: $0.amount, date: $0.date) }
+        return SpendSeries.week(of: now, lines: lines, calendar: calendar).map {
+            DaySpend(date: $0.date, amount: $0.amount, isFuture: $0.isFuture,
+                     isToday: calendar.isDate($0.date, inSameDayAs: today))
+        }
+    }
+
+    /// The donut: five largest categories and an "Other", each with its ink
+    /// step. Shares are of the full month, so the slices still sum to one.
+    static func slices(from categories: [CategoryRow]) -> [CategorySlice] {
+        let total = categories.reduce(0) { $0 + $1.amount }
+        guard total > 0 else { return [] }
+        let folded = SpendSeries.fold(
+            categories.map { SpendSeries.Share(name: $0.name, amount: $0.amount) }, keep: 5
+        )
+        return folded.enumerated().map { index, share in
+            CategorySlice(id: share.name, name: share.name, amount: share.amount,
+                          share: share.amount / total,
+                          opacity: CategorySlice.steps[min(index, CategorySlice.steps.count - 1)],
+                          isOther: share.name == "Other" && !categories.contains { $0.name == "Other" })
         }
     }
 

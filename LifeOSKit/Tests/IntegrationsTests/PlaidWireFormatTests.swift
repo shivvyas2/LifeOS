@@ -23,6 +23,16 @@ import Foundation
         #expect(payroll.merchant_entity_id == nil)
     }
 
+    @Test func aLogoIsDecodedWhenPlaidSentOne() throws {
+        let coffee = try #require(delta().added.first { $0.transaction_id == "txn_coffee" })
+        #expect(coffee.logo_url == "https://plaid-merchant-logos.plaid.com/blue_bottle_1234.png")
+    }
+
+    @Test func aTransactionWithoutALogoStillDecodes() throws {
+        let payroll = try #require(delta().added.first { $0.transaction_id == "txn_payroll" })
+        #expect(payroll.logo_url == nil)
+    }
+
     @Test func anAccountCarriesItsMaskAndSubtype() throws {
         let card = try #require(delta().accounts.first { $0.account_id == "acc_card" })
         #expect(card.mask == "4127")

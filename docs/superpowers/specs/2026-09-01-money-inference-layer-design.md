@@ -132,6 +132,11 @@ The useful part of those apps is that they tell you things. That is what Section
 
 This is a decision, not a permanent bar. If the band vocabulary later grows a form that can hold an image without fighting it, the field is one additive property away.
 
+**Superseded 2026-09-01.** Merchant logos are in, by decision: see
+`2026-09-01-money-detail-and-charts-design.md`, Section 3. The band vocabulary
+grew the form this paragraph asked for (a paper-white circle inside the band),
+and `logoURL` was added by the additive mechanism described above.
+
 ---
 
 ## 7. Correctness rules

@@ -27,14 +27,6 @@ struct LIfeOSApp: App {
     /// app has a delegate at all.
     @UIApplicationDelegateAdaptor(PushDelegate.self) private var pushDelegate
 
-    init() {
-        // Demo default for TestFlight: the Money tab opens on sample figures,
-        // so there is something to walk a person through before any bank is
-        // connected. An attached bank overrides it, and Settings turns it off.
-        UserDefaults.standard.register(defaults: [MoneyViewModel.sampleDataKey: true])
-
-    }
-
     var body: some Scene {
         WindowGroup {
             if let container = session.container {

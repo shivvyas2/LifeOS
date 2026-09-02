@@ -71,6 +71,7 @@ enum PlaidFixtures {
               "name": "SQ *BLUE BOTTLE",
               "merchant_name": "Blue Bottle Coffee",
               "merchant_entity_id": "mch_bluebottle",
+              "logo_url": "https://plaid-merchant-logos.plaid.com/blue_bottle_1234.png",
               "pending": true,
               "personal_finance_category": {
                 "primary": "FOOD_AND_DRINK",

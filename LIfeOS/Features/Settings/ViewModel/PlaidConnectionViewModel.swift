@@ -128,7 +128,21 @@ final class PlaidConnectionViewModel {
 
     // MARK: - Sync
 
+    /// Rows synced before the logo field existed never get one, because
+    /// `/transactions/sync` only re-sends what changed. Clearing every cursor
+    /// once makes the next sync replay history through the same upsert, and
+    /// the flag stops it happening again: a replay on every launch would pull
+    /// years of rows daily.
+    static let logoReplayKey = "plaid.logoReplayDone.v1"
+
+    func replayHistoryOnce(defaults: UserDefaults = .currentAccount) {
+        guard !defaults.bool(forKey: Self.logoReplayKey) else { return }
+        items.resetCursors()
+        defaults.set(true, forKey: Self.logoReplayKey)
+    }
+
     func syncIfDue() async {
+        replayHistoryOnce()
         guard case .connected = state,
               SyncStalenessPolicy.shouldSync(lastSync: lastSyncedAt) else { return }
         await sync()

@@ -42,6 +42,11 @@ public final class MoneyEntry {
     /// it: rows written before this existed read back nil rather than needing
     /// a migration step.
     public var merchantID: String?
+    /// Where the merchant's mark can be fetched. A string rather than a URL
+    /// because SwiftData stores it as text either way and a malformed value
+    /// should read back as "no logo", not fail the row. Optional and additive
+    /// for the same migration reason as `merchantID`.
+    public var logoURL: String?
     public var accountID: String?
     public var accountName: String?
     public var pending: Bool
@@ -56,6 +61,7 @@ public final class MoneyEntry {
         category: String? = nil,
         categoryCode: String? = nil,
         merchantID: String? = nil,
+        logoURL: String? = nil,
         currencyCode: String = "USD",
         source: MoneySource = .manual,
         externalID: String? = nil,
@@ -73,6 +79,7 @@ public final class MoneyEntry {
         self.category = category
         self.categoryCode = categoryCode
         self.merchantID = merchantID
+        self.logoURL = logoURL
         self.accountID = accountID
         self.accountName = accountName
         self.pending = pending
@@ -86,6 +93,14 @@ public final class MoneyEntry {
     }
 
     public var isIncome: Bool { amount > 0 }
+
+    /// Money that left and counts as spent: a settled outflow that is not a
+    /// transfer or a card payment. The category rollup and the donut are
+    /// built from this, and `summarise` uses the same rule, so the category
+    /// list sums to the "Spent" figure above it.
+    public var isSpending: Bool {
+        amount < 0 && !pending && !MoneyCategoryRule.isTransferLike(categoryCode)
+    }
 }
 
 /// A funding account and its balance. Net worth is summed from these.
@@ -206,7 +221,7 @@ public func summarise(entries: [MoneyEntry], accounts: [MoneyAccount] = []) -> M
     var expenses = 0.0
     for entry in entries where !entry.pending
         && !MoneyCategoryRule.isTransferLike(entry.categoryCode) {
-        if entry.amount > 0 { income += entry.amount } else { expenses += -entry.amount }
+        if entry.amount > 0 { income += entry.amount } else if entry.isSpending { expenses += -entry.amount }
     }
     return MoneySummary(
         income: income,

@@ -19,6 +19,9 @@ struct MoneyScreen: View {
     var onConnect: () -> Void = {}
     var onSync: () -> Void = {}
     var onEditBudgets: () -> Void = {}
+    /// A category, merchant or transaction was tapped. The stack that owns
+    /// this screen pushes the detail page.
+    var onOpen: (MoneyDetailFilter) -> Void = { _ in }
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
@@ -79,18 +82,17 @@ struct MoneyScreen: View {
     private var sections: some View {
         ScrollView {
                 VStack(spacing: 0) {
-                    if snapshot.isSample { sampleBadge }
                     if snapshot.reconnectPrompt != nil { reconnectBanner }
 
                     Group {
                         switch section {
                         case .flow:       MoneyFlowSection(snapshot: snapshot)
-                        case .categories: MoneyCategoriesSection(snapshot: snapshot)
-                        case .repeating:  MoneyRecurringSection(snapshot: snapshot)
+                        case .categories: MoneyCategoriesSection(snapshot: snapshot, onOpen: onOpen)
+                        case .repeating:  MoneyRecurringSection(snapshot: snapshot, onOpen: onOpen)
                         case .goal:       MoneyGoalSection(snapshot: snapshot, onEdit: onEditBudgets)
                         case .pressure:   MoneyPressureSection(points: snapshot.pressurePoints,
                                                                onEditBudgets: onEditBudgets)
-                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd)
+                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd, onOpen: onOpen)
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
@@ -98,22 +100,9 @@ struct MoneyScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
         }
         .scrollIndicators(.hidden)
-    }
-
-    /// Quiet by design. Sample data is a state this screen is in, not a fault,
-    /// and the amber alert bar this replaced looked like something had broken.
-    /// It stays undismissable all the same: every figure below it is invented.
-    private var sampleBadge: some View {
-        Text("Sample data")
-            .font(LifeOSType.eyebrow)
-            .tracking(0.6)
-            .foregroundStyle(MoneyPalette.quietInk(scheme))
-            .padding(.vertical, 5)
-            .padding(.horizontal, 12)
-            .background(Capsule().fill(MoneyPalette.ink.resolve(scheme).opacity(0.07)))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, Space.x1)
-            .accessibilityLabel("Sample data. These figures are invented.")
+        // A new scroll view per section, so switching tabs starts at the top
+        // of the new one rather than wherever the old one was left.
+        .id(section)
     }
 
     private var emptyState: some View {
@@ -186,11 +175,11 @@ struct MoneyScreen: View {
     }
 
     static func money(_ value: Double) -> String? {
-        value.formatted(.currency(code: "USD").precision(.fractionLength(0)))
+        value.formatted(.currency(code: "USD").precision(.fractionLength(2)))
     }
 
     static func signed(_ value: Double) -> String {
-        let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(0)))
+        let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(2)))
         return value >= 0 ? "+\(formatted)" : "-\(formatted)"
     }
 }
@@ -230,7 +219,7 @@ extension MoneySnapshot {
             points.append(PressurePoint(
                 id: "recurring",
                 title: "Repeating payments",
-                detail: "\(Int((recurringTotal / expenses) * 100))% of this month's spending renews by itself",
+                detail: "\(Int(((recurringTotal / expenses) * 100).rounded()))% of this month's spending renews by itself",
                 amount: recurringTotal
             ))
         }

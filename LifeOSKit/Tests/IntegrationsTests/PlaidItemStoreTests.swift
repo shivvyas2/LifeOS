@@ -24,6 +24,18 @@ import Foundation
         #expect(items.first { $0.itemID == "item_b" }?.cursor == nil)
     }
 
+    @Test func resettingCursorsKeepsEveryItemAndForgetsWhereItWas() {
+        let store = makeStore()
+        store.upsert(PlaidStoredItem(itemID: "item_a", institutionName: "A", cursor: "c1"))
+        store.upsert(PlaidStoredItem(itemID: "item_b", institutionName: "B", cursor: "c2"))
+
+        store.resetCursors()
+
+        let items = store.items()
+        #expect(items.map(\.itemID) == ["item_a", "item_b"])
+        #expect(items.allSatisfy { $0.cursor == nil })
+    }
+
     @Test func upsertingAnItemKeepsTheCursorItAlreadyHad() {
         // A sync response re-states the institution name. Letting that reset the
         // cursor would replay full history on every sync.

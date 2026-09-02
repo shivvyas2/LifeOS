@@ -15,7 +15,6 @@ struct SettingsScreen: View {
     var plaid: PlaidConnectionViewModel?
     var onSignOut: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
-    @AppStorage(MoneyViewModel.sampleDataKey) private var useSampleFinanceData = false
     @AppStorage(TierPreference.storageKey) private var tierRaw = TierPreference.automatic.rawValue
     @AppStorage(AssistantVoice.enabledKey) private var speaksReplies = false
     @AppStorage(AssistantVoice.voiceKey) private var voiceRaw = AssistantVoice.default.rawValue
@@ -62,7 +61,6 @@ struct SettingsScreen: View {
             connectionsRow
 
             sectionLabel("Developer")
-            sampleDataCard
 
             signOutButton
                 .padding(.top, 8)
@@ -199,27 +197,6 @@ struct SettingsScreen: View {
                     }
                 }
             }
-        }
-    }
-
-    /// Fills the Money screen with invented numbers so its layout can be judged
-    /// while bank connection is broken. Ships in release builds, which is why
-    /// the Money screen badges the month as sample: the toggle alone is not
-    /// enough for a tester who flipped it once and opens the app a week later.
-    private var sampleDataCard: some View {
-        GlassPanel {
-            Toggle(isOn: $useSampleFinanceData) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Use sample finance data")
-                        .font(LifeOSType.rowTitle)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text("Invented numbers, on by default so there is something to show. A connected bank replaces them, and the Money screen marks the month as sample while they show.")
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .tint(LifeOSTokens.accent)
         }
     }
 
