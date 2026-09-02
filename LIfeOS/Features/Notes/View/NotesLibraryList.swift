@@ -7,10 +7,10 @@ import Persistence
 /// The iPad rail (`NotesSidebar`) is text rows on the canvas, which suits a
 /// column that is always there. A drawer that slides in on a phone wants the
 /// app's own card vocabulary instead: the shortcuts as a row of tiles, and
-/// each PARA shelf as one soft card with a coloured spine down its edge, the
-/// way the edge of a folder shows its colour on a shelf. The spine is the
-/// one bold thing here; everything else is the canvas, the pastel icon
-/// bubbles the rest of the app uses, and quiet type.
+/// each PARA shelf as one soft card. Colour is Apple's: system grays for
+/// every icon square and fill, and the bright system orange for exactly one
+/// thing, whatever is selected. No hue per shelf; the shelf is named by its
+/// symbol and its title.
 ///
 /// Same inputs and callbacks as the rail, so the shell can hand either the
 /// same wiring.
@@ -97,11 +97,11 @@ struct NotesLibraryList: View {
     private var shortcuts: some View {
         HStack(spacing: 8) {
             shortcutTile(.recent, title: "Recent", systemImage: "clock.fill",
-                         hue: .recovery, count: snapshot.recent.count)
+                         count: snapshot.recent.count)
             shortcutTile(.favorites, title: "Favourites", systemImage: "star.fill",
-                         hue: .activity, count: snapshot.favorites.count)
+                         count: snapshot.favorites.count)
             Button(action: onOpenHabits) {
-                tileLabel(title: "Habits", systemImage: "flame.fill", hue: .habits,
+                tileLabel(title: "Habits", systemImage: "flame.fill",
                           count: habitCount, isSelected: false)
             }
             .buttonStyle(.plain)
@@ -110,22 +110,22 @@ struct NotesLibraryList: View {
     }
 
     private func shortcutTile(_ target: NoteSelection, title: String, systemImage: String,
-                              hue: ModuleHue, count: Int) -> some View {
+                              count: Int) -> some View {
         Button {
             selection = target
         } label: {
-            tileLabel(title: title, systemImage: systemImage, hue: hue,
+            tileLabel(title: title, systemImage: systemImage,
                       count: count, isSelected: selection == target)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selection == target ? [.isSelected] : [])
     }
 
-    private func tileLabel(title: String, systemImage: String, hue: ModuleHue,
+    private func tileLabel(title: String, systemImage: String,
                            count: Int, isSelected: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                iconBubble(systemImage, hue: hue)
+                iconSquare(systemImage, selected: isSelected)
                 Spacer(minLength: 0)
                 if count > 0 {
                     Text("\(count)")
@@ -148,13 +148,12 @@ struct NotesLibraryList: View {
 
     // MARK: - Shelves
 
-    /// One shelf: a card with a coloured spine, the shelf row at the top,
+    /// One shelf: a card with the shelf row at the top,
     /// its folders under a hairline, and a quiet row to add one.
     @ViewBuilder
     private func shelfCard(_ bucket: NoteBucket) -> some View {
         let folders = Self.flattened(snapshot.folders(in: bucket))
         let isOpen = expanded.contains(bucket)
-        let hue = Self.hue(for: bucket)
         let isSelected = selection == .bucket(bucket)
 
         VStack(alignment: .leading, spacing: 0) {
@@ -167,7 +166,7 @@ struct NotesLibraryList: View {
                     expanded.insert(bucket)
                 } label: {
                     HStack(spacing: 10) {
-                        iconBubble(bucket.systemImage, hue: hue)
+                        iconSquare(Self.symbol(for: bucket), selected: isSelected)
                         Text(bucket.title)
                             .font(LifeOSType.rowTitle.weight(isSelected ? .semibold : .medium))
                             .foregroundStyle(primary)
@@ -226,14 +225,15 @@ struct NotesLibraryList: View {
                         onNewFolder(bucket)
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "plus")
-                                .font(LifeOSType.caption.weight(.semibold))
+                            Image(systemName: "plus.circle.fill")
+                                .font(LifeOSType.label)
+                                .foregroundStyle(Self.orange)
                                 .frame(width: 22)
                             Text("New folder")
                                 .font(LifeOSType.secondary)
+                                .foregroundStyle(secondary)
                             Spacer()
                         }
-                        .foregroundStyle(secondary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .contentShape(Rectangle())
@@ -244,16 +244,6 @@ struct NotesLibraryList: View {
         }
         .padding(.vertical, 2)
         .background(card(selected: false))
-        // The spine: the shelf's colour down its leading edge, inside the
-        // card's corner so it reads as the card's own edge and not a bar
-        // beside it.
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(hue.top)
-                .frame(width: 3)
-                .padding(.vertical, 12)
-                .padding(.leading, 5)
-        }
     }
 
     private func folderRow(_ folder: NoteFolderSnapshot, depth: Int) -> some View {
@@ -265,9 +255,9 @@ struct NotesLibraryList: View {
             HStack(spacing: 8) {
                 Group {
                     if folder.icon.isEmpty {
-                        Circle()
-                            .fill(NoteAccentPalette.dot(folder.accent, scheme))
-                            .frame(width: 9, height: 9)
+                        Image(systemName: isSelected ? "folder.fill" : "folder")
+                            .font(LifeOSType.label.weight(.medium))
+                            .foregroundStyle(isSelected ? Self.orange : secondary)
                     } else {
                         Text(folder.icon).font(LifeOSType.label)
                     }
@@ -314,25 +304,33 @@ struct NotesLibraryList: View {
 
     // MARK: - Pieces
 
+    /// Apple's bright orange, the one accent in the drawer.
+    static let orange = Color(uiColor: .systemOrange)
+    /// Apple's grays: the fill behind an icon, and the fill behind a row.
+    private var iconFill: Color { Color(uiColor: .secondarySystemFill) }
+    private var rowFill: Color { Color(uiColor: .tertiarySystemFill) }
+
     /// The app's card: its surface, its corner, its soft shadow in light.
-    /// A selected tile deepens to the primary tint rather than changing hue,
-    /// so "current" never competes with the spines for colour.
+    /// A selected tile takes the gray fill; the orange goes on its icon.
     private func card(selected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(selected
-                  ? primary.opacity(scheme == .dark ? 0.16 : 0.07)
-                  : LifeOSTokens.cardSurface.resolve(scheme))
+            .fill(selected ? rowFill : LifeOSTokens.cardSurface.resolve(scheme))
             .shadow(color: scheme == .dark || selected ? .clear : LifeOSTokens.cardShadow,
                     radius: 8, y: 2)
     }
 
-    /// The pastel bubble the rail and the stat tiles use.
-    private func iconBubble(_ symbol: String, hue: ModuleHue) -> some View {
+    /// The Settings-style icon: a rounded square, gray with a dark glyph,
+    /// or orange with a white one for whatever is selected.
+    private func iconSquare(_ symbol: String, selected: Bool) -> some View {
         Image(systemName: symbol)
-            .font(LifeOSType.caption.weight(.semibold))
-            .foregroundStyle(hue.top)
-            .frame(width: 28, height: 28)
-            .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
+            .font(LifeOSType.rowTitle.weight(.semibold))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(selected ? .white : primary)
+            .frame(width: 30, height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(selected ? Self.orange : iconFill)
+            )
     }
 
     private func countBadge(_ count: Int) -> some View {
@@ -342,7 +340,7 @@ struct NotesLibraryList: View {
             .foregroundStyle(secondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule().fill(primary.opacity(scheme == .dark ? 0.12 : 0.05)))
+            .background(Capsule().fill(iconFill))
     }
 
     private var hairline: some View {
@@ -358,25 +356,24 @@ struct NotesLibraryList: View {
     private func rowHighlight(dropping: Bool) -> some View {
         if dropping {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LifeOSTokens.accent.opacity(0.16))
+                .fill(Self.orange.opacity(0.16))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(LifeOSTokens.accent.opacity(0.6), lineWidth: 1.5)
+                        .strokeBorder(Self.orange.opacity(0.7), lineWidth: 1.5)
                 )
         } else {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(primary.opacity(scheme == .dark ? 0.14 : 0.06))
+                .fill(rowFill)
         }
     }
 
-    /// Each shelf keeps one hue, so its spine, its bubble and (on the shelf
-    /// screen) its cards agree. Archive is grey: a state, not a place.
-    private static func hue(for bucket: NoteBucket) -> ModuleHue {
+    /// Filled symbols, so the glyph reads at a glance in a small square.
+    private static func symbol(for bucket: NoteBucket) -> String {
         switch bucket {
-        case .projects: .habits
-        case .areas:    .recovery
-        case .research: .nutrition
-        case .archive:  .body
+        case .projects: "target"
+        case .areas:    "square.grid.2x2.fill"
+        case .research: "books.vertical.fill"
+        case .archive:  "archivebox.fill"
         }
     }
 
