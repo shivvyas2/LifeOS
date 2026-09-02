@@ -35,6 +35,39 @@ public struct ContextBundle: Sendable {
             self.netWorth = netWorth
             self.recent = recent
         }
+
+        public struct CategoryTotal: Sendable, Equatable {
+            public let name: String
+            /// Signed as the transactions are: spending is negative.
+            public let total: Double
+            public let count: Int
+        }
+
+        /// `recent` reduced to what may leave the device: spending summed per
+        /// category, largest first. Income rows are excluded because the
+        /// summary line already carries income. A category with a single
+        /// purchase is a per-row amount under another name, so singletons
+        /// fold into "Other"; and "Other" is itself dropped when it holds
+        /// only one, because a lone leftover is still one row.
+        public var spendingByCategory: [CategoryTotal] {
+            let spending = recent.filter { $0.amount < 0 }
+            let grouped = Dictionary(grouping: spending, by: { $0.category ?? "Other" })
+            var other: [Transaction] = []
+            var buckets: [CategoryTotal] = []
+            for (name, rows) in grouped {
+                if rows.count >= 2 && name != "Other" {
+                    buckets.append(CategoryTotal(name: name, total: rows.reduce(0) { $0 + $1.amount },
+                                                 count: rows.count))
+                } else {
+                    other.append(contentsOf: rows)
+                }
+            }
+            if other.count >= 2 {
+                buckets.append(CategoryTotal(name: "Other", total: other.reduce(0) { $0 + $1.amount },
+                                             count: other.count))
+            }
+            return buckets.sorted { abs($0.total) != abs($1.total) ? abs($0.total) > abs($1.total) : $0.name < $1.name }
+        }
     }
 
     public struct Sector: Sendable, Equatable {
@@ -75,7 +108,7 @@ public struct ContextBundle: Sendable {
     /// property of the digest, not a gap this type silently papers over.
     ///
     /// `.onDevice` keeps the render to the digest plus one sector line: the
-    /// local window is small and a transaction list would push the health
+    /// local window is small and a spending breakdown would push the health
     /// data out of it. `.offDevice` carries everything, apportioned so the
     /// whole render honours one budget rather than each section trusting its
     /// own: the user, sector, and money-summary lines are small, dense, and
@@ -83,9 +116,15 @@ public struct ContextBundle: Sendable {
     /// first and never trimmed. The digest claims what is left of the budget
     /// next -- it already drops its oldest days first to fit whatever it is
     /// given, so handing it a smaller number just makes that existing
-    /// truncation bite sooner. Transactions get only what neither of the
-    /// above used, which is why they are the first thing to disappear under
-    /// a tight budget.
+    /// truncation bite sooner. The spending breakdown gets only what neither
+    /// of the above used, which is why it is the first thing to disappear
+    /// under a tight budget.
+    ///
+    /// No audience ever sees a transaction row. `recent` exists so the
+    /// breakdown can be computed on the device; what leaves the device is
+    /// `Money.spendingByCategory`, a total and a count per category, never a
+    /// merchant, a date, or a single amount. That is the privacy rule for a
+    /// paid model: it may learn how spending splits, not who was paid when.
     public func promptLines(for audience: MetricsDigest.Audience, budget: Int = 8_000) -> String {
         let userLine = firstName.map { "User: \($0)" }
 
@@ -122,9 +161,10 @@ public struct ContextBundle: Sendable {
         if let moneyLine { blocks.append(moneyLine) }
 
         if let money, audience == .offDevice {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            let header = "Recent transactions:"
+            // Every purchase, not just those a bucket accounts for, so the
+            // model can tell when the breakdown is partial.
+            let purchases = money.recent.filter { $0.amount < 0 }.count
+            let header = "Spending by category (\(purchases) purchases):"
             // `spent` has to account for the header and the separator ahead
             // of it before the loop starts, not just the blocks built so
             // far -- otherwise every render that keeps at least one row
@@ -132,10 +172,8 @@ public struct ContextBundle: Sendable {
             var spent = blocks.joined(separator: "\n").count
                 + (blocks.isEmpty ? 0 : 1) + header.count
             var rows: [String] = []
-            for transaction in money.recent {
-                let row = "\(formatter.string(from: transaction.date)) \(transaction.merchant)"
-                    + (transaction.category.map { " (\($0))" } ?? "")
-                    + " \(String(format: "%.2f", transaction.amount))"
+            for bucket in money.spendingByCategory {
+                let row = "\(bucket.name) \(String(format: "%.2f", bucket.total)) (\(bucket.count))"
                 guard spent + row.count + 1 <= budget else { break }
                 rows.append(row)
                 spent += row.count + 1

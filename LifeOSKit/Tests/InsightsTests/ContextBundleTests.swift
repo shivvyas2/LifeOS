@@ -71,24 +71,78 @@ import Persistence
 
     @Test func theOffDeviceRenderCarriesEverySection() {
         let lines = bundle().promptLines(for: .offDevice)
-        #expect(lines.contains("Merchant 0"))
+        #expect(lines.contains("Food -37.50 (3)"))
         #expect(lines.contains("Body 7 (+1)"))
         #expect(lines.contains("Money unscored"))
         #expect(lines.contains("Shiv"))
     }
 
-    // The on-device window is small; transactions would drown the digest.
-    @Test func theOnDeviceRenderSkipsTransactionDetail() {
+    // The privacy rule for a paid model: it may learn how spending splits
+    // across categories, never which merchant took which amount on which
+    // day. Merchant names, per-row amounts and dates are the identifying
+    // detail, and a category total carries none of them.
+    @Test func theOffDeviceRenderNeverCarriesAMerchantRowOrDate() {
+        let recent = [
+            ContextBundle.Money.Transaction(merchant: "Blue Bottle", category: "Food",
+                                            amount: -6.75, date: Date(timeIntervalSince1970: 1_756_000_000)),
+            ContextBundle.Money.Transaction(merchant: "Blue Bottle", category: "Food",
+                                            amount: -6.75, date: Date(timeIntervalSince1970: 1_756_086_400)),
+            ContextBundle.Money.Transaction(merchant: "MTA", category: "Transport",
+                                            amount: -2.90, date: Date(timeIntervalSince1970: 1_756_172_800)),
+            ContextBundle.Money.Transaction(merchant: "Payroll", category: nil,
+                                            amount: 3_200, date: Date(timeIntervalSince1970: 1_756_259_200)),
+        ]
+        let bundle = ContextBundle(
+            digest: MetricsDigest.from(metrics: [], sleeps: [], workouts: []),
+            money: ContextBundle.Money(income: 3_200, expenses: 16.40, savingsRate: nil,
+                                       netWorth: nil, recent: recent)
+        )
+        let lines = bundle.promptLines(for: .offDevice)
+        #expect(!lines.contains("Blue Bottle"))
+        #expect(!lines.contains("MTA"))
+        #expect(!lines.contains("Payroll"))
+        #expect(!lines.contains("6.75"))
+        #expect(!lines.contains("2.90"))
+        #expect(!lines.contains("Aug "))
+        #expect(lines.contains("3 purchases"))
+        #expect(lines.contains("Food -13.50 (2)"))
+        #expect(!lines.contains("Transport")) // a lone purchase is a row under another name
+        #expect(!lines.contains("3200.00"))   // income never enters the breakdown
+    }
+
+    // A category with one transaction is a per-row amount with a different
+    // label, so it folds into "Other" rather than being printed on its own.
+    @Test func singletonCategoriesFoldIntoOther() {
+        let recent = [
+            ContextBundle.Money.Transaction(merchant: "A", category: "Food", amount: -10, date: .init(timeIntervalSince1970: 1_756_000_000)),
+            ContextBundle.Money.Transaction(merchant: "B", category: "Food", amount: -20, date: .init(timeIntervalSince1970: 1_756_000_000)),
+            ContextBundle.Money.Transaction(merchant: "C", category: "Transport", amount: -5, date: .init(timeIntervalSince1970: 1_756_000_000)),
+            ContextBundle.Money.Transaction(merchant: "D", category: "Pets", amount: -7, date: .init(timeIntervalSince1970: 1_756_000_000)),
+        ]
+        let bundle = ContextBundle(
+            digest: MetricsDigest.from(metrics: [], sleeps: [], workouts: []),
+            money: ContextBundle.Money(income: 0, expenses: 42, savingsRate: nil, netWorth: nil, recent: recent)
+        )
+        let lines = bundle.promptLines(for: .offDevice)
+        #expect(lines.contains("Food -30.00 (2)"))
+        #expect(lines.contains("Other -12.00 (2)"))
+        #expect(!lines.contains("Transport"))
+        #expect(!lines.contains("Pets"))
+    }
+
+    // The on-device window is small; a spending breakdown would drown the digest.
+    @Test func theOnDeviceRenderSkipsSpendingDetail() {
         let lines = bundle().promptLines(for: .onDevice)
+        #expect(!lines.contains("Food -37.50"))
         #expect(!lines.contains("Merchant 0"))
         #expect(lines.contains("Body 7 (+1)"))
     }
 
-    // Truncation drops transaction detail first; sectors and the money
+    // Truncation drops the spending breakdown first; sectors and the money
     // summary survive because they are the cheapest, densest lines.
-    @Test func aTightBudgetDropsTransactionsBeforeSummary() {
-        let lines = bundle(transactions: 200).promptLines(for: .offDevice, budget: 600)
-        #expect(!lines.contains("Merchant 150"))
+    @Test func aTightBudgetDropsSpendingDetailBeforeSummary() {
+        let lines = bundle(transactions: 200).promptLines(for: .offDevice, budget: 120)
+        #expect(!lines.contains("Food"))
         #expect(lines.contains("income 8000"))
     }
 
@@ -103,14 +157,13 @@ import Persistence
         #expect(lines.count <= 800)
     }
 
-    // Regression pin: `spent` must include "Recent transactions:" and the
-    // separator before it before the row loop starts. At this budget, the
-    // old accounting kept a second row it should not have, and the render it
-    // produced landed past the budget by exactly the header's length.
-    @Test func transactionRowsNeverPushTheRenderPastBudget() {
-        let recent = (0..<5).map {
+    // Regression pin: `spent` must include the header and the separator
+    // before it before the category loop starts, otherwise every render that
+    // keeps at least one category overshoots `budget` by the header's length.
+    @Test func categoryRowsNeverPushTheRenderPastBudget() {
+        let recent = ["Food", "Food", "Transport", "Transport", "Rent", "Rent", "Pets", "Pets"].map {
             ContextBundle.Money.Transaction(
-                merchant: "Merchant \($0)", category: "Food",
+                merchant: "Merchant", category: $0,
                 amount: -12.5, date: Date(timeIntervalSince1970: 1_756_000_000)
             )
         }
@@ -119,9 +172,12 @@ import Persistence
             money: ContextBundle.Money(income: 8000, expenses: 5000, savingsRate: nil,
                                        netWorth: nil, recent: recent)
         )
+        // Equal totals sort by name, so the rows run Food, Pets, Rent,
+        // Transport; 120 characters holds the first two exactly.
         let lines = bundle.promptLines(for: .offDevice, budget: 120)
-        #expect(lines.contains("Merchant 0"))
-        #expect(!lines.contains("Merchant 1"))
+        #expect(lines.contains("Food -25.00 (2)"))
+        #expect(lines.contains("Pets -25.00 (2)"))
+        #expect(!lines.contains("Rent"))
         #expect(lines.count <= 120)
     }
 
