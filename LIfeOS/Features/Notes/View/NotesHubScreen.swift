@@ -314,10 +314,11 @@ struct NotesHubScreen: View {
         }
     }
 
-    /// Three quarters of the screen, capped so a large phone in landscape
-    /// does not open a drawer wider than the library needs.
+    /// Two thirds of the screen, capped: enough for the rail's rows and the
+    /// search field, while the pushed page stays a visible strip beside it
+    /// rather than a sliver, so it is obvious what a tap out there does.
     private static func drawerWidth(in available: CGFloat) -> CGFloat {
-        min(available * 0.82, 320)
+        min(available * 0.68, 280)
     }
 
     /// Where the drawer's leading edge sits: 0 closed, `width` open, and
