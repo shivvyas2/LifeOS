@@ -301,6 +301,7 @@ struct NotesHubScreen: View {
                 compactLibrary
                     .frame(width: width)
                     .offset(x: offset - width)
+                    .zIndex(1)
                     // Hidden from the accessibility tree while closed, so
                     // VoiceOver does not read a rail that is off screen.
                     .accessibilityHidden(!isDrawerOpen)
@@ -326,7 +327,11 @@ struct NotesHubScreen: View {
                             .accessibilityLabel("Close library")
                         }
                     }
-                    .offset(x: offset)
+                    // Pushed by a little over half the drawer's width, not
+                    // all of it, so the page slides under the glass and is
+                    // what the drawer blurs. A page shoved fully clear would
+                    // leave the drawer blurring nothing but canvas.
+                    .offset(x: offset * 0.58)
             }
             .simultaneousGesture(drawerDragGesture(width: width))
             .animation(drawerDrag == 0 ? .spring(response: 0.38, dampingFraction: 0.86) : nil,
@@ -427,8 +432,23 @@ struct NotesHubScreen: View {
         }
         .padding(.bottom, layout.contentBottomInset)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .overlay(alignment: .trailing) { columnRule.ignoresSafeArea() }
+        // Glass, not canvas: the page it pushed shows through, blurred, and
+        // the trailing corners round off so the panel reads as a sheet of
+        // material lying over the page rather than a wall beside it.
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
+                                   bottomTrailingRadius: 36, topTrailingRadius: 36,
+                                   style: .continuous)
+                .fill(.regularMaterial)
+                .ignoresSafeArea()
+        )
+        .clipShape(
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
+                                   bottomTrailingRadius: 36, topTrailingRadius: 36,
+                                   style: .continuous)
+                .inset(by: -200)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 30, x: 10)
     }
 
     /// The phone's navigation stack, unchanged by the drawer around it.

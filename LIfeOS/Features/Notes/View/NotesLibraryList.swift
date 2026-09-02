@@ -38,13 +38,17 @@ struct NotesLibraryList: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                searchField
-                shortcuts
-                ForEach(NoteBucket.allCases) { bucket in
-                    shelfCard(bucket)
+            // One container, so neighbouring glass tiles merge and separate
+            // as they move rather than each rendering its own lens.
+            GlassEffectContainer(spacing: 14) {
+                VStack(alignment: .leading, spacing: 14) {
+                    searchField
+                    shortcuts
+                    ForEach(NoteBucket.allCases) { bucket in
+                        shelfCard(bucket)
+                    }
+                    Spacer(minLength: 24)
                 }
-                Spacer(minLength: 24)
             }
             .padding(.horizontal, 14)
             .padding(.top, 6)
@@ -84,10 +88,7 @@ struct NotesLibraryList: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(primary.opacity(scheme == .dark ? 0.10 : 0.05))
-        )
+        .glassEffect(.regular, in: .capsule)
     }
 
     // MARK: - Shortcuts
@@ -142,8 +143,8 @@ struct NotesLibraryList: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(card(selected: isSelected))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .glassCard(selected: isSelected)
     }
 
     // MARK: - Shelves
@@ -243,7 +244,7 @@ struct NotesLibraryList: View {
             }
         }
         .padding(.vertical, 2)
-        .background(card(selected: false))
+        .glassCard(selected: false)
     }
 
     private func folderRow(_ folder: NoteFolderSnapshot, depth: Int) -> some View {
@@ -310,14 +311,6 @@ struct NotesLibraryList: View {
     private var iconFill: Color { Color(uiColor: .secondarySystemFill) }
     private var rowFill: Color { Color(uiColor: .tertiarySystemFill) }
 
-    /// The app's card: its surface, its corner, its soft shadow in light.
-    /// A selected tile takes the gray fill; the orange goes on its icon.
-    private func card(selected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(selected ? rowFill : LifeOSTokens.cardSurface.resolve(scheme))
-            .shadow(color: scheme == .dark || selected ? .clear : LifeOSTokens.cardShadow,
-                    radius: 8, y: 2)
-    }
 
     /// The Settings-style icon: a rounded square, gray with a dark glyph,
     /// or orange with a white one for whatever is selected.
@@ -382,6 +375,22 @@ struct NotesLibraryList: View {
         -> [(folder: NoteFolderSnapshot, depth: Int)] {
         folders.flatMap { folder in
             [(folder, depth)] + flattened(folder.children, depth: depth + 1)
+        }
+    }
+}
+
+private extension View {
+    /// A Liquid Glass card. Selected, it takes a wash of the orange so the
+    /// tint and the icon agree; otherwise it is clear glass over the material.
+    @ViewBuilder
+    func glassCard(selected: Bool) -> some View {
+        if selected {
+            self.glassEffect(
+                .regular.tint(NotesLibraryList.orange.opacity(0.28)).interactive(),
+                in: .rect(cornerRadius: 16, style: .continuous)
+            )
+        } else {
+            self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16, style: .continuous))
         }
     }
 }
