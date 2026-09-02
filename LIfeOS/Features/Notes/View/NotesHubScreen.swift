@@ -215,46 +215,74 @@ struct NotesHubScreen: View {
             .frame(width: 1)
     }
 
-    /// The library rail, shared by both shells so its wiring is stated once.
+    /// What choosing something in the library does to the stack, stated once
+    /// so the iPad rail and the phone drawer cannot drift apart.
+    private var librarySelection: Binding<NoteSelection> {
+        Binding(
+            get: { model.selection },
+            set: { selection in
+                model.selection = selection
+                // On an iPad, the shelf is the interior stack's own root,
+                // so returning to it is a clear. Leaving an open page
+                // beside a rail that highlights a different folder is the
+                // state that makes split views confusing.
+                //
+                // On a phone the Library is a drawer beside the stack,
+                // not a screen on it, so the stack is set to the shelf
+                // outright and the drawer closes to reveal it.
+                if layout.isRegular {
+                    path.removeAll()
+                } else {
+                    path = [.shelf]
+                    setDrawer(open: false)
+                }
+                openPage = nil
+            }
+        )
+    }
+
+    private var libraryHabits: () -> Void {
+        {
+            if !layout.isRegular { setDrawer(open: false) }
+            path.append(.habits)
+        }
+    }
+
+    private var libraryDrop: (_ ids: [UUID], _ bucket: NoteBucket, _ folderID: UUID?) -> Void {
+        { ids, bucket, folderID in
+            for id in ids { model.move(id, to: bucket, folderID: folderID) }
+        }
+    }
+
+    /// The iPad rail.
     private var library: some View {
         NotesSidebar(
             snapshot: model.snapshot,
-            selection: Binding(
-                get: { model.selection },
-                set: { selection in
-                    model.selection = selection
-                    // On an iPad, the shelf is the interior stack's own root,
-                    // so returning to it is a clear. Leaving an open page
-                    // beside a rail that highlights a different folder is the
-                    // state that makes split views confusing.
-                    //
-                    // On a phone the Library is a drawer beside the stack,
-                    // not a screen on it, so the stack is set to the shelf
-                    // outright and the drawer closes to reveal it.
-                    if layout.isRegular {
-                        path.removeAll()
-                    } else {
-                        // Picking a shelf is what the drawer was opened for:
-                        // it closes, and the shelf is what is left standing.
-                        path = [.shelf]
-                        setDrawer(open: false)
-                    }
-                    openPage = nil
-                }
-            ),
+            selection: librarySelection,
             query: $model.query,
             isSearchFocused: $isSearchFocused,
             onNewFolder: { newFolderBucket = $0 },
-            onOpenHabits: {
-                if !layout.isRegular { setDrawer(open: false) }
-                path.append(.habits)
-            },
+            onOpenHabits: libraryHabits,
             habitCount: plan.snapshot.habits.count,
             onRenameFolder: startRename,
             onDeleteFolder: { model.deleteFolder($0) },
-            onDropNotes: { ids, bucket, folderID in
-                for id in ids { model.move(id, to: bucket, folderID: folderID) }
-            }
+            onDropNotes: libraryDrop
+        )
+    }
+
+    /// The phone drawer's list: the same library as a system sidebar list.
+    private var libraryList: some View {
+        NotesLibraryList(
+            snapshot: model.snapshot,
+            selection: librarySelection,
+            query: $model.query,
+            isSearchFocused: $isSearchFocused,
+            onNewFolder: { newFolderBucket = $0 },
+            onOpenHabits: libraryHabits,
+            habitCount: plan.snapshot.habits.count,
+            onRenameFolder: startRename,
+            onDeleteFolder: { model.deleteFolder($0) },
+            onDropNotes: libraryDrop
         )
     }
 
@@ -395,7 +423,7 @@ struct NotesHubScreen: View {
             .padding(.horizontal, 16)
             .frame(height: 52)
 
-            library
+            libraryList
         }
         .padding(.bottom, layout.contentBottomInset)
         .frame(maxHeight: .infinity, alignment: .top)
