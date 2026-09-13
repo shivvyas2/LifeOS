@@ -27,11 +27,13 @@ struct AppShell: View {
     /// entity it cannot find in an empty schema. That is not catchable from
     /// Swift, so it is the whole process.
     var hasStore = false
+    var accountID: String?
 
     @State private var onboarding = OnboardingViewModel()
     @State private var whoop = WhoopConnectionViewModel()
     @State private var fitbit = FitbitConnectionViewModel()
     @State private var health = HealthConnectionViewModel()
+    @State private var plaid = PlaidConnectionViewModel()
     /// Persisted, but the win is narrower than the name suggests: `isSignedIn`
     /// resolves synchronously (a keychain read), so on a relaunch that restores
     /// a session this flag is already true on the first render, instead of
@@ -39,20 +41,20 @@ struct AppShell: View {
     /// It buys nothing when the session cannot be restored — `isSignedIn` is
     /// false there, so the gate below sends the user through onboarding
     /// regardless of this flag.
-    @AppStorage("hasFinishedOnboarding") private var hasFinishedOnboarding = false
+    @AppStorage("hasFinishedOnboarding", store: .currentAccount) private var hasFinishedOnboarding = false
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @Environment(\.scenePhase) private var scenePhase
     /// The one-time walkthrough. Keyed on its own flag rather than on
-    /// `hasFinishedOnboarding`, so it fires exactly once per install however
+    /// `hasFinishedOnboarding`, so it fires exactly once per account however
     /// the person arrived: signup, sign-in, or skip.
-    @AppStorage("hasSeenFirstRunTour") private var hasSeenFirstRunTour = false
+    @AppStorage("hasSeenFirstRunTour", store: .currentAccount) private var hasSeenFirstRunTour = false
     @State private var showTour = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
         Group {
             if onboarding.isSignedIn && hasFinishedOnboarding && hasStore {
-                RootView(whoop: whoop, fitbit: fitbit, health: health, onSignOut: {
+                RootView(whoop: whoop, fitbit: fitbit, plaid: plaid, health: health, onSignOut: {
                     // Before the session goes, not after: deleting this
                     // device's push row needs the access token of the account
                     // whose row it is. Left behind, that row would push one
@@ -63,9 +65,11 @@ struct AppShell: View {
                     if let accessToken = KeychainAuthSessionStore().load()?.accessToken {
                         Task { await PushService.shared.deregister(accessToken: accessToken) }
                     }
-                    hasFinishedOnboarding = false
+                    whoop.deactivate()
+                    fitbit.deactivate()
+                    health.deactivate()
+                    plaid.deactivate()
                     onboarding.signOut()
-                    onSignedOut()
                 })
                 .overlay {
                     // An overlay, deliberately not a fullScreenCover: iOS can
@@ -83,7 +87,7 @@ struct AppShell: View {
                 .task {
                     guard !hasSeenFirstRunTour, !showTour else { return }
                     try? await Task.sleep(for: .milliseconds(400))
-                    if !hasSeenFirstRunTour {
+                    if !Task.isCancelled && !hasSeenFirstRunTour {
                         withAnimation(.easeIn(duration: 0.25)) { showTour = true }
                     }
                 }
@@ -91,26 +95,41 @@ struct AppShell: View {
                 OnboardingFlow(
                     model: onboarding,
                     whoop: whoop,
+                    fitbit: fitbit,
+                    plaid: plaid,
                     health: health,
                     onFinish: {
                         if let account = onboarding.account, let session = onboarding.session {
                             onSignedIn(account, session)
                         }
+                        UserDefaults.currentAccount.removeObject(forKey: "onboarding.step")
                         withAnimation(.easeInOut(duration: 0.35)) { hasFinishedOnboarding = true }
                     },
                 )
             }
         }
+        .onChange(of: onboarding.session?.userID) { _, id in
+            guard let id, (!hasStore || id != accountID), let account = onboarding.account, let session = onboarding.session else { return }
+            onSignedIn(account, session)
+        }
+        .onChange(of: onboarding.isSignedIn) { wasSignedIn, signedIn in
+            if wasSignedIn && !signedIn && hasStore { onSignedOut() }
+        }
         .preferredColorScheme(appearance.colorScheme)
         .task {
-            whoop.attach(context)
-            health.attach(context)
+            if hasStore {
+                whoop.attach(context)
+                health.attach(context)
+                fitbit.attach(context)
+                plaid.attach(context)
+            }
             // A returning user has a session already; renew it and skip past
             // signup rather than making them prove themselves on every launch.
             // Only when there is somewhere for the restored account's data to
             // live. Without the second clause a session found in a scene with
             // no store promotes straight past the gate above.
-            if await onboarding.restoreSession(), hasStore {
+            if await onboarding.restoreSession(), hasStore,
+               onboarding.step == .signedIn {
                 hasFinishedOnboarding = true
                 // The profile belongs to the account, not to the phone that
                 // typed it, so it is fetched rather than assumed present.
@@ -124,11 +143,14 @@ struct AppShell: View {
             // one, and the connections are held per account. There is nowhere
             // for a signed-out person's data to live that would not become
             // somebody else's the moment they signed in.
+            guard hasStore, onboarding.isSignedIn else { return }
             await whoop.syncIfStale()
             // After Whoop, not before: Health fills the gaps Whoop leaves, so
             // running it second means it sees the strap's numbers already in
             // place and writes only where they are missing.
             await health.syncIfConnected()
+            await fitbit.syncIfDue()
+            await plaid.syncIfDue()
         }
         // Nothing awaits the sync: screens render local data immediately and
         // repaint through the ModelContext.didSave reload when it lands. The
@@ -184,8 +206,11 @@ struct AppShell: View {
                 // card spinning, and coming back is the only moment we learn
                 // it was abandoned.
                 await whoop.resolveStalledConnect()
+                guard hasStore, onboarding.isSignedIn else { return }
                 await whoop.syncIfStale()
                 await health.syncIfConnected()
+                await fitbit.syncIfDue()
+                await plaid.syncIfDue()
             }
         }
         .onOpenURL { url in
@@ -211,6 +236,12 @@ struct AppShell: View {
     /// false for anything that is not that redirect, so Whoop loses nothing.
     private func handle(_ url: URL) {
         guard PlaidLinkPresenter.resume(from: url) == false else { return }
-        whoop.handleCallback(url)
+        if FitbitOAuth.state(in: url).map({ returned in
+            KeychainFitbitAuthStore().pendingAuths().contains { $0.state == returned }
+        }) == true {
+            Task { await fitbit.handle(url) }
+        } else {
+            whoop.handleCallback(url)
+        }
     }
 }

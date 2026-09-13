@@ -48,6 +48,9 @@ final class NoteEditorViewModel {
     private var sync: NoteSyncing?
     private let calendar: Calendar
     private var saveTask: Task<Void, Never>?
+    private var isLoading = false
+    private(set) var saveMessage = "Saved on this device"
+    private(set) var hasSaveError = false
 
     init(documentID: UUID, calendar: Calendar = .current) {
         self.documentID = documentID
@@ -68,6 +71,8 @@ final class NoteEditorViewModel {
     func load() {
         guard let store, let document = try? store.document(id: documentID) else { return }
 
+        isLoading = true
+        defer { isLoading = false }
         title = document.title
         icon = document.icon
         blocks = document.blocks
@@ -266,6 +271,9 @@ final class NoteEditorViewModel {
     // MARK: - Saving
 
     private func scheduleSave() {
+        guard !isLoading else { return }
+        saveMessage = "Saving…"
+        hasSaveError = false
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(600))
@@ -290,9 +298,12 @@ final class NoteEditorViewModel {
             if document.title != title { try store.rename(document, to: title) }
             updatedAt = document.updatedAt
             refreshLinks()
+            saveMessage = "Saved on this device"
+            hasSaveError = false
             requestSync()
         } catch {
-            assertionFailure("Note save failed: \(error)")
+            saveMessage = "Couldn’t save · Retry"
+            hasSaveError = true
         }
     }
 

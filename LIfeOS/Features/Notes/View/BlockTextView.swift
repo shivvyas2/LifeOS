@@ -14,7 +14,7 @@ enum BlockStyle {
     /// the page title without inventing sizes: the third is reading text set
     /// bold, which is what a fourth-level heading is in any document.
     static func font(_ kind: NoteBlockKind) -> UIFont {
-        switch kind {
+        let base: UIFont = switch kind {
         case .heading1: LifeOSType.UIKitScale.screenTitle
         case .heading2: LifeOSType.UIKitScale.sectionTitle
         case .heading3: LifeOSType.UIKitScale.bodyStrong
@@ -22,6 +22,7 @@ enum BlockStyle {
         case .quote:    LifeOSType.UIKitScale.body
         default:        LifeOSType.UIKitScale.body
         }
+        return UIFontMetrics(forTextStyle: .body).scaledFont(for: base)
     }
 
     /// Space above a block. Headings need air before them and none after, which
@@ -93,6 +94,7 @@ struct BlockTextView: UIViewRepresentable {
         // the whole point of the ink support, and it needs no code beyond
         // leaving the interaction enabled.
         view.isEditable = true
+        view.adjustsFontForContentSizeCategory = true
 
         view.onDeleteBackwardAtStart = { onBackspaceAtStart() }
         view.onShiftTab = { onIndent(-1) }

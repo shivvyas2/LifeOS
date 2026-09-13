@@ -58,6 +58,16 @@ private struct StubAPI: PlaidAPI {
         #expect(items.items().first?.institutionName == "First Platypus Bank")
     }
 
+    @Test func aConnectionRemovedOnTheServerLeavesTheLocalCache() async throws {
+        let items = makeItems()
+        items.upsert(PlaidStoredItem(itemID: "removed", institutionName: "Old bank", cursor: "old"))
+        let money = StubMoney()
+        let response = try JSONDecoder().decode(PlaidSyncResponse.self, from: Data(#"{"items":[]}"#.utf8))
+        _ = try await PlaidSync(api: StubAPI(response: response), money: money, items: items).run()
+        #expect(items.items().isEmpty)
+        #expect(money.removed.isEmpty, "disconnecting does not delete transaction history")
+    }
+
     @Test func aFailedIngestLeavesTheCursorWhereItWas() async throws {
         // The reason the cursor lives on the device at all. Advance it here and
         // Plaid never resends this page: those transactions are gone for good.

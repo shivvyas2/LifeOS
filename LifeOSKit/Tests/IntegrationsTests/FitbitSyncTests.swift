@@ -67,6 +67,11 @@ final class FitbitStubURLProtocol: URLProtocol {
         return (sync, store, context)
     }
 
+    @Test func aRefreshLockDoesNotBecomeAnEmptySuccessfulSync() async throws {
+        let (sync, _, _) = try makeSync(body: #"{"needs_reauth":false,"payloads":{},"failures":{},"retry":true}"#)
+        await #expect(throws: FitbitSyncError.retryLater) { try await sync.sync(token: "token") }
+    }
+
     /// A dead credential is not a retry. The app stops and asks the user to
     /// reconnect rather than spinning against a token nothing can revive.
     @Test func aNeedsReauthResponseEndsTheSync() async throws {

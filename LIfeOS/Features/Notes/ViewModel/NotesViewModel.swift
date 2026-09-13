@@ -83,15 +83,13 @@ final class NotesViewModel {
     private func sorted(_ cards: [NoteCardSnapshot]) -> [NoteCardSnapshot] {
         switch sort {
         case .recentlyEdited:
-            // The store's own order already leads with favourites and dated
-            // entries, which is what "recently edited" should preserve.
-            return cards
-        case .recentlyOpened:
             return cards.sorted { $0.updatedAt > $1.updatedAt }
+        case .recentlyOpened:
+            return cards.sorted { ($0.openedAt ?? $0.updatedAt) > ($1.openedAt ?? $1.updatedAt) }
         case .title:
             return cards.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .created:
-            return cards.sorted { ($0.entryDate ?? $0.updatedAt) > ($1.entryDate ?? $1.updatedAt) }
+            return cards.sorted { $0.createdAt > $1.createdAt }
         }
     }
 
@@ -163,7 +161,7 @@ final class NotesViewModel {
         return trail
     }
 
-    private func folderSnapshot(_ id: UUID) -> NoteFolderSnapshot? {
+    func folderSnapshot(_ id: UUID) -> NoteFolderSnapshot? {
         for bucket in NoteBucket.allCases {
             if let found = Self.find(id, in: snapshot.folders(in: bucket)) { return found }
         }

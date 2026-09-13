@@ -1,5 +1,7 @@
 import UIKit
 import LinkKit
+import Integrations
+import Persistence
 
 /// What came back from the bank login.
 enum PlaidLinkResult {
@@ -30,6 +32,15 @@ enum PlaidLinkPresenter {
     /// it is the case where the process did not survive: `resumeAfterTermination`
     /// needs the same token the terminated session used.
     private static let tokenKey = "plaid.link.pendingToken"
+    private static var generation = UUID()
+    private static var ownerDefaults: UserDefaults?
+
+    static func resetForAccountChange() {
+        generation = UUID()
+        clear()
+        onResumedConnect = nil
+        UserDefaults.standard.removeObject(forKey: tokenKey)
+    }
 
     /// Where the result of a resumed session goes.
     ///
@@ -38,7 +49,13 @@ enum PlaidLinkPresenter {
     static var onResumedConnect: ((PlaidLinkResult) -> Void)?
 
     static func present(linkToken: String, completion: @escaping (PlaidLinkResult) -> Void) {
-        UserDefaults.standard.set(linkToken, forKey: tokenKey)
+        guard KeychainAuthSessionStore().load() != nil else {
+            completion(.failed("Sign in before connecting a bank"))
+            return
+        }
+        generation = UUID()
+        ownerDefaults = .currentAccount
+        ownerDefaults?.set(linkToken, forKey: tokenKey)
 
         switch create(linkToken: linkToken, completion: completion) {
         case .failure(let error):
@@ -70,7 +87,9 @@ enum PlaidLinkPresenter {
 
         // iOS terminated the app instead. A fresh handler on the original token
         // is the only way back into a flow the user has already completed.
-        guard let token = UserDefaults.standard.string(forKey: tokenKey),
+        ownerDefaults = .currentAccount
+        guard KeychainAuthSessionStore().load() != nil,
+              let token = ownerDefaults?.string(forKey: tokenKey),
               let sink = onResumedConnect else {
             clear()
             return true
@@ -91,7 +110,11 @@ enum PlaidLinkPresenter {
         linkToken: String,
         completion: @escaping (PlaidLinkResult) -> Void
     ) -> Result<any Handler, Plaid.CreateError> {
+        let attempt = generation
+        let owner = UserDefaults.standard.string(forKey: "accounts.current")
         var configuration = LinkTokenConfiguration(token: linkToken) { success in
+            guard generation == attempt, owner != nil,
+                  owner == UserDefaults.standard.string(forKey: "accounts.current") else { return }
             clear()
             completion(.connected(
                 publicToken: success.publicToken,
@@ -100,6 +123,8 @@ enum PlaidLinkPresenter {
             ))
         }
         configuration.onExit = { exit in
+            guard generation == attempt, owner != nil,
+                  owner == UserDefaults.standard.string(forKey: "accounts.current") else { return }
             clear()
             // A user closing the sheet is the common path here, so an exit with
             // no error must not be dressed up as a failure.
@@ -116,7 +141,8 @@ enum PlaidLinkPresenter {
     /// left behind would be replayed into the next OAuth redirect that arrives.
     private static func clear() {
         handler = nil
-        UserDefaults.standard.removeObject(forKey: tokenKey)
+        ownerDefaults?.removeObject(forKey: tokenKey)
+        ownerDefaults = nil
     }
 
     private static func topViewController() -> UIViewController? {

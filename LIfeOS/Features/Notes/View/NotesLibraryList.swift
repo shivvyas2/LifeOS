@@ -88,7 +88,7 @@ struct NotesLibraryList: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .glassEffect(.regular, in: .capsule)
+        .background(primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Shortcuts
@@ -144,7 +144,7 @@ struct NotesLibraryList: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .glassCard(selected: isSelected)
+        .libraryCard(selected: isSelected)
     }
 
     // MARK: - Shelves
@@ -244,7 +244,7 @@ struct NotesLibraryList: View {
             }
         }
         .padding(.vertical, 2)
-        .glassCard(selected: false)
+        .libraryCard(selected: false)
     }
 
     private func folderRow(_ folder: NoteFolderSnapshot, depth: Int) -> some View {
@@ -305,8 +305,8 @@ struct NotesLibraryList: View {
 
     // MARK: - Pieces
 
-    /// Apple's bright orange, the one accent in the drawer.
-    static let orange = Color(uiColor: .systemOrange)
+    /// The same orange used throughout LifeOS.
+    static let orange = LifeOSTokens.accent
     /// Apple's grays: the fill behind an icon, and the fill behind a row.
     private var iconFill: Color { Color(uiColor: .secondarySystemFill) }
     private var rowFill: Color { Color(uiColor: .tertiarySystemFill) }
@@ -333,7 +333,7 @@ struct NotesLibraryList: View {
             .foregroundStyle(secondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule().fill(iconFill))
+
     }
 
     private var hairline: some View {
@@ -380,17 +380,10 @@ struct NotesLibraryList: View {
 }
 
 private extension View {
-    /// A Liquid Glass card. Selected, it takes a wash of the orange so the
-    /// tint and the icon agree; otherwise it is clear glass over the material.
+    /// Quiet surfaces with an orange selection state.
     @ViewBuilder
-    func glassCard(selected: Bool) -> some View {
-        if selected {
-            self.glassEffect(
-                .regular.tint(NotesLibraryList.orange.opacity(0.28)).interactive(),
-                in: .rect(cornerRadius: 16, style: .continuous)
-            )
-        } else {
-            self.glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16, style: .continuous))
-        }
+    func libraryCard(selected: Bool) -> some View {
+        self.background(selected ? NotesLibraryList.orange.opacity(0.09) : Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 14))
     }
 }

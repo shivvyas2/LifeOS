@@ -29,12 +29,23 @@ final class PlaidConnectionViewModel {
 
     private let items: any PlaidItemStoring
     private let sessions: any AuthSessionStoring
+    private let defaults: UserDefaults
     private var context: ModelContext?
+    private var active = true
+    private var lastAttemptAt: Date?
+
+    func deactivate() {
+        active = false
+        context = nil
+        PlaidLinkPresenter.resetForAccountChange()
+    }
 
     init(items: any PlaidItemStoring = UserDefaultsPlaidItemStore(),
-         sessions: any AuthSessionStoring = KeychainAuthSessionStore()) {
+         sessions: any AuthSessionStoring = KeychainAuthSessionStore(),
+         defaults: UserDefaults = .currentAccount) {
         self.items = items
         self.sessions = sessions
+        self.defaults = defaults
     }
 
     func attach(_ context: ModelContext) {
@@ -82,12 +93,13 @@ final class PlaidConnectionViewModel {
     // MARK: - Connect
 
     func connect() {
-        guard let api else { state = .unconfigured; return }
+        guard active, let api else { state = .unconfigured; return }
         state = .connecting
 
         Task {
             do {
                 let linkToken = try await api.createLinkToken()
+                guard active, sessions.load() != nil else { return }
                 PlaidLinkPresenter.present(linkToken: linkToken) { result in
                     Task { await self.finishConnect(result) }
                 }
@@ -99,7 +111,7 @@ final class PlaidConnectionViewModel {
     }
 
     private func finishConnect(_ result: PlaidLinkResult) async {
-        guard let api else { return }
+        guard active, let api else { return }
         switch result {
         case .cancelled:
             refreshState()
@@ -111,6 +123,7 @@ final class PlaidConnectionViewModel {
                 let item = try await api.exchange(publicToken: publicToken,
                                                   institutionID: institutionID,
                                                   institutionName: institutionName)
+                guard active, sessions.load() != nil else { return }
                 items.upsert(PlaidStoredItem(itemID: item.item_id,
                                              institutionName: item.institution_name,
                                              cursor: nil))
@@ -142,14 +155,18 @@ final class PlaidConnectionViewModel {
     }
 
     func syncIfDue() async {
-        replayHistoryOnce()
-        guard case .connected = state,
-              SyncStalenessPolicy.shouldSync(lastSync: lastSyncedAt) else { return }
+        replayHistoryOnce(defaults: defaults)
+        guard active, sessions.load() != nil,
+              SyncStalenessPolicy.shouldSync(lastSync: lastAttemptAt) else { return }
+        // The server owns the link. Ask it even when this device has no cache.
+        if case .connecting = state { return }
+        if case .unconfigured = state { return }
+        lastAttemptAt = .now
         await sync()
     }
 
     func sync() async {
-        guard let api, let context, !isSyncing else { return }
+        guard active, let api, let context, !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -160,12 +177,13 @@ final class PlaidConnectionViewModel {
             // pull of years of history finishes across several runs rather than
             // stopping part-way and looking complete.
             var guardRail = 0
-            while outcome.hasMore, guardRail < 20 {
+            while active, outcome.hasMore, guardRail < 20 {
                 outcome = try await runner.run()
                 guardRail += 1
             }
 
-            lastSyncedAt = .now
+            guard active else { return }
+            if outcome.failedItems.isEmpty && !outcome.hasMore { lastSyncedAt = .now }
             if outcome.transactionsIngested > 0 { isFetchingHistory = false }
             if let reconnect = outcome.needsReconnect.first {
                 state = .needsReconnect(reconnect)
@@ -176,7 +194,8 @@ final class PlaidConnectionViewModel {
             // The previous snapshot stays on screen with its own timestamp,
             // which is honest, rather than being replaced by zeroes.
             plaidLog.error("sync failed: \(String(describing: error))")
-            state = .failed("Sync failed")
+            // A network outage does not disconnect a saved bank.
+            refreshState()
         }
     }
 
@@ -190,7 +209,9 @@ final class PlaidConnectionViewModel {
             try await api.disconnect(itemID: itemID)
         } catch {
             plaidLog.error("disconnect failed: \(String(describing: error))")
+            return
         }
+        guard active else { return }
         items.remove(itemID: itemID)
 
         if deletingHistory, let context {

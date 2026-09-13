@@ -22,6 +22,7 @@ public final class NoteSync {
     private let context: ModelContext
     private let rest: SupabaseREST
     private let calendar: Calendar
+    private let defaults: UserDefaults
     /// Returns a live access token, refreshing it if needed. Nil when nobody is
     /// signed in, which is not an error: the whole notes feature works offline
     /// and a guest simply never syncs.
@@ -39,13 +40,15 @@ public final class NoteSync {
         context: ModelContext,
         rest: SupabaseREST,
         calendar: Calendar = .current,
+        defaults: UserDefaults = .currentAccount,
         accessToken: @escaping @MainActor () async -> String?
     ) {
         self.context = context
         self.rest = rest
         self.calendar = calendar
+        self.defaults = defaults
         self.accessToken = accessToken
-        self.lastSyncedAt = UserDefaults.currentAccount.object(forKey: Self.cursorKey) as? Date
+        self.lastSyncedAt = defaults.object(forKey: Self.cursorKey) as? Date
     }
 
     /// Runs a full pass, or joins the one already running.
@@ -142,7 +145,7 @@ public final class NoteSync {
         }
 
         lastSyncedAt = newest == .distantPast ? .now : newest
-        UserDefaults.currentAccount.set(lastSyncedAt, forKey: Self.cursorKey)
+        defaults.set(lastSyncedAt, forKey: Self.cursorKey)
     }
 
     private func apply(_ row: NoteFolderRow, store: NotesStore) throws {

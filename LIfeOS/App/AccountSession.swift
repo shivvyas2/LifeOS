@@ -3,6 +3,7 @@ import SwiftData
 import OSLog
 import Persistence
 import Integrations
+import UserNotifications
 
 private let accountLog = Logger(subsystem: "com.shivvyas.lifeos", category: "accounts")
 
@@ -23,6 +24,9 @@ final class AccountSession {
 
     init() {
         adoptExistingSessionIfNeeded()
+        if let current = accounts.currentScope, accounts.session(for: current.id)?.userID != current.id {
+            accounts.remove(current.id)
+        }
         adopt(accounts.currentScope)
     }
 
@@ -67,45 +71,53 @@ final class AccountSession {
     func signIn(_ account: Account, session: AuthSession) {
         do {
             try accounts.add(account, session: session)
-            // Everything written before accounts existed becomes the first
-            // account's. Attempted on every sign-in and refused after the
-            // first, because the legacy file is gone by then.
-            let adopted = try LifeOSContainer.adoptLegacyStore(into: account.scope)
-            if adopted { accountLog.info("adopted the pre-account store") }
+            accounts.clearLegacySession()
         } catch {
             accountLog.error("sign-in bookkeeping failed: \(String(describing: error), privacy: .public)")
+            return
         }
-        adopt(account.scope)
+        if scope != account.scope || container == nil { adopt(account.scope) }
     }
 
     /// Switches to an account already signed in on this device.
     @discardableResult
     func `switch`(to userID: String) -> Bool {
         guard accounts.setCurrent(userID) else { return false }
+        PlaidLinkPresenter.resetForAccountChange()
         adopt(accounts.currentScope)
         return true
     }
 
     /// Signs the current account out, leaving the others and their stores
-    /// alone. Lands on whichever account is left, or on signup when none is.
+    /// alone. Returns to onboarding so the next person starts signed out.
     func signOut() {
-        if let scope { accounts.remove(scope.id) }
+        PushService.shared.pending = nil
+        UIApplication.shared.unregisterForRemoteNotifications()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        if let scope {
+            // Saved provider links stay with their owner. In-flight browser
+            // credentials and device calendar/Health opt-ins do not survive logout.
+            KeychainWhoopTokenStore(account: scope.id).clearPending()
+            KeychainFitbitAuthStore(account: scope.id).clearPending()
+            let defaults = UserDefaults(suiteName: scope.defaultsSuiteName)!
+            defaults.removeObject(forKey: AccountDeviceAccess.calendarKey)
+            defaults.removeObject(forKey: "healthAuthorisationRequested")
+            PlaidLinkPresenter.resetForAccountChange()
+            accounts.remove(scope.id)
+        }
         // Belt and braces for a device that adopted the legacy session under
         // the build that left it behind: `remove` clears it too, but only when
         // there was a scope to remove, and a shell with none must not be able
         // to resurrect one either.
         accounts.clearLegacySession()
-        adopt(accounts.currentScope ?? accounts.accounts.first.map(\.scope))
-        if let remaining = accounts.accounts.first, accounts.currentScope == nil {
-            _ = accounts.setCurrent(remaining.userID)
-            adopt(accounts.currentScope)
-        }
+        adopt(nil)
     }
 
     /// Defaults scoped to the open account, for the cursors and connection
     /// tokens that are per account rather than per device.
     var defaults: UserDefaults {
-        scope.flatMap { UserDefaults(suiteName: $0.defaultsSuiteName) } ?? .standard
+        scope.flatMap { UserDefaults(suiteName: $0.defaultsSuiteName) } ?? .currentAccount
     }
 
     private func adopt(_ next: UserScope?) {

@@ -18,15 +18,16 @@ import PencilKit
 ///
 ///   - Over a text block, a Pencil writes. Handwriting becomes text.
 ///   - Over a sketch block, a Pencil draws in that block.
-///   - With ink mode on, a Pencil annotates the whole page, and so does a
-///     finger.
+///   - With ink mode on, a Pencil annotates the whole page. Finger drawing
+///     can be enabled separately on iPad.
 ///
 /// Double-tapping or squeezing the Pencil turns ink mode on, so the annotation
 /// layer is one gesture away without a trip to the toolbar.
 struct InkCanvasView: UIViewRepresentable {
     @Binding var data: Data?
-    /// True when the ink button is on: everything draws, including a finger.
+    /// Annotation mode. Finger drawing is an explicit choice on iPad.
     let isInkMode: Bool
+    var allowsFingerDrawing = false
     /// Raised by a Pencil double-tap or squeeze.
     var onPencilShortcut: () -> Void
     /// The height of the page's blocks, so the canvas covers exactly the
@@ -49,9 +50,8 @@ struct InkCanvasView: UIViewRepresentable {
         canvas.isOpaque = false
         canvas.isScrollEnabled = false          // the page's own scroll view owns scrolling
         canvas.alwaysBounceVertical = false
-        // The adaptive part. A Pencil always draws, whatever mode the page is
-        // in, so on an iPad you pick the Pencil up and write; a finger keeps
-        // typing and scrolling until the ink button says otherwise.
+        // Text keeps Scribble while annotation is off. In annotation mode,
+        // Pencil draws and finger input follows the editor's explicit setting.
         canvas.drawingPolicy = .pencilOnly
         canvas.isInkMode = isInkMode
 
@@ -65,7 +65,7 @@ struct InkCanvasView: UIViewRepresentable {
     func updateUIView(_ canvas: PassthroughCanvasView, context: Context) {
         context.coordinator.parent = self
         canvas.isInkMode = isInkMode
-        canvas.drawingPolicy = isInkMode ? .anyInput : .pencilOnly
+        canvas.drawingPolicy = isInkMode && allowsFingerDrawing ? .anyInput : .pencilOnly
 
         // Only reload when the bytes differ, since assigning a drawing resets
         // the undo stack and interrupts a stroke in progress.
@@ -73,7 +73,7 @@ struct InkCanvasView: UIViewRepresentable {
            let drawing = try? PKDrawing(data: data), drawing != canvas.drawing {
             canvas.drawing = drawing
         }
-        if data == nil, !canvas.drawing.strokes.isEmpty, context.coordinator.lastWritten != nil {
+        if data == nil, !canvas.drawing.strokes.isEmpty {
             canvas.drawing = PKDrawing()
         }
 
@@ -82,6 +82,11 @@ struct InkCanvasView: UIViewRepresentable {
         canvas.overrideUserInterfaceStyle = isDark ? .dark : .light
 
         context.coordinator.setPickerVisible(isInkMode, on: canvas)
+    }
+
+    static func dismantleUIView(_ canvas: PassthroughCanvasView, coordinator: Coordinator) {
+        NoteToolPicker.shared.release(canvas)
+        canvas.delegate = nil
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

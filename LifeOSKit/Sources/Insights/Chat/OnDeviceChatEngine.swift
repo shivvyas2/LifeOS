@@ -24,7 +24,7 @@ public struct OnDeviceChatEngine: ChatEngine {
     ) async throws -> AssistantTurn.Reply {
         let session = LanguageModelSession(
             tools: tools.map { SessionTool($0, invoker: invoker) },
-            instructions: instructions + "\n\n" + ResponseStyle.conversation
+            instructions: instructions + "\n\n" + (CoachPresentation.isStructured(instructions) ? CoachPresentation.instruction : ResponseStyle.conversation)
         )
         // Streamed rather than awaited whole, so the device tier reaches the
         // screen the same way the cloud one does. FoundationModels yields
@@ -37,10 +37,10 @@ public struct OnDeviceChatEngine: ChatEngine {
             // Cleaned on the way past, not only at the end: the model emits
             // markdown mid-sentence and a screen showing raw asterisks for a
             // second before they vanish reads as a rendering bug.
-            onPartial(ResponseStyle.clean(latest))
+            onPartial(CoachPresentation.clean(latest, instructions: instructions))
         }
         return AssistantTurn.Reply(
-            text: ResponseStyle.clean(latest),
+            text: CoachPresentation.clean(latest, instructions: instructions),
             toolSummaries: await invoker.toolSummaries(),
             tier: .onDevice
         )

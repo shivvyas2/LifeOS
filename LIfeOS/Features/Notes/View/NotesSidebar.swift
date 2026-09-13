@@ -73,6 +73,7 @@ struct NotesSidebar: View {
                 .font(LifeOSType.secondary)
                 .textFieldStyle(.plain)
                 .submitLabel(.search)
+                .focused($searchFieldFocused)
             if !query.isEmpty {
                 Button {
                     query = ""
@@ -140,9 +141,9 @@ struct NotesSidebar: View {
     private func iconBubble(_ symbol: String, hue: ModuleHue) -> some View {
         Image(systemName: symbol)
             .font(LifeOSType.caption.weight(.semibold))
-            .foregroundStyle(hue.top)
+            .foregroundStyle(LifeOSTokens.accent)
             .frame(width: 26, height: 26)
-            .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
+
     }
 
     /// A quiet capsule rather than a bare number, so counts read as badges
@@ -153,7 +154,7 @@ struct NotesSidebar: View {
             .foregroundStyle(secondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule().fill(primary.opacity(scheme == .dark ? 0.12 : 0.05)))
+
     }
 
     @ViewBuilder
@@ -191,7 +192,7 @@ struct NotesSidebar: View {
                             .font(LifeOSType.eyebrow.weight(.bold))
                             .rotationEffect(.degrees(isOpen ? 0 : -90))
                             .foregroundStyle(secondary)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(isOpen ? "Collapse \(bucket.title)" : "Expand \(bucket.title)")

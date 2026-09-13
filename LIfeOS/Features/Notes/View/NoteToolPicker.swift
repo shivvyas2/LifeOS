@@ -33,6 +33,12 @@ final class NoteToolPicker {
         }
     }
 
+    func release(_ canvas: PKCanvasView) {
+        hide(for: canvas)
+        picker.removeObserver(canvas)
+        observing.remove(ObjectIdentifier(canvas))
+    }
+
     private func register(_ canvas: PKCanvasView) {
         let key = ObjectIdentifier(canvas)
         guard !observing.contains(key) else { return }

@@ -2,20 +2,7 @@ import SwiftUI
 import DesignSystem
 import Persistence
 
-/// The notes tab.
-///
-/// One set of screens in three arrangements, chosen by how much width there
-/// actually is rather than by the size class alone.
-///
-/// A phone gets the library as its own screen and pushes into a shelf and then
-/// a page. A narrow iPad pane gets library and shelf side by side, with a page
-/// pushed over the shelf. A wide one gets all three at once, which is the whole
-/// argument for the layout: on a landscape iPad, opening a note should not hide
-/// the grid you were reading it from.
-///
-/// The threshold is measured, not assumed. A regular size class covers
-/// everything from a 1366pt landscape iPad to a narrow Stage Manager window,
-/// and those two want different arrangements.
+/// Native phone navigation and adaptive iPad columns for the same page library.
 struct NotesHubScreen: View {
     @Bindable var model: NotesViewModel
     /// Habits did not become pages, so the tab hosts the one screen that still
@@ -26,7 +13,6 @@ struct NotesHubScreen: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
-    @Environment(\.modelContext) private var context
 
     /// Pushed navigation: the phone's whole journey, and the shelf column's
     /// own stack on an iPad. A page is only ever on here when there is no
@@ -42,26 +28,16 @@ struct NotesHubScreen: View {
     /// Measured rather than derived from the size class, for the reason in the
     /// type comment above.
     @State private var paneWidth: CGFloat = 0
-    /// Raised by Command-F. The sidebar owns the field; this is how the scene's
-    /// menu reaches it.
+    /// Raised by Command-F to focus the page search field.
     @State private var isSearchFocused = false
     @State private var newFolderBucket: NoteBucket?
     @State private var renamingFolder: UUID?
     @State private var folderName = ""
-    /// The phone's Inbox stream, above the pushed Library. Owned here rather
-    /// than by `NoteInboxScreen` so the shell can hand it the same
-    /// `ModelContext` it hands everything else.
-    @State private var inbox = NoteInboxViewModel()
-    /// The phone's library drawer. Open, it slides in from the leading edge
-    /// and pushes the stack to the right by its own width; nothing is
-    /// covered, the page moves over. Closed, it sits just off screen.
-    @State private var isDrawerOpen = false
-    /// The live finger offset while a drag is in flight, in points along the
-    /// drawer's axis. Zero whenever nothing is being dragged.
-    @State private var drawerDrag: CGFloat = 0
+    @State private var isLibraryPresented = false
+    @State private var pendingNewFolder: NoteBucket?
+    @State private var pendingRename: UUID?
 
     enum NoteRoute: Hashable {
-        case shelf
         case page(UUID)
         case habits
     }
@@ -82,17 +58,18 @@ struct NotesHubScreen: View {
                 name: "",
                 onSave: { name, icon in model.createFolder(named: name, in: bucket, icon: icon) }
             )
-            .presentationDetents([.height(300)])
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: Binding(get: { renamingFolder != nil }, set: { if !$0 { renamingFolder = nil } })) {
             NoteFolderSheet(
                 title: "Rename folder",
                 name: folderName,
+                showsIconPicker: false,
                 onSave: { name, _ in
                     if let id = renamingFolder { model.renameFolder(id, to: name) }
                 }
             )
-            .presentationDetents([.height(300)])
+            .presentationDetents([.medium, .large])
         }
     }
 
@@ -134,7 +111,6 @@ struct NotesHubScreen: View {
             if isThreeColumn {
                 NavigationStack(path: $path) {
                     shelf
-                        .quickActionsToolbar()
                         .navigationDestination(for: NoteRoute.self, destination: destination)
                 }
                 // Bounded on both sides: below the minimum a card stops being
@@ -147,7 +123,6 @@ struct NotesHubScreen: View {
             } else {
                 NavigationStack(path: $path) {
                     shelf
-                        .quickActionsToolbar()
                         .navigationDestination(for: NoteRoute.self, destination: destination)
                 }
             }
@@ -222,20 +197,8 @@ struct NotesHubScreen: View {
             get: { model.selection },
             set: { selection in
                 model.selection = selection
-                // On an iPad, the shelf is the interior stack's own root,
-                // so returning to it is a clear. Leaving an open page
-                // beside a rail that highlights a different folder is the
-                // state that makes split views confusing.
-                //
-                // On a phone the Library is a drawer beside the stack,
-                // not a screen on it, so the stack is set to the shelf
-                // outright and the drawer closes to reveal it.
-                if layout.isRegular {
-                    path.removeAll()
-                } else {
-                    path = [.shelf]
-                    setDrawer(open: false)
-                }
+                path.removeAll()
+                if !layout.isRegular { setLibrary(open: false) }
                 openPage = nil
             }
         )
@@ -243,7 +206,7 @@ struct NotesHubScreen: View {
 
     private var libraryHabits: () -> Void {
         {
-            if !layout.isRegular { setDrawer(open: false) }
+            if !layout.isRegular { setLibrary(open: false) }
             path.append(.habits)
         }
     }
@@ -260,7 +223,6 @@ struct NotesHubScreen: View {
             snapshot: model.snapshot,
             selection: librarySelection,
             query: $model.query,
-            isSearchFocused: $isSearchFocused,
             onNewFolder: { newFolderBucket = $0 },
             onOpenHabits: libraryHabits,
             habitCount: plan.snapshot.habits.count,
@@ -270,226 +232,67 @@ struct NotesHubScreen: View {
         )
     }
 
-    /// The phone drawer's list: the same library as a system sidebar list.
+    /// Folders and shortcuts in the phone's library sheet.
     private var libraryList: some View {
         NotesLibraryList(
             snapshot: model.snapshot,
             selection: librarySelection,
             query: $model.query,
             isSearchFocused: $isSearchFocused,
-            onNewFolder: { newFolderBucket = $0 },
+            onNewFolder: { pendingNewFolder = $0; isLibraryPresented = false },
             onOpenHabits: libraryHabits,
             habitCount: plan.snapshot.habits.count,
-            onRenameFolder: startRename,
+            onRenameFolder: { pendingRename = $0; isLibraryPresented = false },
             onDeleteFolder: { model.deleteFolder($0) },
             onDropNotes: libraryDrop
         )
     }
 
-    /// Phone. The Inbox stream is the root screen, so the first thing someone
-    /// sees is a composer ready to write in, rather than a shelf to file into.
-    /// The Library is a drawer off the leading edge rather than the front
-    /// door: the nav bar's leading button, or a swipe in from that edge,
-    /// slides it in and pushes the stack over to make room.
+    /// A native page stack on iPhone, with the library one tap away.
     private var compactShell: some View {
-        GeometryReader { proxy in
-            let width = Self.drawerWidth(in: proxy.size.width)
-            let offset = drawerOffset(width: width)
-            let progress = offset / width
-
-            ZStack(alignment: .leading) {
-                compactLibrary
-                    .frame(width: width)
-                    .offset(x: offset - width)
-                    .zIndex(1)
-                    // Hidden from the accessibility tree while closed, so
-                    // VoiceOver does not read a rail that is off screen.
-                    .accessibilityHidden(!isDrawerOpen)
-
-                compactStack
-                    // The corners round as the page moves, so the pushed
-                    // stack reads as a card lifted off the drawer under it.
-                    .clipShape(RoundedRectangle(cornerRadius: 28 * progress, style: .continuous))
-                    .shadow(color: .black.opacity(0.18 * progress), radius: 24, x: -8)
-                    .overlay {
-                        // A scrim over the pushed stack: tap it to close, and
-                        // it says the page is not the thing to touch right now.
-                        // Present only while open, so a closed drawer leaves
-                        // the stack's own touches alone.
-                        if isDrawerOpen {
-                            Button { setDrawer(open: false) } label: {
-                                Color.black
-                                    .opacity(0.22 * progress)
-                                    .ignoresSafeArea()
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Close library")
+        NavigationStack(path: $path) {
+            shelf
+                .navigationTitle("Notes")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { isLibraryPresented = true } label: {
+                            Image(systemName: "sidebar.left")
+                        }
+                        .accessibilityLabel("Browse folders")
+                    }
+                }
+                .navigationDestination(for: NoteRoute.self, destination: destination)
+        }
+        .sheet(isPresented: $isLibraryPresented, onDismiss: {
+            if let bucket = pendingNewFolder {
+                pendingNewFolder = nil
+                newFolderBucket = bucket
+            } else if let id = pendingRename {
+                pendingRename = nil
+                startRename(id)
+            }
+        }) {
+            NavigationStack {
+                libraryList
+                    .background(LifeOSTokens.canvas.resolve(scheme))
+                    .navigationTitle("Your library")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isLibraryPresented = false }
                         }
                     }
-                    // Pushed by a little over half the drawer's width, not
-                    // all of it, so the page slides under the glass and is
-                    // what the drawer blurs. A page shoved fully clear would
-                    // leave the drawer blurring nothing but canvas.
-                    .offset(x: offset * 0.58)
             }
-            .simultaneousGesture(drawerDragGesture(width: width))
-            .animation(drawerDrag == 0 ? .spring(response: 0.38, dampingFraction: 0.86) : nil,
-                       value: isDrawerOpen)
-        }
-        // A query typed in the drawer shows its results on the shelf, so the
-        // shelf is put up behind the drawer as soon as there is a query. Not
-        // closing the drawer: the field keeps focus, and the results are one
-        // swipe away rather than replacing the thing being typed into.
-        .onChange(of: model.query) { _, query in
-            guard !layout.isRegular, !query.isEmpty, path.last != .shelf else { return }
-            path.append(.shelf)
+            .presentationDetents([.large])
+            .tint(LifeOSTokens.accent)
         }
     }
 
-    /// Two thirds of the screen, capped: enough for the rail's rows and the
-    /// search field, while the pushed page stays a visible strip beside it
-    /// rather than a sliver, so it is obvious what a tap out there does.
-    private static func drawerWidth(in available: CGFloat) -> CGFloat {
-        min(available * 0.68, 280)
-    }
-
-    /// Where the drawer's leading edge sits: 0 closed, `width` open, and
-    /// anywhere between while a finger has it.
-    private func drawerOffset(width: CGFloat) -> CGFloat {
-        let resting: CGFloat = isDrawerOpen ? width : 0
-        return min(max(resting + drawerDrag, 0), width)
-    }
-
-    private func setDrawer(open: Bool) {
-        drawerDrag = 0
-        isDrawerOpen = open
-    }
-
-    /// Open from the leading edge, close from anywhere. Only on the Inbox
-    /// root: further in, the leading edge belongs to the navigation stack's
-    /// own back swipe, and two gestures claiming it would fight.
-    private func drawerDragGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 16, coordinateSpace: .local)
-            .onChanged { value in
-                if isDrawerOpen {
-                    drawerDrag = min(value.translation.width, 0)
-                } else if path.isEmpty, value.startLocation.x < 32 {
-                    drawerDrag = max(value.translation.width, 0)
-                }
-            }
-            .onEnded { value in
-                guard drawerDrag != 0 else { return }
-                // Where the finger was heading, not just where it stopped: a
-                // quick flick that has not crossed halfway still means "open".
-                let projected = drawerOffset(width: width)
-                    + (value.predictedEndTranslation.width - value.translation.width) * 0.6
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                    setDrawer(open: projected > width / 2)
-                }
-            }
-    }
-
-    /// The drawer's contents: a header that mirrors the nav bar, then the
-    /// shared library rail.
-    ///
-    /// Drawn to look like the screen it slides out of rather than a panel
-    /// from somewhere else: the same canvas, the same type, and a glass
-    /// circle in exactly the spot the nav bar's Library button occupies, so
-    /// the button reads as having stayed put while the panel grew out from
-    /// behind it. Tapping that circle closes the drawer.
-    private var compactLibrary: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                        setDrawer(open: false)
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .font(LifeOSType.body.weight(.medium))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .accessibilityLabel("Close library")
-
-                Text("Library")
-                    .font(LifeOSType.sectionTitle.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
-            }
-            // The system bar's leading item sits this far from the edge and
-            // this tall; matching both is what makes the circle line up.
-            .padding(.horizontal, 16)
-            .frame(height: 52)
-
-            libraryList
-        }
-        .padding(.bottom, layout.contentBottomInset)
-        .frame(maxHeight: .infinity, alignment: .top)
-        // Glass, not canvas: the page it pushed shows through, blurred, and
-        // the trailing corners round off so the panel reads as a sheet of
-        // material lying over the page rather than a wall beside it.
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
-                                   bottomTrailingRadius: 36, topTrailingRadius: 36,
-                                   style: .continuous)
-                .fill(.regularMaterial)
-                .ignoresSafeArea()
-        )
-        .clipShape(
-            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0,
-                                   bottomTrailingRadius: 36, topTrailingRadius: 36,
-                                   style: .continuous)
-                .inset(by: -200)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 30, x: 10)
-    }
-
-    /// The phone's navigation stack, unchanged by the drawer around it.
-    private var compactStack: some View {
-        NavigationStack(path: $path) {
-            NoteInboxScreen(
-                model: inbox,
-                library: model,
-                onOpen: { open($0) },
-                onOpenLibrary: {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-                        setDrawer(open: true)
-                    }
-                }
-            )
-            .padding(.bottom, layout.contentBottomInset)
-            .background(LifeOSTokens.canvas.resolve(scheme))
-            .quickActionsToolbar()
-            .navigationDestination(for: NoteRoute.self, destination: destination)
-            .onAppear {
-                inbox.attach(context)
-                inbox.load()
-            }
-        }
-        // Every other tab's model is reloaded from `RootView`'s
-        // `ModelContext.didSave` fan-out, but the Inbox's view model belongs
-        // to the notes tab alone, and hoisting it into `RootView` would give
-        // the app shell a model nothing else uses. Reloading when the stack
-        // pops back to the stream instead catches the case that fan-out
-        // exists for: editing a page's title and returning leaves a stale
-        // row here otherwise.
-        .onChange(of: path) { _, newPath in
-            if newPath.isEmpty { inbox.load() }
-        }
-    }
+    private func setLibrary(open: Bool) { isLibraryPresented = open }
 
     @ViewBuilder
     private func destination(_ route: NoteRoute) -> some View {
         switch route {
-        case .shelf:
-            shelf
         case .page(let id):
             NoteEditorHost(documentID: id, onOpenLinked: { open($0) })
         case .habits:
@@ -514,7 +317,8 @@ struct NotesHubScreen: View {
             onNewFolder: { newFolderBucket = $0 },
             // Offered only where there is a library to collapse.
             onToggleLibrary: layout.isRegular ? { isLibraryVisible.toggle() } : nil,
-            isLibraryVisible: isLibraryVisible
+            isLibraryVisible: isLibraryVisible,
+            isSearchFocused: $isSearchFocused
         )
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -527,13 +331,12 @@ struct NotesHubScreen: View {
             newFolder: { newFolderBucket = model.activeBucket },
             todaysJournal: { if let id = model.openTodaysJournal() { open(id) } },
             focusSearch: {
-                // The field lives in the library, so raising it has to raise
-                // the library first or the caret goes somewhere invisible.
-                if layout.isRegular { isLibraryVisible = true } else { setDrawer(open: true) }
+                // Return to the page list before focusing its search field.
+                path.removeAll()
                 isSearchFocused = true
             },
             toggleLibrary: {
-                if layout.isRegular { isLibraryVisible.toggle() } else { setDrawer(open: !isDrawerOpen) }
+                if layout.isRegular { isLibraryVisible.toggle() } else { setLibrary(open: !isLibraryPresented) }
             },
             selectBucket: { bucket in
                 model.selection = .bucket(bucket)
@@ -571,7 +374,7 @@ struct NotesHubScreen: View {
     }
 
     private func startRename(_ id: UUID) {
-        folderName = ""
+        folderName = model.folderSnapshot(id)?.name ?? ""
         renamingFolder = id
     }
 }
@@ -613,6 +416,7 @@ private struct NoteEditorHost: View {
 struct NoteFolderSheet: View {
     let title: String
     @State var name: String
+    var showsIconPicker = true
     var onSave: (String, String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -635,26 +439,29 @@ struct NoteFolderSheet: View {
                             .fill(Color.primary.opacity(0.05))
                     )
 
-                HStack(spacing: 10) {
-                    ForEach(icons, id: \.self) { candidate in
-                        Button {
-                            icon = candidate
-                        } label: {
-                            Group {
-                                if candidate.isEmpty {
-                                    Image(systemName: "circle.dashed").font(LifeOSType.sectionTitle.weight(.regular))
-                                } else {
-                                    Text(candidate).font(LifeOSType.sectionTitle.weight(.regular))
+                if showsIconPicker {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 10) {
+                        ForEach(icons, id: \.self) { candidate in
+                            Button {
+                                icon = candidate
+                            } label: {
+                                Group {
+                                    if candidate.isEmpty {
+                                        Image(systemName: "circle.dashed").font(LifeOSType.sectionTitle.weight(.regular))
+                                    } else {
+                                        Text(candidate).font(LifeOSType.sectionTitle.weight(.regular))
+                                    }
                                 }
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(icon == candidate ? Color.primary.opacity(0.1) : .clear)
+                                )
                             }
-                            .frame(width: 40, height: 40)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(icon == candidate ? Color.primary.opacity(0.1) : .clear)
-                            )
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+
                 }
 
                 Spacer()

@@ -3,6 +3,8 @@ import AuthenticationServices
 import UIKit
 import OSLog
 import Integrations
+import Persistence
+import SwiftData
 
 private let fitbitLog = Logger(subsystem: "com.shivvyas.lifeos", category: "fitbit")
 
@@ -35,17 +37,31 @@ final class FitbitConnectionViewModel: NSObject {
     /// Remembers the last known connection state per account, so the card does
     /// not flash "Not connected" on every launch while the server is asked.
     /// The server remains the authority; this is only what to show meanwhile.
-    private var connectedKey: String {
-        let account = UserDefaults.standard.string(forKey: KeychainAuthSessionStore.currentAccountKey) ?? "default"
-        return "fitbit.connected.\(account)"
+    private let defaults: UserDefaults
+    private let connectedKey = "fitbit.connected"
+    private var context: ModelContext?
+    private var active = true
+    private(set) var isSyncing = false
+    private var lastAttemptAt: Date?
+
+    func attach(_ context: ModelContext) { self.context = context }
+
+    func deactivate() {
+        active = false
+        webSession?.cancel()
+        webSession = nil
+        pending.clearPending()
+        context = nil
     }
 
     init(
         pending: any FitbitAuthStoring = KeychainFitbitAuthStore(),
-        sessions: any AuthSessionStoring = KeychainAuthSessionStore()
+        sessions: any AuthSessionStoring = KeychainAuthSessionStore(),
+        defaults: UserDefaults = .currentAccount
     ) {
         self.pending = pending
         self.sessions = sessions
+        self.defaults = defaults
         super.init()
         refreshState()
     }
@@ -53,7 +69,7 @@ final class FitbitConnectionViewModel: NSObject {
     func refreshState() {
         guard AppConfig.isFitbitConfigured else { state = .unconfigured; return }
         if case .connecting = state { return }
-        state = UserDefaults.standard.bool(forKey: connectedKey)
+        state = defaults.bool(forKey: connectedKey)
             ? .connected(lastSyncedDays: nil)
             : .disconnected
     }
@@ -88,6 +104,7 @@ final class FitbitConnectionViewModel: NSObject {
     /// middle. If Fitbit ever adds one, the fallback is `UIApplication.open`,
     /// exactly as `WhoopConnectionViewModel.connect()` does it.
     func connect() {
+        guard active, sessions.load() != nil else { return }
         guard let clientID = AppConfig.fitbitClientID,
               let redirect = AppConfig.fitbitRedirectURI,
               let scheme = AppConfig.appURLScheme else {
@@ -123,6 +140,7 @@ final class FitbitConnectionViewModel: NSObject {
                         fitbitLog.error("fitbit sign-in failed: \(error)")
                         self.state = .failed("Sign-in did not complete")
                     } else {
+                        self.state = .disconnected
                         self.refreshState()
                     }
                 }
@@ -136,6 +154,7 @@ final class FitbitConnectionViewModel: NSObject {
 
     /// Matches the redirect to the attempt that issued it, then exchanges.
     func handle(_ url: URL) async {
+        guard active, sessions.load() != nil else { return }
         guard let state = FitbitOAuth.state(in: url) else {
             self.state = .failed("Sign-in did not complete")
             return
@@ -151,9 +170,11 @@ final class FitbitConnectionViewModel: NSObject {
         do {
             let code = try FitbitOAuth.code(from: url, expectedState: attempt.state)
             try await exchange(code: code, verifier: attempt.verifier)
+            guard active, sessions.load() != nil else { return }
             pending.clearPending()
-            UserDefaults.standard.set(true, forKey: connectedKey)
+            defaults.set(true, forKey: connectedKey)
             self.state = .connected(lastSyncedDays: nil)
+            await syncIfDue(force: true)
         } catch FitbitAuthError.denied {
             // The user said no. That is an answer, not an error.
             self.state = .disconnected
@@ -187,13 +208,60 @@ final class FitbitConnectionViewModel: NSObject {
         }
     }
 
-    func disconnect() {
-        // The credential lives on the server, so forgetting it locally is only
-        // half the job. The server-side revoke lands with the sync function.
-        UserDefaults.standard.set(false, forKey: connectedKey)
-        pending.clearPending()
-        state = .disconnected
+    func syncIfDue(force: Bool = false) async {
+        guard active, !isSyncing, let context,
+              let endpoint = AppConfig.fitbitSyncEndpoint,
+              let token = sessions.load()?.accessToken,
+              force || SyncStalenessPolicy.shouldSync(lastSync: lastAttemptAt) else { return }
+        if case .connecting = state { return }
+        isSyncing = true
+        lastAttemptAt = .now
+        defer { isSyncing = false }
+        let sync = FitbitSync(endpoint: endpoint,
+            derivation: FitbitDerivation(store: MetricsStore(context: context)),
+            archive: WhoopArchive(context: context))
+        do {
+            let days = try await sync.sync(token: token)
+            guard active else { return }
+            defaults.set(true, forKey: connectedKey)
+            state = .connected(lastSyncedDays: days)
+        } catch FitbitSyncError.notConnected {
+            defaults.set(false, forKey: connectedKey)
+            refreshState()
+        } catch FitbitSyncError.reauthenticationRequired {
+            state = .needsReauth
+        } catch FitbitSyncError.partial {
+            defaults.set(true, forKey: connectedKey)
+            state = .connected(lastSyncedDays: nil)
+        } catch {
+            // Preserve the last known link during an outage or refresh lock.
+            refreshState()
+        }
     }
+
+    func disconnect() {
+        guard active, let endpoint = AppConfig.fitbitSyncEndpoint,
+              let token = sessions.load()?.accessToken else { return }
+        webSession?.cancel()
+        Task {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "DELETE"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            do {
+                let (_, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                    throw FitbitConnectionError.exchangeFailed
+                }
+                guard active else { return }
+                defaults.set(false, forKey: connectedKey)
+                pending.clearPending()
+                state = .disconnected
+            } catch {
+                state = .failed("Could not disconnect. Try again.")
+            }
+        }
+    }
+
 }
 
 enum FitbitConnectionError: Error {

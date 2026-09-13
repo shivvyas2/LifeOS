@@ -17,6 +17,8 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
     public let dueDate: Date?
     public let status: PlanStatus
     public let updatedAt: Date
+    public let createdAt: Date
+    public let openedAt: Date?
     public let isFavorite: Bool
     public let isArchived: Bool
     public let doneCount: Int
@@ -29,7 +31,8 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
         kind: NoteKind, bucket: NoteBucket, folderID: UUID?, folderName: String?,
         entryDate: Date?, dueDate: Date?, status: PlanStatus,
         updatedAt: Date, isFavorite: Bool, isArchived: Bool,
-        doneCount: Int, taskCount: Int, hasInk: Bool, linkCount: Int
+        doneCount: Int, taskCount: Int, hasInk: Bool, linkCount: Int,
+        createdAt: Date? = nil, openedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -44,6 +47,8 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
         self.dueDate = dueDate
         self.status = status
         self.updatedAt = updatedAt
+        self.createdAt = createdAt ?? updatedAt
+        self.openedAt = openedAt
         self.isFavorite = isFavorite
         self.isArchived = isArchived
         self.doneCount = doneCount

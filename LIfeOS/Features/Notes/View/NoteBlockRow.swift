@@ -148,7 +148,7 @@ struct NoteBlockRow: View {
     /// Only the focused empty block explains itself. Placeholders on every
     /// empty row at once is what makes a fresh page look like a form.
     private var placeholder: String {
-        guard isFocused, block.isEmpty else { return "" }
+        guard isFocused || index == 0, block.isEmpty else { return "" }
         switch block.kind {
         case .heading1, .heading2, .heading3: return "Heading"
         case .todo:     return "To-do"
@@ -156,7 +156,7 @@ struct NoteBlockRow: View {
         case .code:     return "Code"
         case .callout:  return "Callout"
         case .bulleted, .numbered: return "List"
-        default:        return "Type '/' for blocks, '[[' to link a page"
+        default:        return "Start writing, or type / for blocks"
         }
     }
 }

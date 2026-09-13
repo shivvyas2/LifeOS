@@ -10,7 +10,8 @@ enum CalendarAccessState: Equatable {
     case notDetermined, denied, authorized
 
     static var current: CalendarAccessState {
-        switch EKEventStore.authorizationStatus(for: .event) {
+        guard UserDefaults.currentAccount.bool(forKey: AccountDeviceAccess.calendarKey) else { return .notDetermined }
+        return switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: .authorized
         case .notDetermined: .notDetermined
         default: .denied

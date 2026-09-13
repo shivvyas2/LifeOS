@@ -15,10 +15,12 @@ final class AuthStubURLProtocol: URLProtocol {
 
     nonisolated(unsafe) static var replies: [Reply] = []
     nonisolated(unsafe) static var requestCount = 0
+    nonisolated(unsafe) static var onRequest: (@Sendable () -> Void)?
 
     static func reset() {
         replies = []
         requestCount = 0
+        onRequest = nil
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -26,6 +28,7 @@ final class AuthStubURLProtocol: URLProtocol {
 
     override func startLoading() {
         Self.requestCount += 1
+        Self.onRequest?()
         let reply = Self.replies.isEmpty ? Reply.status(500, "{}") : Self.replies.removeFirst()
 
         switch reply {
@@ -82,6 +85,23 @@ final class AuthStubURLProtocol: URLProtocol {
         {"access_token":"\#(access)","refresh_token":"\#(refresh)",
          "expires_in":3600,"user":\#(userJSON)}
         """#
+    }
+
+    @Test func logoutDuringRefreshCannotResurrectTheSession() async {
+        let store = InMemoryAuthSessionStore(session: session(expiringIn: -60))
+        let refresher = makeRefresher(store: store)
+        AuthStubURLProtocol.replies = [.ok(refreshBody(access: "new", refresh: "new-refresh", user: "user-1"))]
+        AuthStubURLProtocol.onRequest = { store.clear() }
+        #expect(await refresher.restore() == .signedOut)
+        #expect(store.load() == nil)
+    }
+
+    @Test func aRefreshCannotReplaceTheAccountIdentity() async {
+        let store = InMemoryAuthSessionStore(session: session(expiringIn: -60))
+        let refresher = makeRefresher(store: store)
+        AuthStubURLProtocol.replies = [.ok(refreshBody(access: "other", refresh: "other-refresh", user: "user-2"))]
+        #expect(await refresher.restore() == .rejected)
+        #expect(store.load() == nil)
     }
 
     // MARK: - Nothing to restore

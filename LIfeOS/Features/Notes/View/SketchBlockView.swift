@@ -21,6 +21,8 @@ struct SketchBlockView: View {
     @State private var acceptsFinger = false
     @State private var isActive = false
     @State private var dragHeight: Double?
+    @State private var confirmClear = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var height: Double { dragHeight ?? block.resolvedSketchHeight }
 
@@ -60,6 +62,10 @@ struct SketchBlockView: View {
             resizeHandle
         }
         .padding(.vertical, 6)
+        .onAppear { acceptsFinger = sizeClass == .compact }
+        .confirmationDialog("Clear this sketch?", isPresented: $confirmClear) {
+            Button("Clear sketch", role: .destructive) { onDrawing(nil) }
+        }
     }
 
     private var prompt: some View {
@@ -81,17 +87,17 @@ struct SketchBlockView: View {
             } label: {
                 Image(systemName: acceptsFinger ? "hand.draw.fill" : "hand.draw")
                     .font(LifeOSType.caption.weight(.semibold))
-                    .frame(width: 26, height: 26)
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel(acceptsFinger ? "Draw with pencil only" : "Draw with a finger too")
 
             if !block.isBlankSketch {
                 Button {
-                    onDrawing(nil)
+                    confirmClear = true
                 } label: {
                     Image(systemName: "eraser")
                         .font(LifeOSType.caption.weight(.semibold))
-                        .frame(width: 26, height: 26)
+                        .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("Clear sketch")
             }
@@ -99,7 +105,7 @@ struct SketchBlockView: View {
         .buttonStyle(.plain)
         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         .padding(6)
-        .background(Capsule().fill(LifeOSTokens.cardSurface.resolve(scheme).opacity(0.9)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
         .padding(6)
         .hoverEffect(.highlight)
     }
@@ -173,9 +179,16 @@ private struct BlockCanvasView: UIViewRepresentable {
             context.coordinator.lastWritten = nil
         }
 
-        if isActive {
-            NoteToolPicker.shared.show(for: canvas)
+        if isActive != context.coordinator.wasActive {
+            context.coordinator.wasActive = isActive
+            if isActive { NoteToolPicker.shared.show(for: canvas) }
+            else { NoteToolPicker.shared.hide(for: canvas) }
         }
+    }
+
+    static func dismantleUIView(_ canvas: PKCanvasView, coordinator: Coordinator) {
+        NoteToolPicker.shared.release(canvas)
+        canvas.delegate = nil
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -184,10 +197,12 @@ private struct BlockCanvasView: UIViewRepresentable {
         var parent: BlockCanvasView
         weak var canvas: PKCanvasView?
         var lastWritten: Data?
+        var wasActive = false
 
         init(_ parent: BlockCanvasView) { self.parent = parent }
 
         func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            NoteToolPicker.shared.show(for: canvasView)
             parent.onActivate()
         }
 

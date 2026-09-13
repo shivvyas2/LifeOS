@@ -92,11 +92,13 @@ final class CoachViewModel {
     var needsAppleIntelligence = false
 
     private var context: ModelContext?
+    private var isSending = false
+    private let accountSessions = KeychainAuthSessionStore()
 
     /// Whether a session exists, read at the moment of failure rather than
     /// held: it is only ever consulted to choose which sentence to show, and
     /// a cached copy would tell a user who just signed in to sign in again.
-    private var isSignedIn: Bool { KeychainAuthSessionStore().load() != nil }
+    private var isSignedIn: Bool { accountSessions.load() != nil }
     /// The cloud tier, when the project is configured for it.
     ///
     /// `nil` is a real shipping state, not a stub: with no Supabase URL the
@@ -107,8 +109,9 @@ final class CoachViewModel {
     private let router: CoachRouter = {
         var remote: (any Engine)?
         if let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
+            let sessions = KeychainAuthSessionStore()
             remote = RemoteEngine(baseURL: url, anonKey: key, accessToken: {
-                KeychainAuthSessionStore().load()?.accessToken
+                sessions.load()?.accessToken
             })
         }
         return CoachRouter(
@@ -123,7 +126,8 @@ final class CoachViewModel {
     /// which is global: the coach and the calendar assistant share one store,
     /// and reusing whichever id was written last would let each of them read
     /// the other's turns as its own history.
-    private let conversationID = UUID()
+    private var conversationID = UUID()
+    private let defaults = UserDefaults.currentAccount
 
     /// The cloud tier of the conversation, or nil when the project is not
     /// configured. Built by `ChatTier` so the calendar assistant and this
@@ -141,6 +145,21 @@ final class CoachViewModel {
 
     func attach(_ context: ModelContext) {
         self.context = context
+        if let saved = defaults.string(forKey: "coach.conversationID"), let id = UUID(uuidString: saved) {
+            conversationID = id
+        } else {
+            defaults.set(conversationID.uuidString, forKey: "coach.conversationID")
+        }
+        let saved = (try? ChatStore(context: context).recent(conversationID: conversationID)) ?? []
+        history = []
+        var question = ""
+        for message in saved {
+            if message.role == .user { question = message.text }
+            else if message.role == .assistant {
+                history.append(LifoTurn(id: message.id, question: question, answer: message.text))
+                question = ""
+            }
+        }
         speech.onPartial = { [weak self] text in
             self?.liveTranscript = text
         }
@@ -181,6 +200,7 @@ final class CoachViewModel {
 
     func disappear() {
         speech.stop()
+        stopSpeaking()
         if phase == .listening { phase = .idle }
     }
 
@@ -287,7 +307,9 @@ final class CoachViewModel {
 
     func send(_ text: String) async {
         let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty else { return }
+        guard !question.isEmpty, !isSending else { return }
+        isSending = true
+        defer { isSending = false }
         speech.stop()
         stopSpeaking()
         liveTranscript = question
@@ -359,6 +381,8 @@ final class CoachViewModel {
                         }
                     }
                 )
+                guard let owner = accountSessions.load()?.userID,
+                      owner == UserDefaults.standard.string(forKey: "accounts.current") else { return }
                 let sent = SentContext(
                     text: reply.tier == .cloud ? cloud : onDevice,
                     tier: reply.tier
@@ -371,7 +395,7 @@ final class CoachViewModel {
                 pendingSent = nil
                 phase = .answered
                 status = "LIFO"
-                speak(reply.text)
+                speak(CoachResponse(reply.text).spokenText)
             } catch RemoteEngineError.refused(let reason) {
                 fail(reason)
             } catch RemoteEngineError.exhausted {
@@ -412,6 +436,8 @@ final class CoachViewModel {
         """
         You answer questions about one person's life: their health metrics, \
         money, and life-sector scores.
+
+        \(CoachPresentation.instruction)
 
         Here is what their data shows:
 

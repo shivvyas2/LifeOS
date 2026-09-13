@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import Integrations
+import Persistence
 
 typealias SupabaseAuthChannel = SupabaseAuth.Channel
 
@@ -34,7 +35,7 @@ final class OnboardingViewModel {
     /// account is open is decided above this view model and it needs the id.
     private(set) var session: AuthSession?
 
-    private let store: any AuthSessionStoring
+    private var store: any AuthSessionStoring
     /// Nil when the project is not configured, which is a development state
     /// rather than a user one: signup still completes and the profile simply
     /// stays on the device until there is somewhere to put it.
@@ -51,7 +52,16 @@ final class OnboardingViewModel {
 
     init(store: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.store = store
-        self.isSignedIn = store.load() != nil
+        let restored = store.load()
+        self.isSignedIn = restored != nil
+        self.session = restored
+        if let restored {
+            if UserDefaults.currentAccount.string(forKey: "onboarding.step") == "connections" {
+                step = .connections
+            } else {
+                step = restored.hasProfile ? .signedIn : .profile
+            }
+        }
         if let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
             auth = SupabaseAuth(baseURL: url, anonKey: key)
         }
@@ -168,7 +178,8 @@ final class OnboardingViewModel {
 
     private func performRestore(_ auth: SupabaseAuth) async -> Bool {
         switch await SessionRefresher(auth: auth, store: store).restore() {
-        case .active:
+        case .active(let refreshed):
+            session = refreshed
             isSignedIn = true
         case .signedOut:
             isSignedIn = false
@@ -216,7 +227,10 @@ final class OnboardingViewModel {
                 destination: draft.destination,
                 channel: draft.channel
             )
-            try store.save(session)
+            try AccountStore().add(Account(userID: session.userID,
+                label: session.email ?? session.phone ?? "Account"), session: session)
+            AccountStore().clearLegacySession()
+            store = KeychainAuthSessionStore(account: session.userID)
             self.session = session
             isSignedIn = true
             // The only thing that separates a returning user from a new one,
@@ -278,19 +292,24 @@ final class OnboardingViewModel {
                 heightCM: draft.heightCM,
                 gender: draft.gender.stored
             )
+            UserDefaults.currentAccount.set("connections", forKey: "onboarding.step")
             step = .connections
         } catch let error as AuthError {
             authLog.error("profile update failed: \(String(describing: error), privacy: .public)")
             // The account exists either way; a failed profile write must not
             // strand the user at the last step of signup.
             errorMessage = error.readable
+            UserDefaults.currentAccount.set("connections", forKey: "onboarding.step")
             step = .connections
         } catch {
+            UserDefaults.currentAccount.set("connections", forKey: "onboarding.step")
             step = .connections
         }
     }
 
     func signOut() {
+        restoreTask?.cancel()
+        restoreTask = nil
         store.clear()
         session = nil
         isSignedIn = false

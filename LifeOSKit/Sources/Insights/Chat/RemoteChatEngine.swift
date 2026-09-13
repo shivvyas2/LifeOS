@@ -112,7 +112,7 @@ public struct RemoteChatEngine: ChatEngine {
             switch try ChatWire.reply(data: data, status: status) {
             case .text(let text):
                 return AssistantTurn.Reply(
-                    text: ResponseStyle.clean(text),
+                    text: CoachPresentation.clean(text, instructions: instructions),
                     toolSummaries: await invoker.toolSummaries(),
                     tier: .cloud
                 )
@@ -204,7 +204,7 @@ public struct RemoteChatEngine: ChatEngine {
                 switch event {
                 case .delta(let piece):
                     text += piece
-                    onPartial(ResponseStyle.clean(text))
+                    onPartial(CoachPresentation.clean(text, instructions: instructions))
                 case .refused(let reason):
                     throw RemoteEngineError.refused(reason)
                 case .done:
@@ -226,7 +226,7 @@ public struct RemoteChatEngine: ChatEngine {
         guard !text.isEmpty else { throw RemoteEngineError.unavailable }
 
         return AssistantTurn.Reply(
-            text: ResponseStyle.clean(text),
+            text: CoachPresentation.clean(text, instructions: instructions),
             toolSummaries: await invoker.toolSummaries(),
             tier: .cloud
         )

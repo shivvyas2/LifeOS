@@ -3,11 +3,7 @@ import UniformTypeIdentifiers
 import DesignSystem
 import Persistence
 
-/// One page on a shelf.
-///
-/// Drawn as a filled pastel tile rather than as a white card with a shadow: a
-/// grid of two dozen shadowed cards is two dozen offscreen passes, and the
-/// colour is doing the separating here anyway.
+/// A document row with a preview, filing context, and familiar page actions.
 struct NoteCard: View {
     let card: NoteCardSnapshot
     /// True when this card's page is the one showing in the detail column, so
@@ -24,44 +20,52 @@ struct NoteCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private var ink: Color { NoteAccentPalette.ink(card.accent, scheme) }
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 10) {
-                header
-                title
-                if !card.excerpt.isEmpty {
-                    Text(card.excerpt)
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(ink.opacity(0.68))
-                        .lineLimit(4)
-                        .multilineTextAlignment(.leading)
+            HStack(alignment: .top, spacing: 12) {
+                Group {
+                    if card.icon.isEmpty {
+                        Image(systemName: card.hasInk ? "pencil.and.outline" : "doc.text")
+                            .foregroundStyle(LifeOSTokens.accent)
+                    } else { Text(card.icon) }
+                }
+                .font(.title3).frame(width: 26, height: 28)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(card.title).font(.body.weight(.semibold)).lineLimit(2)
+                        if card.isFavorite {
+                            Image(systemName: "star.fill").font(.caption).foregroundStyle(LifeOSTokens.accent)
+                        }
+                    }
+                    if !card.excerpt.isEmpty {
+                        Text(card.excerpt).font(.subheadline)
+                            .foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    HStack(spacing: 8) {
+                        Text(card.folderName ?? card.bucket.title).lineLimit(1)
+                        if card.taskCount > 0 {
+                            Label("\(card.doneCount)/\(card.taskCount)", systemImage: "checkmark.circle")
+                        }
+                        Spacer(minLength: 0)
+                        Text(card.updatedAt, style: .date).lineLimit(1)
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                footer
             }
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(NoteAccentPalette.fill(card.accent, scheme))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            // The open card is ringed in its own ink rather
-                            // than the app accent: a grid of pastel cards with
-                            // one orange ring reads as an error state.
-                            .strokeBorder(
-                                isOpen ? ink.opacity(0.55) : NoteAccentPalette.edge(scheme),
-                                lineWidth: isOpen ? 2 : 1
-                            )
-                    )
-            )
+            .multilineTextAlignment(.leading)
+            .foregroundStyle(ink)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .padding(16)
+            .background(isOpen ? LifeOSTokens.accent.opacity(0.09) : .clear)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // Trackpad and Magic Keyboard are the iPad's other input, and a grid
         // that gives a pointer no feedback feels dead under one.
-        .hoverEffect(.lift)
+        .hoverEffect(.highlight)
         // Filing is what PARA is, so a card has to be movable. The payload is
         // the page's id, and every drop target parses it back.
         .draggable(NoteDragPayload(id: card.id)) {
@@ -89,67 +93,6 @@ struct NoteCard: View {
         .accessibilityHint(card.excerpt)
     }
 
-    /// The reference this is drawn from puts a year chip and a category on one
-    /// line above the title. The same two slots here carry whichever of date
-    /// and folder the page actually has, so the row never collapses to nothing.
-    private var header: some View {
-        HStack(spacing: 8) {
-            if let entryDate = card.entryDate {
-                Text(entryDate.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(LifeOSType.caption.weight(.semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(ink.opacity(0.10)))
-                    .foregroundStyle(ink.opacity(0.85))
-            }
-
-            Text(card.folderName ?? card.bucket.title)
-                .font(LifeOSType.caption.weight(.medium))
-                .foregroundStyle(ink.opacity(0.6))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-
-            if card.isFavorite {
-                Image(systemName: "star.fill")
-                    .font(LifeOSType.eyebrow.weight(.regular))
-                    .foregroundStyle(ink.opacity(0.7))
-            }
-        }
-    }
-
-    private var title: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if !card.icon.isEmpty {
-                Text(card.icon).font(LifeOSType.body)
-            }
-            Text(card.title)
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(ink)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-        }
-    }
-
-    private var footer: some View {
-        HStack(spacing: 12) {
-            if card.taskCount > 0 {
-                Label("\(card.doneCount)/\(card.taskCount)", systemImage: "checkmark.circle")
-                    .labelStyle(.titleAndIcon)
-            }
-            if card.linkCount > 0 {
-                Label("\(card.linkCount)", systemImage: "link")
-            }
-            if card.hasInk {
-                Image(systemName: "scribble")
-            }
-            Spacer(minLength: 0)
-            Text(card.updatedAt.formatted(.relative(presentation: .numeric)))
-                .lineLimit(1)
-        }
-        .font(LifeOSType.caption.weight(.medium))
-        .foregroundStyle(ink.opacity(0.62))
-    }
 }
 
 #Preview {

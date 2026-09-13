@@ -43,10 +43,16 @@ interface FitbitConnection {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  if (req.method !== "POST" && req.method !== "DELETE") return json({ error: "method_not_allowed" }, 405);
 
   const userID = await resolveUser(req);
   if (!userID) return json({ error: "unauthorized" }, 401);
+
+  if (req.method === "DELETE") {
+    const { error } = await serviceClient().from("fitbit_connections").delete().eq("user_id", userID);
+    if (error) return json({ error: "disconnect_failed" }, 500);
+    return json({ disconnected: true }, 200);
+  }
 
   let body: { days?: number };
   try {
@@ -57,10 +63,11 @@ Deno.serve(async (req: Request) => {
   const days = Math.min(Math.max(body.days ?? 30, 1), 365);
 
   const db = serviceClient();
-  const { data: connection } = await db
+  const { data: connection, error: readError } = await db
     .rpc("read_fitbit_connection", { p_user_id: userID })
     .maybeSingle<FitbitConnection>();
 
+  if (readError) return json({ error: "storage_unavailable" }, 503);
   if (!connection) return json({ error: "not_connected" }, 404);
   // A dead credential is not a retry. Nothing the server holds can be used
   // again, so the app is told to ask the user to sign in rather than being

@@ -202,11 +202,7 @@ struct LifoCoachScreen: View {
                         // The answer as it is written. No cursor and no
                         // per-character animation: the text arrives fast
                         // enough that animating it would slow it down.
-                        Text(model.answer)
-                            .font(LifeOSType.secondary)
-                            .foregroundStyle(LifoPalette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
+                        CoachResponseView(text: model.answer)
                     }
                 }
             }
@@ -225,11 +221,7 @@ struct LifoCoachScreen: View {
             if !question.isEmpty {
                 bubble(question, isQuestion: true)
             }
-            Text(answer)
-                .font(LifeOSType.secondary)
-                .foregroundStyle(LifoPalette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+            CoachResponseView(text: answer)
 
             if let sent {
                 sentView(sent)
@@ -355,8 +347,7 @@ struct LifoCoachScreen: View {
             List(model.history) { turn in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(turn.question).font(LifeOSType.label.weight(.semibold))
-                    Text(turn.answer).font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(.secondary)
+                    CoachResponseView(text: turn.answer)
                 }
                 .padding(.vertical, 4)
             }

@@ -555,7 +555,9 @@ public struct NotesStore {
             doneCount: progress.done,
             taskCount: progress.total,
             hasInk: document.drawingData?.isEmpty == false,
-            linkCount: NoteLinkScanner.links(in: blocks).count
+            linkCount: NoteLinkScanner.links(in: blocks).count,
+            createdAt: document.createdAt,
+            openedAt: document.openedAt
         )
     }
 }

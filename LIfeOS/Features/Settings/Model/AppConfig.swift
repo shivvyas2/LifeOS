@@ -42,7 +42,7 @@ enum AppConfig {
     }
 
     static var isFitbitConfigured: Bool {
-        fitbitClientID?.isEmpty == false && fitbitTokenEndpoint != nil
+        fitbitClientID?.isEmpty == false && fitbitRedirectURI != nil && fitbitTokenEndpoint != nil
     }
 
     /// The four Plaid functions live under here. The Plaid client id and

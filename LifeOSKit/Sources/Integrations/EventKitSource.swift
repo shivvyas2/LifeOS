@@ -8,24 +8,41 @@ public actor EventKitSource: CalendarSource {
     public nonisolated let source: CalendarEventSource = .eventKit
     private let store = EKEventStore()
 
-    public init() {}
+    private let defaults: UserDefaults
+    private let ownerID: String?
+
+    public init(defaults: UserDefaults = .currentAccount) {
+        self.defaults = defaults
+        self.ownerID = UserDefaults.standard.string(forKey: "accounts.current")
+    }
+
+    private var isCurrentAccount: Bool {
+        ownerID != nil && ownerID == UserDefaults.standard.string(forKey: "accounts.current")
+    }
 
     public var isAuthorized: Bool {
-        EKEventStore.authorizationStatus(for: .event) == .fullAccess
+        isCurrentAccount && AccountDeviceAccess.allowsCalendar(defaults: defaults,
+            systemAuthorized: EKEventStore.authorizationStatus(for: .event) == .fullAccess)
     }
 
     /// Presents the system prompt. Callers decide when; per the spec that is
     /// the agenda card's empty state, never launch.
     public func requestAccess() async throws -> Bool {
-        try await store.requestFullAccessToEvents()
+        guard isCurrentAccount else { return false }
+        let granted = try await store.requestFullAccessToEvents()
+        guard isCurrentAccount else { return false }
+        defaults.set(granted, forKey: AccountDeviceAccess.calendarKey)
+        return granted
     }
 
     public func events(from: Date, to: Date) async throws -> [CalendarEventSnapshot] {
+        guard isAuthorized else { throw CalendarSyncError.noWritableSource }
         let predicate = store.predicateForEvents(withStart: from, end: to, calendars: nil)
         return store.events(matching: predicate).compactMap { snapshot(of: $0) }
     }
 
     public func create(_ draft: CalendarEventDraft) async throws -> CalendarEventSnapshot {
+        guard isAuthorized else { throw CalendarSyncError.noWritableSource }
         let event = EKEvent(eventStore: store)
         event.calendar = store.defaultCalendarForNewEvents
         apply(draft, to: event)
@@ -35,6 +52,7 @@ public actor EventKitSource: CalendarSource {
     }
 
     public func update(sourceID: String, with draft: CalendarEventDraft) async throws -> CalendarEventSnapshot {
+        guard isAuthorized else { throw CalendarSyncError.noWritableSource }
         let event = try existing(sourceID)
         apply(draft, to: event)
         try store.save(event, span: .thisEvent, commit: true)
@@ -43,6 +61,7 @@ public actor EventKitSource: CalendarSource {
     }
 
     public func delete(sourceID: String) async throws {
+        guard isAuthorized else { throw CalendarSyncError.noWritableSource }
         try store.remove(try existing(sourceID), span: .thisEvent, commit: true)
     }
 

@@ -1,119 +1,190 @@
 import SwiftUI
 import DesignSystem
-import Integrations
 
-/// The pitch. Four pages, one per life domain, on the same gradient canvas the
-/// rest of the app uses, so the product explains itself by looking like itself.
+/// A single persistent 3D scene accompanies the four-page introduction.
 struct IntroScreen: View {
     let onStart: () -> Void
     var onSignIn: (() -> Void)?
     @State private var page = 0
+    @State private var visible = false
+    @State private var measuredCopyHeight: CGFloat = 206
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .largeTitle) private var headlineSize = 36
+    @ScaledMetric(relativeTo: .body) private var copyHeight = 206
+
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var canvas: Color { LifeOSTokens.canvas.resolve(scheme) }
+    private var pageHeight: CGFloat { max(copyHeight, measuredCopyHeight) }
+    private let pages = IntroPage.all
 
     var body: some View {
-        let pages = IntroPage.all
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                    hero(height: min(320, max(180, geometry.size.height - pageHeight - 260)))
 
-        GradientCanvas(hue: pages[page].hue) {
-            VStack(spacing: 0) {
-                TabView(selection: $page) {
-                    ForEach(pages) { item in
-                        pageBody(item)
-                            .tag(item.id)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                pageDots(count: pages.count)
-                    .padding(.bottom, Space.x3)
-
-                VStack(spacing: Space.x1) {
-                    PrimaryButton(page == pages.count - 1 ? "Get started" : "Continue") {
-                        if page == pages.count - 1 {
-                            onStart()
-                        } else {
-                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { page += 1 }
+                    if dynamicTypeSize.isAccessibilitySize {
+                        // A continuous reading surface at larger sizes avoids a
+                        // nested pager competing with vertical accessibility scrolling.
+                        pageBody(pages[page])
+                    } else {
+                        TabView(selection: $page) {
+                            ForEach(pages) { item in
+                                pageBody(item)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                    .tag(item.id)
+                            }
                         }
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                        .frame(height: pageHeight)
                     }
-                    if let onSignIn {
-                        Button("I already have an account") { onSignIn() }
-                            .font(LifeOSType.rowTitle)
-                            .foregroundStyle(LifeOSTokens.accent)
-                            .frame(height: Space.x5)
-                    }
-                    // Skips the rest of the carousel, not the sign-in. There
-                    // is no way past that any more: a store belongs to an
-                    // account, so there is nowhere for a signed-out person's
-                    // data to live.
-                    Button("Skip") { onStart() }
-                        .font(LifeOSType.secondary.weight(.medium))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .frame(height: Space.x5)
+
+                    pageDots
+                        .padding(.top, Space.x1)
+                        .padding(.bottom, Space.x2)
                 }
-                .padding(.horizontal, Space.x3)
-                .padding(.bottom, Space.x4)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
+            .scrollIndicators(.hidden)
+            .safeAreaInset(edge: .bottom, spacing: 0) { actions }
+            .background(canvas.ignoresSafeArea())
         }
-        .animation(.easeInOut(duration: 0.4), value: page)
+        .onChange(of: dynamicTypeSize) { _, _ in measuredCopyHeight = 0 }
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
+        .sensoryFeedback(.selection, trigger: page)
+    }
+
+    private var header: some View {
+        HStack {
+            HStack(spacing: Space.x1) {
+                Image(systemName: "circle.hexagongrid.fill")
+                    .foregroundStyle(LifeOSTokens.accent)
+                Text("LifeOS")
+                    .tracking(-0.5)
+                    .fixedSize()
+            }
+            .font(.title3.weight(.bold))
+            .accessibilityElement(children: .combine)
+            Spacer()
+            Button("Skip") { onStart() }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityHint("Go to account setup")
+        }
+        .foregroundStyle(ink)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .padding(.horizontal, Space.x4)
+        .padding(.top, Space.x1)
+    }
+
+    private func hero(height: CGFloat) -> some View {
+        ZStack(alignment: .bottom) {
+            Ellipse()
+                .fill(ink.opacity(scheme == .dark ? 0.12 : 0.08))
+                .frame(width: 154, height: 18)
+                .blur(radius: 12)
+                .padding(.bottom, height * 0.09)
+            OnboardingCat(page: page, isActive: visible && scenePhase == .active)
+                .frame(maxWidth: 420)
+                .accessibilityHidden(true)
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
     }
 
     private func pageBody(_ item: IntroPage) -> some View {
-        VStack(spacing: Space.x5) {
-            Spacer(minLength: Space.x4)
+        VStack(spacing: Space.x2) {
+            Text(item.category)
+                .font(.caption.weight(.medium))
+                .tracking(2)
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .padding(.bottom, Space.half)
 
-            // The dot grid is the app's central motif, so the intro animates it
-            // rather than showing an unrelated illustration.
-            //
-            // The first page adds the cat in front of it: the grid is the
-            // product, but a screen that opens on a bare grid opens on a
-            // spreadsheet. The cat greets, the grid explains, and putting the
-            // grid behind rather than beside keeps the page to one focal point.
-            Group {
-                if item.id == 0 {
-                    // The cat IS the grid on this page: it is drawn from the
-                    // same dots at the same pitch, waving. A `DotBloom` behind
-                    // it was two dot fields on different pitches fighting, and
-                    // the loose dots read as artefacts on the cat's body.
-                    ScanlineCat(style: .dots)
-                        .frame(maxWidth: 232)
-                } else {
-                    DotBloom(accentEvery: item.id + 5)
-                        .id(item.id)      // restart the bloom on each page
-                }
-            }
-            .frame(maxHeight: item.id == 0 ? 224 : 180)
+            Text(item.headline)
+                .font(.system(size: headlineSize, weight: .bold))
+                .tracking(-1.2)
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
 
-            VStack(alignment: .leading, spacing: Space.x2) {
-                StaggeredAppear(index: 1) {
-                    Text(item.headline)
-                        .font(LifeOSType.display)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                StaggeredAppear(index: 2) {
-                    Text(item.body)
-                        .font(LifeOSType.secondary)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Space.x3)
-
-            Spacer(minLength: 0)
+            Text(item.body)
+                .font(.subheadline)
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, Space.x4)
+        .frame(maxWidth: 480)
+        .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            if height > measuredCopyHeight { measuredCopyHeight = height }
         }
     }
 
-    private func pageDots(count: Int) -> some View {
-        HStack(spacing: Space.x1) {
-            ForEach(0..<count, id: \.self) { index in
-                Capsule()
-                    .fill(index == page
-                          ? LifeOSTokens.primaryText.resolve(scheme)
-                          : LifeOSTokens.dotMissed.resolve(scheme))
-                    .frame(width: index == page ? Space.x3 : Space.x1, height: Space.x1)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: page)
+    private var pageDots: some View {
+        HStack(spacing: 0) {
+            ForEach(pages) { item in
+                Button { select(item.id) } label: {
+                    Circle()
+                        .fill(page == item.id ? LifeOSTokens.accent : LifeOSTokens.dotMissed.resolve(scheme))
+                        .frame(width: 6, height: 6)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("\(item.category), page \(item.id + 1) of \(pages.count)")
+                .accessibilityAddTraits(page == item.id ? [.isSelected] : [])
             }
         }
+    }
+
+    private var actions: some View {
+        VStack(spacing: Space.x1) {
+            Button {
+                if page == pages.count - 1 { onStart() }
+                else { select(page + 1) }
+            } label: {
+                HStack {
+                    Text(page == pages.count - 1 ? "Let’s get started" : "Continue")
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .foregroundStyle(LifeOSTokens.accent)
+                }
+                .font(.body.weight(.semibold))
+                .padding(.horizontal, Space.x3)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .foregroundStyle(canvas)
+                .background(ink, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+
+            .accessibilityHint(page == pages.count - 1 ? "Go to account setup" : "Next introduction page")
+
+            if let onSignIn {
+                Button(action: onSignIn) {
+                    (Text("Already have an account? ").foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                     + Text("Sign in").foregroundStyle(LifeOSTokens.accent).bold())
+                        .font(.subheadline)
+                        .frame(minHeight: 44)
+                }
+            }
+        }
+        .padding(.horizontal, Space.x4)
+        .padding(.top, Space.x2)
+        .padding(.bottom, Space.x2)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
+        .background(canvas)
+    }
+
+    private func select(_ index: Int) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { page = index }
     }
 }
 

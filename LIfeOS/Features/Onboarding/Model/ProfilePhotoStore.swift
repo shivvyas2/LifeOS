@@ -163,6 +163,7 @@ enum ProfileStore {
 /// second only when there is a picture and it has changed, and it is what
 /// makes the server the source of truth rather than a place a copy was once
 /// sent to.
+@MainActor
 enum ProfileSync {
     private static let log = Logger(subsystem: "com.shivvyas.lifeos", category: "profile")
 
@@ -177,6 +178,7 @@ enum ProfileSync {
             userID: session.userID, accessToken: session.accessToken
         ) else { return }
 
+        guard KeychainAuthSessionStore().load()?.userID == session.userID else { return }
         ProfileStore.save(remote)
 
         guard let path = remote.avatarPath else {
@@ -199,6 +201,7 @@ enum ProfileSync {
             path: path, accessToken: session.accessToken
         )) ?? .unknown
 
+        guard KeychainAuthSessionStore().load()?.userID == session.userID else { return }
         guard ProfileClient.shouldDownloadAvatar(
             stamp: stamp,
             recorded: ProfilePhotoStore.stamp(),
@@ -208,6 +211,7 @@ enum ProfileSync {
         if let data = try? await client.downloadAvatar(
             path: path, accessToken: session.accessToken
         ) {
+            guard KeychainAuthSessionStore().load()?.userID == session.userID else { return }
             // Saving clears the stamp, so it is recorded after, and only when
             // the listing actually gave one. Recording nothing here means the
             // next launch checks again rather than believing it is current.

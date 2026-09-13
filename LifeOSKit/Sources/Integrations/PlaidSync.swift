@@ -39,6 +39,13 @@ public struct PlaidSync {
         }
         let response = try await api.sync(cursors: cursors)
 
+        // The endpoint returns every account-owned item, including failed ones.
+        // A link removed on another device must disappear from this cache too.
+        let remoteIDs = Set(response.items.map(\.item_id))
+        for item in items.items() where !remoteIDs.contains(item.itemID) {
+            items.remove(itemID: item.itemID)
+        }
+
         var outcome = PlaidSyncOutcome()
         for delta in response.items {
             // Remember the connection before anything else, so a bank that is

@@ -50,6 +50,8 @@ public struct FitbitSync {
 
         let envelope = try JSONDecoder().decode(SyncResponse.self, from: data)
 
+        if envelope.retry == true { throw FitbitSyncError.retryLater }
+
         // A dead credential is not a retry. Nothing the server holds can be
         // used again, so the app stops and asks the user to sign in rather
         // than spinning against a token nothing can revive.
@@ -90,11 +92,13 @@ public struct FitbitSync {
         let payloads: FitbitPayloads
         let failures: [String: String]
         let needs_reauth: Bool
+        let retry: Bool?
     }
 }
 
 public enum FitbitSyncError: Error, Equatable {
     case notConnected
+    case retryLater
     case reauthenticationRequired
     /// Some collections landed and some did not. The days that arrived are
     /// already written; this names what is missing.

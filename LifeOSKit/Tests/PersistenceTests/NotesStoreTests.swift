@@ -9,6 +9,21 @@ import SwiftData
         return NotesStore(context: ModelContext(container))
     }
 
+    @Test func librarySnapshotsKeepCreationEditAndOpenDatesSeparate() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Reading", bucket: .projects)
+        let created = Date(timeIntervalSince1970: 100)
+        let edited = Date(timeIntervalSince1970: 200)
+        let opened = Date(timeIntervalSince1970: 300)
+        page.createdAt = created
+        page.updatedAt = edited
+        page.openedAt = opened
+        let card = try #require(store.cards(bucket: .projects).first)
+        #expect(card.createdAt == created)
+        #expect(card.updatedAt == edited)
+        #expect(card.openedAt == opened)
+    }
+
     @Test func aNewPageLandsOnTheShelfItWasMadeOn() throws {
         let store = try makeStore()
         try store.createDocument(title: "Marathon", bucket: .projects)

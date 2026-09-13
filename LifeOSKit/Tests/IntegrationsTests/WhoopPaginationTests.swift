@@ -146,13 +146,27 @@ final class StubURLProtocol: URLProtocol {
             accessToken: "stale", refreshToken: "refresh",
             expiresAt: .now.addingTimeInterval(-3_600)      // forces a refresh
         ))
-        StubURLProtocol.statuses = [401]                     // the refresh call itself
+        StubURLProtocol.statuses = [502]
+        StubURLProtocol.bodies = [#"{"error":"exchange_failed","status":401}"#]
 
         let sync = try makeSync(session: session, tokens: tokens)
         await #expect(throws: WhoopSyncError.reauthenticationRequired) {
             try await sync.sync()
         }
         #expect(tokens.load() == nil, "a dead refresh token must clear the connection")
+    }
+
+    @Test @MainActor func anExpiredAppSessionKeepsTheWhoopConnection() async throws {
+        let session = stubSession()
+        let tokens = InMemoryWhoopTokenStore(tokens: WhoopTokens(
+            accessToken: "stale", refreshToken: "refresh",
+            expiresAt: .now.addingTimeInterval(-3_600)
+        ))
+        StubURLProtocol.statuses = [401]
+        StubURLProtocol.bodies = [#"{"error":"unauthorized"}"#]
+        let sync = try makeSync(session: session, tokens: tokens)
+        await #expect(throws: WhoopTokenExchangeError.self) { try await sync.sync() }
+        #expect(tokens.load()?.refreshToken == "refresh")
     }
 
     /// OAuth servers commonly report an expired or rotated refresh token as

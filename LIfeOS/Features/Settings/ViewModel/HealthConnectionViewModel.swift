@@ -48,6 +48,14 @@ final class HealthConnectionViewModel {
     private let reader: HealthKitReader
     private let defaults: UserDefaults
     private var context: ModelContext?
+    private var active = true
+
+    func deactivate() {
+        active = false
+        running?.cancel()
+        stopWatching()
+        context = nil
+    }
     /// The in-flight sync, so a launch task and a foreground transition
     /// arriving together do one pass rather than two.
     private var running: Task<Void, Never>?
@@ -139,9 +147,11 @@ final class HealthConnectionViewModel {
     /// Asks for permission, then reads. The prompt only ever appears once;
     /// after that this is just a sync.
     func connect() async {
+        guard active else { return }
         guard reader.isAvailable else { state = .unavailable; return }
         do {
             try await reader.requestAuthorisation()
+            guard active else { return }
             defaults.set(true, forKey: Self.hasAskedKey)
             await decideCycleDefault()
         } catch {
@@ -158,6 +168,7 @@ final class HealthConnectionViewModel {
     /// Re-reads the window since the last sync. Safe to call on every launch:
     /// a sync minutes old costs one day of queries.
     func syncIfConnected() async {
+        guard active else { return }
         guard reader.isAvailable, defaults.bool(forKey: Self.hasAskedKey) else { return }
         await sync()
     }

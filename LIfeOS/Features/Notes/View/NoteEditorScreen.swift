@@ -23,6 +23,9 @@ struct NoteEditorScreen: View {
     /// layout the page is the last of three, and only it knows how much it got.
     @State private var editorWidth: CGFloat = 0
     @State private var showEmojiPicker = false
+    @State private var drawWithFinger = false
+    @State private var confirmClearDrawing = false
+    @Environment(\.scenePhase) private var scenePhase
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -61,6 +64,17 @@ struct NoteEditorScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if model.isInking {
+                    HStack {
+                        Label(layout.isRegular ? "Pencil drawing" : "Drawing", systemImage: "pencil.tip")
+                        Spacer()
+                        if layout.isRegular {
+                            Toggle("Draw with finger", isOn: $drawWithFinger).toggleStyle(.button)
+                        }
+                    }
+                    .font(.caption).foregroundStyle(LifeOSTokens.accent)
+                    .padding(.vertical, 12)
+                }
                 pageBody
                 if !model.backlinks.isEmpty, !showsInspector { backlinks }
                 Spacer(minLength: 120)
@@ -70,7 +84,7 @@ struct NoteEditorScreen: View {
             .padding(.horizontal, layout.gutter)
             .padding(.top, 12)
         }
-        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .background(LifeOSTokens.canvas.resolve(scheme))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if model.focusedBlockID != nil {
@@ -93,7 +107,14 @@ struct NoteEditorScreen: View {
         }
         .toolbar { toolbar }
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { model.flush() }
+        .onDisappear { model.isInking = false; model.flush() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { model.flush() }
+        }
+        .confirmationDialog("Clear the drawing on this page?", isPresented: $confirmClearDrawing) {
+            Button("Clear drawing", role: .destructive) { model.setDrawing(nil) }
+        }
+        .tint(LifeOSTokens.accent)
         // Escape backs out one layer at a time rather than closing everything
         // at once: the block menu, then the link picker, then the keyboard.
         // Closing the page on the first press would lose someone mid-sentence.
@@ -116,22 +137,14 @@ struct NoteEditorScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Button {
-                    showEmojiPicker = true
-                } label: {
-                    Text(model.icon.isEmpty ? "\u{1F4C4}" : model.icon)
-                        .font(LifeOSType.display.weight(.regular))
-                        .opacity(model.icon.isEmpty ? 0.35 : 1)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Page icon")
-
-                Spacer(minLength: 0)
+            if !model.icon.isEmpty {
+                Button { showEmojiPicker = true } label: {
+                    Text(model.icon).font(.largeTitle).frame(minWidth: 44, minHeight: 44)
+                }.buttonStyle(.plain).accessibilityLabel("Change page icon")
             }
 
             TextField("Untitled", text: $model.title, axis: .vertical)
-                .font(layout.isRegular ? LifeOSType.display : LifeOSType.screenTitle)
+                .font(.system(.largeTitle, design: .default, weight: .bold))
                 .foregroundStyle(primary)
                 .textFieldStyle(.plain)
                 .lineLimit(1...3)
@@ -146,49 +159,32 @@ struct NoteEditorScreen: View {
     }
 
     private var metaRow: some View {
-        HStack(spacing: 10) {
-            if let entryDate = model.entryDate {
-                chip(entryDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()),
-                     systemImage: "calendar")
-            }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { metadata }
+            VStack(alignment: .leading, spacing: 8) { metadata }
+        }
+        .font(.caption)
+        .foregroundStyle(secondary)
+    }
 
+    @ViewBuilder private var metadata: some View {
+        Text(model.bucket.title)
+        if let date = model.entryDate {
+            Text(date, format: .dateTime.month(.abbreviated).day())
+        }
+        if model.kind == .task {
             Menu {
                 ForEach(PlanStatus.allCases, id: \.self) { status in
                     Button(status.title) { model.setStatus(status) }
                 }
-            } label: {
-                chip(model.status.title, systemImage: "circle.dotted")
-            }
-
-            Menu {
-                ForEach(NoteAccent.allCases) { accent in
-                    Button(accent.title) { model.setAccent(accent) }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(NoteAccentPalette.dot(model.accent, scheme))
-                        .frame(width: 9, height: 9)
-                    Text(model.accent.title)
-                }
-                .font(LifeOSType.label)
-                .foregroundStyle(secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().strokeBorder(secondary.opacity(0.28), lineWidth: 1))
-            }
-
-            Spacer(minLength: 0)
+            } label: { Label(model.status.title, systemImage: "circle.dotted") }
         }
-    }
-
-    private func chip(_ text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(LifeOSType.label)
-            .foregroundStyle(secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().strokeBorder(secondary.opacity(0.28), lineWidth: 1))
+        Button { model.flush() } label: {
+            Label(model.saveMessage, systemImage: model.hasSaveError ? "exclamationmark.circle" : "checkmark")
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.hasSaveError)
+        .accessibilityHint(model.hasSaveError ? "Retry saving this page" : "")
     }
 
     // MARK: - Blocks and ink
@@ -236,6 +232,7 @@ struct NoteEditorScreen: View {
             InkCanvasView(
                 data: Binding(get: { model.drawingData }, set: { model.setDrawing($0) }),
                 isInkMode: model.isInking,
+                allowsFingerDrawing: !layout.isRegular || drawWithFinger,
                 onPencilShortcut: {
                     model.isInking.toggle()
                     if model.isInking { model.focusedBlockID = nil }
@@ -334,6 +331,13 @@ struct NoteEditorScreen: View {
 
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button("Change page icon", systemImage: "face.smiling") { showEmojiPicker = true }
+                Menu("Page color", systemImage: "paintpalette") {
+                    ForEach(NoteAccent.allCases) { accent in
+                        Button(accent.title) { model.setAccent(accent) }
+                    }
+                }
+                Divider()
                 Button(model.isFavorite ? "Remove from favourites" : "Add to favourites",
                        systemImage: model.isFavorite ? "star.slash" : "star") {
                     model.toggleFavorite()
@@ -348,7 +352,7 @@ struct NoteEditorScreen: View {
                 }
                 if model.drawingData != nil {
                     Button("Clear drawing", systemImage: "eraser", role: .destructive) {
-                        model.setDrawing(nil)
+                        confirmClearDrawing = true
                     }
                 }
             } label: {

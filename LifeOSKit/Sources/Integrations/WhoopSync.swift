@@ -7,10 +7,12 @@ import Persistence
 public struct WhoopTokenExchange: Sendable {
     private let endpoint: URL
     private let session: URLSession
+    private let sessions: any AuthSessionStoring
 
-    public init(endpoint: URL, session: URLSession = .shared) {
+    public init(endpoint: URL, session: URLSession = .shared, sessions: any AuthSessionStoring = KeychainAuthSessionStore()) {
         self.endpoint = endpoint
         self.session = session
+        self.sessions = sessions
     }
 
     public func exchange(code: String, verifier: String, redirectURI: String) async throws -> WhoopTokens {
@@ -21,10 +23,29 @@ public struct WhoopTokenExchange: Sendable {
         try await post(["refresh_token": refreshToken])
     }
 
+    public func restore() async throws -> WhoopTokens {
+        try await post(["action": "restore"])
+    }
+
+    public func disconnect() async throws {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "DELETE"
+        if let token = sessions.load()?.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw WhoopAPIError.transport
+        }
+    }
+
     private func post(_ body: [String: String]) async throws -> WhoopTokens {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = sessions.load()?.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await session.data(for: request)
@@ -35,6 +56,9 @@ public struct WhoopTokenExchange: Sendable {
             // from a missing server secret.
             let upstream = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
                 .flatMap { $0?["status"] as? Int }
+            if upstream == nil, (response as? HTTPURLResponse)?.statusCode == 401 {
+                throw WhoopTokenExchangeError.notSignedIn
+            }
             throw WhoopAPIError.status(upstream ?? (response as? HTTPURLResponse)?.statusCode ?? -1)
         }
 
@@ -156,3 +180,5 @@ public enum WhoopSyncError: Error, Equatable {
     /// scopes is the fix, not treating the connection as lost.
     case accessDenied
 }
+
+public enum WhoopTokenExchangeError: Error { case notSignedIn }

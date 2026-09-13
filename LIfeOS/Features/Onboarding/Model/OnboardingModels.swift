@@ -27,9 +27,19 @@ enum AuthMode: Equatable {
 /// hand-written screens that drift apart.
 struct IntroPage: Identifiable, Equatable {
     let id: Int
-    let hue: ModuleHue
     let headline: String
     let body: String
+
+    var category: String {
+        switch id {
+        case 1: "YOUR HEALTH"
+        case 2: "YOUR MONEY"
+        case 3: "YOUR EVERYDAY"
+        case 4: "CONNECTED TO YOU"
+        default: "A HOME FOR YOUR LIFE"
+        }
+    }
+
 }
 
 extension IntroPage {
@@ -37,24 +47,29 @@ extension IntroPage {
     /// order the tabs appear, so the intro maps onto the interface.
     static let all: [IntroPage] = [
         IntroPage(
-            id: 0, hue: .body,
-            headline: "Everything about your life,\nin one place",
-            body: "Health, money, habits and plans, tracked together instead of scattered across six apps."
+            id: 0,
+            headline: "A little more life.\nA lot less juggling.",
+            body: "Your health, money, habits and plans.\nOne home for everything that makes you, you."
         ),
         IntroPage(
-            id: 1, hue: .activity,
-            headline: "Your body,\nunderstood",
-            body: "Steps, sleep, weight and recovery from Whoop and Apple Health, rolled into one day."
+            id: 1,
+            headline: "Feel more in tune\nwith you.",
+            body: "Connect Apple Health and WHOOP to see your sleep, movement and recovery together."
         ),
         IntroPage(
-            id: 2, hue: .money,
-            headline: "Your money,\nhonestly",
-            body: "Income, spending and what you actually keep. No invented numbers. A blank stays blank."
+            id: 2,
+            headline: "A clearer picture.\nA calmer mind.",
+            body: "Make sense of what comes in, what goes out and what you keep. All in one place."
         ),
         IntroPage(
-            id: 3, hue: .habits,
-            headline: "Your goals\nand your days",
-            body: "Habits, goals, notes and plans. One dot per day, so a month is readable at a glance."
+            id: 3,
+            headline: "Small steps.\nMore you.",
+            body: "Make room for your habits, goals and ideas. Watch the little things add up, day by day."
+        ),
+        IntroPage(
+            id: 4,
+            headline: "Connect once.\nCome back to everything.",
+            body: "Link WHOOP, Google Fitbit or your bank through Plaid. Your saved connections stay with your LifeOS account."
         ),
     ]
 }

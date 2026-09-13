@@ -240,7 +240,14 @@ export function chatBody(
   context = "",
   stream = false,
 ): Record<string, unknown> {
-  const system = [{ role: "system", content: TASKS.chat.system }];
+  const structuredCoach = context.includes("LIFEOS_STRUCTURED_COACH_V1") && tools.length === 0;
+  const coachStyle = `${SCOPE}
+
+Answer directly in one or two sentences. Usually stay under 120 words unless asked for detail.
+Use brief Markdown tables for supplied metrics or comparisons, and at most three bullets for actions.
+Use at most three sections. No greeting, filler, repeated conclusion, or invented numbers.
+Keep units and time periods. Say when data is missing. Follow the requested presentation format.`;
+  const system = [{ role: "system", content: structuredCoach ? coachStyle : TASKS.chat.system }];
   if (context) system.push({ role: "system", content: context });
 
   const body: Record<string, unknown> = {

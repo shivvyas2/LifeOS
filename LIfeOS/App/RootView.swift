@@ -28,6 +28,7 @@ extension NoteSync: NoteSyncing {}
 struct RootView: View {
     @Bindable var whoop: WhoopConnectionViewModel
     @Bindable var fitbit: FitbitConnectionViewModel
+    @Bindable var plaid: PlaidConnectionViewModel
     @Bindable var health: HealthConnectionViewModel
     var onSignOut: () -> Void = {}
 
@@ -51,7 +52,6 @@ struct RootView: View {
     @State private var money = MoneyViewModel()
     @State private var moneyDetail = MoneyDetailViewModel()
     @State private var openMoney: MoneyDetailFilter?
-    @State private var plaid = PlaidConnectionViewModel()
     @State private var plan = PlanViewModel()
     @State private var notes = NotesViewModel()
     @State private var life = LifeBoardViewModel()
@@ -130,6 +130,11 @@ struct RootView: View {
         }
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
+        }
+        .onDisappear {
+            health.stopWatching()
+            coach.disappear()
+            coach.stopSpeaking()
         }
         .onChange(of: showSettings) { _, isOpen in
             if !isOpen { profilePhoto = ProfilePhotoStore.load() }

@@ -29,6 +29,16 @@ final class WhoopConnectionViewModel {
     var manualCode = ""
 
     private let tokens: any WhoopTokenStoring
+    private let defaults = UserDefaults.currentAccount
+    private let sessions = KeychainAuthSessionStore()
+    private var restoredConnection = false
+    private var active = true
+
+    func deactivate() {
+        active = false
+        tokens.clearPending()
+        context = nil
+    }
     private var context: ModelContext?
 
     init(tokens: any WhoopTokenStoring = KeychainWhoopTokenStore()) {
@@ -152,8 +162,9 @@ final class WhoopConnectionViewModel {
               let redirect = AppConfig.whoopRedirectURI else { return }
 
         do {
-            let newTokens = try await WhoopTokenExchange(endpoint: endpoint)
+            let newTokens = try await WhoopTokenExchange(endpoint: endpoint, sessions: sessions)
                 .exchange(code: code, verifier: pending.verifier, redirectURI: redirect)
+            guard active, !Task.isCancelled else { return }
             try tokens.save(newTokens)
             lastCompletedSync = nil
             tokens.clearPending()
@@ -210,10 +221,11 @@ final class WhoopConnectionViewModel {
         do {
             // Rejects a redirect whose state does not match ours.
             let code = try WhoopOAuth.code(from: callbackURL, expectedState: pending.state)
-            let exchange = WhoopTokenExchange(endpoint: endpoint)
+            let exchange = WhoopTokenExchange(endpoint: endpoint, sessions: sessions)
             let newTokens = try await exchange.exchange(
                 code: code, verifier: pending.verifier, redirectURI: redirect
             )
+            guard active, !Task.isCancelled else { return }
             try tokens.save(newTokens)
             lastCompletedSync = nil
             tokens.clearPending()
@@ -257,10 +269,20 @@ final class WhoopConnectionViewModel {
     }
 
     func disconnect() {
-        tokens.clear()
-        tokens.clearPending()
-        lastCompletedSync = nil
-        state = .disconnected
+        guard active, let endpoint = AppConfig.whoopTokenEndpoint else { return }
+        Task {
+            do {
+                try await WhoopTokenExchange(endpoint: endpoint, sessions: sessions).disconnect()
+                guard active else { return }
+                tokens.clear()
+                tokens.clearPending()
+                lastCompletedSync = nil
+                restoredConnection = true
+                state = .disconnected
+            } catch {
+                state = .failed("Could not disconnect. Try again.")
+            }
+        }
     }
 
     // MARK: - Sync
@@ -269,8 +291,8 @@ final class WhoopConnectionViewModel {
     /// UserDefaults rather than Keychain: this is a convenience timestamp, not
     /// a credential, and losing it costs one extra sync.
     private var lastCompletedSync: Date? {
-        get { UserDefaults.currentAccount.object(forKey: Self.lastSyncKey) as? Date }
-        set { UserDefaults.currentAccount.set(newValue, forKey: Self.lastSyncKey) }
+        get { defaults.object(forKey: Self.lastSyncKey) as? Date }
+        set { defaults.set(newValue, forKey: Self.lastSyncKey) }
     }
     private static let lastSyncKey = "whoopLastCompletedSyncAt"
 
@@ -324,6 +346,20 @@ final class WhoopConnectionViewModel {
     /// the user to act. The guards never mutate state, so an OAuth attempt
     /// in flight (`.connecting`) is left untouched.
     func syncIfStale() async {
+        guard active else { return }
+        if !restoredConnection, tokens.load() == nil, let endpoint = AppConfig.whoopTokenEndpoint {
+            restoredConnection = true
+            do {
+                let saved = try await WhoopTokenExchange(endpoint: endpoint, sessions: sessions).restore()
+                guard active else { return }
+                try tokens.save(saved)
+                refreshState()
+            } catch WhoopAPIError.status(404) {
+                // This account has never linked WHOOP.
+            } catch {
+                restoredConnection = false
+            }
+        }
         guard context != nil, AppConfig.whoopTokenEndpoint != nil else { return }
         guard tokens.load() != nil, !isSyncing else { return }
         guard SyncStalenessPolicy.shouldSync(lastSync: lastCompletedSync) else { return }
@@ -393,7 +429,7 @@ final class WhoopConnectionViewModel {
         }
 
         let sync = WhoopSync(
-            exchange: WhoopTokenExchange(endpoint: endpoint),
+            exchange: WhoopTokenExchange(endpoint: endpoint, sessions: sessions),
             tokens: tokens,
             derivation: WhoopDerivation(
                 store: MetricsStore(context: context),

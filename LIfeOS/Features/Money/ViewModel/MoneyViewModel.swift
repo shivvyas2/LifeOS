@@ -285,7 +285,7 @@ final class MoneyViewModel {
     /// see would be inventing one. A month that kept nothing shows zero saved,
     /// which is the honest reading.
     static func goal(saved: Double) -> SavingsGoal? {
-        let defaults = UserDefaults.standard
+        let defaults = UserDefaults.currentAccount
         let target = defaults.double(forKey: goalTargetKey)
         guard target > 0 else { return nil }
         let name = defaults.string(forKey: goalNameKey) ?? "Savings goal"

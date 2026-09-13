@@ -17,7 +17,7 @@ import Foundation
 /// a leak that looks like working software. A separate file cannot leak: the
 /// rows are not there to be read.
 public struct UserScope: Hashable, Sendable, Codable {
-    /// The Supabase user id, or `guest` for the signed-out store.
+    /// The signed-in Supabase user id.
     public let id: String
 
     public init(id: String) {
@@ -77,7 +77,7 @@ public extension UserDefaults {
     static var currentAccount: UserDefaults {
         guard let id = standard.string(forKey: "accounts.current"),
               let suite = UserDefaults(suiteName: UserScope(id: id).defaultsSuiteName)
-        else { return standard }
+        else { return UserDefaults(suiteName: "lifeos.signedOut")! }
         return suite
     }
 }

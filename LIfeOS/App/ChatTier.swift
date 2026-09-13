@@ -23,8 +23,9 @@ enum ChatTier {
     static func remote() -> (any ChatEngine)? {
         guard let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey
         else { return nil }
+        let sessions = KeychainAuthSessionStore()
         return RemoteChatEngine(baseURL: url, anonKey: key, accessToken: {
-            KeychainAuthSessionStore().load()?.accessToken
+            sessions.load()?.accessToken
         })
     }
 }

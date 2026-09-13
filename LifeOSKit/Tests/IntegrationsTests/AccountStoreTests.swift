@@ -37,6 +37,25 @@ import Persistence
         #expect(store.accounts.isEmpty)
     }
 
+    @Test func mismatchedIdentityCannotOpenAnotherAccountsStore() throws {
+        let (store, _, _) = makeStore()
+        #expect(throws: AccountStoreError.self) {
+            try store.add(Account(userID: "alice", label: "Alice"), session: session("bob"))
+        }
+        #expect(store.currentScope == nil)
+        #expect(store.accounts.isEmpty)
+    }
+
+    @Test func restoredRosterUsesItsOwnStoredSession() throws {
+        let (store, keyring, defaults) = makeStore()
+        try store.add(Account(userID: "alice", label: "Alice"), session: session("alice"))
+        let relaunched = AccountStore(defaults: defaults, sessionStores: { keyring.store($0) })
+        #expect(relaunched.currentScope?.id == "alice")
+        #expect(relaunched.session(for: "alice")?.accessToken == "access-alice")
+        try keyring.store("alice").save(session("bob"))
+        #expect(!relaunched.setCurrent("alice"))
+    }
+
     /// The bug this whole type exists to fix: a second sign-in used to
     /// overwrite the first, with no way back.
     @Test func aSecondAccountDoesNotEvictTheFirst() throws {

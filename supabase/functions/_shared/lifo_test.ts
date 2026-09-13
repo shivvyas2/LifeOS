@@ -501,3 +501,11 @@ Deno.test("the done sentinel comes through as a payload like any other", () => {
   assertEquals(payloads, ["[DONE]"]);
   assertEquals(rest, "");
 });
+
+Deno.test("structured coach keeps scope and permits concise native table output", () => {
+  const body = chatBody([{ role: "user", content: "How did I sleep?" }], [], "LIFEOS_STRUCTURED_COACH_V1");
+  const system = (body.messages as { role: string; content: string }[])[0].content;
+  assertEquals(system.includes("Markdown tables"), true);
+  assertEquals(system.includes("Never use markdown"), false);
+  assertEquals(system.includes("invented numbers"), true);
+});

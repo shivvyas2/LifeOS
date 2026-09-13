@@ -87,6 +87,9 @@ public final class AccountStore {
 
     /// Records a signed-in account and makes it current.
     public func add(_ account: Account, session: AuthSession) throws {
+        guard !account.userID.isEmpty, account.userID == session.userID else {
+            throw AccountStoreError.identityMismatch
+        }
         try keychain(for: account.userID).save(session)
 
         var roster = accounts.filter { $0.userID != account.userID }
@@ -103,7 +106,7 @@ public final class AccountStore {
     @discardableResult
     public func setCurrent(_ userID: String) -> Bool {
         guard accounts.contains(where: { $0.userID == userID }),
-              keychain(for: userID).load() != nil
+              keychain(for: userID).load()?.userID == userID
         else { return false }
         defaults.set(userID, forKey: Self.currentKey)
         return true
@@ -168,3 +171,5 @@ public final class AccountStore {
         defaults.set(data, forKey: Self.rosterKey)
     }
 }
+
+public enum AccountStoreError: Error { case identityMismatch }

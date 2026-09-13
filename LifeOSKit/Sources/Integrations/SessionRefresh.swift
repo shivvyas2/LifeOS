@@ -37,15 +37,24 @@ public struct SessionRefresher: Sendable {
 
         do {
             let refreshed = try await auth.refresh(refreshToken: refreshToken)
+            guard !Task.isCancelled,
+                  store.load()?.refreshToken == stored.refreshToken,
+                  store.load()?.userID == stored.userID else { return .signedOut }
+            guard refreshed.userID.isEmpty || refreshed.userID == stored.userID else {
+                store.clear()
+                return .rejected
+            }
             let session = refreshed.carryingForward(stored)
             // A keychain write failure should not cost the user this launch;
             // the session in hand is still good.
             try? store.save(session)
             return .active(session)
         } catch let error as AuthError where Self.isRefusal(error) {
+            guard store.load()?.accessToken == stored.accessToken else { return .signedOut }
             store.clear()
             return .rejected
         } catch {
+            guard !Task.isCancelled, store.load()?.userID == stored.userID else { return .signedOut }
             return .active(stored)
         }
     }

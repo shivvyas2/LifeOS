@@ -12,52 +12,112 @@ private let signupLog = Logger(subsystem: "com.shivvyas.lifeos", category: "sign
 struct SignupScaffold<Content: View, Action: View>: View {
     let title: String
     let subtitle: String
+    var step = 1
+    var totalSteps = 3
+    var showsProgress = true
     var onBack: (() -> Void)?
     @ViewBuilder let content: Content
     @ViewBuilder let action: Action
-
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ZStack {
-            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
-
+        ScrollView {
             VStack(alignment: .leading, spacing: Space.x4) {
-                if let onBack {
-                    Button(action: onBack) {
-                        Image(systemName: "chevron.left")
-                            .font(LifeOSType.body.weight(.semibold))
-                            .frame(width: Space.x5, height: Space.x5)
-                            .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
+                HStack {
+                    if let onBack {
+                        Button(action: onBack) {
+                            Image(systemName: "arrow.left")
+                                .font(.body.weight(.semibold))
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel("Back")
                     }
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.hexagongrid.fill")
+                            .foregroundStyle(LifeOSTokens.accent)
+                        Text("LifeOS").font(.title3.bold())
+                    }
+                    .accessibilityElement(children: .combine)
                 }
 
-                VStack(alignment: .leading, spacing: Space.x1) {
-                    StaggeredAppear(index: 0) {
-                        Text(title)
-                            .font(LifeOSType.display)
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    if showsProgress {
+                        Text("YOUR ACCOUNT · \(step) OF \(totalSteps)")
+                            .font(.caption.weight(.medium))
+                            .tracking(1.5)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            ForEach(1...totalSteps, id: \.self) { index in
+                                Rectangle()
+                                    .fill(index <= step ? LifeOSTokens.accent : LifeOSTokens.dotMissed.resolve(scheme))
+                                    .frame(height: 3)
+                            }
+                        }
+                        .accessibilityHidden(true)
                     }
-                    StaggeredAppear(index: 1) {
-                        Text(subtitle)
-                            .font(LifeOSType.secondary)
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text(title)
+                        .font(.largeTitle.bold())
+                        .tracking(-0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.top, Space.x2)
+                    Text(subtitle)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                content
+            }
+            .padding(.horizontal, Space.x4)
+            .padding(.vertical, Space.x2)
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            action
+                .padding(.horizontal, Space.x4)
+                .padding(.vertical, Space.x2)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
+                .background(LifeOSTokens.canvas.resolve(scheme))
+        }
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .tint(LifeOSTokens.accent)
+    }
+}
 
-                StaggeredAppear(index: 2) { content }
+struct OnboardingActionButton: View {
+    let title: String
+    var isLoading = false
+    let action: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.isEnabled) private var enabled
 
-                Spacer(minLength: Space.x3)
+    init(_ title: String, isLoading: Bool = false, action: @escaping () -> Void) {
+        self.title = title
+        self.isLoading = isLoading
+        self.action = action
+    }
 
-                action
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title).font(.body.weight(.semibold))
+                Spacer()
+                if isLoading { ProgressView().tint(LifeOSTokens.accent) }
+                else { Image(systemName: "arrow.right").foregroundStyle(LifeOSTokens.accent) }
             }
             .padding(.horizontal, Space.x3)
-            .padding(.top, Space.x2)
-            .padding(.bottom, Space.x4)
+            .frame(minHeight: 56)
+            .foregroundStyle(LifeOSTokens.canvas.resolve(scheme))
+            .background(LifeOSTokens.primaryText.resolve(scheme),
+                        in: RoundedRectangle(cornerRadius: 16))
+            .opacity(enabled ? 1 : 0.4)
         }
+        .disabled(isLoading)
     }
 }
 
@@ -77,16 +137,35 @@ struct IdentityScreen: View {
         SignupScaffold(
             title: model.identityTitle,
             subtitle: model.identitySubtitle,
+            totalSteps: model.mode == .signIn ? 2 : 3,
+            showsProgress: model.mode == .signUp,
             onBack: { model.back() }
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
-                SegmentedPills(
-                    selection: Binding(
-                        get: { model.draft.channel },
-                        set: { model.switchChannel(to: $0) }
-                    ),
-                    options: [(.email, "Email"), (.phone, "Phone")]
-                )
+                HStack(spacing: Space.x3) {
+                    ForEach([SupabaseAuthChannel.email, .phone], id: \.self) { channel in
+                        Button { model.switchChannel(to: channel) } label: {
+                            VStack(spacing: 10) {
+                                Text(channel == .email ? "Email" : "Phone")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                Rectangle()
+                                    .fill(model.draft.channel == channel ? LifeOSTokens.accent : .clear)
+                                    .frame(height: 2)
+                            }
+                            .frame(minHeight: 44)
+                        }
+                        .foregroundStyle(model.draft.channel == channel
+                            ? LifeOSTokens.primaryText.resolve(scheme)
+                            : LifeOSTokens.secondaryText.resolve(scheme))
+                        .accessibilityAddTraits(model.draft.channel == channel ? .isSelected : [])
+                    }
+                }
+
+                Text(model.draft.channel == .email ? "EMAIL ADDRESS" : "PHONE NUMBER")
+                    .font(.caption.weight(.medium))
+                    .tracking(1.2)
+                    .foregroundStyle(.secondary)
 
                 if model.draft.channel == .phone {
                     HStack(spacing: Space.x1) {
@@ -113,7 +192,8 @@ struct IdentityScreen: View {
                             .focusableField(isFocused: focus == .phone)
                     }
                 } else {
-                    TextField("you@example.com", text: $model.draft.email)
+                    TextField("Email address", text: $model.draft.email,
+                              prompt: Text(verbatim: "you@example.com").foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme)))
                         .keyboardType(.emailAddress)
                         .textContentType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -146,7 +226,7 @@ struct IdentityScreen: View {
             }
         } action: {
             VStack(spacing: Space.half) {
-                PrimaryButton("Send code", isLoading: model.isBusy) {
+                OnboardingActionButton("Send code", isLoading: model.isBusy) {
                     Task { await model.sendCode() }
                 }
                 .disabled(!model.draft.canSendCode || !model.isConfigured)
@@ -209,6 +289,9 @@ struct CodeScreen: View {
         SignupScaffold(
             title: "Enter your code",
             subtitle: "Sent to \(model.destinationLabel).",
+            step: 2,
+            totalSteps: model.mode == .signIn ? 2 : 3,
+            showsProgress: model.mode == .signUp,
             onBack: { model.back() }
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
@@ -242,7 +325,7 @@ struct CodeScreen: View {
             // Kept even though the sixth digit auto-verifies: autofill can land
             // a full code without a keystroke, and a screen with no button
             // leaves that user nothing to press.
-            PrimaryButton("Verify", isLoading: model.isBusy) {
+            OnboardingActionButton("Verify", isLoading: model.isBusy) {
                 verify()
             }
             .disabled(!model.draft.canVerify)
@@ -272,7 +355,8 @@ struct ProfileStepScreen: View {
     var body: some View {
         SignupScaffold(
             title: "About you",
-            subtitle: "Name is all we need. The rest sharpens what the app can tell you.",
+            subtitle: "A name makes this your space. Everything else is optional.",
+            step: 3,
             onBack: { model.back() }
         ) {
             VStack(spacing: Space.x2) {
@@ -297,7 +381,7 @@ struct ProfileStepScreen: View {
                 countryRow
             }
         } action: {
-            PrimaryButton("Continue", isLoading: model.isBusy) {
+            OnboardingActionButton("Continue", isLoading: model.isBusy) {
                 Task { await model.saveProfile() }
             }
             .disabled(!model.draft.canFinishProfile)

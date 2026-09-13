@@ -437,3 +437,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # back to an app that will reject a state it did not issue.
 [functions.whoop-callback]
 verify_jwt = false
+
+# The handler validates the bearer with resolveUser before accessing account data.
+[functions.whoop-token]
+verify_jwt = false

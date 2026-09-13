@@ -30,6 +30,7 @@ final class AssistantViewModel {
     private let store: CalendarStore
     private let sync: CalendarSync
     private let eventKit: EventKitSource
+    private let remote = ChatTier.remote()
     private var conversationID = UUID()
     private var broker = ConfirmationBroker()
 
@@ -174,7 +175,7 @@ final class AssistantViewModel {
                 thread: thread,
                 tools: tools,
                 broker: broker,
-                remote: ChatTier.remote()
+                remote: remote
             )
             let events = await collector.collected()
             try? chat.append(
