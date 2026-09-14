@@ -110,7 +110,7 @@ Deno.serve(async (req: Request) => {
     if (targets.length === 0) return json({ error: "no_device_tokens", sent: 0 }, 404);
 
     const text = test.text ?? "This is LIFO checking the line works.";
-    const payload = notificationPayload(text, "test", now.toISOString().slice(0, 10));
+    const payload = notificationPayload(text, "test", now.toISOString().slice(0, 10), test.test_user_id);
     let sent = 0;
     const failures: number[] = [];
     for (const target of targets) {
@@ -220,7 +220,7 @@ Deno.serve(async (req: Request) => {
       continue;
     }
 
-    const payload = notificationPayload(text, fired.name, due.day);
+    const payload = notificationPayload(text, fired.name, due.day, userID);
     for (const token of due.tokens) {
       const result = await sendPush(apns, token, payload, now);
       if (result.unregistered) {

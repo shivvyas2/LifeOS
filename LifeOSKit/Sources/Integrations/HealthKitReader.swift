@@ -29,9 +29,8 @@ import HealthKit
 /// An actor because `HKHealthStore` is a shared resource and the sync can be
 /// entered from a launch task and a foreground transition at the same time.
 ///
-/// Read-only on purpose: the app never writes back, so there is no
-/// `NSHealthUpdateUsageDescription` and nothing Almanac can do to a user's
-/// Health data.
+/// This reader only imports existing measurements. User-started workout
+/// recording requests separate write permission through the app recorder.
 public actor HealthKitReader {
     private static let log = Logger(subsystem: "com.shivvyas.lifeos", category: "healthkit")
     private let store = HKHealthStore()

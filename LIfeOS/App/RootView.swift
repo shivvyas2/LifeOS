@@ -1,4 +1,5 @@
 import SwiftUI
+import AppSurfaces
 import SwiftData
 import DesignSystem
 import Persistence
@@ -32,6 +33,7 @@ struct RootView: View {
     @Bindable var health: HealthConnectionViewModel
     var onSignOut: () -> Void = {}
 
+    @Environment(\.accountSession) private var accountSession
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
@@ -47,6 +49,11 @@ struct RootView: View {
     @State private var today = TodayViewModel()
     @State private var weight = BodyViewModel()
     @State private var activity = ActivityViewModel()
+    @State private var recorder = ActivityRecorder()
+    @State private var showActivity = false
+    @State private var showNotifications = false
+    @State private var coachAfterDismiss = false
+    @State private var quickLogAfterActivity = false
     @State private var recovery = RecoveryViewModel()
     @State private var wellness = WellnessViewModel()
     @State private var money = MoneyViewModel()
@@ -128,6 +135,18 @@ struct RootView: View {
         )) { detail in
             DayDetailSheet(snapshot: detail) { today.toggleHabit(id: $0) }
         }
+        .sheet(isPresented: $showActivity, onDismiss: {
+            if quickLogAfterActivity { quickLogAfterActivity = false; showQuickLog = true }
+        }) {
+            BeginActivityScreen(model: recorder, onQuickLog: { quickLogAfterActivity = true })
+        }
+        .sheet(isPresented: $showNotifications, onDismiss: presentDeferredCoach) {
+            NavigationStack {
+                NotificationInboxScreen().toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { showNotifications = false } }
+                }
+            }
+        }
         .sheet(isPresented: $showQuickLog) {
             QuickLogSheet(model: quickLog)
         }
@@ -142,7 +161,7 @@ struct RootView: View {
         .onChange(of: showSettings) { _, isOpen in
             if !isOpen { profilePhoto = ProfilePhotoStore.load() }
         }
-        .fullScreenCover(isPresented: $showSettings) {
+        .fullScreenCover(isPresented: $showSettings, onDismiss: presentDeferredCoach) {
             ProfileScreen(
                 settings: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
                 stats: profileStats, highlights: profileHighlights,
@@ -227,18 +246,17 @@ struct RootView: View {
             attachAll()
             reloadAll()
             syncCalendar()
-            // Asked for here rather than at launch: by the time this runs the
-            // person is signed in and looking at their own data, so the prompt
-            // arrives with something behind it. A permission dialog on first
-            // run, before the app has shown anyone anything worth being
-            // interrupted about, is the fastest way to a permanent no.
-            await PushService.shared.requestAuthorization()
+            await PushService.shared.refreshInbox()
+            await PushService.shared.syncRegistration()
+            openSurfaceRoute()
+            openNudge(PushService.shared.pending)
             // Foreground only: the watch is what keeps a step count on screen
             // climbing, and it is stopped again below when the app goes away.
             health.startWatching()
         }
         // The nudge from a tapped notification, opened as the first turn of a
         // conversation rather than shown and dismissed.
+        .onChange(of: SurfaceCoordinator.shared.pendingRoute) { _, _ in openSurfaceRoute() }
         .onChange(of: PushService.shared.pending) { _, nudge in
             openNudge(nudge)
         }
@@ -257,7 +275,7 @@ struct RootView: View {
                 // row carries the timezone the send hour is read in, so
                 // somebody who has flown somewhere would otherwise keep being
                 // nudged at eight in the morning where they used to live.
-                Task { await PushService.shared.syncRegistration() }
+                Task { await PushService.shared.syncRegistration(); await PushService.shared.refreshInbox() }
                 // A notification tapped from a cold launch lands in the inbox
                 // before this view exists, so onChange never fires for it.
                 openNudge(PushService.shared.pending)
@@ -492,8 +510,7 @@ struct RootView: View {
     /// different place depending on which tab they were on, and hid it behind
     /// a trigger on four of the five. One place, always open.
     ///
-    /// Quick log is the prominent one: it is the only one of the three that
-    /// writes something, and it is the one people reach for most.
+    /// The plus starts or resumes an activity; Quick Log remains inside that screen.
     private var quickActions: [QuickAction] {
         [
             // Not a bare `calendar`: the month button in Today's top bar is
@@ -504,8 +521,8 @@ struct RootView: View {
             QuickAction(id: "coach", systemImage: "message.fill", label: "LIFO") {
                 showCoach = true
             },
-            QuickAction(id: "quickLog", systemImage: "plus", label: "Quick log", isProminent: true) {
-                showQuickLog = true
+            QuickAction(id: "beginActivity", systemImage: recorder.hasSession ? "timer" : "plus", label: recorder.hasSession ? "Current activity" : "Begin activity", isProminent: true) {
+                showActivity = true
             },
         ]
     }
@@ -520,7 +537,22 @@ struct RootView: View {
         guard let nudge else { return }
         PushService.shared.pending = nil
         coach.seed(nudge.text)
-        showCoach = true
+        if showSettings || showNotifications {
+            coachAfterDismiss = true; showSettings = false; showNotifications = false
+        } else { showCoach = true }
+    }
+    private func presentDeferredCoach() {
+        if coachAfterDismiss { coachAfterDismiss = false; showCoach = true }
+    }
+    private func openSurfaceRoute() {
+        guard let route = SurfaceCoordinator.shared.pendingRoute else { return }
+        SurfaceCoordinator.shared.pendingRoute = nil
+        switch route {
+        case .today: tab = .today
+        case .health: tab = .health; selectHealthDate(.now)
+        case .activity: showActivity = true
+        case .notifications: showNotifications = true
+        }
     }
 
     private func selectHealthDate(_ date: Date) {
@@ -663,6 +695,12 @@ struct RootView: View {
         metricDetail.attach(context)
         weight.attach(context)
         activity.attach(context)
+        recorder.attach(context)
+        accountSession?.beforeAccountChange = { [recorder] in recorder.deactivate() }
+        recorder.onSaved = {
+            reloadAll()
+            Task { await health.syncIfConnected(); reloadAll() }
+        }
         recovery.attach(context)
         wellness.attach(context)
         money.attach(context)
@@ -757,6 +795,7 @@ struct RootView: View {
     }
 
     private func reloadAll() {
+        SurfaceCoordinator.shared.publish()
         today.load()
         // Only while its page is up. Off screen it is a year of bucketing
         // nobody is looking at, run on every save in the app.

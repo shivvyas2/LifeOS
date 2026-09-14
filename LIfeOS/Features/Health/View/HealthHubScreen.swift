@@ -69,7 +69,7 @@ struct HealthHubScreen: View {
                 Button { onSelectMetric(metric) } label: {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Image(systemName: metric.icon).foregroundStyle(LifeOSTokens.accent)
+                            Image(systemName: metric.icon).foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             Text(metric.title).font(.subheadline.weight(.medium))
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right").font(.caption2)
@@ -80,7 +80,7 @@ struct HealthHubScreen: View {
                     }
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                    .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+                    .background(scheme == .dark ? metric.hue.pastelDark : metric.hue.pastel, in: RoundedRectangle(cornerRadius: 20))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(metric.title), \(value(metric)), \(selectedDate.formatted(date: .abbreviated, time: .omitted))")

@@ -1,12 +1,7 @@
 import SwiftUI
 import DesignSystem
 
-/// Full-screen connections, not a cramped Settings section. All three
-/// integrations are live: Whoop, Apple Health and bank accounts via Plaid.
-///
-/// Each source wears its own hue in the app's bubble vocabulary, the cards
-/// are real glass, and the action sits in a chip: a verb when there is
-/// something to do, a quiet green state when the connection is standing.
+/// Account connections grouped by purpose, with a status and action for each source.
 struct ConnectionsSettingsScreen: View {
     @Bindable var whoop: WhoopConnectionViewModel
     @Bindable var fitbit: FitbitConnectionViewModel
@@ -16,12 +11,15 @@ struct ConnectionsSettingsScreen: View {
     @State private var showWhoop = false
 
     var body: some View {
-        GradientCanvas(hue: .recovery) {
+        ZStack {
+            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
+                    AccountPageHeading(title: "Better, connected", detail: "Your health and finances, together in Almanac.")
+                    Label("Health & wearables", systemImage: "heart").font(LifeOSType.sectionTitle)
                     connectionCard(
                         icon: "bolt.heart.fill", hue: .recovery,
-                        title: "Whoop", status: whoop.statusDetail,
+                        title: "WHOOP", status: whoop.statusDetail,
                         chip: whoopChip
                     ) { showWhoop = true }
 
@@ -29,8 +27,11 @@ struct ConnectionsSettingsScreen: View {
                         icon: "figure.run.circle.fill", hue: .body,
                         title: "Fitbit", status: fitbit.statusDetail,
                         chip: fitbitChip
-                    ) { fitbit.connect() }
-                    .disabled(fitbit.state == .unconfigured)
+                    ) {
+                        if fitbit.isConnected { Task { await fitbit.syncIfDue(force: true) } }
+                        else { fitbit.connect() }
+                    }
+                    .disabled(fitbit.state == .unconfigured || fitbit.isSyncing)
 
                     connectionCard(
                         icon: "heart.fill", hue: .body,
@@ -41,6 +42,7 @@ struct ConnectionsSettingsScreen: View {
 
                     if health.isConnected { cycleToggle }
 
+                    Label("Finances", systemImage: "building.columns").font(LifeOSType.sectionTitle).padding(.top, 12)
                     connectionCard(
                         icon: "building.columns.fill", hue: .money,
                         title: "Bank accounts", status: plaid.statusDetail,
@@ -48,7 +50,10 @@ struct ConnectionsSettingsScreen: View {
                     ) {
                         if case .connected = plaid.state {} else { plaid.connect() }
                     }
+                    Label("Connections stay with your account.", systemImage: "lock.shield")
+                        .font(LifeOSType.caption).foregroundStyle(.secondary).padding(.vertical, 12)
                 }
+                .frame(maxWidth: 680).frame(maxWidth: .infinity)
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 40)
@@ -71,29 +76,31 @@ struct ConnectionsSettingsScreen: View {
         chip: Chip, action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon)
-                    .font(LifeOSType.body.weight(.semibold))
-                    .foregroundStyle(hue.top)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(LifeOSType.body.weight(.semibold))
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(spacing: 14) {
+                    Image(systemName: icon).font(.title3)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    Text(status)
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(width: 48, height: 48)
+                        .background(scheme == .dark ? hue.pastelDark : hue.pastel, in: RoundedRectangle(cornerRadius: 16))
+                    Text(title).font(LifeOSType.sectionTitle)
+                    Spacer(minLength: 8)
+                    Image(systemName: chip.standing ? "checkmark.circle.fill" : "arrow.up.right")
+                        .foregroundStyle(LifeOSTokens.accent)
                 }
-
-                Spacer(minLength: 10)
-
-                chipView(chip)
+                Text(status).font(LifeOSType.secondary).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !chip.text.isEmpty {
+                    HStack {
+                        Text(chip.text == "…" ? "Connecting…" : chip.text).font(LifeOSType.rowTitle)
+                        Spacer()
+                        if chip.text == "…" { ProgressView() }
+                    }
+                    .foregroundStyle(chip.standing ? LifeOSTokens.primaryText.resolve(scheme) : LifeOSTokens.accent)
+                }
             }
-            .padding(16)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+            .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 24))
         }
         .buttonStyle(.plain)
     }
@@ -130,30 +137,6 @@ struct ConnectionsSettingsScreen: View {
     private struct Chip {
         let text: String
         var standing = false
-    }
-
-    @ViewBuilder
-    private func chipView(_ chip: Chip) -> some View {
-        if chip.text.isEmpty {
-            EmptyView()
-        } else {
-            HStack(spacing: 4) {
-                if chip.standing {
-                    Image(systemName: "checkmark")
-                        .font(LifeOSType.eyebrow.weight(.bold))
-                }
-                Text(chip.text)
-                    .font(LifeOSType.label.weight(.semibold))
-            }
-            .foregroundStyle(chip.standing ? ModuleHue.money.top : LifeOSTokens.primaryText.resolve(scheme))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(chip.standing
-                               ? (scheme == .dark ? ModuleHue.money.pastelDark : ModuleHue.money.pastel)
-                               : LifeOSTokens.accentSoft.resolve(scheme))
-            )
-        }
     }
 
     // MARK: - Per-source chips

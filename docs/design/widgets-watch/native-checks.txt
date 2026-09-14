@@ -1,0 +1,9 @@
+PASS Current-account notification accepted
+PASS Repeat delivery deduplicated
+PASS Switch clears visible inbox and pending route
+PASS Delayed notification from previous account rejected
+PASS Account inbox and read status restored
+PASS Cleared check-in cannot be restored by duplicate delivery
+PASS Widget exports today's data, not a historical day
+PASS Sign-out replaces shared health cache with an empty snapshot
+PASS Next account starts with missing readings, never previous values

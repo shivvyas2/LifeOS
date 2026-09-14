@@ -7,7 +7,7 @@ struct WeightSection: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        SoftCard {
+        SoftCard(hue: .body) {
             VStack(alignment: .leading, spacing: 18) {
                 Label("Weight", systemImage: "scalemass").font(.headline)
                 HStack(alignment: .firstTextBaseline) {

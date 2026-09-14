@@ -1,123 +1,39 @@
 import SwiftUI
 import DesignSystem
 
-/// The coach's palette and backdrop.
-///
-/// Deep navy ground with a cyan core bleeding out through blue. It is the one
-/// screen in the app that is dark in both appearances: the aura only reads as
-/// light on a dark ground, and inverting it for light mode would produce a
-/// washed cyan smear rather than a glow.
+/// Warm charcoal, amber light, and cream keep the coach in the app's orange theme.
 enum LifoPalette {
-    /// Deep navy
-    static let night = Color(red: 0.025, green: 0.055, blue: 0.16)
-    /// Cobalt
-    static let blue = Color(red: 0.12, green: 0.25, blue: 0.88)
-    /// Soft cyan
-    static let cyan = Color(red: 0.24, green: 0.70, blue: 1.0)
-
-    /// Ink on the aura. Not pure white: at full white the text vibrates
-    /// against the cyan, which is the same reason road signs are off-white.
-    static let ink = Color(white: 0.96)
-    static let quietInk = Color(white: 0.96).opacity(0.8)
+    static let night = Color(red: 0.105, green: 0.105, blue: 0.085)
+    static let amber = Color(red: 0.58, green: 0.43, blue: 0.16)
+    static let gold = Color(red: 0.86, green: 0.67, blue: 0.29)
+    static let ink = Color(red: 0.98, green: 0.96, blue: 0.90)
+    static let quietInk = ink.opacity(0.8)
+    static let raised = Color(red: 0.22, green: 0.20, blue: 0.15)
 }
 
-/// The glow behind the coach.
-///
-/// Three stacked radial gradients rather than one: a single ramp from cyan to
-/// navy passes through a muddy teal in the middle, and the reference glow gets
-/// its depth from a small saturated core sitting inside a much larger, much
-/// softer blue wash.
-///
-/// It breathes, slowly. A still gradient reads as a wallpaper; a moving one
-/// reads as something listening. The motion is deliberately below the rate
-/// anyone would call an animation, and it stops dead for Reduce Motion.
 struct LifoAura: View {
-    /// 0...1, driven by the mic level while listening so the core answers the
-    /// voice. At rest it simply breathes.
     var intensity: CGFloat = 0
     var isActive = false
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breath: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
             let side = max(proxy.size.width, proxy.size.height)
-            // The core swells with the voice, and breathes when idle.
-            let swell = 1 + (!reduceMotion && isActive ? min(max(intensity, 0), 1) * 0.15 : 0) + (reduceMotion ? 0 : breath * 0.04)
-            // The whole field drifts, slowly and off-centre. A glow pinned to
-            // the exact middle reads as a spotlight; one that wanders reads as
-            // atmosphere, which is what the reference has.
-            let driftX = (reduceMotion ? 0 : breath - 0.5) * side * 0.08
-            let driftY = (reduceMotion ? 0 : 0.5 - breath) * side * 0.05
-
+            let level = intensity.isFinite ? min(max(intensity, 0), 1) : 0
+            let swell = reduceMotion || !isActive ? 1 : 1 + level * 0.12
             ZStack {
                 LifoPalette.night
-
-                // The far wash: most of the screen, barely there. Offset from
-                // the core so the two do not stack into concentric rings.
-                RadialGradient(
-                    colors: [LifoPalette.blue.opacity(0.5), LifoPalette.night.opacity(0)],
-                    center: .init(x: 0.42, y: 0.44),
-                    startRadius: 0,
-                    endRadius: side * 0.72 * swell
-                )
-                .offset(x: -driftX, y: -driftY)
-
-                // The body of the glow.
-                RadialGradient(
-                    colors: [LifoPalette.blue.opacity(0.8),
-                             LifoPalette.blue.opacity(0.32),
-                             LifoPalette.blue.opacity(0)],
-                    center: .init(x: 0.54, y: 0.5),
-                    startRadius: 0,
-                    endRadius: side * 0.42 * swell
-                )
-                .offset(x: driftX, y: driftY)
-
-                // A second, cooler lobe. Two lobes at different centres are
-                // what turn a ring into a blend: where they overlap the hue
-                // moves continuously instead of stepping.
-                RadialGradient(
-                    colors: [LifoPalette.cyan.opacity(0.34), LifoPalette.cyan.opacity(0)],
-                    center: .init(x: 0.36, y: 0.58),
-                    startRadius: 0,
-                    endRadius: side * 0.34 * swell
-                )
-                .offset(x: driftY, y: -driftX)
-                .blendMode(.screen)
-
-                // The core. Small and saturated: the only place cyan appears
-                // at full strength, which keeps it a light source rather than
-                // a colour.
-                RadialGradient(
-                    colors: [LifoPalette.cyan.opacity(0.38),
-                             LifoPalette.cyan.opacity(0.3),
-                             LifoPalette.cyan.opacity(0)],
-                    center: .init(x: 0.5, y: 0.48),
-                    startRadius: 0,
-                    endRadius: side * 0.18 * swell
-                )
-                .offset(x: driftX * 0.5, y: driftY * 0.5)
-                .blendMode(.screen)
+                LinearGradient(colors: [LifoPalette.amber.opacity(0.42), LifoPalette.night.opacity(0)],
+                               startPoint: .topLeading, endPoint: .bottom)
+                RadialGradient(colors: [LifoPalette.gold.opacity(0.17), .clear],
+                               center: .init(x: 0.45, y: 0.19), startRadius: 0, endRadius: side * 0.44 * swell)
+                RadialGradient(colors: [LifeOSTokens.accent.opacity(0.09), .clear],
+                               center: .init(x: 0.9, y: 0.45), startRadius: 0, endRadius: side * 0.35)
             }
-            // One blur over the whole stack rather than per layer: it melts
-            // the lobes into each other, which is the difference between
-            // stacked gradients and a single blended field.
-            .blur(radius: 34)
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: intensity)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: level)
         }
         .ignoresSafeArea()
-        .task {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
-                breath = 1
-            }
-        }
     }
 }
 
-#Preview {
-    LifoAura(intensity: 0.3, isActive: true)
-}
+#Preview { LifoAura(intensity: 0.3, isActive: true) }

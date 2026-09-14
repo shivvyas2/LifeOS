@@ -7,6 +7,7 @@ import DesignSystem
 /// In-memory design fixtures; never writes to an account or syncs sample pages.
 struct NotesDesignPreview: View {
     var showEditor = false
+    var showsPreviewLabel = true
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var fixture = NotesPreviewFixture()
 
@@ -24,10 +25,12 @@ struct NotesDesignPreview: View {
         .modelContainer(fixture.container)
         .environment(\.layout, .metrics(for: sizeClass == .regular ? .regular : .compact))
         .safeAreaInset(edge: .top, spacing: 0) {
-            Text("DESIGN PREVIEW · SAMPLE PAGES")
-                .font(.caption2).tracking(1).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity).padding(.vertical, 6)
-                .background(LifeOSTokens.canvas.light)
+            if showsPreviewLabel {
+                Text("DESIGN PREVIEW · SAMPLE PAGES")
+                    .font(.caption2).tracking(1).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity).padding(.vertical, 6)
+                    .background(LifeOSTokens.canvas.light)
+            }
         }
     }
 }

@@ -7,16 +7,20 @@ import SwiftUI
 /// content of a long repeated list cell (use `tileSurface` rows for those).
 public struct SoftCard<Content: View>: View {
     private let content: Content
+    private let hue: ModuleHue?
     @Environment(\.colorScheme) private var scheme
 
-    public init(@ViewBuilder content: () -> Content) { self.content = content() }
+    public init(hue: ModuleHue? = nil, @ViewBuilder content: () -> Content) {
+        self.hue = hue
+        self.content = content()
+    }
 
     public var body: some View {
         content
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
+                    .fill(hue.map { scheme == .dark ? $0.pastelDark : $0.pastel } ?? LifeOSTokens.cardSurface.resolve(scheme))
                     .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow,
                             radius: 12, y: 4)
             )

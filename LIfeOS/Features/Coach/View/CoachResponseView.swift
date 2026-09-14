@@ -66,7 +66,7 @@ struct CoachResponseView: View {
         .environment(\.colorScheme, onAura ? .light : scheme)
     }
 
-    private var surface: Color { onAura ? Color(red: 0.91, green: 0.94, blue: 0.98) : LifeOSTokens.cardSurface.resolve(scheme) }
+    private var surface: Color { onAura ? Color(red: 0.96, green: 0.91, blue: 0.81) : LifeOSTokens.cardSurface.resolve(scheme) }
 
     private func richText(_ value: String) -> Text {
         Text((try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value))
@@ -103,7 +103,7 @@ struct CoachResponseView: View {
                             .padding(12)
                     }
                 }
-                .background(onAura ? Color(red: 0.83, green: 0.89, blue: 0.96) : LifeOSTokens.accent.opacity(0.10))
+                .background(onAura ? Color(red: 0.92, green: 0.83, blue: 0.66) : LifeOSTokens.accent.opacity(0.10))
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { column, value in

@@ -21,6 +21,8 @@ final class AccountSession {
     private(set) var container: ModelContainer?
 
     private let accounts = AccountStore()
+    private var hasAdoptedScope = false
+    var beforeAccountChange: (() -> Void)?
 
     init() {
         adoptExistingSessionIfNeeded()
@@ -121,19 +123,35 @@ final class AccountSession {
     }
 
     private func adopt(_ next: UserScope?) {
+        let signedOutRoute = scope == nil ? SurfaceCoordinator.shared.pendingRoute : nil
+        if hasAdoptedScope && scope != next {
+            SurfaceCoordinator.shared.clear()
+            WorkoutLiveActivityController.endAll()
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            beforeAccountChange?()
+            beforeAccountChange = nil
+        }
+        if let signedOutRoute { SurfaceCoordinator.shared.pendingRoute = signedOutRoute }
+        hasAdoptedScope = true
         scope = next
+        PushService.shared.attach(ownerID: next?.id)
         guard let next else {
             container = nil
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            SurfaceCoordinator.shared.adopt(ownerID: nil, context: nil)
+            WorkoutLiveActivityController.endAll()
             return
         }
         do {
             container = try LifeOSContainer.make(for: next)
+            SurfaceCoordinator.shared.adopt(ownerID: next.id, context: container?.mainContext)
         } catch {
             // A store that cannot open is not something the person can fix,
             // and carrying on with the previous account's container would show
             // them somebody else's data. Nothing open is the safe failure.
             accountLog.error("could not open the store for an account: \(String(describing: error), privacy: .public)")
             container = nil
+            SurfaceCoordinator.shared.clear()
         }
     }
 }

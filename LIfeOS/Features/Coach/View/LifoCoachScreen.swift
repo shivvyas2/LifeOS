@@ -65,7 +65,7 @@ struct LifoCoachScreen: View {
             CoachVoiceOrb(level: activityLevel,
                           isResponding: model.phase == .thinking || model.voicePlayer.isSpeaking,
                           isEnabled: scenePhase == .active)
-                .frame(width: 170, height: 154)
+                .frame(width: 224, height: 202)
             HStack(spacing: 8) {
                 if model.phase == .listening {
                     Circle().fill(LifeOSTokens.accent).frame(width: 6, height: 6)
@@ -154,7 +154,7 @@ struct LifoCoachScreen: View {
                         .foregroundStyle(LifoPalette.ink)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(red: 0.06, green: 0.12, blue: 0.29).opacity(0.9), in: RoundedRectangle(cornerRadius: 14))
+                        .background(LifoPalette.raised.opacity(0.9), in: RoundedRectangle(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
                 }
@@ -412,7 +412,7 @@ struct GlassPane: ViewModifier {
                 // lit by the aura behind it rather than laid on top of it.
                 shape.fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.10), LifoPalette.cyan.opacity(0.05)],
+                        colors: [Color.white.opacity(0.10), LifoPalette.gold.opacity(0.05)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )

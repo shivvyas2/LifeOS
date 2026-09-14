@@ -1,0 +1,7 @@
+# Widgets, Watch, notifications, and activity surfaces
+
+Implemented an AppSurfaces package, iPhone/iPad Home and Lock Screen widgets, an activity timer Live Activity and Dynamic Island, a Watch companion with complication widgets, and a persistent account-scoped notification inbox. Settings expose permission and surface-sharing controls. Widget payloads use one atomic App Group envelope and expire after six hours or at midnight. Account changes replace the envelope and clear active activities; offline Watch copies expire and clear on reconnection.
+
+Verification: seven AppSurfaces package tests, nine APNs payload tests, nine native account/inbox/snapshot checks, and the normal iOS app plus Watch app and both extensions build passed. Real simulator Home widget reads and paired WatchConnectivity transfer were verified with synthetic values. Screenshots and native check output are in this directory. The final normal build log is `/private/tmp/lifeos-normal-final-build.log`.
+
+Release work: register/provision the App Group across all targets, deploy the updated APNs payload with `user_id` before shipping the stricter inbox client, and validate physical-device behavior. A fresh iPad surface pass remains pending. The Watch companion currently displays shared snapshots; native Watch workout mirroring and automatic WHOOP Bluetooth reconnection are separate requested work and are not implemented by these surface targets. The current Live Activity is the timer version; the newly requested blue-white glass tracker with additional live metrics is also pending.

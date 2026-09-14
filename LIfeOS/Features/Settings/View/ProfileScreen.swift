@@ -21,7 +21,7 @@ struct ProfileScreen: View {
     @State private var isEditing = false
     @State private var destination: ProfileDestination?
 
-    private enum ProfileDestination: Hashable { case settings, friends, connections }
+    private enum ProfileDestination: Hashable { case settings, friends, connections, notifications }
 
     var body: some View {
         NavigationStack {
@@ -33,6 +33,11 @@ struct ProfileScreen: View {
                 .navigationTitle("Profile")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { destination = .notifications } label: {
+                            Image(systemName: PushService.shared.unreadCount > 0 ? "bell.badge.fill" : "bell")
+                        }.accessibilityLabel("Notifications, \(PushService.shared.unreadCount) unread")
+                    }
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Close", systemImage: "xmark") { dismiss() }
                             .labelStyle(.iconOnly)
@@ -40,6 +45,7 @@ struct ProfileScreen: View {
                 }
                 .navigationDestination(item: $destination) { destination in
                     switch destination {
+                    case .notifications: NotificationInboxScreen()
                     case .friends: SocialHubScreen(activity: socialActivity)
                     case .connections:
                         if let whoop, let fitbit, let health, let plaid {

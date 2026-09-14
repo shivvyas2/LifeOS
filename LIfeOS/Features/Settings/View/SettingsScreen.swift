@@ -24,9 +24,12 @@ struct SettingsScreen: View {
     /// NavigationStack and no Done: the back chevron is the way out, which is
     /// what makes this feel like a place rather than an overlay.
     var body: some View {
-        GradientCanvas(hue: .habits) {
+        ZStack {
+            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
             ScrollView {
                 sections
+                    .frame(maxWidth: 680)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .padding(.bottom, 40)
@@ -40,7 +43,8 @@ struct SettingsScreen: View {
     @ViewBuilder
     private var sections: some View {
         VStack(alignment: .leading, spacing: 22) {
-            sectionLabel("Look")
+            AccountPageHeading(title: "Make it yours", detail: "Your preferences, daily goals and account.")
+            sectionLabel("Appearance")
             appearanceCard
 
             sectionLabel("Daily goals")
@@ -51,16 +55,30 @@ struct SettingsScreen: View {
                 accountsCard(session)
             }
 
-            sectionLabel("Thinking")
+            sectionLabel("Your coach")
             tierCard
 
             sectionLabel("Voice")
             voiceCard
 
+            sectionLabel("At a glance")
+            AccountPanel {
+                VStack(spacing: 18) {
+                    NavigationLink { NotificationInboxScreen() } label: {
+                        Label("Notifications", systemImage: "bell.badge").font(LifeOSType.rowTitle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Divider()
+                    NavigationLink { SurfaceSettingsScreen() } label: {
+                        Label("Widgets & Watch", systemImage: "applewatch").font(LifeOSType.rowTitle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+
             sectionLabel("Connections")
             connectionsRow
 
-            sectionLabel("Developer")
 
             signOutButton
                 .padding(.top, 8)
@@ -73,7 +91,7 @@ struct SettingsScreen: View {
     /// its own sync cursors and its own Whoop and bank connections, so moving
     /// between them is opening a different file rather than tearing one down.
     private func accountsCard(_ session: AccountSession) -> some View {
-        GlassPanel {
+        AccountPanel {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(session.signedInAccounts) { account in
                     let current = account.userID == session.currentAccount?.userID
@@ -115,7 +133,7 @@ struct SettingsScreen: View {
     /// allowance, the phone gives a weaker one and sends nothing anywhere.
     /// Automatic is the default and the only one that falls back.
     private var tierCard: some View {
-        GlassPanel {
+        AccountPanel {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(TierPreference.allCases) { option in
                     let selected = tierRaw == option.rawValue
@@ -155,7 +173,7 @@ struct SettingsScreen: View {
     /// that do nothing are three questions a person has to work out the
     /// answer to for no reason.
     private var voiceCard: some View {
-        GlassPanel {
+        AccountPanel {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: $speaksReplies) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -201,12 +219,8 @@ struct SettingsScreen: View {
     }
 
     private var appearanceCard: some View {
-        GlassPanel {
+        AccountPanel {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Appearance")
-                    .font(LifeOSType.rowTitle)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
                 HStack(spacing: 10) {
                     ForEach(ColorSchemePreference.allCases, id: \.self) { option in
                         let selected = appearance == option
@@ -229,7 +243,7 @@ struct SettingsScreen: View {
                                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                                             .strokeBorder(
                                                 selected
-                                                    ? ModuleHue.habits.top
+                                                    ? LifeOSTokens.accent
                                                     : Color.clear,
                                                 lineWidth: 2
                                             )
@@ -244,7 +258,7 @@ struct SettingsScreen: View {
     }
 
     private var goalsCard: some View {
-        GlassPanel {
+        AccountPanel {
             VStack(spacing: 0) {
                 stepper(icon: "moon.fill", "Sleep",
                         value: "\(model.draft.sleepMinutes / 60)h \(model.draft.sleepMinutes % 60)m") {
@@ -301,6 +315,9 @@ struct SettingsScreen: View {
                         icon: "heart.fill", name: "Apple Health",
                         detail: health.statusDetail, isOn: health.isConnected
                     )
+                    rowDivider
+                    connectionLine(icon: "figure.run", name: "Fitbit", detail: fitbit.statusDetail,
+                                   isOn: fitbit.isConnected, isBusy: fitbit.isSyncing)
                     rowDivider
                     connectionLine(
                         // The same words the Connections screen uses. Two
@@ -413,8 +430,7 @@ struct SettingsScreen: View {
 
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
-            .font(LifeOSType.label.weight(.bold))
-            .tracking(0.8)
+            .font(LifeOSType.sectionTitle)
             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
     }
 
@@ -430,7 +446,7 @@ struct SettingsScreen: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(LifeOSType.label.weight(.semibold))
-                .foregroundStyle(ModuleHue.habits.top)
+                .foregroundStyle(LifeOSTokens.accent)
                 .frame(width: 28)
             Text(label)
                 .font(LifeOSType.secondary.weight(.medium))

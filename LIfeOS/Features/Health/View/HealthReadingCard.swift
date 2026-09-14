@@ -1,7 +1,7 @@
 import SwiftUI
 import DesignSystem
 
-/// The same neutral surface for health readings, with color reserved for meaning.
+/// Module colors identify readings without implying a healthy or unhealthy result.
 struct HealthReadingCard: View {
     let icon: String
     let label: String
@@ -9,12 +9,13 @@ struct HealthReadingCard: View {
     var unit: String? = nil
     var caption: String? = nil
     var captionColor: Color? = nil
+    var hue: ModuleHue = .body
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(label, systemImage: icon).font(.subheadline)
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            Label(label, systemImage: icon).font(LifeOSType.label)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.75))
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value ?? "—").font(.title.bold()).monospacedDigit()
                 if let unit, value != nil { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
@@ -28,7 +29,7 @@ struct HealthReadingCard: View {
         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
         .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
         .padding(16)
-        .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+        .background(scheme == .dark ? hue.pastelDark : hue.pastel, in: RoundedRectangle(cornerRadius: 22))
         .accessibilityElement(children: .combine)
     }
 }

@@ -3,8 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "LifeOSKit",
-    platforms: [.iOS("26.0"), .macOS("26.0")],
+    platforms: [.iOS("26.0"), .macOS("26.0"), .watchOS("26.0")],
     products: [
+        .library(name: "AppSurfaces", targets: ["AppSurfaces"]),
         .library(name: "DesignSystem", targets: ["DesignSystem"]),
         .library(name: "Persistence", targets: ["Persistence"]),
         .library(name: "Integrations", targets: ["Integrations"]),
@@ -13,6 +14,8 @@ let package = Package(
         .library(name: "Assistant", targets: ["Assistant"]),
     ],
     targets: [
+        .target(name: "AppSurfaces"),
+        .testTarget(name: "AppSurfacesTests", dependencies: ["AppSurfaces"]),
         .target(name: "DesignSystem"),
         .target(name: "Persistence"),
         .target(name: "Integrations", dependencies: ["Persistence"]),

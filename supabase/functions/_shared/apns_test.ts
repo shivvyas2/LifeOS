@@ -46,12 +46,14 @@ Deno.test("something that is not a key is rejected rather than sent", () => {
 });
 
 Deno.test("the payload carries the sentence and what it was about, never the numbers", () => {
-  const payload = notificationPayload("Three short nights.", "short_sleep", "2026-08-28") as {
+  const payload = notificationPayload("Three short nights.", "short_sleep", "2026-08-28", "account-a") as {
     aps: { alert: { title: string; body: string }; "thread-id": string };
+    user_id: string;
     trigger: string;
     day: string;
   };
   assertEquals(payload.aps.alert.body, "Three short nights.");
+  assertEquals(payload.user_id, "account-a");
   assertEquals(payload.trigger, "short_sleep");
   assertEquals(payload.day, "2026-08-28");
   assertEquals(payload.aps["thread-id"], COLLAPSE_ID);

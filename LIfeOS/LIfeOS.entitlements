@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>com.apple.security.application-groups</key>
+	<array><string>group.com.shivvyas.lifeos</string></array>
 	<!-- Read access to Apple Health. This is the whole requirement for steps,
 	     sleep, weight and heart data.
 

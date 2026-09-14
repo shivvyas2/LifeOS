@@ -13,7 +13,7 @@ struct SleepDashboardCard: View {
     }
 
     var body: some View {
-        SoftCard {
+        SoftCard(hue: .nutrition) {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
                     Label("Sleep", systemImage: "moon").font(.headline)

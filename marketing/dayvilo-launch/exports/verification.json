@@ -1,0 +1,47 @@
+[
+  {
+    "file": "dayvilo-launch-9x16.mp4",
+    "dimensions": [
+      1080,
+      1920
+    ],
+    "duration": 60.0,
+    "frames": 1800,
+    "bytes": 12384574,
+    "decode": "pass",
+    "codecs": [
+      "h264",
+      "aac"
+    ]
+  },
+  {
+    "file": "dayvilo-launch-16x9.mp4",
+    "dimensions": [
+      1920,
+      1080
+    ],
+    "duration": 60.0,
+    "frames": 1800,
+    "bytes": 12330409,
+    "decode": "pass",
+    "codecs": [
+      "h264",
+      "aac"
+    ]
+  },
+  {
+    "file": "dayvilo-teaser-9x16.mp4",
+    "dimensions": [
+      1080,
+      1920
+    ],
+    "duration": 15.008,
+    "frames": 450,
+    "bytes": 3081551,
+    "decode": "pass",
+    "codecs": [
+      "h264",
+      "aac"
+    ]
+  }
+]

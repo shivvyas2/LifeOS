@@ -53,6 +53,7 @@ export function notificationPayload(
   body: string,
   trigger: string,
   day: string,
+  userID: string,
 ): Record<string, unknown> {
   return {
     aps: {
@@ -62,6 +63,7 @@ export function notificationPayload(
     },
     trigger,
     day,
+    user_id: userID,
   };
 }
 

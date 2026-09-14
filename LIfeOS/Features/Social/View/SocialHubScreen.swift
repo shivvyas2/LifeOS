@@ -121,15 +121,9 @@ struct SocialHubScreen: View {
                         }.buttonStyle(.plain)
                     }
                 }
-                SocialPanel {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Share activity on my profile", isOn: Binding(get: { model.sharesWithFriends },
-                            set: { enabled in Task { await model.shareWithFriends(enabled) } }))
-                            .lifeOSText(.rowTitle).disabled(model.busy || model.refreshing)
-                        Text("Only accepted friends can see your streak, days tracked and workout total. Group leaderboard sharing is separate.")
-                            .lifeOSText(.caption).foregroundStyle(.secondary)
-                    }
-                }
+                ProfileActivitySharingCard(isOn: Binding(get: { model.sharesWithFriends },
+                    set: { enabled in Task { await model.shareWithFriends(enabled) } }),
+                    isBusy: model.busy || model.refreshing)
             }
             .padding(20).frame(maxWidth: 860).frame(maxWidth: .infinity)
         }

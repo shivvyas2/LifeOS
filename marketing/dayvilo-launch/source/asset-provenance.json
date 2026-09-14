@@ -1,0 +1,16 @@
+{
+  "health": "docs/design/health-activity/health-iphone.png",
+  "calendar": "docs/design/calendar-health/calendar.png",
+  "leaderboard": "docs/design/social/wellness-leaderboard-iphone.png",
+  "chat": "docs/design/social/chat-iphone.png",
+  "activity": "docs/design/health-activity/activity-running-iphone.png",
+  "widget": "docs/design/widgets-watch/widget-home-screen.png",
+  "watch": "docs/design/widgets-watch/watch-steps.png",
+  "lock": "docs/design/widgets-watch/live-activity-lock-screen.png",
+  "coach": "docs/design/coach/voice-and-cards.png",
+  "today": "LaunchFilmPreview / native TodayScreen, synthetic fixtures",
+  "notes": "LaunchFilmPreview / native NotesHubScreen, in-memory sample pages",
+  "money": "LaunchFilmPreview / native MoneyScreen, synthetic money snapshot",
+  "cat-native.mp4": "OnboardingCat.swift / native SceneKit recording",
+  "coach-motion.mp4": "CoachDesignPreview / native coach, simulated audio input"
+}

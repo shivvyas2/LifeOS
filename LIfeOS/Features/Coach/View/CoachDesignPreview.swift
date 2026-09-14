@@ -5,7 +5,7 @@ import DesignSystem
 /// Visual fixtures only. Audio levels are simulated; no microphone or provider calls.
 struct CoachDesignPreview: View {
     @State private var model = CoachViewModel()
-    @State private var simulatedAudio = false
+    @State private var simulatedAudio = ProcessInfo.processInfo.arguments.contains("--voice")
 
     var body: some View {
         VStack(spacing: 0) {

@@ -13,20 +13,20 @@ struct FitnessSegmentView: View {
         VStack(spacing: 20) {
             caloriesCard
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 HealthReadingCard(icon: "figure.walk", label: "Steps",
-                               value: activity.steps.map { $0.formatted() })
+                               value: activity.steps.map { $0.formatted() }, hue: .activity)
                 HealthReadingCard(icon: "bolt.fill", label: "Active Time",
-                               value: activity.exerciseMinutes.map { "\($0)" }, unit: "min")
+                               value: activity.exerciseMinutes.map { "\($0)" }, unit: "min", hue: .activity)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 HealthReadingCard(icon: "gauge.with.needle", label: "Strain",
                                value: recovery.dayStrain.map { String(format: "%.1f", $0) })
                 HealthReadingCard(icon: "heart.fill", label: "Avg HR",
-                               value: recovery.averageHR.map { "\(Int($0))" }, unit: "bpm")
+                               value: recovery.averageHR.map { "\(Int($0))" }, unit: "bpm", hue: .habits)
                 HealthReadingCard(icon: "bolt.heart.fill", label: "Max HR",
-                               value: recovery.maxHR.map { "\(Int($0))" }, unit: "bpm")
+                               value: recovery.maxHR.map { "\(Int($0))" }, unit: "bpm", hue: .habits)
             }
 
             if !activity.workouts.isEmpty {
@@ -60,7 +60,7 @@ struct FitnessSegmentView: View {
     }
 
     private var caloriesCard: some View {
-        SoftCard {
+        SoftCard(hue: .activity) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -85,7 +85,7 @@ struct FitnessSegmentView: View {
     }
 
     private var trainingCard: some View {
-        SoftCard {
+        SoftCard(hue: .activity) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("TRAINING")
                     .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)

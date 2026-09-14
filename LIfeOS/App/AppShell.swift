@@ -1,4 +1,5 @@
 import SwiftUI
+import AppSurfaces
 import Integrations
 import Persistence
 import DesignSystem
@@ -235,6 +236,10 @@ struct AppShell: View {
     /// half finished bank connection is waiting on it, and `resume` returns
     /// false for anything that is not that redirect, so Whoop loses nothing.
     private func handle(_ url: URL) {
+        if let route = SurfaceRoute(url: url) {
+            SurfaceCoordinator.shared.pendingRoute = route
+            return
+        }
         guard PlaidLinkPresenter.resume(from: url) == false else { return }
         if FitbitOAuth.state(in: url).map({ returned in
             KeychainFitbitAuthStore().pendingAuths().contains { $0.state == returned }

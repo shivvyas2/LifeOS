@@ -53,3 +53,27 @@ Evidence: `docs/design/social/wellness-leaderboard-iphone.png`, `wellness-leader
 Final health-update verification: 1,199 package tests, 10 Fitbit helper tests, 23 wellness database assertions and 43 group/chat database regression assertions passed; native build and database lint passed. See `docs/design/social/wellness-leaderboards.md` for definitions, caveats, API references and deployment state. Live accounts for all three providers have not been exercised in the simulator.
 
 Final result: passed
+
+## Health, account and Begin Activity — 2026-09-14
+
+Visual target: the supplied health tiles / heart-rate reference and journal reference (`8b43589606845085ce824c83cf05a695.jpg` and `667e20b408cf9b32ef62977eef31746c.jpg`). This is an adaptation into the existing native app, not a pixel clone: SF typography, orange actions, the original module pastels, system navigation and the photo-derived profile glass are intentional constraints. No reference illustrations, fictional chart values or emotion scores were introduced.
+
+Evidence: `docs/design/health-activity/`. iPhone screenshots are 1206×2622 pixels at 3× (402×874 points); iPad screenshots are 1668×2420 at 2× (834×1210 points). Native screen content was compared with both supplied references in the same image inputs. The reference phone mockups include device framing; comparisons assessed app-owned card composition, color, typography, spacing and hierarchy rather than the mockup bezels.
+
+First-pass fixes:
+- P2: recovery caption used low-contrast green on the restored blue card. Changed caption to adaptive primary ink; `health-iphone.png` was recaptured and inspected after the fix.
+- P2: Settings repeated the Appearance title inside and outside its card. Removed the inner heading; `settings-iphone.png` was recaptured and inspected after the fix.
+
+Final visual checks:
+- Existing four top Health tiles retain their data, ordering, navigation and date controls, with the requested module colors restored.
+- Category cards feature a leading reading with aligned supporting cells; accessibility text uses a single supporting column. No clipping in the reviewed iPhone/iPad category layouts.
+- Profile shortcuts keep the transparent glass surface; Together is prominent and Connections/Settings sit in two readable cards. See `profile-shortcuts-iphone.png`.
+- The mint weight panel and peach journal card have coherent spacing and a clear writing action. See `journal-weight-iphone.png`.
+- Begin Activity has clear selection, timer, pause/resume and save hierarchy. Missing measurements are stated; no simulated beats or calories appear in production.
+- Shared typography, warm canvas, orange actions, adaptive dark palette, real SF Symbols and concise copy match the existing app. The illustrative reference assets were intentionally not recreated because the request was to adapt its card presentation.
+
+Interaction checks: selected Run, started with Health saving off, paused at 00:19, confirmed elapsed time stayed fixed while opening the syncing explanation, resumed and saved at 00:25. The saved screen correctly reported local account storage. `activity-running-iphone.png` and `activity-saved-iphone.png` capture these states. Nine additional native recorder lifecycle checks passed in an isolated in-memory store; 1,202 package tests passed. The final production-entry iOS build passed and `git diff --check` is clean.
+
+Physical sensor streaming, Apple Watch delivery timing and actual HealthKit write authorization/saving remain hardware validation items. The simulator checks do not establish end-to-end wearable performance. There is no Apple Watch companion in this repository, and the UI does not claim live control of Apple's Workout app. No real account data was used in the preview or recorder checks.
+
+final result: passed

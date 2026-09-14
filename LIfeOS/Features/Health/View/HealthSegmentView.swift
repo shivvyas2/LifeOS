@@ -51,14 +51,14 @@ struct HealthSegmentView: View {
                 .buttonStyle(.plain)
             }
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 recoveryCard
                 caloriesCard
             }
 
             SleepDashboardCard(recovery: recovery, wellness: wellness, selectedDate: selectedDate)
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 HealthReadingCard(
                     icon: "waveform.path.ecg",
                     label: "HRV",
@@ -69,11 +69,11 @@ struct HealthSegmentView: View {
                     icon: "heart.fill",
                     label: "Resting HR",
                     value: recovery.restingHR.map { "\(Int($0))" },
-                    unit: "bpm"
+                    unit: "bpm", hue: .habits
                 )
             }
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 HealthReadingCard(
                     icon: "drop.fill",
                     label: "Blood oxygen",
@@ -90,7 +90,7 @@ struct HealthSegmentView: View {
                 )
             }
 
-            StatGroup(title: "Vitals", rows: vitalRows)
+            StatGroup(title: "Vitals", rows: vitalRows, hue: .recovery, icon: "waveform.path.ecg")
 
             appleHealthGroups
             WeightSection(snapshot: weight)
@@ -133,7 +133,7 @@ struct HealthSegmentView: View {
             value: recovery.recoveryPct.map { "\(Int($0))" },
             unit: "%",
             caption: band?.label.uppercased(),
-            captionColor: band?.color
+            captionColor: LifeOSTokens.primaryText.resolve(scheme), hue: .recovery
         )
     }
 
@@ -142,35 +142,56 @@ struct HealthSegmentView: View {
             icon: "flame.fill",
             label: "Calories",
             value: recovery.calories.map { "\(Int($0))" },
-            unit: "kcal"
+            unit: "kcal", hue: .activity
         )
     }
 
     private var journalCard: some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("JOURNAL")
-                        .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
-                    Spacer()
-                    Button(wellness.hasEntryToday ? "Add another" : "Write today") { onAddJournal() }
-                        .font(LifeOSType.label.weight(.semibold))
-                        .tint(LifeOSTokens.accent)
-                }
-                if wellness.journal.isEmpty {
-                    Text("Nothing written yet. How did today feel?")
-                        .font(LifeOSType.label.weight(.regular)).opacity(0.5)
-                } else {
-                    ForEach(wellness.journal.prefix(4)) { entry in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.text).font(LifeOSType.secondary).lineLimit(3)
-                            Text(entry.date.formatted(.dateTime.weekday(.abbreviated).month().day()))
-                                .font(LifeOSType.caption).opacity(0.45)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Label("Your journal", systemImage: "book.closed").font(LifeOSType.sectionTitle)
+                Spacer()
+                Image(systemName: "sun.max").font(.title2).accessibilityHidden(true)
             }
+            Text(wellness.journal.isEmpty ? "A moment for you." : "Little moments, kept.")
+                .font(LifeOSType.sectionTitle)
+            Text("What gave you energy? What would you like to leave behind?")
+                .font(LifeOSType.secondary)
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.7))
+            ForEach(wellness.journal.prefix(3)) { entry in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.date.formatted(.dateTime.weekday(.wide).month().day()))
+                        .font(LifeOSType.caption).foregroundStyle(.secondary)
+                    Text(entry.text).font(LifeOSType.secondary).lineLimit(3)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                .background(LifeOSTokens.cardSurface.resolve(scheme).opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+            }
+            Button(action: onAddJournal) {
+                HStack {
+                    Text(wellness.hasEntryToday ? "Add a reflection" : "Write a reflection")
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                }
+                .font(LifeOSType.rowTitle).padding(16)
+                .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
+                .background(LifeOSTokens.fabFill.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+            }.buttonStyle(.plain)
+        }
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+        .padding(22).background(scheme == .dark ? ModuleHue.activity.pastelDark : ModuleHue.activity.pastel,
+                               in: RoundedRectangle(cornerRadius: 26))
+    }
+
+    private func categoryStyle(_ title: String) -> (ModuleHue, String) {
+        switch title {
+        case "Movement": (.activity, "figure.run")
+        case "Heart and fitness": (.habits, "heart")
+        case "Body": (.body, "figure.stand")
+        case "Vitals": (.recovery, "waveform.path.ecg")
+        case "Walking": (.money, "figure.walk")
+        case "Sleep": (.nutrition, "moon")
+        default: (.body, "circle.grid.2x2")
         }
     }
 
@@ -193,7 +214,8 @@ struct HealthSegmentView: View {
         ForEach(wellness.healthGroups) { group in
             StatGroup(
                 title: group.title,
-                rows: group.items.map { StatGroup.Row(label: $0.title, value: $0.formatted) }
+                rows: group.items.map { StatGroup.Row(label: $0.title, value: $0.formatted) },
+                hue: categoryStyle(group.title).0, icon: categoryStyle(group.title).1
             )
         }
     }

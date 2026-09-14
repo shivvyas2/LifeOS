@@ -162,33 +162,33 @@ struct ProfileOverview: View {
     }
 
     private var shortcuts: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Your account").font(.title3.bold())
-            VStack(spacing: 0) {
-                shortcut("Connections", detail: "Health, wearables and bank accounts", icon: "link", action: onConnections)
-                Rectangle().fill(.white.opacity(0.14)).frame(height: 0.5).padding(.leading, 58)
-                shortcut("Together", detail: "Friends, messages, groups and rankings", icon: "person.2", action: onFriends)
-                Rectangle().fill(.white.opacity(0.14)).frame(height: 0.5).padding(.leading, 58)
-                shortcut("Settings", detail: "Goals, appearance and account", icon: "slider.horizontal.3", action: onSettings)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Your account").font(LifeOSType.sectionTitle)
+            shortcut("Together", detail: "Friends, conversations and a little motivation.", icon: "person.2", action: onFriends)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: typeSize.isAccessibilitySize ? 260 : 150))], spacing: 12) {
+                shortcut("Connections", detail: "Health, wearables & banks", icon: "link", action: onConnections)
+                shortcut("Settings", detail: "Goals & preferences", icon: "slider.horizontal.3", action: onSettings)
             }
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 22))
         }
     }
 
     private func shortcut(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: icon).font(.body).foregroundStyle(LifeOSTokens.accent).frame(width: 28)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(primary)
-                    Text(detail).font(.caption).foregroundStyle(secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Image(systemName: icon).font(.title3).foregroundStyle(LifeOSTokens.accent)
+                    Spacer()
+                    Image(systemName: "arrow.up.right").font(.caption.weight(.semibold)).foregroundStyle(secondary)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(LifeOSType.rowTitle).foregroundStyle(primary)
+                    Text(detail).font(LifeOSType.caption).foregroundStyle(secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .padding(16).frame(minHeight: 64).contentShape(.rect)
-        }
-        .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(20)
+            .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: 22))
+        }.buttonStyle(.plain)
     }
 
     private var initials: String {
