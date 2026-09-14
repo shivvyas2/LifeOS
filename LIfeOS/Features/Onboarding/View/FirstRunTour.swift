@@ -13,7 +13,7 @@ struct FirstRunTour: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(spacing: 8) {
-                        Image(systemName: "circle.hexagongrid.fill")
+                        Image(systemName: LifeOSMark.symbol)
                             .foregroundStyle(LifeOSTokens.accent)
                         Text("LifeOS").font(.title3.bold())
                         Spacer()

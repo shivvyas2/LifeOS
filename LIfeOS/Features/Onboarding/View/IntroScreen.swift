@@ -63,7 +63,7 @@ struct IntroScreen: View {
     private var header: some View {
         HStack {
             HStack(spacing: Space.x1) {
-                Image(systemName: "circle.hexagongrid.fill")
+                Image(systemName: LifeOSMark.symbol)
                     .foregroundStyle(LifeOSTokens.accent)
                 Text("LifeOS")
                     .tracking(-0.5)

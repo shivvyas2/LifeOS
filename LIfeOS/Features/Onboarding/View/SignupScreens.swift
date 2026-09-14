@@ -34,7 +34,7 @@ struct SignupScaffold<Content: View, Action: View>: View {
                     }
                     Spacer()
                     HStack(spacing: 8) {
-                        Image(systemName: "circle.hexagongrid.fill")
+                        Image(systemName: LifeOSMark.symbol)
                             .foregroundStyle(LifeOSTokens.accent)
                         Text("LifeOS").font(.title3.bold())
                     }
