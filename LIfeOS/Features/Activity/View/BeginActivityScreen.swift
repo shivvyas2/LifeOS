@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Integrations
+import AppSurfaces
 
 struct BeginActivityScreen: View {
     @Bindable var model: ActivityRecorder
@@ -9,16 +10,21 @@ struct BeginActivityScreen: View {
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
     @State private var confirmDiscard = false
+    @State private var hudExpanded = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    AccountPageHeading(title: model.saved ? "Time well spent." : model.hasSession ? model.selection.rawValue : "Make time to move.",
-                        detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
-                    timerCard
-                    if !model.hasSession && !model.saved { activityPicker }
-                    if model.hasSession { liveReadings }
+                    if model.hasSession, let readout = model.readout {
+                        liveHero(readout)
+                        liveTiles(readout)
+                    } else {
+                        AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
+                            detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
+                        timerCard
+                        if !model.saved { activityPicker }
+                    }
                     if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
                     if let error = model.error {
                         Label(error, systemImage: "exclamationmark.circle")
@@ -35,7 +41,17 @@ struct BeginActivityScreen: View {
                 }
                 .frame(maxWidth: 620).frame(maxWidth: .infinity).padding(22).padding(.bottom, 20)
             }
-            .background(LifeOSTokens.canvas.resolve(scheme))
+            .background(alignment: .top) {
+                ZStack(alignment: .top) {
+                    LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
+                    if model.hasSession {
+                        LinearGradient(colors: [scheme == .dark ? ModuleHue.recovery.darkTop : LifeOSTokens.liveGradientTop,
+                                                LifeOSTokens.canvas.resolve(scheme)], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 380).ignoresSafeArea(edges: .top)
+                    }
+                }
+            }
+            .toolbarBackground(.hidden, for: .navigationBar)
             .navigationTitle(model.hasSession ? "Activity" : "Begin activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -73,6 +89,79 @@ struct BeginActivityScreen: View {
         .background(scheme == .dark ? ModuleHue.activity.pastelDark : ModuleHue.activity.pastel,
                     in: RoundedRectangle(cornerRadius: 28))
     }
+    private func liveHero(_ readout: LiveSessionReadout) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(model.selection.rawValue, systemImage: model.selection.icon).font(LifeOSType.rowTitle)
+                Spacer()
+                Text(readout.isPaused ? "Paused" : readout.push.headline).font(LifeOSType.label)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(.white.opacity(0.22), in: Capsule())
+            }
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
+                    .font(.system(size: 72, weight: .medium, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.45)
+                    .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
+            }
+            Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
+            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, isExpanded: $hudExpanded)
+                .padding(.top, 10)
+        }
+        .foregroundStyle(.white)
+        .padding(.top, 8)
+    }
+
+    private func liveTiles(_ readout: LiveSessionReadout) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let fresh = model.isRunning && model.heartRateDate.map { timeline.date.timeIntervalSince($0) < 15 } == true
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+                glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
+                          value: fresh ? readout.heartRate.map(String.init) : nil, unit: "bpm",
+                          caption: fresh ? "Live sensor reading" : model.isPaused ? "Activity paused" : model.sensor.status)
+                if model.zonesAvailable, model.selection != .yoga {
+                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effort.map { String(format: "%.1f", $0) },
+                              unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
+                              caption: capacityCaption(readout))
+                }
+                glassTile(icon: "flame.fill", label: "Calories", value: readout.calories.map(String.init), unit: "kcal",
+                          caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
+                if [.walk, .run, .cycle].contains(model.selection) {
+                    glassTile(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
+                              value: readout.distanceMeters.map { String(format: "%.2f", Double($0) / 1000) }, unit: "km",
+                              caption: readout.distanceMeters == nil ? "No distance reading" : "From Apple Health")
+                }
+                if !model.zonesAvailable {
+                    Text("Add your birth date in Profile for zones, effort and battery.")
+                        .font(LifeOSType.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func capacityCaption(_ readout: LiveSessionReadout) -> String {
+        switch readout.capacitySource {
+        case "whoop": "Battery \(readout.batteryPercent.map { "\($0)%" } ?? "\u{2014}") · WHOOP recovery"
+        case "health": "Battery \(readout.batteryPercent.map { "\($0)%" } ?? "\u{2014}") · Apple Health"
+        default: "Battery unknown · cautious target"
+        }
+    }
+
+    private func glassTile(icon: String, label: String, value: String?, unit: String?, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(label, systemImage: icon).font(LifeOSType.label).opacity(0.75)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value ?? "\u{2014}").font(.title.bold()).monospacedDigit()
+                if let unit, value != nil { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
+            }.lineLimit(1).minimumScaleFactor(0.7)
+            Text(caption).font(.caption.weight(.medium)).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+        }
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
+        .padding(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
     private var activityPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose your activity").font(LifeOSType.sectionTitle)
@@ -93,19 +182,6 @@ struct BeginActivityScreen: View {
                     .buttonStyle(.plain).disabled(model.busy)
                     .accessibilityAddTraits(model.selection == activity ? .isSelected : [])
                 }
-            }
-        }
-    }
-    private var liveReadings: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let fresh = model.isRunning && model.heartRateDate.map { timeline.date.timeIntervalSince($0) < 15 } == true
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
-                HealthReadingCard(icon: "heart", label: "Heart rate", value: fresh ? model.heartRate.map { String(Int($0)) } : nil,
-                    unit: "bpm", caption: fresh ? "Live sensor reading" : model.isPaused ? "Activity paused" : "Waiting for a sensor", hue: .habits)
-                HealthReadingCard(icon: "flame", label: "Active energy", value: model.energy.map { String(Int($0)) },
-                    unit: "kcal", caption: model.energy == nil ? "No energy reading" : "From Apple Health", hue: .activity)
-                HealthReadingCard(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
-                    value: model.distance.map { String(format: "%.2f", $0 / 1000) }, unit: "km", caption: model.distance == nil ? "No distance reading" : "From Apple Health", hue: .body)
             }
         }
     }

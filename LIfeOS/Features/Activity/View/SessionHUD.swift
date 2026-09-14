@@ -20,7 +20,7 @@ struct SessionHUD: View {
             Button { withAnimation(.snappy) { isExpanded.toggle() } } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 14) {
-                        timer.frame(minWidth: 62, alignment: .leading)
+                        timer
                         reading(symbol: "heart.fill", value: readout.heartRate.map(String.init), chip: readout.zone.map { "Z\($0)" }, tint: readout.push.tint)
                         if showsEffort {
                             reading(symbol: "bolt.fill", value: readout.effort.map { String(format: "%.1f", $0) }, chip: "est", tint: nil)
@@ -54,15 +54,17 @@ struct SessionHUD: View {
                 Text(Duration.seconds(readout.elapsed).formatted(.time(pattern: .minuteSecond)))
             }
         }
-        .font(.system(.headline, design: .rounded)).monospacedDigit().lineLimit(1)
+        .font(.system(.headline, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
     }
 
     private func reading(symbol: String, value: String?, chip: String?, tint: Color?) -> some View {
         HStack(spacing: 4) {
             Image(systemName: symbol).font(.caption).foregroundStyle(tint ?? LifeOSTokens.secondaryText.resolve(scheme))
-            Text(value ?? "\u{2014}").font(.headline).monospacedDigit().frame(minWidth: 30, alignment: .leading)
+            Text(value ?? "\u{2014}").font(.headline).monospacedDigit()
+                .minimumScaleFactor(0.6).lineLimit(1)
             if let chip {
                 Text(chip).font(LifeOSType.eyebrow).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .minimumScaleFactor(0.6).lineLimit(1)
             }
         }.lineLimit(1)
     }

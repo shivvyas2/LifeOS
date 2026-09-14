@@ -24,7 +24,19 @@ struct HealthActivityDesignPreview: View {
                         try? checkResults.write(to: url, atomically: true, encoding: .utf8)
                     }
             }
-            else if page == "activity" { BeginActivityScreen(model: fixture.recorder) }
+            else if page == "activity" {
+                BeginActivityScreen(model: fixture.recorder)
+                    .task {
+                        guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
+                        fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? .strength : .run
+                        await fixture.recorder.start()
+                        let start = Date.now.addingTimeInterval(-724)
+                        for second in stride(from: 0, to: 720, by: 2) {
+                            fixture.recorder.sensor.onReading?(second < 120 ? 118 : second < 480 ? 146 : 156, start.addingTimeInterval(Double(second)))
+                        }
+                        fixture.recorder.sensor.onReading?(152, .now)
+                    }
+            }
             else if page == "profile" { ProfileDesignPreview() }
             else {
                 NavigationStack {
@@ -75,6 +87,8 @@ struct HealthActivityDesignPreview: View {
     init() {
         recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: false)
         recorder.saveToHealth = false
+        recorder.birthDate = { Calendar.current.date(from: DateComponents(year: 1996, month: 6, day: 1)) }
+        _ = try? MetricsStore(context: container.mainContext).upsert(date: .now) { $0.whoopRecoveryPct = 82; $0.whoopSleepPerformancePct = 89 }
         recorder.attach(container.mainContext)
         fitbit = FitbitConnectionViewModel(pending: InMemoryFitbitAuthStore(), sessions: InMemoryAuthSessionStore(), defaults: defaults)
         health = HealthConnectionViewModel(defaults: defaults)
