@@ -1,7 +1,7 @@
 # Apple Watch companion: the watch runs the workout, the phone shows it
 
 **Date:** 2026-09-14
-**Status:** approved in conversation, spec under review
+**Status:** implemented on feat/watch-companion, see docs/design/watch-companion/report.md
 **Builds on:** `2026-09-14-live-session-core-design.md` (the readout, the
 effort model, the HUD, the Live Activity, the recorder's draft),
 `docs/design/widgets-watch/` (the watch dashboard and its WatchConnectivity
@@ -281,3 +281,8 @@ and find one workout in Health. Record all five in
 - **Two sessions at once.** If the phone path is already running when a
   mirrored session arrives (the person started on both), the recorder keeps
   the phone session and ends the mirrored one with a notice; it never merges.
+- **Recovery behaviour is still unverified.** No hardware run has confirmed
+  whether `recoverActiveWorkoutSession` returns a mirrored session after a
+  phone relaunch; see `docs/design/watch-companion/report.md`.
+- **The five section 8 hardware checks are pending**, to be run by Shiv on
+  the iPhone and watch; see `docs/design/watch-companion/report.md`.
