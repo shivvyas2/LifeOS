@@ -34,7 +34,7 @@ struct NotificationInboxScreen: View {
                             Button { service.markRead(entry.id); selected = entry } label: {
                                 AccountPanel {
                                     HStack(alignment: .top, spacing: 12) {
-                                        Image(systemName: entry.isRead ? "sparkles" : "bell.badge.fill")
+                                        Image(systemName: entry.isRead ? LifeOSMark.symbol : "bell.badge.fill")
                                             .foregroundStyle(LifeOSTokens.accent).frame(width: 24)
                                         VStack(alignment: .leading, spacing: 8) {
                                             HStack {

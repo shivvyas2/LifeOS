@@ -23,7 +23,7 @@ public struct InsightCallout: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    public init(title: String = "LIFO", text: String, systemImage: String = "sparkles") {
+    public init(title: String = "LIFO", text: String, systemImage: String = LifeOSMark.symbol) {
         self.title = title
         self.text = text
         self.systemImage = systemImage
