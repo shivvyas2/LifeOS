@@ -30,3 +30,35 @@ public struct HeartRateZones: Equatable, Sendable {
         }
     }
 }
+
+/// Estimated effort on WHOOP's 0 to 21 scale.
+///
+/// Seconds in each zone add a weight to a running load, and the load maps
+/// through a saturating curve so a long day approaches 21 without reaching
+/// it. The constants are pinned by calibration tests: a steady hour in zone 3
+/// is about 12, a hard ninety minutes about 18. Retuning is a deliberate
+/// change with a diff, not a drift.
+public struct EffortAccumulator: Codable, Equatable, Sendable {
+    public static let weights: [Double] = [0, 0.15, 0.28, 0.35, 0.45, 0.63]
+    public static let scale = 1500.0
+    /// A gap in the stream is not effort that was measured. One reading
+    /// credits at most this many seconds.
+    public static let maxCredit: TimeInterval = 5
+
+    public private(set) var load: Double
+
+    public init(load: Double = 0) { self.load = max(0, load) }
+
+    public mutating func add(zone: Int, seconds: TimeInterval) {
+        guard seconds > 0, Self.weights.indices.contains(zone) else { return }
+        load += Self.weights[zone] * seconds
+    }
+
+    public var effort: Double { 21 * (1 - exp(-load / Self.scale)) }
+
+    /// Seconds to credit a reading at `date` given the previous reading.
+    public static func credit(previous: Date?, at date: Date) -> TimeInterval {
+        guard let previous else { return 0 }
+        return min(maxCredit, max(0, date.timeIntervalSince(previous)))
+    }
+}
