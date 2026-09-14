@@ -34,6 +34,9 @@ struct WorkoutLiveActivity: Widget {
                         }
                         HStack {
                             Text(readout.isPaused ? "Paused" : readout.push.headline).foregroundStyle(.secondary)
+                            if let set = readout.setText, let reps = readout.repsText {
+                                Text("\(set) · \(reps) reps")
+                            }
                             Spacer()
                             Link("Open activity", destination: SurfaceRoute.activity.url).foregroundStyle(readout.push.tint)
                         }.font(.subheadline)
@@ -49,7 +52,11 @@ struct WorkoutLiveActivity: Widget {
                     Image(systemName: context.attributes.icon).foregroundStyle(readout.push.tint)
                 }
             } compactTrailing: {
-                WorkoutTimer(readout: readout).font(.caption.monospacedDigit()).frame(width: 48)
+                if let reps = readout.repsText {
+                    Text("\(reps) reps").font(.caption.monospacedDigit()).frame(width: 60)
+                } else {
+                    WorkoutTimer(readout: readout).font(.caption.monospacedDigit()).frame(width: 48)
+                }
             } minimal: {
                 if let zone = readout.zone {
                     Text("\(zone)").font(.caption2.bold()).foregroundStyle(.black)
@@ -94,7 +101,7 @@ private struct LockScreenView: View {
             HStack(spacing: 8) {
                 Tile(eyebrow: readout.zone.map { "Z\($0)" } ?? "BPM", value: readout.heartRateText, symbol: "heart.fill")
                 Tile(eyebrow: "EST", value: readout.effortText, symbol: "bolt.fill", unit: effortUnit)
-                Tile(eyebrow: "KCAL", value: readout.caloriesText, symbol: "flame.fill")
+                Tile(eyebrow: readout.setText?.uppercased() ?? "KCAL", value: readout.repsText ?? readout.caloriesText, symbol: readout.reps == nil ? "flame.fill" : "repeat")
                 Tile(eyebrow: "LEFT", value: readout.batteryText, symbol: "battery.75percent", ring: readout.batteryPercent)
             }
         }

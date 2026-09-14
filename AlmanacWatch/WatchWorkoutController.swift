@@ -22,6 +22,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var setIndex: Int?
     private(set) var completedSets: [Int] = []
     private(set) var maxHeartRate: Int?
+    private(set) var mirroringFailed = false
     var isStrength: Bool { session?.workoutConfiguration.activityType == .traditionalStrengthTraining }
     var elapsed: TimeInterval { startedAt.map { Date.now.timeIntervalSince($0) } ?? 0 }
 
@@ -56,7 +57,12 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 startedAt = started
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
-                try await session.startMirroringToCompanionDevice()
+                mirroringFailed = false
+                do {
+                    try await session.startMirroringToCompanionDevice()
+                } catch {
+                    mirroringFailed = true
+                }
                 state = .running
                 if isStrength { reps = 0; setIndex = 1; completedSets = []; startMotion() }
                 sendPacket(force: true)
@@ -155,7 +161,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             case .ended:
                 self.state = .idle; self.session = nil; self.builder = nil
                 self.startedAt = nil; self.heartRate = nil; self.energyKcal = nil
-                self.reps = nil; self.setIndex = nil; self.completedSets = []
+                self.reps = nil; self.setIndex = nil; self.completedSets = []; self.mirroringFailed = false
             default: break
             }
         }

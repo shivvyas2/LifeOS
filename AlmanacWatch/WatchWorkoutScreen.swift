@@ -15,6 +15,9 @@ struct WatchWorkoutScreen: View {
                 } else {
                     Text(workout.state == .paused ? "Paused" : "Ending…").font(.title3)
                 }
+                if workout.mirroringFailed {
+                    Text("Not connected to iPhone").font(.caption2).foregroundStyle(.secondary)
+                }
                 HStack(spacing: 6) {
                     Image(systemName: "heart.fill").foregroundStyle(.red)
                     Text(workout.heartRate.map(String.init) ?? "—").font(.title2.monospacedDigit())

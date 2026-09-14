@@ -106,7 +106,8 @@ struct BeginActivityScreen: View {
                     .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
             }
             Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
-            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false, isExpanded: $hudExpanded)
+            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false,
+                       onAddRep: { model.addRep() }, onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
                 .padding(.top, 10)
         }
         .foregroundStyle(.white)
@@ -119,11 +120,15 @@ struct BeginActivityScreen: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
                           value: fresh ? readout.heartRateText : nil, unit: "bpm",
-                          caption: fresh ? "Live sensor reading" : model.isPaused ? "Activity paused" : model.sensor.status)
+                          caption: fresh ? (model.source == .watch ? "From Apple Watch" : "Live sensor reading") : model.isPaused ? "Activity paused" : model.sensor.status)
                 if model.zonesAvailable, model.selection != .yoga {
                     glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effortText,
                               unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
                               caption: capacityCaption(readout))
+                }
+                if model.selection == .strength {
+                    glassTile(icon: "repeat", label: readout.setText ?? "Reps", value: readout.repsText, unit: "reps",
+                              caption: model.completedSets.isEmpty ? "Counted from your wrist · auto" : "Sets so far: \(model.completedSets.map(String.init).joined(separator: ", "))")
                 }
                 glassTile(icon: "flame.fill", label: "Calories", value: readout.caloriesText, unit: "kcal",
                           caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
@@ -223,11 +228,13 @@ struct BeginActivityScreen: View {
                     Button(model.sensor.connectedName == nil ? "Connect" : "Manage") { showSensors = true }
                         .font(LifeOSType.label).frame(minHeight: 44)
                 }
+                Text(model.source == .watch ? "Apple Watch is recording this session." : WatchSessionBridge.watchAvailable ? "Apple Watch ready" : "Apple Watch not nearby")
+                    .font(LifeOSType.caption).foregroundStyle(.secondary)
                 Text(model.sensor.status).font(LifeOSType.caption).foregroundStyle(.secondary)
                 DisclosureGroup("How syncing works") {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("WHOOP: turn on Heart Rate Broadcast, then connect its Bluetooth sensor here for live beats.")
-                        Text("Apple Health: this session saves with your permission. Apple Watch workouts appear when the watch writes to Health; this screen does not control Apple's Workout app.")
+                        Text("Apple Watch: when your watch is nearby it records the workout and counts reps; otherwise this iPhone records.")
                         Text("Fitbit and WHOOP cloud readings refresh after the device syncs. They are not live heart-rate feeds.")
                     }.font(LifeOSType.caption).foregroundStyle(.secondary).padding(.top, 8)
                 }.font(LifeOSType.label)

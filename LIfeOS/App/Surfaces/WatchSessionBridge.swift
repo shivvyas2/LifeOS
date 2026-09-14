@@ -64,7 +64,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in if self.session === workoutSession { self.end() } }
     }
-    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteDevice data: [Data]) {
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
             for item in data { self.onPacket?(item) }

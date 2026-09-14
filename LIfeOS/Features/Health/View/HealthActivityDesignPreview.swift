@@ -35,6 +35,7 @@ struct HealthActivityDesignPreview: View {
                             fixture.recorder.sensor.onReading?(second < 120 ? 118 : second < 480 ? 146 : 156, start.addingTimeInterval(Double(second)))
                         }
                         fixture.recorder.sensor.onReading?(152, .now)
+                        fixture.recorder.addRep(); fixture.recorder.addRep(); fixture.recorder.nextSet(); fixture.recorder.addRep()
                     }
             }
             else if page == "profile" { ProfileDesignPreview() }

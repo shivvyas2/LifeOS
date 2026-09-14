@@ -92,7 +92,7 @@ phone app.
 - Installs `workoutSessionMirroringStartHandler` at app launch (in the app
   delegate, alongside push setup), stores the mirrored session, sets itself
   as its delegate, and hands the session to the recorder.
-- Decodes `WatchPacket`s from `workoutSession(_:didReceiveDataFromRemoteDevice:)`
+- Decodes `WatchPacket`s from `workoutSession(_:didReceiveDataFromRemoteWorkoutSession:)`
   and forwards them to `ActivityRecorder.receiveWatchPacket(_:)`.
 - Sends `PhoneCommand`s with `sendToRemoteWorkoutSession(data:)`.
 - Mirrors session state changes from the delegate into the recorder's timer,

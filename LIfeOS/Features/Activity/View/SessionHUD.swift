@@ -10,6 +10,8 @@ struct SessionHUD: View {
     let activity: RecordedActivity
     let zonesAvailable: Bool
     var showsTimer: Bool = true
+    var onAddRep: () -> Void = {}
+    var onNextSet: () -> Void = {}
     @Binding var isExpanded: Bool
     @Environment(\.colorScheme) private var scheme
     @Namespace private var glass
@@ -28,7 +30,7 @@ struct SessionHUD: View {
                             reading(symbol: "battery.75percent", value: readout.batteryText, chip: nil, tint: nil)
                         }
                         if activity == .strength {
-                            reading(symbol: "repeat", value: nil, chip: "reps", tint: nil)
+                            reading(symbol: "repeat", value: readout.repsText, chip: "reps", tint: nil)
                         }
                     }
                     if isExpanded { expanded }
@@ -81,7 +83,19 @@ struct SessionHUD: View {
                 }
                 if readout.push == .overLimit { Text("Over your target").font(LifeOSType.label).foregroundStyle(LifeOSTokens.pushNear) }
             }
+            if activity == .strength {
+                HStack(spacing: 10) {
+                    Text(setLine).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    Spacer()
+                    Button("+1", action: onAddRep).buttonStyle(.glass)
+                    Button("Next set", action: onNextSet).buttonStyle(.glass)
+                }.font(LifeOSType.label)
+            }
         }
+    }
+
+    private var setLine: String {
+        [readout.setText, readout.repsText.map { "\($0) reps · auto" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var ceilingLine: String {
@@ -98,6 +112,7 @@ struct SessionHUD: View {
         if let zone = readout.zone { parts.append("zone \(zone)") }
         if showsEffort, let effort = readout.effort { parts.append(String(format: "effort %.1f estimated", effort)) }
         if showsEffort, let battery = readout.batteryPercent { parts.append("battery \(battery) percent") }
+        if activity == .strength, let reps = readout.reps { parts.append("\(reps) reps in set \(readout.setIndex ?? 1)") }
         return parts.joined(separator: ", ")
     }
 }
