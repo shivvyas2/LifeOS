@@ -3,6 +3,7 @@ import HealthKit
 import SwiftData
 import Persistence
 import Integrations
+import AppSurfaces
 
 enum RecordedActivity: String, CaseIterable, Identifiable {
     case walk = "Walk", run = "Run", cycle = "Cycle", strength = "Strength", yoga = "Yoga", other = "Other"
@@ -41,9 +42,18 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private(set) var distance: Double?
     private(set) var heartRate: Double?
     private(set) var heartRateDate: Date?
+    private(set) var capacity: Capacity?
+    private(set) var readout: LiveSessionReadout?
     var error: String?
     var notice: String?
     let sensor = LiveHeartRateSensor()
+    /// Injected so previews and checks can fix an age without a profile.
+    var birthDate: () -> Date? = { ProfileStore.load().birthDate }
+    /// Whether the WHOOP cloud account is connected; decides auto-pairing.
+    var whoopConnected: () -> Bool = { false }
+    private var zones: HeartRateZones?
+    private var effort = EffortAccumulator()
+    private var lastReadingAt: Date?
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -57,6 +67,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private var recordingHealth = false
     private static let draftKey = "activeWorkoutDraft"
     var onSaved: (() -> Void)?
+    var zonesAvailable: Bool { zones != nil }
 
     private struct Draft: Codable {
         var timer: ActivitySessionState
@@ -64,6 +75,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         var recordsHealth: Bool?
         var energy: Double?
         var distance: Double?
+        var capacity: Capacity?
+        var effortLoad: Double?
     }
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
@@ -84,8 +97,10 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         recordingHealth = draft.recordsHealth == true
         saveToHealth = recordingHealth
         timer = draft.timer; healthSaved = draft.healthSaved; energy = draft.energy; distance = draft.distance
+        capacity = draft.capacity; effort = EffortAccumulator(load: draft.effortLoad ?? 0)
+        zones = HeartRateZones(birthDate: birthDate())
         selection = RecordedActivity(rawValue: draft.timer.activity) ?? .other
-        if liveActivitiesEnabled { liveActivity.sync(draft.timer, icon: selection.icon) }
+        persist()
         notice = "Your activity timer was restored. Reconnect a sensor for live heart rate."
         if recordingHealth, HKHealthStore.isHealthDataAvailable(), !healthSaved {
             busy = true
@@ -115,6 +130,10 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     func start() async {
         guard active, !busy, !hasSession else { return }
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false
+        zones = HeartRateZones(birthDate: birthDate())
+        capacity = loadCapacity()
+        effort = EffortAccumulator(); lastReadingAt = nil
+        sensor.prepareForSession(whoopConnected: whoopConnected())
         recordingHealth = saveToHealth
         defer { busy = false }
         do {
@@ -154,7 +173,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     func togglePause() {
         guard !busy else { return }
         if isRunning { timer?.pause(); session?.pause() }
-        else if isPaused { timer?.resume(); session?.resume() }
+        else if isPaused { timer?.resume(); session?.resume(); lastReadingAt = nil }
         persist()
     }
     func finish() async {
@@ -209,6 +228,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         session?.end(); builder?.discardWorkout(); session = nil; builder = nil
         sensor.disconnect(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
+        capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
     }
@@ -216,14 +236,37 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         active = false; discard(); context = nil; onSaved = nil
     }
     private func persist() {
+        refreshReadout()
         guard active, let timer,
-              let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth, energy: energy, distance: distance)) else { return }
+              let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth,
+                                                         energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load)) else { return }
         defaults.set(data, forKey: Self.draftKey)
-        if liveActivitiesEnabled { liveActivity.sync(timer, icon: selection.icon) }
+        if liveActivitiesEnabled, let readout { liveActivity.sync(readout, timer: timer, icon: selection.icon) }
+    }
+    private func refreshReadout() {
+        guard let timer else { readout = nil; return }
+        readout = LiveReadoutBuilder.readout(timer: timer, heartRate: heartRate.map { Int($0) }, zones: zones, effort: effort,
+                                             capacity: capacity, energyKcal: energy, distanceMeters: distance)
+    }
+    /// Today's row, or yesterday's while today has not synced. A week of
+    /// rows behind it gives the Health path its HRV baseline.
+    private func loadCapacity() -> Capacity? {
+        guard let context else { return nil }
+        let rows = (try? MetricsStore(context: context).metrics(from: .now.addingTimeInterval(-9 * 86400), to: .now)) ?? []
+        let days = rows.map {
+            RecoveryDay(date: $0.date, whoopRecoveryPct: $0.whoopRecoveryPct, whoopIsCalibrating: $0.whoopRecoveryIsCalibrating,
+                        sleepPerformancePct: $0.whoopSleepPerformancePct, hrvMs: $0.hrvMs, sleepMinutes: $0.sleepMinutes)
+        }
+        return CapacityMath.capacity(days: days, now: .now)
     }
     private func receiveHeartRate(_ bpm: Int, at date: Date) {
         guard active, isRunning else { return }
         heartRate = Double(bpm); heartRateDate = date
+        if let zones {
+            effort.add(zone: zones.zone(for: bpm), seconds: EffortAccumulator.credit(previous: lastReadingAt, at: date))
+        }
+        lastReadingAt = date
+        persist()
         guard let builder, healthStore.authorizationStatus(for: .quantityType(forIdentifier: .heartRate)!) == .sharingAuthorized else { return }
         let sample = HKQuantitySample(type: .quantityType(forIdentifier: .heartRate)!,
             quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: Double(bpm)), start: date, end: date)
@@ -266,8 +309,14 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 case HKQuantityTypeIdentifier.distanceWalkingRunning.rawValue, HKQuantityTypeIdentifier.distanceCycling.rawValue:
                     self.distance = stats.sumQuantity()?.doubleValue(for: .meter())
                 case HKQuantityTypeIdentifier.heartRate.rawValue:
-                    self.heartRate = stats.mostRecentQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
-                    self.heartRateDate = stats.mostRecentQuantityDateInterval()?.end
+                    if let bpm = stats.mostRecentQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                       let date = stats.mostRecentQuantityDateInterval()?.end, date != self.heartRateDate {
+                        self.heartRate = bpm; self.heartRateDate = date
+                        if let zones = self.zones {
+                            self.effort.add(zone: zones.zone(for: Int(bpm)), seconds: EffortAccumulator.credit(previous: self.lastReadingAt, at: date))
+                        }
+                        self.lastReadingAt = date
+                    }
                 default: break
                 }
             }

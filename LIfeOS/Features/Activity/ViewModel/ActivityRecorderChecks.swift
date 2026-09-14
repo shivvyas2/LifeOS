@@ -3,6 +3,7 @@ import Foundation
 import SwiftData
 import Persistence
 import Integrations
+import AppSurfaces
 
 /// Runs only from the isolated design preview, using disposable suites and an in-memory store.
 @MainActor enum ActivityRecorderChecks {
@@ -18,9 +19,15 @@ import Integrations
             let container = try LifeOSContainer.make(inMemory: true)
             let context = container.mainContext
             let recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: false)
+            recorder.birthDate = { Calendar.current.date(from: DateComponents(year: 1996, month: 6, day: 1)) }
+            _ = try MetricsStore(context: context).upsert(date: .now) { $0.whoopRecoveryPct = 80; $0.whoopSleepPerformancePct = 90 }
             recorder.attach(context); recorder.saveToHealth = false
             await recorder.start()
             check(recorder.isRunning && recorder.timer != nil, "Timer starts without Health access")
+            check(recorder.capacity?.percent == 82 && recorder.readout?.batteryPercent == 82, "Capacity comes from today's recovery at start")
+            let base = Date.now.addingTimeInterval(-30)
+            for second in 0..<30 { recorder.sensor.onReading?(140, base.addingTimeInterval(Double(second))) }
+            check(recorder.readout?.heartRate == 140 && recorder.readout?.zone == 3 && (recorder.readout?.effort ?? 0) > 0, "Readings yield zone and effort")
             let id = recorder.timer?.id
             recorder.togglePause()
             let paused = recorder.timer?.elapsed()
@@ -28,8 +35,10 @@ import Integrations
             recorder.togglePause()
             check(recorder.isRunning, "Resume keeps the activity")
             let restored = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: false)
+            restored.birthDate = recorder.birthDate
             restored.attach(context)
             check(restored.timer?.id == id && restored.isRunning && !restored.busy, "Timer-only draft restores without Health recovery")
+            check(restored.capacity?.percent == 82 && (restored.readout?.effort ?? 0) > 0, "Draft restores capacity and effort")
             let other = ActivityRecorder(defaults: otherDefaults, liveActivitiesEnabled: false)
             other.attach(context)
             check(other.timer == nil, "Other account cannot see the draft")

@@ -6,18 +6,19 @@ import Foundation
 @MainActor
 final class WorkoutLiveActivityController {
     private var current: Activity<WorkoutActivityAttributes>?
-    private var lastState: WorkoutActivityAttributes.ContentState?
+    private var lastState: LiveSessionReadout?
+    private var lastPublishedAt: Date?
     private var updates: Task<Void, Never>?
 
-    func sync(_ timer: ActivitySessionState, icon: String) {
+    func sync(_ readout: LiveSessionReadout, timer: ActivitySessionState, icon: String) {
         guard timer.phase != .finished else { end(); return }
-        let state = WorkoutActivityAttributes.ContentState(elapsed: timer.accumulated, runningSince: timer.runningSince)
-        guard state != lastState || current == nil else { return }
-        lastState = state
         if current == nil {
             current = Activity<WorkoutActivityAttributes>.activities.first { $0.attributes.sessionID == timer.id }
         }
-        let content = ActivityContent(state: state, staleDate: .now.addingTimeInterval(8 * 3600))
+        let now = Date.now
+        guard current == nil || LiveActivityThrottle.shouldPublish(previous: lastState, next: readout, lastPublishedAt: lastPublishedAt, now: now) else { return }
+        lastState = readout; lastPublishedAt = now
+        let content = ActivityContent(state: readout, staleDate: now.addingTimeInterval(8 * 3600))
         if let current {
             let preceding = updates
             updates = Task { await preceding?.value; await current.update(content) }
@@ -30,7 +31,7 @@ final class WorkoutLiveActivityController {
         guard let current else { return }
         let preceding = updates
         updates = Task { await preceding?.value; await current.end(nil, dismissalPolicy: .immediate) }
-        self.current = nil; lastState = nil
+        self.current = nil; lastState = nil; lastPublishedAt = nil
     }
     static func endAll() {
         let existing = Activity<WorkoutActivityAttributes>.activities

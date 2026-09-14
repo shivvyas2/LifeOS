@@ -29,6 +29,30 @@ struct LIfeOSApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--design-preview") {
+                HealthActivityDesignPreview()
+            } else if let container = session.container {
+                AppShell(onSignedIn: { session.signIn($0, session: $1) },
+                         onSignedOut: { session.signOut() },
+                         hasStore: true, accountID: session.scope?.id)
+                    .modelContainer(container)
+                    // Re-rooted per account, so no screen carries the previous
+                    // account's view models or scroll position into the next
+                    // one. A stale snapshot on screen after a switch is the
+                    // same class of leak as a stale row.
+                    .id(session.scope?.id ?? "none")
+                    .environment(\.accountSession, session)
+                    .task(id: session.scope?.id) { purgeSeededHistoryOnce() }
+            } else {
+                // Nobody signed in. The onboarding flow needs no store: it has
+                // nothing to read and nowhere to put anything until there is
+                // an account to put it in.
+                AppShell(onSignedIn: { session.signIn($0, session: $1) },
+                         onSignedOut: { session.signOut() },
+                         hasStore: false, accountID: session.scope?.id)
+            }
+            #else
             if let container = session.container {
                 AppShell(onSignedIn: { session.signIn($0, session: $1) },
                          onSignedOut: { session.signOut() },
@@ -49,6 +73,7 @@ struct LIfeOSApp: App {
                          onSignedOut: { session.signOut() },
                          hasStore: false, accountID: session.scope?.id)
             }
+            #endif
         }
         // Hardware keyboard support lives in the scene so the shortcuts work
         // wherever focus is, and so iPadOS lists them in the overlay that

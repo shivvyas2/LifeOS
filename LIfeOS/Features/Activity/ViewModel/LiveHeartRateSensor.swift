@@ -23,6 +23,7 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
     private let measurement = CBUUID(string: "2A37")
     private var wantsScan = false
 
+    func prepareForSession(whoopConnected: Bool) {}
     func scan() {
         wantsScan = true
         if central == nil { central = CBCentralManager(delegate: self, queue: .main) }

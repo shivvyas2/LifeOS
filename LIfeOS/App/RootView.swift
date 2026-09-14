@@ -696,6 +696,7 @@ struct RootView: View {
         weight.attach(context)
         activity.attach(context)
         recorder.attach(context)
+        recorder.whoopConnected = { [whoop] in whoop.isConnected }
         accountSession?.beforeAccountChange = { [recorder] in recorder.deactivate() }
         recorder.onSaved = {
             reloadAll()
