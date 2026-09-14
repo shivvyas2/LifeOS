@@ -54,6 +54,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private var zones: HeartRateZones?
     private var effort = EffortAccumulator()
     private var lastReadingAt: Date?
+    private var lastDraftWriteAt: Date?
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -228,20 +229,36 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         session?.end(); builder?.discardWorkout(); session = nil; builder = nil
         sensor.disconnect(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
-        capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil
+        capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
     }
     func deactivate() {
         active = false; discard(); context = nil; onSaved = nil
     }
+    /// State changes: always write the draft and sync.
     private func persist() {
         refreshReadout()
+        writeDraft()
+        syncLiveActivity()
+    }
+    /// Readings arrive every second: always refresh and sync (the controller
+    /// throttles the publish), but write the draft at most every ten seconds.
+    private func persistReading(at date: Date) {
+        refreshReadout()
+        if lastDraftWriteAt.map({ date.timeIntervalSince($0) >= 10 }) ?? true { writeDraft(at: date) }
+        syncLiveActivity()
+    }
+    private func writeDraft(at date: Date = .now) {
         guard active, let timer,
               let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth,
                                                          energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load)) else { return }
         defaults.set(data, forKey: Self.draftKey)
-        if liveActivitiesEnabled, let readout { liveActivity.sync(readout, timer: timer, icon: selection.icon) }
+        lastDraftWriteAt = date
+    }
+    private func syncLiveActivity() {
+        guard liveActivitiesEnabled, let timer, let readout else { return }
+        liveActivity.sync(readout, timer: timer, icon: selection.icon)
     }
     private func refreshReadout() {
         guard let timer else { readout = nil; return }
@@ -266,7 +283,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             effort.add(zone: zones.zone(for: bpm), seconds: EffortAccumulator.credit(previous: lastReadingAt, at: date))
         }
         lastReadingAt = date
-        persist()
+        persistReading(at: date)
         guard let builder, healthStore.authorizationStatus(for: .quantityType(forIdentifier: .heartRate)!) == .sharingAuthorized else { return }
         let sample = HKQuantitySample(type: .quantityType(forIdentifier: .heartRate)!,
             quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: Double(bpm)), start: date, end: date)
@@ -312,10 +329,10 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                     if let bpm = stats.mostRecentQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
                        let date = stats.mostRecentQuantityDateInterval()?.end, date != self.heartRateDate {
                         self.heartRate = bpm; self.heartRateDate = date
-                        if let zones = self.zones {
+                        if self.isRunning, let zones = self.zones {
                             self.effort.add(zone: zones.zone(for: Int(bpm)), seconds: EffortAccumulator.credit(previous: self.lastReadingAt, at: date))
+                            self.lastReadingAt = date
                         }
-                        self.lastReadingAt = date
                     }
                 default: break
                 }
