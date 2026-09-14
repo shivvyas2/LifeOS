@@ -14,7 +14,6 @@ struct BeginActivityScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
-    @State private var confirmDiscard = false
     @State private var hudExpanded = false
 
     var body: some View {
@@ -38,7 +37,7 @@ struct BeginActivityScreen: View {
                         Label(error, systemImage: "exclamationmark.circle")
                             .font(LifeOSType.secondary).foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
                     }
-                    controls
+                    ActivityControls(model: model, onDone: { dismiss() })
                     if !model.saved { connections }
                     if !model.hasSession && !model.saved {
                         Button { dismiss(); onQuickLog() } label: {
@@ -72,9 +71,6 @@ struct BeginActivityScreen: View {
         .tint(LifeOSTokens.accent)
         .onAppear { if startsExpanded { hudExpanded = true } }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
-        .confirmationDialog("Discard this activity?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-            Button("Discard activity", role: .destructive) { model.discard() }
-        } message: { Text("This timer and its unsaved readings will be removed.") }
     }
 
     private var timerCard: some View {
@@ -107,6 +103,10 @@ struct BeginActivityScreen: View {
                 Text(readout.isPaused ? "Paused" : readout.push.headline).font(LifeOSType.label)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.white.opacity(0.22), in: Capsule())
+            }
+            if let following = model.following {
+                Text("Following: \(following.title) · \(following.channel)")
+                    .font(LifeOSType.caption).opacity(0.85).lineLimit(1)
             }
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
@@ -180,7 +180,7 @@ struct BeginActivityScreen: View {
     /// too: the player maps the split onto the recorder's selection.
     private func followVideoLink(_ library: WorkoutLibraryViewModel) -> some View {
         NavigationLink {
-            WorkoutLibraryScreen(model: library)
+            WorkoutLibraryScreen(model: library, recorder: model)
         } label: {
             Label("Follow a video", systemImage: "play.rectangle")
                 .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
@@ -211,38 +211,6 @@ struct BeginActivityScreen: View {
                 }
             }
         }
-    }
-    private var controls: some View {
-        VStack(spacing: 12) {
-            if model.saved {
-                primaryButton("Done", icon: "checkmark") { model.discard(); dismiss() }
-            } else if model.hasSession {
-                if model.timer?.phase != .finished {
-                    primaryButton(model.isPaused ? "Resume activity" : "Pause activity", icon: model.isPaused ? "play.fill" : "pause.fill") {
-                        model.togglePause()
-                    }
-                }
-                Button { Task { await model.finish() } } label: {
-                    Label(model.busy ? "Saving…" : "Finish & save", systemImage: "checkmark")
-                        .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
-                }.buttonStyle(.bordered).disabled(model.busy)
-                Button("Discard activity", role: .destructive) { confirmDiscard = true }
-                    .font(LifeOSType.label).frame(minHeight: 44).disabled(model.busy)
-            } else {
-                Toggle("Save to Apple Health", isOn: $model.saveToHealth).font(LifeOSType.rowTitle)
-                    .disabled(model.busy)
-                primaryButton(model.busy ? "Starting…" : "Begin activity", icon: "play.fill") {
-                    Task { await model.start() }
-                }
-            }
-        }
-    }
-    private func primaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack { Spacer(); if model.busy { ProgressView() } else { Image(systemName: icon) }; Text(title); Spacer() }
-                .font(LifeOSType.rowTitle).frame(minHeight: 56)
-                .foregroundStyle(.white).background(LifeOSTokens.accent, in: RoundedRectangle(cornerRadius: 18))
-        }.buttonStyle(.plain).disabled(model.busy)
     }
     private var connections: some View {
         AccountPanel {

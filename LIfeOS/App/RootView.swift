@@ -442,6 +442,7 @@ struct RootView: View {
                         isWhoopConnected: whoop.isConnected,
                         onSelectMetric: { openMetric = $0 },
                         library: library,
+                        recorder: recorder,
                         section: $healthSection,
                         selectedDate: Binding(
                             get: { healthDate },

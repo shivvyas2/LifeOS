@@ -43,7 +43,29 @@ struct HealthActivityDesignPreview: View {
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "library" || page == "library-empty" {
-                NavigationStack { WorkoutLibraryScreen(model: fixture.library) }
+                NavigationStack { WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder) }
+            }
+            // `--video=<id>` picks another seed row, which is how the embed
+            // spot-check plays more than one video without a tap.
+            else if page == "player" {
+                NavigationStack {
+                    VideoWorkoutScreen(video: fixture.playerVideo, model: fixture.recorder)
+                }
+                .task {
+                    guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
+                    let video = fixture.playerVideo
+                    fixture.recorder.selection = VideoWorkoutScreen.activity(for: video.split)
+                    fixture.recorder.pendingVideoID = video.youtubeID
+                    fixture.recorder.pendingSplit = video.split
+                    fixture.recorder.following = (video.title, video.channel)
+                    let start = Date.now.addingTimeInterval(-724)
+                    await fixture.recorder.start(backdatedTo: start)
+                    for second in stride(from: 0, to: 720, by: 2) {
+                        fixture.recorder.sensor.onReading?(second < 120 ? 118 : second < 480 ? 146 : 156, start.addingTimeInterval(Double(second)))
+                    }
+                    fixture.recorder.sensor.onReading?(152, .now)
+                    fixture.recorder.addRep(); fixture.recorder.addRep(); fixture.recorder.nextSet(); fixture.recorder.addRep()
+                }
             }
             else {
                 NavigationStack {
@@ -65,7 +87,7 @@ struct HealthActivityDesignPreview: View {
                         HealthHubScreen(activity: .init(steps: 8240, exerciseMinutes: 35, activeEnergyKcal: 460),
                             weight: .init(weightKg: 77.4, weeklyDeltaKg: 0.2, recentWeights: fixture.weights), recovery: fixture.recovery,
                             wellness: .init(journal: [.init(id: UUID(), text: "A long walk, a good conversation, and a little time for myself.", date: .now)]),
-                            library: fixture.library, section: $section, selectedDate: $day)
+                            library: fixture.library, recorder: fixture.recorder, section: $section, selectedDate: $day)
                     }
                 }
             }
@@ -95,7 +117,12 @@ struct HealthActivityDesignPreview: View {
     /// fixture hands it an empty in-memory store so a preview never reaches
     /// the network and the offline copy is what a capture shows.
     let library = WorkoutLibraryViewModel(sessions: InMemoryAuthSessionStore())
+    /// The row the player page renders, chosen once so a re-render never
+    /// rebuilds the web view under a running session.
+    let playerVideo: CatalogVideo
     init() {
+        let requested = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--video=") }.map { String($0.dropFirst(8)) }
+        playerVideo = CatalogVideo(Self.catalog.first { $0.youtubeID == requested } ?? Self.catalog[0])
         recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: ProcessInfo.processInfo.arguments.contains("--live-activity"))
         recorder.saveToHealth = false
         recorder.birthDate = { Calendar.current.date(from: DateComponents(year: 1996, month: 6, day: 1)) }

@@ -16,6 +16,8 @@ struct HealthHubScreen: View {
     /// Passed straight through to the Fitness segment's training card. Nil in
     /// the previews, which have no app view models.
     var library: WorkoutLibraryViewModel?
+    /// Passed through with it, for the player the library pushes.
+    var recorder: ActivityRecorder?
 
     @Binding var section: HealthSection
     @Binding var selectedDate: Date
@@ -52,7 +54,7 @@ struct HealthHubScreen: View {
                                           isWhoopConnected: isWhoopConnected)
                     case .fitness:
                         FitnessSegmentView(activity: activity, recovery: recovery,
-                                           wellness: wellness, library: library)
+                                           wellness: wellness, library: library, recorder: recorder)
                     }
                 }
                 .frame(maxWidth: layout.maxContentWidth)

@@ -11,6 +11,9 @@ struct FitnessSegmentView: View {
     /// Nil in the design previews, which render the segment without the app's
     /// view models. The training card simply has no library row then.
     var library: WorkoutLibraryViewModel?
+    /// Travels with the library: the player the library pushes records the
+    /// session, so the row only appears when both are here.
+    var recorder: ActivityRecorder?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -104,16 +107,16 @@ struct FitnessSegmentView: View {
                     Text("Avg session \(avg) min").font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
-                if let library { libraryRow(library) }
+                if let library, let recorder { libraryRow(library, recorder) }
             }
         }
     }
 
     /// The way into the workout library, with today's plan already on it so
     /// the tap is a decision the person has already half made.
-    private func libraryRow(_ library: WorkoutLibraryViewModel) -> some View {
+    private func libraryRow(_ library: WorkoutLibraryViewModel, _ recorder: ActivityRecorder) -> some View {
         NavigationLink {
-            WorkoutLibraryScreen(model: library)
+            WorkoutLibraryScreen(model: library, recorder: recorder)
         } label: {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {

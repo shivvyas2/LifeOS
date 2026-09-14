@@ -10,6 +10,9 @@ import Sectors
 /// they came.
 struct WorkoutLibraryScreen: View {
     @Bindable var model: WorkoutLibraryViewModel
+    /// The player needs the live recorder, and the library is pushed on two
+    /// different stacks, so it is handed down rather than reached for.
+    var recorder: ActivityRecorder
     /// Handed the tapped video when a caller wants the push for itself. Nil,
     /// which is what both entry points pass today, means this screen opens
     /// the player on its own stack.
@@ -54,8 +57,9 @@ struct WorkoutLibraryScreen: View {
             }
         }
         .sheet(isPresented: $model.needsPreferences) { TrainingPreferencesSheet(model: model) }
-        // Task 7 replaces this one line with `VideoWorkoutScreen(video: video)`.
-        .navigationDestination(item: $opened) { video in Text(video.title) }
+        .navigationDestination(item: $opened) { video in
+            VideoWorkoutScreen(video: video, model: recorder)
+        }
         .task { await model.refreshIfDue() }
         .tint(LifeOSTokens.accent)
     }
