@@ -12,6 +12,7 @@
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = D04A72741F9CF213015F7725 /* AppSurfaces */; };
+		A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F60718293A4B5D /* DesignSystem */; };
 		65562F2ADB6E2321FAE9A9FB /* WorkoutLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */; };
 		68A03CA62FF558CFA54A53F7 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */; };
 		6E623354DC6DDB5C8B9B6C2C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
@@ -145,6 +146,7 @@
 			files = (
 				F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */,
 				57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */,
+				A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -286,6 +288,7 @@
 			name = AlmanacWidgets;
 			packageProductDependencies = (
 				D04A72741F9CF213015F7725 /* AppSurfaces */,
+				A1B2C3D4E5F60718293A4B5D /* DesignSystem */,
 			);
 			productName = AlmanacWidgets;
 			productReference = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */;
@@ -995,6 +998,10 @@
 		D04A72741F9CF213015F7725 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
+		};
+		A1B2C3D4E5F60718293A4B5D /* DesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DesignSystem;
 		};
 		F5C6D9F9A578760FC7F5C260 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
