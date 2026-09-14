@@ -26,6 +26,9 @@ Final result: passed
 - iPad: 1668 x 2420 pixels, native 834 x 1210 points, 2x, simulator
   `1606E372-1254-44BB-9938-E116A64F0740` (LifeOS-iPad, iOS 26.0).
   `session-ipad.png`, `session-ipad-dark.png`.
+- `session-iphone-strength.png` shows a Strength activity with the dumbbell
+  icon: the HUD capsule adds a "reps" slot showing a dash, and the tile
+  grid drops the Distance tile.
 - All captures except the two Live Activity surfaces were taken with
   `--design-preview --page=activity --live` (and `--dark` / `--strength` where
   named); the fixture explicitly labels itself as sample data and loads no
@@ -35,9 +38,9 @@ Final result: passed
   Live Activity; they were launched with `--design-preview --page=activity
   --live --live-activity`.
 
-## Findings
+## Findings and comparison history
 
-No P0/P1/P2 findings from this pass. One observation, not a defect:
+No P0/P1/P2 findings from this pass. Two observations, not defects:
 
 1. **iPad tile grid stays 4-across rather than adapting to the wider canvas.**
    On `session-ipad.png` / `session-ipad-dark.png` the four metric tiles
@@ -48,10 +51,14 @@ No P0/P1/P2 findings from this pass. One observation, not a defect:
    iPad's extra width for larger tiles or extra breathing room the way a
    fully adaptive grid might. Not blocking; noted as a finding per the task
    brief rather than changed in Swift.
+2. **Empty space below the fold on iPad.** On both `session-ipad.png` and
+   `session-ipad-dark.png`, the bottom third of the screen is empty below
+   the Live heart rate card; nothing wraps or misplaces, but the layout
+   does not fill the taller iPad canvas.
 
 ## Required fidelity surfaces
 
-- **Typography:** one system sans family throughout — the large monospaced-
+- **Typography:** one system sans family throughout: the large monospaced-
   style elapsed-time readout, the pill's compact numeric readings, and the
   tile labels/values all use the app's existing type roles. Dynamic content
   (bpm, effort, battery percent) is set in the same weight/style across
@@ -75,7 +82,7 @@ No P0/P1/P2 findings from this pass. One observation, not a defect:
   photographic or illustrative assets were introduced for this slice.
 - **Copy:** "Elapsed time," "Effort, estimated," "Battery 67% · WHOOP
   recovery," "Live sensor reading," "No energy reading," "No distance
-  reading" and "On track" are the real strings the fixture renders — no
+  reading" and "On track" are the real strings the fixture renders. No
   placeholder or lorem-ipsum text appears in any capture. The Live Activity
   card copy ("Run," "On track," "Z4," "EST O…," "KCAL," "LEFT") mirrors the
   in-session tile labels, abbreviated for the smaller surface.
@@ -102,7 +109,7 @@ still runs with Live Activities off.
   built clean for the iPad destination (`id=1606E372-1254-44BB-9938-E116A64F0740`)
   for the iPad captures.
 - Checks harness output (`--design-preview --page=checks`, from Task 12,
-  pasted verbatim — 15 of 15 PASS, no FAILs):
+  pasted verbatim, 15 of 15 PASS, no FAILs):
 
 ```
 PASS: Timer starts without Health access
@@ -122,7 +129,7 @@ PASS: Forget clears the remembered sensor
 PASS: Account transition stops recording and rejects late starts
 ```
 
-- **Sensor auto-reconnect on real WHOOP hardware — pending.** Not run in
+- **Sensor auto-reconnect on real WHOOP hardware: pending.** Not run in
   this environment (no physical iPhone or WHOOP device available).
   To be run by the developer on the iPhone with WHOOP:
 
@@ -132,7 +139,7 @@ PASS: Account transition stops recording and rejects late starts
   > reads "Reconnecting to WHOOP…" and then "Live · WHOOP" within a few
   > seconds with no tap. If it does not, note that here.
 
-- **Lock screen Live Activity updates while the phone stays locked — pending.**
+- **Lock screen Live Activity updates while the phone stays locked: pending.**
   Not run in this environment (no physical iPhone available). To be run by
   the developer on the iPhone with WHOOP:
 
@@ -149,7 +156,7 @@ PASS: Account transition stops recording and rejects late starts
 
 ## Pending captures
 
-- **`dynamic-island-expanded.png` — pending.** Long-pressing the Dynamic
+- **`dynamic-island-expanded.png`: pending.** Long-pressing the Dynamic
   Island at its on-screen coordinates (via `cliclick` mouse-down/wait/mouse-up,
   computed from the Simulator window's AppleScript position/size) did not
   expand the island on the first try; the compact pill remained compact in
