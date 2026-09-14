@@ -40,6 +40,8 @@ Final result: passed
 
 ## Findings and comparison history
 
+The final review's fix wave corrected two Important findings from this pass: the lock-screen effort tile's eyebrow truncation (now a fixed "EST" eyebrow with the target as a unit next to the value) and the iPad navigation title rendering dark on the blue hero (now `.toolbarColorScheme(.dark)` while a session is live).
+
 No P0/P1/P2 findings from this pass. Two observations, not defects:
 
 1. **iPad tile grid stays 4-across rather than adapting to the wider canvas.**
@@ -108,15 +110,19 @@ still runs with Live Activities off.
   Simulator,name=iPhone 17,OS=26.0' build`): `** BUILD SUCCEEDED **`. Also
   built clean for the iPad destination (`id=1606E372-1254-44BB-9938-E116A64F0740`)
   for the iPad captures.
-- Checks harness output (`--design-preview --page=checks`, from Task 12,
-  pasted verbatim, 15 of 15 PASS, no FAILs):
+- Checks harness output (`--design-preview --page=checks`, from the final
+  review's fix wave, pasted verbatim, 17 of 17 PASS, no FAILs; the two new
+  checks pin the paused-accrual and resume-credit behavior called out by the
+  review):
 
 ```
 PASS: Timer starts without Health access
 PASS: Capacity comes from today's recovery at start
 PASS: Readings yield zone and effort
+PASS: Paused readings accrue nothing
 PASS: Paused time stays fixed
 PASS: Resume keeps the activity
+PASS: First reading after resume credits nothing, the second accrues
 PASS: Timer-only draft restores without Health recovery
 PASS: Draft restores capacity and effort
 PASS: Other account cannot see the draft
@@ -179,6 +185,21 @@ PASS: Account transition stops recording and rejects late starts
   mapped screen coordinate, then the lock screen was recaptured clean (the
   file now in the folder). This is a design-preview/first-run artifact of
   driving the app without prior onboarding, not a product defect.
+
+  **Final review fix wave, recapture attempt: failed, old PNG kept.** After
+  dismissing the "Allow Live Activities" alert (permission now granted for
+  this app install), the next attempt to re-lock the simulator for a clean
+  screenshot left the Simulator app with no window, and the device came back
+  from a forced reboot signed out at onboarding, so the design-preview route
+  could not be reached again within the two-attempt budget. The
+  `live-activity-lock-screen.png` committed here is unchanged from before
+  this wave (git-restored to the prior commit's version) and does not show
+  the Important-1/3 eyebrow fix. Format was confirmed correct against the
+  same fixture during this session before the simulator became unusable:
+  the effort tile read "EST" with the value and "of 18" as a trailing unit
+  in `.caption2`, matching the spec. The eyebrow fix itself is exercised by
+  the widget's Swift build, which succeeded; only the recapture is
+  outstanding, to be redone the next time the simulator is available.
 
 ## Residual test gaps
 
