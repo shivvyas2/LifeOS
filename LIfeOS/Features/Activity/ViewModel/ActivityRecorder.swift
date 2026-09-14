@@ -1,4 +1,5 @@
 import Foundation
+import ActivityKit
 import HealthKit
 import SwiftData
 import Persistence
@@ -70,7 +71,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var effort = EffortAccumulator()
     var lastReadingAt: Date?
     private var lastDraftWriteAt: Date?
-    let healthStore = HKHealthStore()
+    private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var context: ModelContext?
@@ -345,12 +346,23 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         syncLiveActivity()
     }
     private func writeDraft(at date: Date = .now) {
-        guard active, let timer,
+        // A saved workout has no draft to leave behind: `saveFinished` removes
+        // the key, and a later refresh must not write it back.
+        guard active, !saved, let timer,
               let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth,
                                                          energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load,
                                                          source: source, reps: reps, setIndex: setIndex, completedSets: completedSets)) else { return }
         defaults.set(data, forKey: Self.draftKey)
         lastDraftWriteAt = date
+    }
+    /// A card the bridge put up before this timer existed, or one left by a
+    /// workout that ended without a recorder watching, is not this session's.
+    /// Only one activity belongs on screen, so end every other one.
+    func endStrayLiveActivities() {
+        guard liveActivitiesEnabled, let timer else { return }
+        let strays = Activity<WorkoutActivityAttributes>.activities.filter { $0.attributes.sessionID != timer.id }
+        guard !strays.isEmpty else { return }
+        Task { for activity in strays { await activity.end(nil, dismissalPolicy: .immediate) } }
     }
     private func syncLiveActivity() {
         guard liveActivitiesEnabled, let timer, let readout else { return }

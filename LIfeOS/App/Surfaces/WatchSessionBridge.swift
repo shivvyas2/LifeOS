@@ -16,10 +16,15 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     /// The id of a Live Activity requested before any recorder was listening,
     /// so the timer built later adopts it instead of asking for a second one.
     private(set) var placeholderSessionID: UUID?
+    /// True between sending a last command and the session actually going.
+    /// Without it `hasSession` stays true through that window and the next
+    /// start refuses the hand-off against a session already on its way out.
+    private var dropping = false
+    private var placeholderPending = false
     var onSession: ((HKWorkoutSession) -> Void)?
     var onPacket: ((Data) -> Void)?
     var onStateChange: ((HKWorkoutSessionState, Date) -> Void)?
-    var hasSession: Bool { session != nil }
+    var hasSession: Bool { session != nil && !dropping }
 
     /// Call once at launch, before any session can arrive.
     static func installMirroringHandler() {
@@ -56,6 +61,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
 
     func adopt(_ session: HKWorkoutSession) {
         self.session?.delegate = nil
+        dropping = false
         self.session = session
         session.delegate = self
         onSession?(session)
@@ -73,6 +79,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now)) else {
             end(); return
         }
+        dropping = true
         session.sendToRemoteWorkoutSession(data: data) { _, _ in
             Task { @MainActor in self.end() }
         }
@@ -81,13 +88,29 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     func end() {
         session?.delegate = nil
         session = nil
+        dropping = false
     }
 
     /// Called once the recorder's timer has taken the placeholder's id.
     func clearPlaceholder() { placeholderSessionID = nil }
 
+    /// A session nobody adopted has ended: the card the handler put up is the
+    /// only trace of it left, so take it down.
+    private func endPlaceholderActivity() {
+        guard let id = placeholderSessionID else { return }
+        placeholderSessionID = nil
+        let strays = Activity<WorkoutActivityAttributes>.activities.filter { $0.attributes.sessionID == id }
+        guard !strays.isEmpty else { return }
+        Task { for activity in strays { await activity.end(nil, dismissalPolicy: .immediate) } }
+    }
+
     private func requestPlaceholderActivity(for session: HKWorkoutSession) {
-        guard placeholderSessionID == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        // One placeholder at a time: a second session arriving before the
+        // recorder adopts the first must not leave two cards on screen.
+        guard placeholderSessionID == nil, !placeholderPending,
+              ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        placeholderPending = true
+        defer { placeholderPending = false }
         let id = UUID()
         let type = session.workoutConfiguration.activityType
         let content = ActivityContent(state: LiveSessionReadout(elapsed: 0, runningSince: .now, push: .onTrack),
@@ -125,7 +148,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
             self.onStateChange?(toState, date)
-            if toState == .ended { self.end() }
+            if toState == .ended { self.endPlaceholderActivity(); self.end() }
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {

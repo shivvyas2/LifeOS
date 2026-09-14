@@ -42,7 +42,7 @@ public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
 
 /// Encoding and the version gate in one place, shared by both devices.
 public enum WatchWire {
-    public static let version = 1
+    public static let version = 2
     public static let packetKind = "packet"
     public static let commandKind = "command"
 

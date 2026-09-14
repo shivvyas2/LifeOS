@@ -70,11 +70,14 @@ extension ActivityRecorder {
             // on screen before this timer existed, so it is updated in place.
             timer = ActivitySessionState(id: watch?.placeholderSessionID ?? UUID(),
                                          activity: selection.rawValue, at: mirrored.startDate ?? .now)
-            watch?.clearPlaceholder()
             if selection == .strength { reps = 0; setIndex = 1; completedSets = [] }
             else { reps = nil; setIndex = nil; completedSets = [] }
         }
         source = .watch
+        // Whichever path built the timer, it now owns the Live Activity: end
+        // any placeholder or leftover card keyed to another session.
+        endStrayLiveActivities()
+        watch?.clearPlaceholder()
         // The watch streams its own heart rate; a strap as well would double
         // every reading into the effort accrual.
         sensor.stopStreaming()

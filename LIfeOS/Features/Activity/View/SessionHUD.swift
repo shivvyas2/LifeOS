@@ -40,13 +40,16 @@ struct SessionHUD: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Inside the label, so the side gutter toggles with the row
+                    // rather than sitting in a dead margin around it.
+                    .padding(.horizontal, 18)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                if isExpanded { expanded }
+                if isExpanded { expanded.padding(.horizontal, 18) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18).padding(.vertical, isExpanded ? 14 : 10)
+            .padding(.vertical, isExpanded ? 14 : 10)
             .frame(minHeight: 52)
             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             .glassEffect(.regular.tint(readout.push.tint.opacity(0.18)).interactive(),
