@@ -33,6 +33,10 @@
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
 		C1A644C6813581BB160BA976 /* HealthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B837A02BD3CD136DF62D37 /* HealthWidget.swift */; };
 		DE5380CEF71189FC734B69BC /* AlmanacWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */; };
+		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
+		90261B2890C34AE7A9718E2D /* WatchWorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */; };
+		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
+		00F6E2B27A984AF7B6A4F9D2 /* Motion in Frameworks */ = {isa = PBXBuildFile; productRef = 0BEF691ED9A34E748BA71A9C /* Motion */; };
 		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 /* End PBXBuildFile section */
@@ -102,6 +106,9 @@
 		055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlmanacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BB1D631B325075AAB0B16BF /* AlmanacWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWidgets.entitlements; sourceTree = "<group>"; };
 		172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWatchApp.swift; sourceTree = "<group>"; };
+		AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchAppDelegate.swift; sourceTree = "<group>"; };
+		2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutController.swift; sourceTree = "<group>"; };
+		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
 		1F17F22DE820F38559377622 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWatch.entitlements; sourceTree = "<group>"; };
 		53B837A02BD3CD136DF62D37 /* HealthWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthWidget.swift; sourceTree = "<group>"; };
@@ -137,6 +144,7 @@
 			files = (
 				204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */,
 				68A03CA62FF558CFA54A53F7 /* AppSurfaces in Frameworks */,
+				00F6E2B27A984AF7B6A4F9D2 /* Motion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -241,6 +249,9 @@
 			isa = PBXGroup;
 			children = (
 				172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */,
+				AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */,
+				2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */,
+				4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */,
 				65C0CC243BDD2E3A83313257 /* Info.plist */,
 				30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */,
 				F99CEA62E9FE796BD5BA81FE /* Assets.xcassets */,
@@ -365,6 +376,7 @@
 			name = AlmanacWatch;
 			packageProductDependencies = (
 				BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */,
+				0BEF691ED9A34E748BA71A9C /* Motion */,
 			);
 			productName = AlmanacWatch;
 			productReference = 5A224D947F9F20AEE96E695F /* AlmanacWatch.app */;
@@ -478,6 +490,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				DE5380CEF71189FC734B69BC /* AlmanacWatchApp.swift in Sources */,
+				24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */,
+				90261B2890C34AE7A9718E2D /* WatchWorkoutController.swift in Sources */,
+				BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -547,6 +562,9 @@
 				DEVELOPMENT_TEAM = Z42YU5W6WY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AlmanacWatch/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads heart rate and energy during a workout you start on your watch.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac saves workouts you record on your watch to Health.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac counts reps from wrist motion during strength sessions.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -607,6 +625,9 @@
 				DEVELOPMENT_TEAM = Z42YU5W6WY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AlmanacWatch/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads heart rate and energy during a workout you start on your watch.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac saves workouts you record on your watch to Health.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac counts reps from wrist motion during strength sessions.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -994,6 +1015,10 @@
 		BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
+		};
+		0BEF691ED9A34E748BA71A9C /* Motion */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Motion;
 		};
 		D04A72741F9CF213015F7725 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;

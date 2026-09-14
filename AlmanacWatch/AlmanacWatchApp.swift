@@ -1,18 +1,37 @@
 import SwiftUI
 import WidgetKit
 import WatchConnectivity
+import HealthKit
 import AppSurfaces
 
 @main
 struct AlmanacWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var delegate
     @State private var bridge = WatchBridge()
+    @State private var workout = WatchWorkoutController()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
-            WatchDashboard(bridge: bridge)
-                .task { bridge.start() }
-                .onOpenURL { _ in bridge.refresh() }
-                .onChange(of: scenePhase) { _, phase in if phase == .active { bridge.refresh() } }
+            NavigationStack {
+                if workout.state != .idle {
+                    WatchWorkoutScreen(workout: workout)
+                } else {
+                    WatchDashboard(bridge: bridge, onStartWorkout: { type in workout.start(type: type) })
+                }
+            }
+            .task {
+                bridge.start()
+                // Either order must reach `start`: the handler catches a
+                // configuration that arrives later, the pending one catches
+                // a configuration that arrived before this ran.
+                WatchAppDelegate.onConfiguration = { configuration in workout.start(configuration) }
+                if let pending = WatchAppDelegate.pendingConfiguration {
+                    WatchAppDelegate.pendingConfiguration = nil
+                    workout.start(pending)
+                }
+            }
+            .onOpenURL { _ in bridge.refresh() }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { bridge.refresh() } }
         }
     }
 }
@@ -72,9 +91,10 @@ final class WatchBridge: NSObject, WCSessionDelegate {
 
 struct WatchDashboard: View {
     @Bindable var bridge: WatchBridge
+    var onStartWorkout: (HKWorkoutActivityType) -> Void = { _ in }
+    @State private var isChoosingWorkout = false
     var body: some View {
-        NavigationStack {
-            TimelineView(.periodic(from: .now, by: 60)) { timeline in
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("A little progress.").font(.title3.bold())
@@ -99,12 +119,23 @@ struct WatchDashboard: View {
                             Text("Sign in to Almanac on your iPhone and sync your health data. Enable sharing in Settings → Widgets & Watch.")
                                 .font(.footnote).foregroundStyle(.secondary)
                         }
+                        Button { isChoosingWorkout = true } label: {
+                            Label("Start workout", systemImage: "figure.run")
+                        }.tint(.orange)
                         Button(action: bridge.refresh) { Label("Refresh", systemImage: "arrow.clockwise") }.tint(.orange)
                         Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
                     }.padding(.horizontal, 4)
                 }
+        }
+        .navigationTitle("Almanac")
+        // watchOS has no `Menu`, so the Start list is a sheet.
+        .sheet(isPresented: $isChoosingWorkout) {
+            List {
+                ForEach(WatchWorkoutController.startable, id: \.type) { item in
+                    Button(item.name) { isChoosingWorkout = false; onStartWorkout(item.type) }
+                }
             }
-            .navigationTitle("Almanac")
+            .navigationTitle("Start workout")
         }
     }
     private func reading(_ title: String, value: String, icon: String, tint: Color) -> some View {
