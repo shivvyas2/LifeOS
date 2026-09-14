@@ -28,6 +28,23 @@ import AppSurfaces
             let base = Date.now.addingTimeInterval(-30)
             for second in 0..<30 { recorder.sensor.onReading?(140, base.addingTimeInterval(Double(second))) }
             check(recorder.readout?.heartRate == 140 && recorder.readout?.zone == 3 && (recorder.readout?.effort ?? 0) > 0, "Readings yield zone and effort")
+            let lifter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".lift")!, liveActivitiesEnabled: false)
+            lifter.attach(context); lifter.saveToHealth = false; lifter.selection = .strength
+            await lifter.start()
+            check(lifter.source == .phone && lifter.reps == 0 && lifter.setIndex == 1, "A phone strength session starts at set 1 with zero reps")
+            lifter.addRep(); lifter.addRep(); lifter.nextSet(); lifter.addRep()
+            check(lifter.reps == 1 && lifter.setIndex == 2 && lifter.completedSets == [2] && lifter.readout?.reps == 1, "Manual reps and sets count on the phone")
+            var stale = WatchPacket(sentAt: .now); stale.v = 99; stale.reps = 40
+            lifter.receiveWatchPacket(try WatchWire.encode(stale))
+            check(lifter.reps == 1, "A packet with an unknown version changes nothing")
+            await lifter.finish()
+            let lifted = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Strength" }
+            check(lifted?.sets == [2, 1], "Finishing writes the sets, current set included")
+            // The strength check shares the walk's context; remove its row so a
+            // later count of all workouts still reflects only the walk's saves.
+            if let lifted { context.delete(lifted); try context.save() }
+            lifter.deactivate()
+            UserDefaults(suiteName: suite + ".lift")?.removePersistentDomain(forName: suite + ".lift")
             let beforePauseEffort = recorder.readout?.effort
             let beforePauseHeartRate = recorder.readout?.heartRate
             let id = recorder.timer?.id

@@ -44,9 +44,15 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private(set) var heartRateDate: Date?
     private(set) var capacity: Capacity?
     private(set) var readout: LiveSessionReadout?
+    private(set) var source: SessionSource = .phone
+    private(set) var reps: Int?
+    private(set) var setIndex: Int?
+    private(set) var completedSets: [Int] = []
     var error: String?
     var notice: String?
     let sensor: LiveHeartRateSensor
+    /// Task 4 replaces this placeholder with the real mirrored session.
+    var watch: WatchSessionBridge?
     /// Injected so previews and checks can fix an age without a profile.
     var birthDate: () -> Date? = { ProfileStore.load().birthDate }
     /// Whether the WHOOP cloud account is connected; decides auto-pairing.
@@ -78,6 +84,10 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         var distance: Double?
         var capacity: Capacity?
         var effortLoad: Double?
+        var source: SessionSource?
+        var reps: Int?
+        var setIndex: Int?
+        var completedSets: [Int]?
     }
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
@@ -100,6 +110,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         saveToHealth = recordingHealth
         timer = draft.timer; healthSaved = draft.healthSaved; energy = draft.energy; distance = draft.distance
         capacity = draft.capacity; effort = EffortAccumulator(load: draft.effortLoad ?? 0)
+        source = draft.source ?? .phone; reps = draft.reps; setIndex = draft.setIndex; completedSets = draft.completedSets ?? []
         zones = HeartRateZones(birthDate: birthDate())
         selection = RecordedActivity(rawValue: draft.timer.activity) ?? .other
         persist()
@@ -137,6 +148,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         zones = HeartRateZones(birthDate: birthDate())
         capacity = loadCapacity()
         effort = EffortAccumulator(); lastReadingAt = nil
+        source = .phone
+        if selection == .strength { reps = 0; setIndex = 1; completedSets = [] } else { reps = nil; setIndex = nil; completedSets = [] }
         sensor.prepareForSession(whoopConnected: whoopConnected())
         recordingHealth = saveToHealth
         defer { busy = false }
@@ -180,6 +193,34 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         else if isPaused { timer?.resume(); session?.resume(); lastReadingAt = nil }
         persist()
     }
+    /// Manual counting. On the watch source the command echoes back in the
+    /// next packet; on the phone it counts here.
+    func addRep() {
+        guard hasSession, selection == .strength else { return }
+        if source == .watch { watch?.send(.addRep); return }
+        reps = (reps ?? 0) + 1
+        persist()
+    }
+    func nextSet() {
+        guard hasSession, selection == .strength else { return }
+        if source == .watch { watch?.send(.nextSet); return }
+        completedSets.append(reps ?? 0)
+        reps = 0; setIndex = (setIndex ?? 1) + 1
+        persist()
+    }
+    /// Raw bytes from the mirrored session. Anything not a current-version
+    /// packet is dropped without changing state.
+    func receiveWatchPacket(_ data: Data) {
+        guard active, hasSession, let packet = WatchWire.packet(from: data) else { return }
+        if let bpm = packet.heartRate, let at = packet.heartRateAt { receiveHeartRate(bpm, at: at) }
+        if let energy = packet.energyKcal { self.energy = energy }
+        if selection == .strength {
+            if let value = packet.reps { reps = value }
+            if let value = packet.setIndex { setIndex = value }
+            if let value = packet.completedSets { completedSets = value }
+        }
+        persistReading(at: packet.sentAt)
+    }
     func finish() async {
         guard active, !busy, timer != nil, !saved else { return }
         busy = true; error = nil
@@ -215,6 +256,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 let row = WorkoutRecord(externalID: id, start: timer.startedAt,
                     durationMinutes: Int(timer.elapsed() / 60), activityName: timer.activity, energyKcal: energy)
                 row.distanceMeters = distance
+                if selection == .strength { row.sets = completedSets + [reps ?? 0] }
                 context.insert(row)
             }
             try context.save()
@@ -233,6 +275,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         sensor.stopStreaming(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
+        source = .phone; reps = nil; setIndex = nil; completedSets = []
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
     }
@@ -255,7 +298,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private func writeDraft(at date: Date = .now) {
         guard active, let timer,
               let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth,
-                                                         energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load)) else { return }
+                                                         energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load,
+                                                         source: source, reps: reps, setIndex: setIndex, completedSets: completedSets)) else { return }
         defaults.set(data, forKey: Self.draftKey)
         lastDraftWriteAt = date
     }
@@ -266,7 +310,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private func refreshReadout() {
         guard let timer else { readout = nil; return }
         readout = LiveReadoutBuilder.readout(timer: timer, heartRate: heartRate.map { Int($0) }, zones: zones, effort: effort,
-                                             capacity: capacity, energyKcal: energy, distanceMeters: distance)
+                                             capacity: capacity, energyKcal: energy, distanceMeters: distance,
+                                             reps: reps, setIndex: setIndex)
     }
     /// Today's row, or yesterday's while today has not synced. A week of
     /// rows behind it gives the Health path its HRV baseline.

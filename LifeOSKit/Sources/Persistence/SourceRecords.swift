@@ -30,6 +30,13 @@ public final class WorkoutRecord {
     public var zoneThreeMinutes: Int?
     public var zoneFourMinutes: Int?
     public var zoneFiveMinutes: Int?
+    /// Reps per set for a strength session, as JSON, so an existing store
+    /// migrates without a plan. Empty sets are stored as nil, not `[]`.
+    public var setsData: Data?
+    public var sets: [Int] {
+        get { setsData.flatMap { try? JSONDecoder().decode([Int].self, from: $0) } ?? [] }
+        set { setsData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue) }
+    }
 
     public init(externalID: String, start: Date, durationMinutes: Int, activityName: String, energyKcal: Double? = nil) {
         self.externalID = externalID

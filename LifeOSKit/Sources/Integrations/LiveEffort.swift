@@ -169,7 +169,8 @@ public enum EffortMath {
 public enum LiveReadoutBuilder {
     public static func readout(timer: ActivitySessionState, heartRate: Int?, zones: HeartRateZones?,
                                effort: EffortAccumulator, capacity: Capacity?,
-                               energyKcal: Double?, distanceMeters: Double?) -> LiveSessionReadout {
+                               energyKcal: Double?, distanceMeters: Double?,
+                               reps: Int? = nil, setIndex: Int? = nil) -> LiveSessionReadout {
         let zone = zones.flatMap { zones in heartRate.map { zones.zone(for: $0) } }
         let ceiling = capacity?.ceiling ?? .conservative
         let push: PushState = zones == nil ? .onTrack : EffortMath.pushState(zone: zone, effort: effort.effort, ceiling: ceiling)
@@ -187,6 +188,8 @@ public enum LiveReadoutBuilder {
                 EffortMath.batteryRemaining(capacity: $0.percent, effort: effort.effort, ceiling: ceiling)
             }
         }
+        readout.reps = reps
+        readout.setIndex = setIndex
         return readout
     }
 }

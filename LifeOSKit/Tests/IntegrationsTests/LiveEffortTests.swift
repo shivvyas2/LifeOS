@@ -185,4 +185,14 @@ struct LiveEffortTests {
         #expect(WhoopAutoPair.choice(among: ["Polar H10", "WHOOP 4A0B"]) == .one(1))
         #expect(WhoopAutoPair.choice(among: ["whoop", "WHOOP 4A0B"]) == .several)
     }
+
+    @Test func builderCarriesRepsAndSet() {
+        let timer = ActivitySessionState(activity: "Strength", at: today)
+        let readout = LiveReadoutBuilder.readout(timer: timer, heartRate: nil, zones: nil, effort: EffortAccumulator(),
+                                                 capacity: nil, energyKcal: nil, distanceMeters: nil, reps: 8, setIndex: 2)
+        #expect(readout.reps == 8 && readout.setIndex == 2)
+        let plain = LiveReadoutBuilder.readout(timer: timer, heartRate: nil, zones: nil, effort: EffortAccumulator(),
+                                               capacity: nil, energyKcal: nil, distanceMeters: nil)
+        #expect(plain.reps == nil && plain.setIndex == nil)
+    }
 }
