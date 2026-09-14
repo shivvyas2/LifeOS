@@ -141,6 +141,20 @@ import AppSurfaces
             remembering.sensor.forget()
             check(defaults.string(forKey: "lastHeartRateSensorID") == nil, "Forget clears the remembered sensor")
             remembering.deactivate(); stranger.deactivate()
+            let follower = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".follower")!, liveActivitiesEnabled: false)
+            follower.attach(context); follower.saveToHealth = false
+            follower.pendingVideoID = "abcdefghijk"; follower.pendingSplit = "pull"
+            await follower.start()
+            let followerID = "almanac:\(follower.timer!.id.uuidString)"
+            await follower.finish()
+            var followerFetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == followerID })
+            followerFetch.fetchLimit = 1
+            let followed = try context.fetch(followerFetch).first
+            check(followed?.activityName == "Walk" && followed?.videoID == "abcdefghijk" && followed?.split == "pull",
+                  "Finishing stamps the video and split")
+            if let followed { context.delete(followed); try context.save() }
+            follower.deactivate()
+            UserDefaults(suiteName: suite + ".follower")?.removePersistentDomain(forName: suite + ".follower")
             recorder.deactivate()
             await recorder.start()
             check(recorder.timer == nil && !recorder.hasSession, "Account transition stops recording and rejects late starts")

@@ -52,6 +52,12 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var reps: Int?
     var setIndex: Int?
     var completedSets: [Int] = []
+    /// Set by the player screen before `finish()` so the saved record carries
+    /// which video and which split the session followed.
+    var pendingVideoID: String?
+    var pendingSplit: String?
+    /// The video the player screen is following, for the in-session line.
+    var following: (title: String, channel: String)?
     var error: String?
     var notice: String?
     let sensor: LiveHeartRateSensor
@@ -298,6 +304,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 let row = WorkoutRecord(externalID: id, start: timer.startedAt,
                     durationMinutes: Int(timer.elapsed() / 60), activityName: timer.activity, energyKcal: energy)
                 row.distanceMeters = distance
+                row.videoID = pendingVideoID; row.split = pendingSplit
                 if selection == .strength { row.sets = completedSets + [reps ?? 0] }
                 context.insert(row)
             }
@@ -325,6 +332,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
         source = .phone; reps = nil; setIndex = nil; completedSets = []
+        pendingVideoID = nil; pendingSplit = nil; following = nil
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
     }
@@ -377,13 +385,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     /// Today's row, or yesterday's while today has not synced. A week of
     /// rows behind it gives the Health path its HRV baseline.
     func loadCapacity() -> Capacity? {
-        guard let context else { return nil }
-        let rows = (try? MetricsStore(context: context).metrics(from: .now.addingTimeInterval(-9 * 86400), to: .now)) ?? []
-        let days = rows.map {
-            RecoveryDay(date: $0.date, whoopRecoveryPct: $0.whoopRecoveryPct, whoopIsCalibrating: $0.whoopRecoveryIsCalibrating,
-                        sleepPerformancePct: $0.whoopSleepPerformancePct, hrvMs: $0.hrvMs, sleepMinutes: $0.sleepMinutes)
-        }
-        return CapacityMath.capacity(days: days, now: .now)
+        context.map { CapacityInputs.todayCapacity(store: MetricsStore(context: $0)) } ?? nil
     }
     func receiveHeartRate(_ bpm: Int, at date: Date) {
         guard active, isRunning else { return }

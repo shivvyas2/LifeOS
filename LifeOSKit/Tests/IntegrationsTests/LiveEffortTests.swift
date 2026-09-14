@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import AppSurfaces
+import Persistence
 @testable import Integrations
 
 struct LiveEffortTests {
@@ -184,6 +185,15 @@ struct LiveEffortTests {
         #expect(WhoopAutoPair.choice(among: ["Polar H10"]) == .none)
         #expect(WhoopAutoPair.choice(among: ["Polar H10", "WHOOP 4A0B"]) == .one(1))
         #expect(WhoopAutoPair.choice(among: ["whoop", "WHOOP 4A0B"]) == .several)
+    }
+
+    @Test @MainActor func todayCapacityReadsTheStore() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = MetricsStore(context: container.mainContext)
+        _ = try store.upsert(date: .now) { $0.whoopRecoveryPct = 80; $0.whoopSleepPerformancePct = 90 }
+        let capacity = CapacityInputs.todayCapacity(store: store)
+        #expect(capacity?.percent == 82)
+        #expect(capacity?.source == .whoop)
     }
 
     @Test func builderCarriesRepsAndSet() {
