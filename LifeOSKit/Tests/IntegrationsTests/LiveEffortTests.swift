@@ -67,4 +67,69 @@ struct LiveEffortTests {
         #expect(EffortAccumulator.credit(previous: now.addingTimeInterval(-2), at: now) == 2)
         #expect(EffortAccumulator.credit(previous: now.addingTimeInterval(3), at: now) == 0)
     }
+
+    private func recovery(_ date: Date, whoop: Double? = nil, calibrating: Bool? = nil, sleepPerf: Double? = nil,
+                          hrv: Double? = nil, sleep: Int? = nil) -> RecoveryDay {
+        RecoveryDay(date: calendar.startOfDay(for: date), whoopRecoveryPct: whoop, whoopIsCalibrating: calibrating,
+                    sleepPerformancePct: sleepPerf, hrvMs: hrv, sleepMinutes: sleep)
+    }
+    private func daysAgo(_ n: Int) -> Date { calendar.date(byAdding: .day, value: -n, to: today)! }
+
+    @Test func whoopRecoveryBlendsSleepAndSetsGreenCeiling() throws {
+        let capacity = try #require(CapacityMath.capacity(days: [recovery(today, whoop: 80, sleepPerf: 90)], now: today, calendar: calendar))
+        #expect(capacity.percent == 82)
+        #expect(capacity.source == .whoop)
+        #expect(capacity.ceiling == .green)
+        #expect(capacity.measuredOn == calendar.startOfDay(for: today))
+    }
+
+    @Test func yesterdayRecoveryStandsInUntilTodaySyncs() throws {
+        let capacity = try #require(CapacityMath.capacity(days: [recovery(daysAgo(1), whoop: 40)], now: today, calendar: calendar))
+        #expect(capacity.percent == 40)
+        #expect(capacity.ceiling == .yellow)
+        #expect(CapacityMath.capacity(days: [recovery(daysAgo(2), whoop: 40)], now: today, calendar: calendar) == nil)
+    }
+
+    @Test func calibratingWhoopFallsThroughToHealth() throws {
+        let days = [recovery(today, whoop: 80, calibrating: true, hrv: 60, sleep: 450)]
+            + (1...3).map { recovery(daysAgo($0), hrv: 60) }
+        let capacity = try #require(CapacityMath.capacity(days: days, now: today, calendar: calendar))
+        #expect(capacity.source == .health)
+        #expect(capacity.percent == 65)
+        #expect(capacity.ceiling == .yellow)
+    }
+
+    @Test func healthCapacityNeedsABaselineAndRespondsToSleep() throws {
+        #expect(CapacityMath.capacity(days: [recovery(today, hrv: 60), recovery(daysAgo(1), hrv: 60)], now: today, calendar: calendar) == nil)
+        let short = [recovery(today, hrv: 60, sleep: 300)] + (1...3).map { recovery(daysAgo($0), hrv: 60) }
+        #expect(try #require(CapacityMath.capacity(days: short, now: today, calendar: calendar)).percent == 55)
+        let strong = [recovery(today, hrv: 72)] + (1...3).map { recovery(daysAgo($0), hrv: 60) }
+        #expect(try #require(CapacityMath.capacity(days: strong, now: today, calendar: calendar)).percent == 90)
+        #expect(CapacityMath.capacity(days: [], now: today, calendar: calendar) == nil)
+    }
+
+    @Test func batteryDrainsAgainstTheTargetTop() {
+        #expect(EffortMath.batteryRemaining(capacity: 60, effort: 7, ceiling: .yellow) == 30)
+        #expect(EffortMath.batteryRemaining(capacity: 60, effort: 15, ceiling: .yellow) == 0)
+        #expect(EffortMath.batteryRemaining(capacity: 60, effort: 0, ceiling: .yellow) == 60)
+    }
+
+    @Test func pushStateFollowsZoneAndEffort() {
+        #expect(EffortMath.pushState(zone: 5, effort: 8, ceiling: .yellow) == .overLimit)
+        #expect(EffortMath.pushState(zone: 3, effort: 15, ceiling: .yellow) == .overLimit)
+        #expect(EffortMath.pushState(zone: 4, effort: 8, ceiling: .yellow) == .nearLimit)
+        #expect(EffortMath.pushState(zone: 3, effort: 13, ceiling: .yellow) == .nearLimit)
+        #expect(EffortMath.pushState(zone: 2, effort: 3, ceiling: .yellow) == .easy)
+        #expect(EffortMath.pushState(zone: 3, effort: 3, ceiling: .yellow) == .onTrack)
+        #expect(EffortMath.pushState(zone: nil, effort: 11, ceiling: .yellow) == .onTrack)
+        #expect(EffortMath.pushState(zone: nil, effort: 3, ceiling: .yellow) == .easy)
+    }
+
+    @Test func ceilingBands() {
+        #expect(EffortCeiling.forCapacity(67) == .green)
+        #expect(EffortCeiling.forCapacity(66) == .yellow)
+        #expect(EffortCeiling.forCapacity(34) == .yellow)
+        #expect(EffortCeiling.forCapacity(33) == .red)
+        #expect(EffortCeiling.conservative == .yellow)
+    }
 }
