@@ -33,6 +33,9 @@ public struct LiveSessionReadout: Codable, Hashable, Sendable {
     public var capacitySource: String?
     public var ceilingMaxZone: Int?
     public var ceilingTarget: ClosedRange<Double>?
+    /// Reps in the current set and the 1-based set index, strength only.
+    public var reps: Int?
+    public var setIndex: Int?
     public var push: PushState
 
     public init(elapsed: TimeInterval, runningSince: Date?, push: PushState) {
@@ -63,6 +66,7 @@ public enum LiveActivityThrottle {
         if previous == next { return false }
         if previous.isPaused != next.isPaused { return true }
         if previous.push != next.push { return true }
+        if previous.reps != next.reps { return true }
         switch (previous.heartRate, next.heartRate) {
         case let (old?, new?) where abs(old - new) >= heartRateStep:
             return now.timeIntervalSince(lastPublishedAt) >= readingInterval

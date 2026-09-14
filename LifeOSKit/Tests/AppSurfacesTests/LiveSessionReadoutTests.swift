@@ -72,4 +72,21 @@ struct LiveSessionReadoutTests {
         #expect(readout.caloriesText == "0" && readout.distanceKilometresText == "1.23" && readout.batteryText == "0%")
         #expect(readout.capacitySourceName == "WHOOP recovery")
     }
+
+    @Test func repsRoundTripAndFormat() throws {
+        var readout = LiveSessionReadout(elapsed: 10, runningSince: start, push: .onTrack)
+        #expect(readout.repsText == nil && readout.setText == nil)
+        readout.reps = 0; readout.setIndex = 1
+        #expect(readout.repsText == "0" && readout.setText == "Set 1")
+        readout.reps = 12; readout.setIndex = 3
+        let back = try JSONDecoder().decode(LiveSessionReadout.self, from: try JSONEncoder().encode(readout))
+        #expect(back.reps == 12 && back.setIndex == 3)
+    }
+
+    @Test func throttlePublishesOnRepsChange() {
+        let now = start.addingTimeInterval(100)
+        var a = readout(bpm: 120); a.reps = 4
+        var b = a; b.reps = 5
+        #expect(LiveActivityThrottle.shouldPublish(previous: a, next: b, lastPublishedAt: now.addingTimeInterval(-1), now: now))
+    }
 }

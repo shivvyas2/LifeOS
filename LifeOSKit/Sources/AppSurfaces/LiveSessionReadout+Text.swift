@@ -10,6 +10,8 @@ public extension LiveSessionReadout {
     var caloriesText: String? { calories.map(String.init) }
     var distanceKilometresText: String? { distanceMeters.map { String(format: "%.2f", Double($0) / 1000) } }
     var batteryText: String? { batteryPercent.map { "\($0)%" } }
+    var repsText: String? { reps.map(String.init) }
+    var setText: String? { setIndex.map { "Set \($0)" } }
     /// "WHOOP recovery", "Apple Health", or "Battery unknown".
     var capacitySourceName: String {
         switch capacitySource {
