@@ -50,7 +50,6 @@ public struct FitbitSync {
 
         let envelope = try JSONDecoder().decode(SyncResponse.self, from: data)
 
-        if envelope.retry == true { throw FitbitSyncError.retryLater }
 
         // A dead credential is not a retry. Nothing the server holds can be
         // used again, so the app stops and asks the user to sign in rather
@@ -67,6 +66,7 @@ public struct FitbitSync {
 
         // After the write, not before. One declined scope must not discard the
         // six collections that arrived intact.
+        if envelope.retry == true { throw FitbitSyncError.retryLater }
         if !envelope.failures.isEmpty {
             throw FitbitSyncError.partial(failed: envelope.failures.keys.sorted())
         }

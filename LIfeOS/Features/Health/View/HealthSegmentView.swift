@@ -12,13 +12,14 @@ struct HealthSegmentView: View {
     var selectedDate: Date = .now
     var onAddJournal: () -> Void = {}
     var onConnectWhoop: () -> Void = {}
+    var isWhoopConnected = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(spacing: 16) {
             AlertBanner(messages: recovery.anomalies.map(Self.message))
 
-            if !recovery.hasAnyReading {
+            if !recovery.hasAnyReading && !isWhoopConnected {
                 Button(action: onConnectWhoop) {
                     HStack(spacing: 14) {
                         Image(systemName: "bolt.heart.fill")
@@ -39,7 +40,7 @@ struct HealthSegmentView: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.ultraThinMaterial)
+                            .fill(LifeOSTokens.cardSurface.resolve(scheme))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                                     .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
@@ -58,16 +59,14 @@ struct HealthSegmentView: View {
             SleepDashboardCard(recovery: recovery, wellness: wellness, selectedDate: selectedDate)
 
             HStack(spacing: 12) {
-                PastelFillCard(
+                HealthReadingCard(
                     icon: "waveform.path.ecg",
-                    hue: .recovery,
                     label: "HRV",
                     value: recovery.hrvMs.map { "\(Int($0))" },
                     unit: "ms"
                 )
-                PastelFillCard(
+                HealthReadingCard(
                     icon: "heart.fill",
-                    hue: .habits,
                     label: "Resting HR",
                     value: recovery.restingHR.map { "\(Int($0))" },
                     unit: "bpm"
@@ -75,17 +74,15 @@ struct HealthSegmentView: View {
             }
 
             HStack(spacing: 12) {
-                PastelFillCard(
+                HealthReadingCard(
                     icon: "drop.fill",
-                    hue: .body,
                     label: "Blood oxygen",
                     value: recovery.spo2Percentage.map { String(format: "%.1f", $0) },
                     unit: "%",
                     caption: recovery.spo2Trend.deltaFromAverage.map { String(format: "%+.1f", $0) }
                 )
-                PastelFillCard(
+                HealthReadingCard(
                     icon: "thermometer.medium",
-                    hue: .activity,
                     label: "Skin temp",
                     value: recovery.skinTempCelsius.map { String(format: "%.1f", $0) },
                     unit: "°C",
@@ -110,7 +107,7 @@ struct HealthSegmentView: View {
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
-                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
                 }
             }
 
@@ -130,9 +127,8 @@ struct HealthSegmentView: View {
 
     private var recoveryCard: some View {
         let band = recovery.recoveryPct.map(RecoveryBand.band(for:))
-        return PastelFillCard(
+        return HealthReadingCard(
             icon: "bolt.heart.fill",
-            hue: .nutrition,
             label: "Recovery",
             value: recovery.recoveryPct.map { "\(Int($0))" },
             unit: "%",
@@ -142,9 +138,8 @@ struct HealthSegmentView: View {
     }
 
     private var caloriesCard: some View {
-        PastelFillCard(
+        HealthReadingCard(
             icon: "flame.fill",
-            hue: .activity,
             label: "Calories",
             value: recovery.calories.map { "\(Int($0))" },
             unit: "kcal"

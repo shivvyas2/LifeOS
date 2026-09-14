@@ -7,36 +7,21 @@ struct WeightSection: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 24) {
-            if let weight = snapshot.weightKg {
-                HeroNumeral(value: String(format: "%.1f", weight), unit: "kg", label: "Bodyweight")
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.top, 18)
-            } else {
-                HeroEmptyState(label: "Bodyweight", reason: "No weigh-in recorded")
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.top, 18)
-            }
-
-            HStack(spacing: 10) {
-                MetricTile(
-                    label: "This week",
-                    value: snapshot.weeklyDeltaKg.map { "\($0 >= 0 ? "+" : "")\(String(format: "%.1f", $0))" },
-                    unit: "kg"
-                )
-                MetricTile(
-                    label: "Logged",
-                    value: "\(snapshot.recentWeights.count { $0.weightKg != nil })",
-                    unit: "of 14"
-                )
-            }
-
-            SoftCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("LAST 14 DAYS")
-                        .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
-                    WeightBars(points: snapshot.recentWeights)
+        SoftCard {
+            VStack(alignment: .leading, spacing: 18) {
+                Label("Weight", systemImage: "scalemass").font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(snapshot.weightKg.map { String(format: "%.1f kg", $0) } ?? "No weigh-in")
+                        .font(.title.bold()).monospacedDigit()
+                    Spacer()
+                    if let delta = snapshot.weeklyDeltaKg {
+                        Text(String(format: "%+.1f kg this week", delta))
+                            .font(.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    }
                 }
+                WeightBars(points: snapshot.recentWeights)
+                Text("\(snapshot.recentWeights.count { $0.weightKg != nil }) of 14 days recorded · Scale follows your weight range")
+                    .font(.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             }
         }
     }

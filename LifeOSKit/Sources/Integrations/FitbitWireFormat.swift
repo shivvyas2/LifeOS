@@ -12,6 +12,7 @@ import Foundation
 public struct FitbitSleepPayload: Decodable, Sendable, Equatable {
     public struct Night: Decodable, Sendable, Equatable {
         public let dateOfSleep: String
+        public let isMainSleep: Bool?
         public let efficiency: Double?
         public let minutesAsleep: Double?
         public let minutesAwake: Double?
@@ -121,6 +122,19 @@ public struct FitbitCardioPayload: Decodable, Sendable, Equatable {
     public let cardioScore: [Day]
 }
 
+// Activity range resources use string numbers on the wire.
+public struct FitbitActivityPayload: Decodable, Sendable, Equatable {
+    public struct Day: Decodable, Sendable, Equatable {
+        public let dateTime: String
+        public let value: String
+    }
+    public let fairlyActive: [Day]?
+    public let veryActive: [Day]?
+    enum CodingKeys: String, CodingKey {
+        case fairlyActive = "activities-minutesFairlyActive", veryActive = "activities-minutesVeryActive"
+    }
+}
+
 // MARK: - The whole response
 
 /// One sync's worth of raw collections.
@@ -135,13 +149,16 @@ public struct FitbitPayloads: Decodable, Sendable, Equatable {
     public var skinTemperature: FitbitTemperaturePayload?
     public var restingHeartRate: FitbitHeartPayload?
     public var cardioFitness: FitbitCardioPayload?
+    public var fairlyActiveMinutes: FitbitActivityPayload?
+    public var veryActiveMinutes: FitbitActivityPayload?
 
     public init(
         sleep: FitbitSleepPayload? = nil, hrv: FitbitHRVPayload? = nil,
         spo2: FitbitSpO2Payload? = nil, breathing: FitbitBreathingPayload? = nil,
         skinTemperature: FitbitTemperaturePayload? = nil,
         restingHeartRate: FitbitHeartPayload? = nil,
-        cardioFitness: FitbitCardioPayload? = nil
+        cardioFitness: FitbitCardioPayload? = nil,
+        fairlyActiveMinutes: FitbitActivityPayload? = nil, veryActiveMinutes: FitbitActivityPayload? = nil
     ) {
         self.sleep = sleep
         self.hrv = hrv
@@ -150,6 +167,7 @@ public struct FitbitPayloads: Decodable, Sendable, Equatable {
         self.skinTemperature = skinTemperature
         self.restingHeartRate = restingHeartRate
         self.cardioFitness = cardioFitness
+        self.fairlyActiveMinutes = fairlyActiveMinutes; self.veryActiveMinutes = veryActiveMinutes
     }
 }
 
@@ -170,13 +188,13 @@ public struct FitbitDay: Sendable, Equatable {
 /// absent: they cost one request per day against a quota of 150 per hour, so
 /// they arrive with the resumable cursor rather than here.
 public enum FitbitCollection: String, CaseIterable, Sendable {
-    case sleep, hrv, spo2, breathing, skinTemperature, restingHeartRate, cardioFitness
+    case sleep, hrv, spo2, breathing, skinTemperature, restingHeartRate, cardioFitness, fairlyActiveMinutes, veryActiveMinutes
 
     /// Fitbit's own cap. Exceeding it is a 400 that names nothing useful.
     public var maximumRangeDays: Int {
         switch self {
         case .sleep: 100
-        case .restingHeartRate: 365
+        case .restingHeartRate, .fairlyActiveMinutes, .veryActiveMinutes: 365
         case .hrv, .spo2, .breathing, .skinTemperature, .cardioFitness: 30
         }
     }

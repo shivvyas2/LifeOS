@@ -29,6 +29,7 @@ final class FriendsViewModel {
     private(set) var outgoingPending: Set<UUID> = []
     private(set) var searchResults: [SocialProfile] = []
     var query = ""
+    private(set) var searching = false
     /// One quiet sentence for the screen. Never an alert: a failed friend
     /// request is not an emergency.
     private(set) var errorMessage: String?
@@ -53,6 +54,19 @@ final class FriendsViewModel {
         self.sessions = sessions
     }
 
+#if DEBUG
+    private var previewMode = false
+    static func designPreview() -> FriendsViewModel {
+        let model = FriendsViewModel()
+        model.previewMode = true; model.phase = .ready
+        model.friends = [(SocialProfile(userID: UUID(), displayName: "Alex Morgan"), 1),
+                         (SocialProfile(userID: UUID(), displayName: "Jamie Chen"), 2),
+                         (SocialProfile(userID: UUID(), displayName: "Sofia Rivera"), 3)]
+        model.requests = [(SocialProfile(userID: UUID(), displayName: "Noah Williams"), 4)]
+        return model
+    }
+#endif
+
     private var api: SocialAPI? {
         guard let baseURL = AppConfig.supabaseURL, let anonKey = AppConfig.supabaseAnonKey else { return nil }
         return SocialAPI(baseURL: baseURL, anonKey: anonKey)
@@ -62,6 +76,9 @@ final class FriendsViewModel {
     /// publish the local display name as this device's profile row, then
     /// load the lists it drives.
     func appear() async {
+#if DEBUG
+        if previewMode { return }
+#endif
         guard let session = sessions.load(), let userID = UUID(uuidString: session.userID) else {
             phase = .guest
             return
@@ -91,6 +108,9 @@ final class FriendsViewModel {
 
     /// Pull-to-refresh and the retry after an accept: the same reload.
     func refresh() async {
+#if DEBUG
+        if previewMode { return }
+#endif
         await load()
     }
 
@@ -160,6 +180,7 @@ final class FriendsViewModel {
     /// the fast response for "alex" and silently replace the right results
     /// with the wrong ones.
     private var searchTask: Task<Void, Never>?
+    private var searchGeneration = 0
 
     /// Runs a search for the current `query`. Excludes the signed-in user:
     /// finding yourself in your own friends search is noise, not a result.
@@ -169,7 +190,13 @@ final class FriendsViewModel {
     /// its network round trip returns — a cancelled or superseded response is
     /// dropped rather than applied.
     func search() {
+#if DEBUG
+        if previewMode { return }
+#endif
         searchTask?.cancel()
+        searchGeneration += 1
+        let generation = searchGeneration
+        searching = false
 
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -193,8 +220,12 @@ final class FriendsViewModel {
         }
 
         let issuedQuery = query
+        searching = true
+        searchResults = []
         searchTask = Task {
+            defer { if generation == searchGeneration { searching = false } }
             do {
+                try await Task.sleep(for: .milliseconds(250))
                 let results = try await api.search(trimmed, accessToken: accessToken)
                 guard !Task.isCancelled, issuedQuery == self.query else { return }
                 searchResults = results.filter { $0.userID != myUserID }
@@ -210,6 +241,9 @@ final class FriendsViewModel {
     /// the round trip, so the button's state does not flicker back to "Add"
     /// while the request is in flight.
     func add(_ profile: SocialProfile) async {
+#if DEBUG
+        if previewMode { return }
+#endif
         // Saying nothing here is what "it just spins" looks like from the
         // outside: no results, no error, no spinner ending. Each of these
         // three is a different problem and each is worth naming.
@@ -238,6 +272,9 @@ final class FriendsViewModel {
     /// Accepts an incoming request and reloads, since accepting turns a
     /// request row into a friend row.
     func accept(_ friendshipID: Int) async {
+#if DEBUG
+        if previewMode { return }
+#endif
         guard let api, let accessToken else { return }
         do {
             try await api.accept(friendshipID: friendshipID, accessToken: accessToken)
@@ -251,6 +288,9 @@ final class FriendsViewModel {
     /// its life: declining a pending request and removing an accepted
     /// friend, since either way the row simply stops existing.
     func remove(friendshipID: Int) async {
+#if DEBUG
+        if previewMode { return }
+#endif
         guard let api, let accessToken else { return }
         do {
             try await api.remove(friendshipID: friendshipID, accessToken: accessToken)

@@ -186,12 +186,12 @@ final class SocialStubURLProtocol: URLProtocol {
         #expect(query.contains("user_id=in.(\(a.uuidString),\(b.uuidString))"))
     }
 
-    @Test func messagesRequestFiltersByEitherPartyOrderedOldestFirst() {
+    @Test func messagesRequestFetchesNewestPageBeforeChronologicalPresentation() {
         let them = UUID()
         let request = SocialAPI.messagesRequest(baseURL: baseURL, anonKey: anonKey, accessToken: "tok", userID: them)
         let query = request.url?.query ?? ""
         #expect(query.contains("or=(sender.eq.\(them.uuidString),recipient.eq.\(them.uuidString))"))
-        #expect(query.contains("order=created_at.asc"))
+        #expect(query.contains("order=id.desc"))
         #expect(query.contains("limit=200"))
     }
 

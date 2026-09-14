@@ -132,3 +132,58 @@ public extension LifeOSType {
     }
 }
 #endif
+
+/// Dynamic Type counterparts of the shared text scale. Existing layouts can adopt
+/// these one at a time without changing the Today masthead or numeral treatments.
+public enum LifeOSTextRole {
+    case caption, label, secondary, body, rowTitle, sectionTitle, screenTitle, display
+
+    fileprivate var size: CGFloat {
+        switch self {
+        case .caption: 12
+        case .label: 13
+        case .secondary, .rowTitle: 15
+        case .body: 17
+        case .sectionTitle: 20
+        case .screenTitle: 24
+        case .display: 34
+        }
+    }
+    fileprivate var weight: Font.Weight {
+        switch self {
+        case .label: .medium
+        case .rowTitle, .sectionTitle: .semibold
+        case .screenTitle, .display: .bold
+        default: .regular
+        }
+    }
+    fileprivate var relativeTo: Font.TextStyle {
+        switch self {
+        case .caption: .caption
+        case .label: .footnote
+        case .secondary, .rowTitle: .subheadline
+        case .body: .body
+        case .sectionTitle: .title3
+        case .screenTitle: .title2
+        case .display: .largeTitle
+        }
+    }
+}
+
+private struct LifeOSTextModifier: ViewModifier {
+    let role: LifeOSTextRole
+    @ScaledMetric private var size: CGFloat
+    init(role: LifeOSTextRole) {
+        self.role = role
+        _size = ScaledMetric(wrappedValue: role.size, relativeTo: role.relativeTo)
+    }
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, weight: role.weight))
+    }
+}
+
+public extension View {
+    func lifeOSText(_ role: LifeOSTextRole) -> some View {
+        modifier(LifeOSTextModifier(role: role))
+    }
+}

@@ -14,18 +14,18 @@ struct FitnessSegmentView: View {
             caloriesCard
 
             HStack(spacing: 12) {
-                IconBubbleTile(icon: "figure.walk", hue: .body, label: "Steps",
+                HealthReadingCard(icon: "figure.walk", label: "Steps",
                                value: activity.steps.map { $0.formatted() })
-                IconBubbleTile(icon: "bolt.fill", hue: .activity, label: "Active Time",
+                HealthReadingCard(icon: "bolt.fill", label: "Active Time",
                                value: activity.exerciseMinutes.map { "\($0)" }, unit: "min")
             }
 
-            HStack(spacing: 12) {
-                IconBubbleTile(icon: "gauge.with.needle", hue: .habits, label: "Strain",
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+                HealthReadingCard(icon: "gauge.with.needle", label: "Strain",
                                value: recovery.dayStrain.map { String(format: "%.1f", $0) })
-                IconBubbleTile(icon: "heart.fill", hue: .recovery, label: "Avg HR",
+                HealthReadingCard(icon: "heart.fill", label: "Avg HR",
                                value: recovery.averageHR.map { "\(Int($0))" }, unit: "bpm")
-                IconBubbleTile(icon: "bolt.heart.fill", hue: .habits, label: "Max HR",
+                HealthReadingCard(icon: "bolt.heart.fill", label: "Max HR",
                                value: recovery.maxHR.map { "\(Int($0))" }, unit: "bpm")
             }
 
@@ -52,7 +52,7 @@ struct FitnessSegmentView: View {
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
-                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
                 }
                 .buttonStyle(.plain)
             }

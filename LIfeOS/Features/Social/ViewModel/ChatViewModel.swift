@@ -72,7 +72,7 @@ final class ChatViewModel {
     func send() async {
         guard !sending else { return }
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let api, let accessToken, let myUserID else { return }
+        guard !text.isEmpty, text.unicodeScalars.count <= 2000, let api, let accessToken, let myUserID else { return }
 
         let provisionalID = nextProvisionalID
         nextProvisionalID -= 1
@@ -80,17 +80,17 @@ final class ChatViewModel {
             id: provisionalID, sender: myUserID, recipient: friend.userID, body: text, createdAt: .now
         )
         pending.append(provisional)
-        draft = ""
         sending = true
 
         do {
             try await api.send(text, to: friend.userID, accessToken: accessToken)
             pending.removeAll { $0.id == provisionalID }
+            if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
             errorMessage = nil
             await refresh()
         } catch {
             pending.removeAll { $0.id == provisionalID }
-            errorMessage = "Could not send message"
+            errorMessage = "Message wasn’t confirmed. Your draft is still here; check the conversation before trying again."
         }
 
         sending = false

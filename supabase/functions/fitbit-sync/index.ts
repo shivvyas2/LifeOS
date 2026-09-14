@@ -25,6 +25,8 @@ const COLLECTIONS: { key: string; maxDays: number }[] = [
   { key: "skinTemperature", maxDays: 30 },
   { key: "restingHeartRate", maxDays: 365 },
   { key: "cardioFitness", maxDays: 30 },
+  { key: "fairlyActiveMinutes", maxDays: 365 },
+  { key: "veryActiveMinutes", maxDays: 365 },
 ];
 
 /// Stop while there is still headroom rather than at zero. A sync that spends

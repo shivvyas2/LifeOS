@@ -136,6 +136,9 @@ struct RootView: View {
             coach.disappear()
             coach.stopSpeaking()
         }
+        .task(id: "\(health.state)|\(whoop.state)|\(fitbit.state)") {
+            await publishWellnessIfShared()
+        }
         .onChange(of: showSettings) { _, isOpen in
             if !isOpen { profilePhoto = ProfilePhotoStore.load() }
         }
@@ -143,7 +146,7 @@ struct RootView: View {
             ProfileScreen(
                 settings: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
                 stats: profileStats, highlights: profileHighlights,
-                allTime: profileAllTime, onSignOut: onSignOut
+                allTime: profileAllTime, socialActivity: socialActivity, onSignOut: onSignOut
             )
         }
         .fullScreenCover(isPresented: $showCoach) {
@@ -396,14 +399,16 @@ struct RootView: View {
                     .navigationDestination(isPresented: $showMonth) {
                         MonthScreen(
                             onTapEvent: { eventSheet = .edit($0) },
-                            onAddEvent: { eventSheet = .create(on: $0) }
+                            onAddEvent: { eventSheet = .create(on: $0) },
+                            isCalendarConnected: today.snapshot.calendarAccess == .authorized,
+                            onConnectCalendar: { requestCalendarAccess() }
                         )
                     }
                     // Pushed on Today's stack rather than presented as a sheet:
                     // it is a place inside the day's numbers, not an errand
                     // that interrupts them, and a push keeps the way back.
                     .navigationDestination(item: $openMetric) { metric in
-                        MetricDetailScreen(metric: metric, model: metricDetail)
+                        MetricDetailScreen(metric: metric, model: metricDetail, onManageConnections: { showSettings = true })
                     }
                 }
             case .health:
@@ -415,6 +420,8 @@ struct RootView: View {
                         wellness: wellness.snapshot,
                         onAddJournal: { showJournal = true },
                         onConnectWhoop: { showWhoop = true },
+                        isWhoopConnected: whoop.isConnected,
+                        onSelectMetric: { openMetric = $0 },
                         section: $healthSection,
                         selectedDate: Binding(
                             get: { healthDate },
@@ -422,6 +429,9 @@ struct RootView: View {
                         )
                     )
                     .quickActionsToolbar()
+                    .navigationDestination(item: $openMetric) { metric in
+                        MetricDetailScreen(metric: metric, model: metricDetail, onManageConnections: { showSettings = true })
+                    }
                 }
             case .money:
                 // Wrapped here rather than in `MoneyScreen`: the stack carries
@@ -551,6 +561,31 @@ struct RootView: View {
     /// Three, because a row of four on a narrow phone squeezes each column
     /// past the point the figures are readable, and because these are the
     /// three the app can state without qualification.
+    @MainActor private func publishWellnessIfShared() async {
+        guard let api = SocialSession.api, let session = SocialSession.current else { return }
+        do {
+            let groups = try await api.groups(token: session.accessToken)
+            guard !Task.isCancelled, SocialSession.current?.userID == session.userID,
+                  groups.contains(where: { $0.members.contains(where: { $0.sharesWellness == true }) }),
+                  let activity = socialActivity else { return }
+            try await api.publish(activity, token: session.accessToken)
+        } catch {
+            // Foreground/social refresh retries. Never interrupt the home screen
+            // or expose private score values in logs for a background sync failure.
+        }
+    }
+
+    private var socialActivity: SocialActivitySnapshot? {
+        guard let days = try? context.fetchCount(FetchDescriptor<DailyMetrics>()),
+              let workouts = try? context.fetchCount(FetchDescriptor<WorkoutRecord>()) else { return nil }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Calendar.current.startOfDay(for: .now))!
+        guard let rows = try? context.fetch(FetchDescriptor<DailyMetrics>(predicate: #Predicate { $0.date >= cutoff })) else { return nil }
+        let goals = (try? context.fetch(FetchDescriptor<UserGoals>()))?.first
+        let wellness = SocialWellness.scores(readings: rows.map(WellnessReading.init),
+            exerciseGoal: goals?.exerciseMinutesGoal ?? 30, sleepGoal: goals?.sleepMinutesGoal ?? 420)
+        return SocialActivitySnapshot(streak: today.snapshot.streak, daysTracked: days, workouts: workouts, wellness: wellness)
+    }
+
     private var profileStats: [ProfileStat] {
         // Cumulative, not daily: the trio under the name is who this person
         // has been, the way the reference's followers number is. Counts come

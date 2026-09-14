@@ -94,6 +94,8 @@ export function rangePath(collection: string, start: string, end: string): strin
     case "breathing":        return `/1/user/-/br/date/${start}/${end}.json`;
     case "skinTemperature":  return `/1/user/-/temp/skin/date/${start}/${end}.json`;
     case "restingHeartRate": return `/1/user/-/activities/heart/date/${start}/${end}.json`;
+    case "fairlyActiveMinutes": return `/1/user/-/activities/minutesFairlyActive/date/${start}/${end}.json`;
+    case "veryActiveMinutes": return `/1/user/-/activities/minutesVeryActive/date/${start}/${end}.json`;
     case "cardioFitness":    return `/1/user/-/cardioscore/date/${start}/${end}.json`;
     default: throw new Error(`unknown collection ${collection}`);
   }

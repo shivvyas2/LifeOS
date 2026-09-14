@@ -60,6 +60,7 @@ struct MetricDetailSnapshot: Equatable {
     /// The most recent actual reading in the window, which is usually but not
     /// always today: a night's sleep or a recovery score can be a day behind.
     var latest: Double?
+    var latestDate: Date?
     var goal: Double?
 
     var bars: [MetricBar] = []

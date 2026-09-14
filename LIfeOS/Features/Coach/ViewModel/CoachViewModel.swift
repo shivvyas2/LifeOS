@@ -93,6 +93,7 @@ final class CoachViewModel {
 
     private var context: ModelContext?
     private var isSending = false
+    private var isVisible = false
     private let accountSessions = KeychainAuthSessionStore()
 
     /// Whether a session exists, read at the moment of failure rather than
@@ -167,7 +168,8 @@ final class CoachViewModel {
             Task { await self?.send(text) }
         }
         speech.onLevel = { [weak self] level in
-            self?.level = level
+            guard let self, self.phase == .listening else { return }
+            self.level = level
         }
         // The mic closes itself when the sentence ends, and the screen has to
         // say so at that moment. Waiting for the transcript would leave it
@@ -188,6 +190,7 @@ final class CoachViewModel {
     }
 
     func appear() {
+        isVisible = true
         error = nil
     }
 
@@ -199,6 +202,7 @@ final class CoachViewModel {
     }
 
     func disappear() {
+        isVisible = false
         speech.stop()
         stopSpeaking()
         if phase == .listening { phase = .idle }
@@ -218,6 +222,8 @@ final class CoachViewModel {
     }
 
     func startListening() async {
+        guard phase != .thinking else { return }
+        stopSpeaking()
         error = nil
         liveTranscript = ""
         isTyping = false
@@ -248,7 +254,7 @@ final class CoachViewModel {
     /// nothing to report.
     private func speak(_ text: String) {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: AssistantVoice.enabledKey),
+        guard isVisible, defaults.bool(forKey: AssistantVoice.enabledKey),
               let key = AppConfig.elevenLabsAPIKey
         else { return }
 

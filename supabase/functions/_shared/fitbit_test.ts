@@ -94,3 +94,8 @@ Deno.test("each collection knows its own path shape", () => {
     "/1/user/-/temp/skin/date/2026-07-28/2026-08-26.json",
   );
 });
+
+Deno.test("leaderboard activity uses range endpoints", () => {
+  assertEquals(rangePath("fairlyActiveMinutes", "2026-09-01", "2026-09-14"), "/1/user/-/activities/minutesFairlyActive/date/2026-09-01/2026-09-14.json");
+  assertEquals(rangePath("veryActiveMinutes", "2026-09-01", "2026-09-14"), "/1/user/-/activities/minutesVeryActive/date/2026-09-01/2026-09-14.json");
+});

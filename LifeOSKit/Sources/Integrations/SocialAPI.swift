@@ -206,7 +206,7 @@ public struct SocialAPI: Sendable {
     public func messages(with userID: UUID, accessToken: String) async throws -> [SocialMessage] {
         let request = Self.messagesRequest(baseURL: baseURL, anonKey: anonKey, accessToken: accessToken, userID: userID)
         let data = try await perform(request)
-        return try Self.decoder.decode([SocialMessage].self, from: data)
+        return try Self.decoder.decode([SocialMessage].self, from: data).reversed()
     }
 
     /// Every message the caller can see, newest first.
@@ -342,7 +342,7 @@ public struct SocialAPI: Sendable {
         )
         components?.queryItems = [
             URLQueryItem(name: "or", value: "(sender.eq.\(userID.uuidString),recipient.eq.\(userID.uuidString))"),
-            URLQueryItem(name: "order", value: "created_at.asc"),
+            URLQueryItem(name: "order", value: "id.desc"),
             URLQueryItem(name: "limit", value: "200"),
         ]
         var request = URLRequest(url: components?.url ?? baseURL)
@@ -406,7 +406,7 @@ public struct SocialAPI: Sendable {
     /// verification is the server's job, and by the time this client holds
     /// the token Supabase has already issued it. This only reads the claim
     /// already trusted to authenticate every other call made with it.
-    private static func subject(ofAccessToken token: String) -> UUID? {
+    static func subject(ofAccessToken token: String) -> UUID? {
         let segments = token.split(separator: ".")
         guard segments.count > 1 else { return nil }
         var base64 = String(segments[1])

@@ -41,7 +41,8 @@ struct ProfileEditSheet: View {
 
     var body: some View {
         NavigationStack {
-            GradientCanvas(hue: .habits) {
+            ZStack {
+                ProfilePhotoBackdrop(photo: draftPhoto, showsPortrait: false)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         if let publishError {
@@ -55,7 +56,7 @@ struct ProfileEditSheet: View {
                             .frame(maxWidth: .infinity)
 
                         sectionLabel("Name")
-                        GlassPanel {
+                        editorPanel {
                             VStack(spacing: 0) {
                                 TextField("First name", text: $draft.firstName)
                                     .textContentType(.givenName)
@@ -70,19 +71,33 @@ struct ProfileEditSheet: View {
                         }
 
                         sectionLabel("About")
-                        GlassPanel {
+                        editorPanel {
                             VStack(spacing: 0) {
-                                DatePicker(
-                                    "Birthday",
-                                    selection: Binding(
-                                        get: { draft.birthDate ?? Self.defaultBirthday },
-                                        set: { draft.birthDate = $0 }
-                                    ),
-                                    in: Self.earliest...Date.now,
-                                    displayedComponents: .date
-                                )
-                                .font(LifeOSType.secondary.weight(.medium))
-                                .padding(.vertical, 6)
+                                if draft.birthDate != nil {
+                                    DatePicker(
+                                        "Birthday",
+                                        selection: Binding(
+                                            get: { draft.birthDate ?? Self.defaultBirthday },
+                                            set: { draft.birthDate = $0 }
+                                        ),
+                                        in: Self.earliest...Date.now,
+                                        displayedComponents: .date
+                                    )
+                                    .font(LifeOSType.secondary.weight(.medium))
+                                    .padding(.vertical, 6)
+                                    Button("Remove birthday") { draft.birthDate = nil }
+                                        .font(.caption).frame(minHeight: 44)
+                                        .frame(maxWidth: .infinity, alignment: .trailing)
+                                } else {
+                                    Button { draft.birthDate = Self.defaultBirthday } label: {
+                                        HStack {
+                                            Text("Birthday").foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                                            Spacer()
+                                            Label("Add", systemImage: "plus")
+                                        }
+                                        .font(.subheadline.weight(.medium)).frame(minHeight: 48)
+                                    }
+                                }
 
                                 divider
 
@@ -98,7 +113,7 @@ struct ProfileEditSheet: View {
                                     .multilineTextAlignment(.trailing)
                                     .frame(width: 70)
                                     Text("cm")
-                                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                                        .foregroundStyle(Color.white.opacity(0.8))
                                 }
                                 .padding(.vertical, 10)
 
@@ -130,6 +145,8 @@ struct ProfileEditSheet: View {
                     .padding(.top, 16)
                     .padding(.bottom, 40)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .disabled(isSaving)
             }
             .navigationTitle("Edit profile")
             .navigationBarTitleDisplayMode(.inline)
@@ -140,14 +157,22 @@ struct ProfileEditSheet: View {
                     // and trapping someone in a sheet they cannot satisfy is
                     // worse than letting them out informed.
                     Button(publishError == nil ? "Cancel" : "Close anyway") { dismiss() }
+                        .foregroundStyle(.white)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(publishError == nil ? "Save" : "Try again") { Task { await save() } }
-                        .disabled(isSaving)
+                    if isSaving {
+                        ProgressView().accessibilityLabel("Saving profile")
+                    } else {
+                        Button(publishError == nil ? "Save" : "Try again") { Task { await save() } }
+                            .fontWeight(.semibold).foregroundStyle(.white)
+                    }
                 }
             }
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .tint(LifeOSTokens.accent)
             .onChange(of: pickedPhoto) { _, item in Task { await load(item) } }
         }
+        .preferredColorScheme(.dark)
     }
 
     /// The photo is the reason this sheet exists: a big circle with a camera
@@ -164,7 +189,7 @@ struct ProfileEditSheet: View {
                                 Circle().fill(LifeOSTokens.cardSurface.resolve(scheme))
                                 Image(systemName: "person.fill")
                                     .font(LifeOSType.numeral(44, weight: .bold))
-                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                                    .foregroundStyle(Color.white.opacity(0.8))
                             }
                         }
                     }
@@ -180,15 +205,30 @@ struct ProfileEditSheet: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Change photo")
+            .accessibilityLabel(draftPhoto == nil ? "Add photo" : "Change photo")
+            Text(draftPhoto == nil ? "Add a photo" : "Tap to change photo")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.8))
+            if draftPhoto != nil {
+                Button("Remove photo", role: .destructive) {
+                    draftPhoto = nil
+                    pickedPhoto = nil
+                }
+                .font(.caption).frame(minHeight: 44)
+            }
         }
+    }
+
+    private func editorPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content().padding(24)
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 24))
     }
 
     private func sectionLabel(_ title: String) -> some View {
         Text(title)
             .font(LifeOSType.label.weight(.bold))
             .tracking(0.8)
-            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            .foregroundStyle(Color.white.opacity(0.8))
     }
 
     private var divider: some View {

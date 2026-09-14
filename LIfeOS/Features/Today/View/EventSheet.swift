@@ -38,6 +38,8 @@ struct EventSheet: View {
     let onSave: (CalendarEventDraft) -> Void
     let onDelete: () -> Void
 
+    @Environment(\.colorScheme) private var scheme
+    @State private var confirmsDelete = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var title: String
@@ -110,12 +112,17 @@ struct EventSheet: View {
                 if isEditing, !isRecurring {
                     Section {
                         Button("Delete event", role: .destructive) {
-                            onDelete()
-                            dismiss()
+                            confirmsDelete = true
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
+            }
+            .scrollContentBackground(.hidden)
+            .background(LifeOSTokens.canvas.resolve(scheme))
+            .tint(LifeOSTokens.accent)
+            .confirmationDialog("Delete this event?", isPresented: $confirmsDelete, titleVisibility: .visible) {
+                Button("Delete event", role: .destructive) { onDelete(); dismiss() }
             }
             .navigationTitle(isEditing ? "Event" : "New event")
             .navigationBarTitleDisplayMode(.inline)

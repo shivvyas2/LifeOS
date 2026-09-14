@@ -14,12 +14,17 @@ struct MonthScreen: View {
     @State private var model = MonthViewModel()
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.layout) private var layout
+    @State private var showDatePicker = false
 
     /// Create and edit leave through the caller, which owns `CalendarSync`.
     /// This screen never writes: it has no more business talking to EventKit
     /// than `AgendaCard` does.
     var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
     var onAddEvent: (Date) -> Void = { _ in }
+
+    var isCalendarConnected = true
+    var onConnectCalendar: () -> Void = {}
 
     private let calendar = Calendar.current
 
@@ -37,25 +42,47 @@ struct MonthScreen: View {
     }
 
     var body: some View {
-        GradientCanvas(hue: .recovery) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    header
-                    grid
+        ScrollView {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 28) {
+                    calendarPanel.frame(width: 400)
+                    agenda.frame(minWidth: 320, maxWidth: .infinity)
+                }
+                VStack(alignment: .leading, spacing: 28) {
+                    calendarPanel
                     agenda
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 40)
             }
-            .scrollIndicators(.hidden)
+            .padding(.horizontal, layout.gutter)
+            .padding(.leading, layout.railInset)
+            .padding(.top, 16)
+            .padding(.bottom, layout.contentBottomInset)
+        }
+        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .tint(LifeOSTokens.accent)
+        .sheet(isPresented: $showDatePicker) {
+            NavigationStack {
+                DatePicker("Go to date", selection: Binding(get: { model.selection }, set: {
+                    model.goTo($0)
+                    showDatePicker = false
+                }), displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding()
+                .navigationTitle("Go to date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showDatePicker = false }
+                } }
+            }
+            .presentationDetents([.medium, .large])
+            .tint(LifeOSTokens.accent)
         }
         .navigationTitle("Calendar")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Today") { model.goToToday() }
-                    .disabled(calendar.isDate(model.month, equalTo: .now, toGranularity: .month))
+                    .disabled(calendar.isDateInToday(model.selection))
             }
         }
         .task { model.attach(context) }
@@ -69,17 +96,30 @@ struct MonthScreen: View {
 
     // MARK: - Month header
 
+    private var calendarPanel: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            header
+            grid
+        }
+        .padding(16)
+        .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 20))
+    }
+
     private var header: some View {
         HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: -2) {
-                Text(model.month.formatted(.dateTime.month(.wide)).uppercased())
-                    .font(LifeOSType.sectionTitle.weight(.bold))
-                    .foregroundStyle(primary)
-                Text(model.month.formatted(.dateTime.year()))
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(secondary)
-            }
+            Button { showDatePicker = true } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.month.formatted(.dateTime.month(.wide)))
+                        .font(LifeOSType.sectionTitle.weight(.bold))
+                        .foregroundStyle(primary)
+                    Text(model.month.formatted(.dateTime.year()))
+                        .font(LifeOSType.secondary)
+                        .foregroundStyle(secondary)
+                }
 
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Choose any date")
             Spacer(minLength: 0)
 
             stepButton("chevron.left", months: -1, label: "Previous month")
@@ -94,8 +134,8 @@ struct MonthScreen: View {
             Image(systemName: icon)
                 .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(primary)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(primary.opacity(scheme == .dark ? 0.12 : 0.06)))
+                .frame(width: 44, height: 44)
+                .background(RoundedRectangle(cornerRadius: 12).fill(primary.opacity(0.045)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -105,11 +145,11 @@ struct MonthScreen: View {
 
     private var grid: some View {
         VStack(spacing: 8) {
-            WeekdayHeader(calendar: calendar, today: model.month, spacing: 6)
+            WeekdayHeader(calendar: calendar, today: model.month, spacing: 2)
 
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7),
-                spacing: 6
+                columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7),
+                spacing: 2
             ) {
                 ForEach(cells) { cell in
                     if let date = cell.date {
@@ -147,7 +187,7 @@ struct MonthScreen: View {
             VStack(spacing: 3) {
                 Text(date.formatted(.dateTime.day()))
                     .font(LifeOSType.label.weight(isToday ? .bold : .medium))
-                    .foregroundStyle(isToday ? LifeOSTokens.accent : primary)
+                    .foregroundStyle(isSelected ? Color.white : (isToday ? LifeOSTokens.accent : primary))
 
                 // Three at most. A day with nine events is a day with a lot
                 // on, which three dots and a heavier row in the agenda say
@@ -155,7 +195,7 @@ struct MonthScreen: View {
                 HStack(spacing: 2) {
                     ForEach(0..<min(events.count, 3), id: \.self) { _ in
                         Circle()
-                            .fill(isSelected ? primary : secondary.opacity(0.8))
+                            .fill(isSelected ? Color.white : LifeOSTokens.accent)
                             .frame(width: 4, height: 4)
                     }
                 }
@@ -166,7 +206,7 @@ struct MonthScreen: View {
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(primary.opacity(scheme == .dark ? 0.14 : 0.07))
+                        .fill(LifeOSTokens.accent)
                 }
             }
             .contentShape(.rect)
@@ -183,34 +223,57 @@ struct MonthScreen: View {
     private var agenda: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(model.selection.formatted(.dateTime.weekday(.wide).month().day()).uppercased())
-                    .font(LifeOSType.eyebrow)
-                    .tracking(0.8)
-                    .foregroundStyle(secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(calendar.isDateInToday(model.selection) ? "Today" : model.selection.formatted(.dateTime.weekday(.wide)))
+                        .font(.title2.bold()).foregroundStyle(primary)
+                    Text(model.selection.formatted(.dateTime.month(.wide).day()))
+                        .font(.subheadline).foregroundStyle(secondary)
+                }
                 Spacer()
                 Button {
-                    onAddEvent(model.selection)
+                    if isCalendarConnected { onAddEvent(model.selection) } else { onConnectCalendar() }
                 } label: {
                     Image(systemName: "plus")
                         .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(primary)
+                        .foregroundStyle(LifeOSTokens.accent)
+                        .frame(width: 44, height: 44)
+                        .background(primary, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add an event on this day")
             }
 
+            if !isCalendarConnected {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Bring your plans together").font(.headline)
+                    Text("Connect your calendar to see and manage your events here.")
+                        .font(.subheadline).foregroundStyle(secondary)
+                    Button("Connect calendar", action: onConnectCalendar).frame(minHeight: 44)
+                }
+                .padding(16)
+                .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+            }
             let events = model.selectedEvents
-            if events.isEmpty {
-                Text("Nothing scheduled.")
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(secondary)
-                    .padding(.vertical, 6)
-            } else {
+            if events.isEmpty && isCalendarConnected {
+                VStack(alignment: .leading, spacing: 12) {
+                    Image(systemName: "sun.horizon").font(.title).foregroundStyle(LifeOSTokens.accent)
+                    Text("A little room in your day").font(.headline)
+                    Text("Nothing scheduled. Add a plan when you’re ready.")
+                        .font(.subheadline).foregroundStyle(secondary)
+                    Button("Add an event") { onAddEvent(model.selection) }
+                        .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+            } else if !events.isEmpty {
+                Text("\(events.count) \(events.count == 1 ? "event" : "events")")
+                    .font(.subheadline).foregroundStyle(secondary)
                 ForEach(events.sorted { lhs, rhs in
                     if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
                     return lhs.startDate < rhs.startDate
                 }) { event in
-                    EventJourneyRow(event: event, onTap: onTapEvent)
+                    CalendarEventRow(event: event, onTap: onTapEvent)
                 }
             }
         }

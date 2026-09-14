@@ -95,10 +95,12 @@ public struct SleepComposition: Sendable, Equatable, Identifiable {
 public struct SleepStageBar: View {
     public let segments: [SleepComposition.Segment]
     public var height: CGFloat
+    public var showsLabels: Bool
 
-    public init(segments: [SleepComposition.Segment], height: CGFloat = 16) {
+    public init(segments: [SleepComposition.Segment], height: CGFloat = 16, showsLabels: Bool = true) {
         self.segments = segments
         self.height = height
+        self.showsLabels = showsLabels
     }
 
     private var total: Int {
@@ -113,11 +115,13 @@ public struct SleepStageBar: View {
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(segments) { segment in
                     VStack(spacing: 6) {
+                        if showsLabels {
                         Text(segment.stage.label)
                             .font(LifeOSType.eyebrow)
                             .foregroundStyle(segment.stage.color)
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
+                        }
                         Capsule()
                             .fill(segment.stage.color)
                             .frame(height: height)
@@ -127,7 +131,7 @@ public struct SleepStageBar: View {
                 }
             }
         }
-        .frame(height: height + 22)
+        .frame(height: height + (showsLabels ? 22 : 0))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -3,49 +3,28 @@ import UIKit
 import DesignSystem
 import Insights
 
-/// The coach. Text first, voice second.
-///
-/// It was voice-first, with a 240pt globe holding the top of the screen and a
-/// keyboard tucked behind a button. That inverted the actual usage: most
-/// questions are typed, most of the time, and a screen that opens on a
-/// microphone asks someone to speak out loud before it asks them anything
-/// else. Now the field is the subject of the screen and the mic sits beside
-/// it, one tap away, for when speaking is easier.
+/// A voice-reactive coach with readable response cards and a persistent text composer.
 struct LifoCoachScreen: View {
     @Bindable var model: CoachViewModel
     var onDismiss: () -> Void
 
-    /// The aura is dark in both appearances, so every token here resolves
-    /// dark regardless of the system scheme.
-    private let scheme: ColorScheme = .dark
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @FocusState private var typingFocused: Bool
     @State private var showHistory = false
 
     var body: some View {
         ZStack {
-            LifoAura(intensity: model.level,
-                     isActive: model.phase == .listening || model.phase == .thinking)
+            LifoAura(intensity: activityLevel,
+                     isActive: model.phase == .listening || model.voicePlayer.isSpeaking)
 
             VStack(spacing: 0) {
                 header
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // The globe is the listening body, and it appears only
-                        // while listening. Standing it at the top of a resting
-                        // screen was what made this feel voice-first when most
-                        // questions are typed; showing it the moment the mic
-                        // opens keeps what it was good at, which is making it
-                        // obvious the app is hearing you.
-                        if model.phase == .listening || model.phase == .thinking {
-                            GlassGlobe(intensity: model.level, isActive: true)
-                                .frame(width: 190, height: 190)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .allowsHitTesting(false)
-                                .transition(.scale(scale: 0.8).combined(with: .opacity))
-                        }
+                        voicePresence
 
                         if model.history.isEmpty && model.answer.isEmpty
                             && model.pendingQuestion.isEmpty {
@@ -54,13 +33,15 @@ struct LifoCoachScreen: View {
                             transcript
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: 720, alignment: .leading)
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
                 }
                 .scrollIndicators(.hidden)
-                .animation(.spring(response: 0.4, dampingFraction: 0.82), value: model.phase)
+                .scrollDismissesKeyboard(.interactively)
+                .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82), value: model.phase)
 
                 composer
             }
@@ -69,6 +50,41 @@ struct LifoCoachScreen: View {
         .sheet(isPresented: $showHistory) { historySheet }
         .task { model.appear() }
         .onDisappear { model.disappear() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.appear() } else { model.disappear() }
+        }
+    }
+
+    private var activityLevel: CGFloat {
+        if model.phase == .listening { return model.level }
+        return model.voicePlayer.isSpeaking ? model.voicePlayer.level : 0
+    }
+
+    private var voicePresence: some View {
+        VStack(spacing: 8) {
+            CoachVoiceOrb(level: activityLevel,
+                          isResponding: model.phase == .thinking || model.voicePlayer.isSpeaking,
+                          isEnabled: scenePhase == .active)
+                .frame(width: 170, height: 154)
+            HStack(spacing: 8) {
+                if model.phase == .listening {
+                    Circle().fill(LifeOSTokens.accent).frame(width: 6, height: 6)
+                    Text("Listening to you")
+                } else if model.voicePlayer.isSpeaking {
+                    Text("Speaking")
+                    Button("Stop") { model.stopSpeaking() }
+                        .foregroundStyle(LifeOSTokens.accent).frame(minHeight: 44)
+                } else if model.phase == .thinking {
+                    Text("Putting it together…")
+                } else {
+                    Text("Type below, or tap the mic")
+                }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(LifoPalette.quietInk)
+            .frame(height: 44)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Header
@@ -90,8 +106,8 @@ struct LifoCoachScreen: View {
                     Image(systemName: "clock")
                         .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifoPalette.quietInk)
-                        .frame(width: 38, height: 38)
-                        .glassPane(Circle())
+                        .frame(width: 44, height: 44)
+                        .glassPane(RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("History")
             }
@@ -100,8 +116,8 @@ struct LifoCoachScreen: View {
                 Image(systemName: "xmark")
                     .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifoPalette.quietInk)
-                    .frame(width: 38, height: 38)
-                    .glassPane(Circle())
+                    .frame(width: 44, height: 44)
+                    .glassPane(RoundedRectangle(cornerRadius: 12))
             }
             .accessibilityLabel("Close")
         }
@@ -114,7 +130,7 @@ struct LifoCoachScreen: View {
 
     private var opening: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Spacer(minLength: 40)
+            Spacer(minLength: 4)
 
             Text("How can I help you?")
                 .font(LifeOSType.display.weight(.semibold))
@@ -124,9 +140,24 @@ struct LifoCoachScreen: View {
             // Suggestions, not a menu: they are the questions this app can
             // actually answer well, phrased the way someone would say them,
             // so the first use is not a blank field and a guess about scope.
-            FlowChips(items: Self.suggestions) { prompt in
-                model.draft = prompt
-                Task { await model.sendTyped() }
+            VStack(spacing: 10) {
+                ForEach(Self.suggestions.prefix(3), id: \.self) { prompt in
+                    Button {
+                        model.draft = prompt
+                        Task { await model.sendTyped() }
+                    } label: {
+                        HStack(spacing: 14) {
+                            Text(prompt).font(.subheadline)
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.up.left").foregroundStyle(LifeOSTokens.accent)
+                        }
+                        .foregroundStyle(LifoPalette.ink)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(red: 0.06, green: 0.12, blue: 0.29).opacity(0.9), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             if let error = model.error {
@@ -157,7 +188,7 @@ struct LifoCoachScreen: View {
                         .foregroundStyle(.black)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(.white))
+                        .background(RoundedRectangle(cornerRadius: 16).fill(.white))
                 }
                 .buttonStyle(.plain)
             }
@@ -189,7 +220,7 @@ struct LifoCoachScreen: View {
             // the answer it was waiting for.
             if !model.pendingQuestion.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    bubble(model.pendingQuestion, isQuestion: true)
+                    bubble(model.pendingQuestion)
 
                     if model.answer.isEmpty {
                         HStack(spacing: 8) {
@@ -202,7 +233,7 @@ struct LifoCoachScreen: View {
                         // The answer as it is written. No cursor and no
                         // per-character animation: the text arrives fast
                         // enough that animating it would slow it down.
-                        CoachResponseView(text: model.answer)
+                        CoachResponseView(text: model.answer, onAura: true)
                     }
                 }
             }
@@ -219,9 +250,9 @@ struct LifoCoachScreen: View {
             // first. An empty bubble there reads as a message the person sent
             // and then deleted.
             if !question.isEmpty {
-                bubble(question, isQuestion: true)
+                bubble(question)
             }
-            CoachResponseView(text: answer)
+            CoachResponseView(text: answer, onAura: true)
 
             if let sent {
                 sentView(sent)
@@ -254,13 +285,13 @@ struct LifoCoachScreen: View {
 
     /// White on the aura, not glass: your own words are the brightest thing
     /// in the transcript, and the answer reads underneath them.
-    private func bubble(_ text: String, isQuestion: Bool) -> some View {
+    private func bubble(_ text: String) -> some View {
         Text(text)
             .font(LifeOSType.label.weight(.semibold))
             .foregroundStyle(.black)
             .padding(.vertical, 9)
             .padding(.horizontal, 14)
-            .background(Capsule().fill(.white))
+            .background(RoundedRectangle(cornerRadius: 16).fill(.white))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -284,7 +315,9 @@ struct LifoCoachScreen: View {
                 // on this screen where reading and writing must be effortless
                 // gets paper, not glass.
                 HStack(spacing: 10) {
-                    TextField("Ask anything about your life…", text: $model.draft, axis: .vertical)
+                    TextField("Ask LIFO", text: $model.draft,
+                              prompt: Text("Ask about your life…").foregroundStyle(Color.black.opacity(0.55)),
+                              axis: .vertical)
                         .font(LifeOSType.secondary)
                         .focused($typingFocused)
                         .autocorrectionDisabled()
@@ -300,9 +333,10 @@ struct LifoCoachScreen: View {
                             Image(systemName: "arrow.up")
                                 .font(LifeOSType.label.weight(.bold))
                                 .foregroundStyle(.white)
-                                .frame(width: 30, height: 30)
-                                .background(Circle().fill(LifeOSTokens.accent))
+                                .frame(width: 44, height: 44)
+                                .background(RoundedRectangle(cornerRadius: 14).fill(LifeOSTokens.accent))
                         }
+                        .disabled(model.phase == .thinking)
                         .accessibilityLabel("Send")
                         .transition(.scale.combined(with: .opacity))
                     }
@@ -310,7 +344,7 @@ struct LifoCoachScreen: View {
                 .padding(.leading, 18)
                 .padding(.trailing, 6)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(.white))
+                .background(RoundedRectangle(cornerRadius: 16).fill(.white))
 
                 // The mic wears the app's warm accent, filled, in every
                 // state: it is the same button whether it is about to listen
@@ -322,13 +356,14 @@ struct LifoCoachScreen: View {
                         .font(LifeOSType.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(width: 46, height: 46)
-                        .background(Circle().fill(LifeOSTokens.accent))
+                        .background(RoundedRectangle(cornerRadius: 14).fill(LifeOSTokens.accent))
                         .overlay {
                             if model.phase == .listening {
-                                Circle().strokeBorder(.white.opacity(0.7), lineWidth: 2)
+                                RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.7), lineWidth: 2)
                             }
                         }
                 }
+                .disabled(model.phase == .thinking)
                 .accessibilityLabel(model.phase == .listening ? "Stop listening" : "Speak instead")
             }
             .padding(.horizontal, 20)
@@ -415,72 +450,5 @@ struct AnyInsettableShape: InsettableShape {
 extension View {
     func glassPane(_ shape: some InsettableShape, highlight: Double = 0.34) -> some View {
         modifier(GlassPane(shape: AnyInsettableShape(shape), highlight: highlight))
-    }
-}
-
-/// Chips that wrap onto as many rows as they need.
-///
-/// `LazyVGrid` cannot do this: its columns are fixed widths, and these are
-/// sentences of very different lengths. Laying them out by hand is the only
-/// way they pack tightly without a column grid's ragged gaps.
-struct FlowChips: View {
-    let items: [String]
-    let onTap: (String) -> Void
-
-    var body: some View {
-        FlowLayout(spacing: 8, rowSpacing: 8) {
-            ForEach(items, id: \.self) { item in
-                Button { onTap(item) } label: {
-                    Text(item)
-                        .font(LifeOSType.label)
-                        .foregroundStyle(LifoPalette.ink)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 16)
-                        .glassPane(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-/// Minimal wrapping layout: place each subview on the current row until it
-/// does not fit, then start another.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-    var rowSpacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > width, x > 0 {
-                x = 0
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: width == .infinity ? x : width, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
-                       subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX {
-                x = bounds.minX
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
     }
 }

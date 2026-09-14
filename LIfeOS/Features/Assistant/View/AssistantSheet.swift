@@ -39,7 +39,7 @@ struct AssistantSheet: View {
                                     .font(LifeOSType.label.weight(.regular))
                                     .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                                 Spacer()
-                                CapsuleButton(title: "Connect") {
+                                Button("Connect") {
                                     Task { await model.connectCalendar() }
                                 }
                             }
@@ -50,10 +50,18 @@ struct AssistantSheet: View {
                     }
                 }
             }
-            .navigationTitle("Calendar")
+            .navigationTitle("Calendar assistant")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        MonthScreen(onTapEvent: { eventSheet = .edit($0) },
+                                    onAddEvent: { eventSheet = .create(on: $0) },
+                                    isCalendarConnected: model.isAuthorized,
+                                    onConnectCalendar: { Task { await model.connectCalendar() } })
+                    } label: { Label("Schedule", systemImage: "calendar") }
+                }
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
@@ -71,6 +79,7 @@ struct AssistantSheet: View {
                 }
             )
         }
+        .tint(LifeOSTokens.accent)
         .task { await model.appear() }
     }
 
@@ -79,7 +88,7 @@ struct AssistantSheet: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if model.messages.isEmpty {
-                        emptyState.padding(.top, 48)
+                        emptyState.padding(.top, 24)
                     }
                     ForEach(model.messages) { message in
                         bubble(message).id(message.id)
@@ -95,6 +104,7 @@ struct AssistantSheet: View {
                 }
                 .padding(16)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: model.messages.count) {
                 if let last = model.messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -109,19 +119,37 @@ struct AssistantSheet: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 18) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.largeTitle).foregroundStyle(LifeOSTokens.accent)
+            Text("Make room for your day").font(.largeTitle.bold()).tracking(-0.7)
             Text(model.isAuthorized
                  ? "Ask about your schedule, or tell me to move something."
                  : "Connect your calendar so I can see your schedule.")
                 .font(LifeOSType.secondary)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
             if !model.isAuthorized {
-                CapsuleButton(title: "Connect calendar") {
+                Button("Connect calendar") {
                     Task { await model.connectCalendar() }
+                }
+            } else {
+                ForEach(["What’s on my calendar today?", "Find a free hour tomorrow", "Show my schedule for this week"], id: \.self) { prompt in
+                    Button { model.draft = prompt; composing = true } label: {
+                        HStack {
+                            Text(prompt).font(.subheadline)
+                            Spacer()
+                            Image(systemName: "arrow.up.left").foregroundStyle(LifeOSTokens.accent)
+                        }
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .padding(16)
+                        .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
+        .frame(maxWidth: 640, alignment: .leading)
         .frame(maxWidth: .infinity)
     }
 
@@ -178,13 +206,13 @@ struct AssistantSheet: View {
             }
 
             if !message.toolSummaries.isEmpty {
-                HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 6) {
                     ForEach(message.toolSummaries, id: \.self) { summary in
                         Text(summary)
                             .font(LifeOSType.eyebrow.weight(.medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Capsule().fill(.ultraThinMaterial))
+                            .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
                     }
                 }
             }
@@ -200,7 +228,7 @@ struct AssistantSheet: View {
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             }
             HStack(spacing: 14) {
-                CapsuleButton(title: "Confirm", prominent: true) { model.confirm(write.id) }
+                Button("Confirm") { model.confirm(write.id) }
                 Button("Cancel") { model.cancel(write.id) }
                     .buttonStyle(.plain)
                     .font(LifeOSType.secondary.weight(.medium))
@@ -208,7 +236,7 @@ struct AssistantSheet: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+        .background(RoundedRectangle(cornerRadius: 16).fill(LifeOSTokens.cardSurface.resolve(scheme)))
     }
 
     private var composer: some View {
@@ -222,13 +250,14 @@ struct AssistantSheet: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(LifeOSType.screenTitle.weight(.regular))
-                    .foregroundStyle(LifeOSTokens.fabFill.resolve(scheme))
+                    .foregroundStyle(LifeOSTokens.accent)
+                    .frame(width: 44, height: 44)
             }
             .disabled(model.isThinking || model.draft.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Capsule().fill(.ultraThinMaterial))
+        .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }

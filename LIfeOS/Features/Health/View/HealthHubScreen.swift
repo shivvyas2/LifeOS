@@ -11,19 +11,31 @@ struct HealthHubScreen: View {
     var onAddJournal: () -> Void = {}
     var onConnectWhoop: () -> Void = {}
 
+    var isWhoopConnected = false
+    var onSelectMetric: (TodayMetric) -> Void = { _ in }
+
     @Binding var section: HealthSection
     @Binding var selectedDate: Date
 
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
     var body: some View {
-        GradientCanvas(hue: section.hue) {
+        ZStack {
+            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 22) {
-                    WeekStrip(selection: $selectedDate, progress: recovery.weekRecovery)
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Your health").font(.largeTitle.bold()).tracking(-0.7)
+                        DatePicker("Viewing date", selection: $selectedDate, in: ...Date(), displayedComponents: .date)
+                            .tint(LifeOSTokens.accent)
+                    }
+                    WeekStrip(selection: $selectedDate)
                         .padding(.top, 4)
 
-                    SegmentedPill(
+                    trackingLinks
+
+                    UnderlinePicker(
                         selection: $section,
                         options: HealthSection.allCases.map { ($0, $0.title) }
                     )
@@ -33,7 +45,8 @@ struct HealthHubScreen: View {
                         HealthSegmentView(recovery: recovery, weight: weight,
                                           wellness: wellness, selectedDate: selectedDate,
                                           onAddJournal: onAddJournal,
-                                          onConnectWhoop: onConnectWhoop)
+                                          onConnectWhoop: onConnectWhoop,
+                                          isWhoopConnected: isWhoopConnected)
                     case .fitness:
                         FitnessSegmentView(activity: activity, recovery: recovery,
                                            wellness: wellness)
@@ -46,8 +59,46 @@ struct HealthHubScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
             }
         }
+        .tint(LifeOSTokens.accent)
         .animation(.easeInOut(duration: 0.25), value: section)
     }
+
+    private var trackingLinks: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
+            ForEach(TodayMetric.allCases) { metric in
+                Button { onSelectMetric(metric) } label: {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: metric.icon).foregroundStyle(LifeOSTokens.accent)
+                            Text(metric.title).font(.subheadline.weight(.medium))
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right").font(.caption2)
+                        }
+                        Text(value(metric)).font(.title2.bold()).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                        Text("View history").font(.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    }
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+                    .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(metric.title), \(value(metric)), \(selectedDate.formatted(date: .abbreviated, time: .omitted))")
+                .accessibilityHint("Opens tracking history")
+            }
+        }
+    }
+
+    private func value(_ metric: TodayMetric) -> String {
+        let reading: Double? = switch metric {
+        case .steps: activity.steps.map(Double.init)
+        case .sleep: recovery.sleepMinutes.map(Double.init)
+        case .weight: weight.weightKg
+        case .recovery: recovery.recoveryPct
+        }
+        return reading.map { metric.format($0) + (metric.unit.map { " " + $0 } ?? "") } ?? "Not recorded"
+    }
+
 }
 
 #Preview {

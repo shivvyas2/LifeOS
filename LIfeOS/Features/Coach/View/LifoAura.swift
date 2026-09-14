@@ -8,17 +8,17 @@ import DesignSystem
 /// light on a dark ground, and inverting it for light mode would produce a
 /// washed cyan smear rather than a glow.
 enum LifoPalette {
-    /// #050A30
-    static let night = Color(red: 0.020, green: 0.039, blue: 0.188)
-    /// #0000FF
-    static let blue = Color(red: 0.0, green: 0.0, blue: 1.0)
-    /// #00FFFF
-    static let cyan = Color(red: 0.0, green: 1.0, blue: 1.0)
+    /// Deep navy
+    static let night = Color(red: 0.025, green: 0.055, blue: 0.16)
+    /// Cobalt
+    static let blue = Color(red: 0.12, green: 0.25, blue: 0.88)
+    /// Soft cyan
+    static let cyan = Color(red: 0.24, green: 0.70, blue: 1.0)
 
     /// Ink on the aura. Not pure white: at full white the text vibrates
     /// against the cyan, which is the same reason road signs are off-white.
     static let ink = Color(white: 0.96)
-    static let quietInk = Color(white: 0.96).opacity(0.62)
+    static let quietInk = Color(white: 0.96).opacity(0.8)
 }
 
 /// The glow behind the coach.
@@ -44,12 +44,12 @@ struct LifoAura: View {
         GeometryReader { proxy in
             let side = max(proxy.size.width, proxy.size.height)
             // The core swells with the voice, and breathes when idle.
-            let swell = 1 + (isActive ? intensity * 0.35 : 0) + breath * 0.06
+            let swell = 1 + (!reduceMotion && isActive ? min(max(intensity, 0), 1) * 0.15 : 0) + (reduceMotion ? 0 : breath * 0.04)
             // The whole field drifts, slowly and off-centre. A glow pinned to
             // the exact middle reads as a spotlight; one that wanders reads as
             // atmosphere, which is what the reference has.
-            let driftX = (breath - 0.5) * side * 0.08
-            let driftY = (0.5 - breath) * side * 0.05
+            let driftX = (reduceMotion ? 0 : breath - 0.5) * side * 0.08
+            let driftY = (reduceMotion ? 0 : 0.5 - breath) * side * 0.05
 
             ZStack {
                 LifoPalette.night
@@ -91,7 +91,7 @@ struct LifoAura: View {
                 // at full strength, which keeps it a light source rather than
                 // a colour.
                 RadialGradient(
-                    colors: [LifoPalette.cyan.opacity(0.92),
+                    colors: [LifoPalette.cyan.opacity(0.38),
                              LifoPalette.cyan.opacity(0.3),
                              LifoPalette.cyan.opacity(0)],
                     center: .init(x: 0.5, y: 0.48),
@@ -106,7 +106,7 @@ struct LifoAura: View {
             // stacked gradients and a single blended field.
             .blur(radius: 34)
             .frame(width: proxy.size.width, height: proxy.size.height)
-            .animation(.easeInOut(duration: 0.35), value: intensity)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: intensity)
         }
         .ignoresSafeArea()
         .task {

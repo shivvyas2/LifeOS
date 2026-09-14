@@ -22,7 +22,7 @@ struct InboxScreen: View {
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
 
     var body: some View {
-        GradientCanvas(hue: .recovery) {
+        SocialCanvas {
             switch viewModel.phase {
             case .guest:
                 message("Sign in to see requests and messages.")
@@ -45,7 +45,7 @@ struct InboxScreen: View {
 
     private func message(_ text: String) -> some View {
         Text(text)
-            .font(LifeOSType.secondary)
+            .lifeOSText(.secondary)
             .foregroundStyle(secondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
@@ -55,13 +55,17 @@ struct InboxScreen: View {
     @ViewBuilder
     private var ready: some View {
         if viewModel.requests.isEmpty && viewModel.threads.isEmpty {
-            message("Nothing waiting. Requests and messages land here.")
+            VStack(spacing: 20) {
+                if let error = viewModel.errorMessage { SocialNotice(message: error) { Task { await viewModel.refresh() } } }
+                SocialEmpty(title: "Your conversations start here", detail: "Find someone in People and connect to send your first message.", icon: "tray")
+            }.padding(20).frame(maxWidth: 760)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    SocialHeading(title: "Conversations.", detail: "A hello, a plan, a little encouragement.", icon: "bubble.left.and.bubble.right.fill")
                     if let error = viewModel.errorMessage {
                         Text(error)
-                            .font(LifeOSType.secondary)
+                            .lifeOSText(.secondary)
                             .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
                     }
                     if !viewModel.requests.isEmpty { requestsSection }
@@ -70,6 +74,7 @@ struct InboxScreen: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 40)
+                .frame(maxWidth: 760).frame(maxWidth: .infinity)
             }
             .scrollIndicators(.hidden)
             .refreshable { await viewModel.refresh() }
@@ -78,42 +83,29 @@ struct InboxScreen: View {
 
     private var requestsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            eyebrow("REQUESTS")
+            eyebrow("Friend requests")
             ForEach(viewModel.requests, id: \.friendshipID) { entry in
-                HStack(spacing: 12) {
-                    InitialBubble(name: entry.profile.displayName)
-                    Text(entry.profile.displayName)
-                        .font(LifeOSType.secondary.weight(.medium))
-                        .foregroundStyle(primary)
-                    Spacer(minLength: 8)
-                    Button("Decline") {
-                        Task { await viewModel.decline(entry.friendshipID) }
-                    }
-                    .buttonStyle(.plain)
-                    .font(LifeOSType.secondary.weight(.medium))
-                    .foregroundStyle(secondary)
-                    CapsuleButton(title: "Accept") {
-                        Task { await viewModel.accept(entry.friendshipID) }
-                    }
-                }
+                SocialFriendRequest(profile: entry.profile,
+                    accept: { Task { await viewModel.accept(entry.friendshipID) } },
+                    decline: { Task { await viewModel.decline(entry.friendshipID) } })
             }
         }
     }
 
     private var threadsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            eyebrow("MESSAGES")
+            eyebrow("Messages")
             ForEach(viewModel.threads) { thread in
                 Button {
                     openChat = thread.friend
                     showChat = true
                 } label: {
                     HStack(spacing: 12) {
-                        InitialBubble(name: thread.friend.displayName)
+                        SocialAvatar(profile: thread.friend, size: 54)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(thread.friend.displayName)
-                                .font(LifeOSType.rowTitle)
+                                .lifeOSText(.rowTitle)
                                 .foregroundStyle(primary)
                                 .lineLimit(1)
                             // Prefixed when the last word was yours, so a
@@ -131,21 +123,20 @@ struct InboxScreen: View {
                         Spacer(minLength: 8)
 
                         Text(Self.stamp(thread.lastMessage.createdAt))
-                            .font(LifeOSType.caption)
+                            .lifeOSText(.caption)
                             .foregroundStyle(secondary)
                     }
-                    .contentShape(.rect)
+                    .padding(.vertical, 12).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                if thread.id != viewModel.threads.last?.id { Divider().padding(.leading, 66) }
             }
         }
     }
 
     private func eyebrow(_ title: String) -> some View {
         Text(title)
-            .font(LifeOSType.eyebrow)
-            .tracking(0.8)
-            .foregroundStyle(secondary)
+            .lifeOSText(.sectionTitle).foregroundStyle(primary)
     }
 
     /// A clock time today, a weekday this week, a date before that. A full
@@ -180,7 +171,7 @@ struct InitialBubble: View {
         let hue = Self.stableHue(for: name)
         let letter = name.trimmingCharacters(in: .whitespaces).first.map(String.init)?.uppercased() ?? "?"
         Text(letter)
-            .font(LifeOSType.rowTitle)
+            .lifeOSText(.sectionTitle)
             .foregroundStyle(hue.top)
             .frame(width: size, height: size)
             .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))

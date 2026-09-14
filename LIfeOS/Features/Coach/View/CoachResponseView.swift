@@ -6,11 +6,17 @@ import DesignSystem
 /// short answer short. No fixed dashboard or placeholder values.
 struct CoachResponseView: View {
     let text: String
+    var onAura = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
+            if onAura {
+                Label("LIFO", systemImage: "sparkle")
+                    .font(.caption.weight(.semibold)).tracking(1)
+                    .foregroundStyle(LifeOSTokens.accent)
+            }
             ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .paragraph(let text):
@@ -46,12 +52,21 @@ struct CoachResponseView: View {
                 }
             }
         }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(onAura ? .light : scheme))
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+        .padding(onAura ? 20 : 0)
+        .background {
+            if onAura {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(red: 0.98, green: 0.98, blue: 0.96))
+                    .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
+            }
+        }
+        .environment(\.colorScheme, onAura ? .light : scheme)
     }
 
-    private var surface: Color { LifeOSTokens.cardSurface.resolve(scheme) }
+    private var surface: Color { onAura ? Color(red: 0.91, green: 0.94, blue: 0.98) : LifeOSTokens.cardSurface.resolve(scheme) }
 
     private func richText(_ value: String) -> Text {
         Text((try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value))
@@ -88,7 +103,7 @@ struct CoachResponseView: View {
                             .padding(12)
                     }
                 }
-                .background(LifeOSTokens.accent.opacity(0.10))
+                .background(onAura ? Color(red: 0.83, green: 0.89, blue: 0.96) : LifeOSTokens.accent.opacity(0.10))
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { column, value in

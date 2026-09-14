@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import OSLog
+import Insights
 
 enum VoiceSynthesisError: Error, Equatable {
     case notConfigured
@@ -83,6 +84,8 @@ nonisolated enum ElevenLabsVoiceClient {
 final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var isSpeaking = false
     private var player: AVAudioPlayer?
+    private(set) var level: CGFloat = 0
+    private var meteringTask: Task<Void, Never>?
 
     func play(_ data: Data) {
         stop()
@@ -97,14 +100,27 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             let player = try AVAudioPlayer(data: data)
             player.delegate = self
             self.player = player
+            player.isMeteringEnabled = true
+            guard player.play() else { stop(); return }
             isSpeaking = true
-            player.play()
+            meteringTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    guard let self, let player = self.player else { break }
+                    guard player.isPlaying else { self.stop(); break }
+                    player.updateMeters()
+                    self.level = CGFloat(AudioEnvelope.level(decibels: Double(player.averagePower(forChannel: 0))))
+                    try? await Task.sleep(for: .milliseconds(33))
+                }
+            }
         } catch {
-            isSpeaking = false
+            stop()
         }
     }
 
     func stop() {
+        meteringTask?.cancel()
+        meteringTask = nil
+        level = 0
         player?.stop()
         player = nil
         isSpeaking = false
@@ -114,6 +130,11 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in stop() }
+        // A delayed completion from an old player must not stop a newer reply.
+        let finished = ObjectIdentifier(player)
+        Task { @MainActor [weak self] in
+            guard let self, self.player.map(ObjectIdentifier.init) == finished else { return }
+            self.stop()
+        }
     }
 }

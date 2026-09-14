@@ -71,11 +71,8 @@ final class MetricDetailViewModel {
             snapshot = MetricDetailSnapshot(
                 metric: metric,
                 range: range,
-                // The last bar with a reading, not the last bar: the window
-                // usually ends on a day Whoop has not scored yet, and reading
-                // "—" as the headline figure for a metric with a week behind
-                // it is the screen looking broken.
-                latest: bars.reversed().first(where: { $0.value != nil })?.value ?? nil,
+                latest: rows.filter { metric.value(in: $0) != nil }.max(by: { $0.date < $1.date }).flatMap { metric.value(in: $0) },
+                latestDate: rows.filter { metric.value(in: $0) != nil }.map(\.date).max(),
                 goal: goal,
                 bars: bars,
                 average: readings.isEmpty ? nil : readings.reduce(0, +) / Double(readings.count),

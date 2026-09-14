@@ -9,7 +9,8 @@ struct WhoopDetailScreen: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        GradientCanvas(hue: .recovery) {
+        ZStack {
+            LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     // First, because it is the only chart here showing structure
@@ -19,15 +20,15 @@ struct WhoopDetailScreen: View {
                     SleepCompositionChart(nights: snapshot.nights)
 
                     TrendChart(title: "Recovery", unit: "%", series: snapshot.recoveryTrend,
-                               color: ModuleHue.recovery.top)
+                               color: LifeOSTokens.accent)
                     TrendChart(title: "Day strain", unit: nil, series: snapshot.strainTrend,
-                               color: ModuleHue.activity.top)
+                               color: LifeOSTokens.accent)
                     TrendChart(title: "Sleep", unit: "min", series: snapshot.sleepTrend,
                                color: SleepComposition.Stage.rem.color)
                     TrendChart(title: "HRV", unit: "ms", series: snapshot.hrvTrend,
-                               color: ModuleHue.body.top)
+                               color: LifeOSTokens.accent)
                     TrendChart(title: "Resting heart rate", unit: "bpm",
-                               series: snapshot.restingHRTrend, color: ModuleHue.habits.top)
+                               series: snapshot.restingHRTrend, color: LifeOSTokens.accent)
                 }
                 .padding(20)
                 .padding(.bottom, 60)
@@ -51,7 +52,7 @@ struct SleepCompositionChart: View {
 
     var body: some View {
         if !shown.isEmpty {
-            GlassPanel {
+            SoftCard {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Sleep composition")
                         .font(LifeOSType.rowTitle)

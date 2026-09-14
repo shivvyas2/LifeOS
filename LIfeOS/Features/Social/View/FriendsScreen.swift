@@ -10,8 +10,14 @@ import Integrations
 /// know. Pushed from the profile, not tabbed, the same way settings is: this
 /// is a place you go, not a home you live in.
 struct FriendsScreen: View {
+    var embedded = false
     @State private var viewModel = FriendsViewModel()
     @Environment(\.colorScheme) private var scheme
+
+    init(embedded: Bool = false) { self.embedded = embedded }
+#if DEBUG
+    init(preview: FriendsViewModel) { _viewModel = State(initialValue: preview) }
+#endif
 
     /// The friend a row was tapped for. `SocialProfile` isn't `Hashable`, so
     /// this pairs a stored selection with `isPresented:` rather than using
@@ -28,7 +34,7 @@ struct FriendsScreen: View {
     }
 
     var body: some View {
-        GradientCanvas(hue: .habits) {
+        SocialCanvas {
             switch viewModel.phase {
             case .guest:
                 guestState
@@ -39,10 +45,10 @@ struct FriendsScreen: View {
                 ready
             }
         }
-        .navigationTitle("Friends")
+        .navigationTitle(embedded ? "Together" : "Friends")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            if !embedded { ToolbarItem(placement: .topBarTrailing) {
                 Button { showInbox = true } label: {
                     Image(systemName: "tray")
                         .overlay(alignment: .topTrailing) {
@@ -64,18 +70,19 @@ struct FriendsScreen: View {
                         ? "Inbox"
                         : "Inbox, \(viewModel.requests.count) requests waiting"
                 )
-            }
+            } }
         }
         .navigationDestination(isPresented: $showInbox) {
             InboxScreen()
         }
         .task { await viewModel.appear() }
+        .onChange(of: showChat) { _, open in if !open { Task { await viewModel.refresh() } } }
         .onChange(of: viewModel.query) { _, _ in
             viewModel.search()
         }
         .navigationDestination(isPresented: $showChat) {
             if let openChat {
-                FriendChatScreen(friend: openChat)
+                UserProfileScreen(profile: openChat)
             }
         }
     }
@@ -84,7 +91,7 @@ struct FriendsScreen: View {
 
     private var guestState: some View {
         Text("Sign in to find friends and message them.")
-            .font(LifeOSType.secondary)
+            .lifeOSText(.secondary)
             .foregroundStyle(secondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
@@ -96,17 +103,18 @@ struct FriendsScreen: View {
     private var ready: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                SocialHeading(title: "Your people.", detail: "Find a friend. Share a win. Keep each other going.", icon: "person.2.fill")
                 searchField
 
                 if let warning = viewModel.publishWarning {
                     Text(warning)
-                        .font(LifeOSType.secondary)
+                        .lifeOSText(.secondary)
                         .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
                 }
 
                 if let error = viewModel.errorMessage {
                     Text(error)
-                        .font(LifeOSType.secondary)
+                        .lifeOSText(.secondary)
                         .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
                 }
 
@@ -120,6 +128,7 @@ struct FriendsScreen: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 40)
+            .frame(maxWidth: 760).frame(maxWidth: .infinity)
         }
         .scrollIndicators(.hidden)
         .refreshable { await viewModel.refresh() }
@@ -130,10 +139,10 @@ struct FriendsScreen: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(LifeOSType.label)
+                .lifeOSText(.label)
                 .foregroundStyle(secondary)
             TextField("Search people", text: $viewModel.query)
-                .font(LifeOSType.secondary)
+                .lifeOSText(.secondary)
                 .textFieldStyle(.plain)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
@@ -150,45 +159,30 @@ struct FriendsScreen: View {
                 .accessibilityLabel("Clear search")
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
                 .fill(primary.opacity(scheme == .dark ? 0.10 : 0.05))
         )
     }
 
     private var requestsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            eyebrow("REQUESTS")
+            eyebrow("Friend requests")
             ForEach(viewModel.requests, id: \.profile.id) { entry in
-                HStack(spacing: 12) {
-                    initialBubble(entry.profile.displayName)
-                    Text(entry.profile.displayName)
-                        .font(LifeOSType.secondary.weight(.medium))
-                        .foregroundStyle(primary)
-                    Spacer(minLength: 8)
-                    Button("Decline") {
-                        Task { await viewModel.remove(friendshipID: entry.friendshipID) }
-                    }
-                    .buttonStyle(.plain)
-                    .font(LifeOSType.secondary.weight(.medium))
-                    .foregroundStyle(secondary)
-                    CapsuleButton(title: "Accept") {
-                        Task { await viewModel.accept(entry.friendshipID) }
-                    }
-                }
+                SocialFriendRequest(profile: entry.profile,
+                    accept: { Task { await viewModel.accept(entry.friendshipID) } },
+                    decline: { Task { await viewModel.remove(friendshipID: entry.friendshipID) } })
             }
         }
     }
 
     private var friendsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            eyebrow("FRIENDS")
+            HStack { eyebrow("Your circle"); Spacer(); Text("\(viewModel.friends.count)").lifeOSText(.secondary).foregroundStyle(secondary) }
             if viewModel.friends.isEmpty {
-                Text("No friends yet. Search above to find people.")
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(secondary)
+                SocialEmpty(title: "Good company starts here", detail: "Search for someone by name to send a friend request.", icon: "person.crop.circle.badge.plus")
             } else {
                 ForEach(viewModel.friends, id: \.profile.id) { entry in
                     Button {
@@ -196,15 +190,16 @@ struct FriendsScreen: View {
                         showChat = true
                     } label: {
                         HStack(spacing: 12) {
-                            initialBubble(entry.profile.displayName)
-                            Text(entry.profile.displayName)
-                                .font(LifeOSType.rowTitle)
-                                .foregroundStyle(primary)
+                            SocialAvatar(profile: entry.profile, size: 52)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entry.profile.displayName).lifeOSText(.rowTitle).foregroundStyle(primary)
+                                Text("View profile & message").lifeOSText(.caption).foregroundStyle(secondary)
+                            }
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right")
                                 .font(LifeOSType.eyebrow)
                                 .foregroundStyle(secondary)
-                        }
+                        }.padding(.vertical, 10).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -212,6 +207,7 @@ struct FriendsScreen: View {
                             Task { await viewModel.remove(friendshipID: entry.friendshipID) }
                         }
                     }
+                    if entry.profile.id != viewModel.friends.last?.profile.id { Divider().padding(.leading, 64) }
                 }
             }
         }
@@ -219,17 +215,21 @@ struct FriendsScreen: View {
 
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if viewModel.searchResults.isEmpty {
+            if viewModel.searching {
+                ProgressView("Searching people…").frame(maxWidth: .infinity).padding(24)
+            } else if viewModel.searchResults.isEmpty && viewModel.errorMessage == nil {
                 Text("No one found")
-                    .font(LifeOSType.secondary)
+                    .lifeOSText(.secondary)
                     .foregroundStyle(secondary)
             } else {
                 ForEach(viewModel.searchResults) { profile in
                     HStack(spacing: 12) {
-                        initialBubble(profile.displayName)
-                        Text(profile.displayName)
-                            .font(LifeOSType.secondary.weight(.medium))
-                            .foregroundStyle(primary)
+                        Button { openChat = profile; showChat = true } label: {
+                            HStack(spacing: 12) {
+                                SocialAvatar(profile: profile)
+                                Text(profile.displayName).lifeOSText(.rowTitle).foregroundStyle(primary)
+                            }.frame(maxWidth: .infinity, alignment: .leading).frame(minHeight: 52).contentShape(.rect)
+                        }.buttonStyle(.plain)
                         Spacer(minLength: 8)
                         searchTrailing(for: profile)
                     }
@@ -245,28 +245,24 @@ struct FriendsScreen: View {
     private func searchTrailing(for profile: SocialProfile) -> some View {
         if viewModel.friends.contains(where: { $0.profile.id == profile.id }) {
             Text("Friends")
-                .font(LifeOSType.label)
+                .lifeOSText(.label)
                 .foregroundStyle(secondary)
         } else if viewModel.outgoingPending.contains(profile.userID)
             || viewModel.requests.contains(where: { $0.profile.id == profile.id }) {
             Text("Requested")
-                .font(LifeOSType.label)
+                .lifeOSText(.label)
                 .foregroundStyle(secondary)
         } else {
-            CapsuleButton(title: "Add") {
+            Button("Add") {
                 Task { await viewModel.add(profile) }
-            }
+            }.buttonStyle(SocialActionStyle())
         }
     }
 
     private func eyebrow(_ title: String) -> some View {
         Text(title)
-            .font(LifeOSType.eyebrow)
-            .tracking(0.8)
-            .foregroundStyle(secondary)
+            .lifeOSText(.sectionTitle)
+            .foregroundStyle(primary)
     }
 
-    private func initialBubble(_ name: String) -> some View {
-        InitialBubble(name: name)
-    }
 }

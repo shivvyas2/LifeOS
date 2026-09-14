@@ -60,8 +60,12 @@ final class MonthViewModel {
 
     /// Back to today, in every sense: the month, the selection and the fetch.
     func goToToday() {
-        month = .now
-        select(.now)
+        goTo(.now)
+    }
+
+    func goTo(_ date: Date) {
+        month = date
+        select(date)
         load()
     }
 
@@ -88,6 +92,6 @@ final class MonthViewModel {
         else { return }
 
         let events = (try? store.events(from: from, to: to)) ?? []
-        eventsByDay = Dictionary(grouping: events) { calendar.startOfDay(for: $0.startDate) }
+        eventsByDay = CalendarDayIndex.group(events, from: from, to: to, calendar: calendar)
     }
 }

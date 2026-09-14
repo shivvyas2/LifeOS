@@ -79,7 +79,18 @@ public struct FitbitDerivation {
             byDay[day, default: [:]][metric] = value
         }
 
-        for night in payloads.sleep?.sleep ?? [] {
+        var fairly: [String: Double] = [:]
+        for entry in payloads.fairlyActiveMinutes?.fairlyActive ?? [] {
+            if let value = Double(entry.value), value.isFinite, (0...1440).contains(value) { fairly[entry.dateTime] = value }
+        }
+        for entry in payloads.veryActiveMinutes?.veryActive ?? [] {
+            if let other = fairly[entry.dateTime], let value = Double(entry.value), value.isFinite,
+               value >= 0, other + value <= 1440 {
+                put(parseDay(entry.dateTime, calendar: calendar), .exerciseMinutes, other + value)
+            }
+        }
+
+        for night in payloads.sleep?.sleep ?? [] where night.isMainSleep != false {
             let day = parseDay(night.dateOfSleep, calendar: calendar)
             put(day, .sleepMinutes, night.minutesAsleep)
             put(day, .awakeMinutes, night.minutesAwake)
@@ -146,6 +157,7 @@ public struct FitbitDerivation {
 
     private func existing(_ metric: HealthMetric, in row: DailyMetrics) -> Double? {
         switch metric {
+        case .exerciseMinutes:   row.exerciseMinutes.map(Double.init)
         case .sleepMinutes:      row.sleepMinutes.map(Double.init)
         case .restingHR:         row.restingHR
         case .hrvMs:             row.hrvMs
@@ -157,6 +169,7 @@ public struct FitbitDerivation {
 
     private func write(_ value: Double?, for metric: HealthMetric, into row: DailyMetrics) {
         switch metric {
+        case .exerciseMinutes:   row.exerciseMinutes = value.map { Int($0.rounded()) }
         case .sleepMinutes:      row.sleepMinutes = value.map { Int($0.rounded()) }
         case .restingHR:         row.restingHR = value
         case .hrvMs:             row.hrvMs = value
