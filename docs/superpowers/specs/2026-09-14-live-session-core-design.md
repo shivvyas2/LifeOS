@@ -86,14 +86,14 @@ because that is what the body feels and what WHOOP's curve rewards:
 | Zone | Weight per second |
 |---|---|
 | 0 | 0 |
-| 1 | 0.10 |
-| 2 | 0.20 |
+| 1 | 0.15 |
+| 2 | 0.28 |
 | 3 | 0.35 |
-| 4 | 0.60 |
-| 5 | 0.90 |
+| 4 | 0.45 |
+| 5 | 0.63 |
 
-`effort = 21 * (1 - exp(-load / K))`, with `K` chosen so the calibration
-points in section 8 hold. The mapping saturates, so a very long session
+`effort = 21 * (1 - exp(-load / 1500))`. The weights and the 1500 are the
+values that make all three calibration points in section 8 hold at once. The mapping saturates, so a very long session
 approaches 21 without ever reaching it, which matches how WHOOP's scale
 behaves.
 
@@ -114,23 +114,31 @@ public struct EffortCeiling: Equatable, Sendable {
     public let maxZone: Int          // 3, 4 or 5
     public let targetEffort: ClosedRange<Double>
 }
+public struct RecoveryDay: Equatable, Sendable {   // one DailyMetrics row, lifted off SwiftData
+    public let date: Date
+    public var whoopRecoveryPct: Double?
+    public var whoopIsCalibrating: Bool?
+    public var sleepPerformancePct: Double?
+    public var hrvMs: Double?
+    public var sleepMinutes: Int?
+}
 public enum CapacityMath {
-    public static func capacity(whoopRecoveryPct: Double?, isCalibrating: Bool?, sleepPerformancePct: Double?,
-                                hrvMs: Double?, hrvBaselineMs: Double?, sleepMinutes: Int?,
-                                measuredOn: Date) -> Capacity?
+    public static func capacity(days: [RecoveryDay], now: Date, calendar: Calendar) -> Capacity?
 }
 ```
 
-Resolution order:
+The candidate rows are today's and yesterday's: yesterday stands in while
+today has not synced, anything older is stale. Resolution order:
 
 1. **WHOOP.** Recovery percent is present and `isCalibrating` is not true.
    `percent = recovery`, nudged by sleep performance: `percent = round(0.8 *
    recovery + 0.2 * sleepPerformance)` when sleep performance is present,
    plain recovery otherwise.
-2. **Apple Health.** HRV and a 7-day HRV baseline are present. The HRV ratio
-   `hrv / baseline` maps linearly from 0.7 to 1.2 onto 20 to 90 percent,
-   clamped. Sleep minutes, when present, adjust by up to plus or minus 10
-   points against a 7.5 hour reference.
+2. **Apple Health.** HRV is present and at least three of the previous seven
+   days carry HRV for a baseline. The ratio `hrv / baseline` maps piecewise:
+   0.7 to 1.0 onto 20 to 65 percent and 1.0 to 1.2 onto 65 to 90, clamped.
+   Sleep minutes, when present, then adjust by up to plus or minus 10 points
+   against a 7.5 hour reference.
 3. **Nothing.** Return nil. The UI says "Battery unknown" and the recorder
    uses `EffortCeiling.conservative`, the yellow band, so guidance stays
    cautious without claiming a capacity it does not have.
@@ -194,9 +202,9 @@ none of its own, so nothing cycles) and the rest of the effort model stays in
 
 `ActivityRecorder` gains:
 
-- `capacity: Capacity?` computed once in `start()` from today's `DailyMetrics`
-  row via `MetricsStore`, with the most recent recovery inside 36 hours as the
-  fallback, and the 7-day HRV baseline from the same rows. Stored in the
+- `capacity: Capacity?` computed once in `start()` from the last nine days of
+  `DailyMetrics` rows via `MetricsStore`: today's row, yesterday's as the
+  fallback, and the week behind them as the HRV baseline. Stored in the
   draft so a relaunch keeps it.
 - `zones: HeartRateZones?` from the profile birth date at start.
 - `effort: EffortAccumulator` advanced on every heart-rate reading with the
@@ -371,8 +379,10 @@ and `LifeOSKit/Tests/AppSurfacesTests/LiveActivityThrottleTests.swift`:
   gives about 18; zero seconds gives 0; effort never exceeds 21 and never
   decreases.
 - Capacity: WHOOP 80 percent with sleep 90 gives 82 and the green ceiling;
-  calibrating WHOOP falls through to Health; Health with HRV at baseline and
-  7.5 hours gives 65 and yellow; nothing gives nil.
+  yesterday's recovery stands in and two days ago does not; calibrating WHOOP
+  falls through to Health; Health with HRV at baseline and 7.5 hours gives 65
+  and yellow, needs three baseline days, and moves with sleep; nothing gives
+  nil.
 - Battery and push: capacity 60 at effort 7 against a 14 target gives 30 left;
   effort 15 gives 0 and `overLimit`; zone 5 under a max zone of 4 gives
   `overLimit`; zone 4 under a max of 4 gives `nearLimit`; zone 2 at effort 3
