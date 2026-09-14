@@ -37,6 +37,11 @@ public final class WorkoutRecord {
         get { setsData.flatMap { try? JSONDecoder().decode([Int].self, from: $0) } ?? [] }
         set { setsData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue) }
     }
+    /// The workout library's split (push, pull, legs, …) when the session
+    /// started from a catalog video; nil for freeform sessions.
+    public var split: String?
+    /// The catalog video's youtube id, when the session followed one.
+    public var videoID: String?
 
     public init(externalID: String, start: Date, durationMinutes: Int, activityName: String, energyKcal: Double? = nil) {
         self.externalID = externalID
