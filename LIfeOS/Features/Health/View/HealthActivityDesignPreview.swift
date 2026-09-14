@@ -30,7 +30,7 @@ struct HealthActivityDesignPreview: View {
                         guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
                         fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? .strength : .run
                         let start = Date.now.addingTimeInterval(-724)
-                        await fixture.recorder.start(at: start)
+                        await fixture.recorder.start(backdatedTo: start)
                         for second in stride(from: 0, to: 720, by: 2) {
                             fixture.recorder.sensor.onReading?(second < 120 ? 118 : second < 480 ? 146 : 156, start.addingTimeInterval(Double(second)))
                         }

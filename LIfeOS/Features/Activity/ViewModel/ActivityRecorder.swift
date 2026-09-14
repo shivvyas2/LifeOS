@@ -128,7 +128,9 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         }
     }
 
-    func start(at started: Date = .now) async {
+    /// `backdatedStart` exists for the design fixture only; real sessions
+    /// start when the clock is read, after Health has answered.
+    func start(backdatedTo backdatedStart: Date? = nil) async {
         guard active, !busy, !hasSession else { return }
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false
         zones = HeartRateZones(birthDate: birthDate())
@@ -157,12 +159,13 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 self.builder = builder
                 session.delegate = self; builder.delegate = self
                 builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+                let started = backdatedStart ?? .now
                 timer = ActivitySessionState(activity: selection.rawValue, at: started)
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
                 guard active else { session.end(); builder.discardWorkout(); return }
             } else {
-                timer = ActivitySessionState(activity: selection.rawValue, at: started)
+                timer = ActivitySessionState(activity: selection.rawValue, at: backdatedStart ?? .now)
             }
             persist()
         } catch {
