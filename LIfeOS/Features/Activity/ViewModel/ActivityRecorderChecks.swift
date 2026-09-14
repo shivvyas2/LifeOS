@@ -45,6 +45,13 @@ import AppSurfaces
             if let lifted { context.delete(lifted); try context.save() }
             lifter.deactivate()
             UserDefaults(suiteName: suite + ".lift")?.removePersistentDomain(forName: suite + ".lift")
+            let waiter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".watch")!, liveActivitiesEnabled: false)
+            waiter.attach(context); waiter.saveToHealth = false
+            waiter.watchAvailable = { true }; waiter.watchHandoffTimeout = 0.5
+            await waiter.start()
+            check(waiter.source == .phone && waiter.hasSession && waiter.notice?.contains("did not answer") == true, "A watch that does not answer falls back to the phone")
+            waiter.deactivate()
+            UserDefaults(suiteName: suite + ".watch")?.removePersistentDomain(forName: suite + ".watch")
             let beforePauseEffort = recorder.readout?.effort
             let beforePauseHeartRate = recorder.readout?.heartRate
             let id = recorder.timer?.id

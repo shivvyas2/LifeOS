@@ -208,6 +208,7 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        WatchSessionBridge.installMirroringHandler()
         return true
     }
 

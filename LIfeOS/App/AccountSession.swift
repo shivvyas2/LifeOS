@@ -127,6 +127,7 @@ final class AccountSession {
         if hasAdoptedScope && scope != next {
             SurfaceCoordinator.shared.clear()
             WorkoutLiveActivityController.endAll()
+            WatchSessionBridge.shared.end()
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             beforeAccountChange?()
             beforeAccountChange = nil
@@ -140,6 +141,7 @@ final class AccountSession {
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             SurfaceCoordinator.shared.adopt(ownerID: nil, context: nil)
             WorkoutLiveActivityController.endAll()
+            WatchSessionBridge.shared.end()
             return
         }
         do {
