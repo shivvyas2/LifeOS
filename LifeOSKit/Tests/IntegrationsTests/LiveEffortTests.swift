@@ -30,6 +30,9 @@ struct LiveEffortTests {
     }
 
     @Test func effortCalibrationPoints() {
+        #expect(EffortAccumulator.weights == [0, 0.15, 0.28, 0.35, 0.45, 0.63])
+        #expect(EffortAccumulator.scale == 1500)
+
         var steadyZone3 = EffortAccumulator()
         steadyZone3.add(zone: 3, seconds: 3600)
         #expect(abs(steadyZone3.effort - 12) < 1)

@@ -52,6 +52,10 @@ public struct LiveSessionReadout: Codable, Hashable, Sendable {
 public enum LiveActivityThrottle {
     public static let heartRateStep = 3
     public static let floor: TimeInterval = 10
+    /// Minimum spacing between updates driven only by a heart-rate reading,
+    /// so a second-by-second sensor stream cannot alone exceed ActivityKit's
+    /// update budget.
+    public static let readingInterval: TimeInterval = 3
 
     public static func shouldPublish(previous: LiveSessionReadout?, next: LiveSessionReadout,
                                      lastPublishedAt: Date?, now: Date) -> Bool {
@@ -60,8 +64,10 @@ public enum LiveActivityThrottle {
         if previous.isPaused != next.isPaused { return true }
         if previous.push != next.push { return true }
         switch (previous.heartRate, next.heartRate) {
-        case let (old?, new?) where abs(old - new) >= heartRateStep: return true
-        case (nil, .some), (.some, nil): return true
+        case let (old?, new?) where abs(old - new) >= heartRateStep:
+            return now.timeIntervalSince(lastPublishedAt) >= readingInterval
+        case (nil, .some), (.some, nil):
+            return now.timeIntervalSince(lastPublishedAt) >= readingInterval
         default: break
         }
         return now.timeIntervalSince(lastPublishedAt) >= floor

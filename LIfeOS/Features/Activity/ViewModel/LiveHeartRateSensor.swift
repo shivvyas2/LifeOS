@@ -47,11 +47,14 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
         guard let id = rememberedPeripheralID, connectedName == nil else { return }
         if central == nil { central = CBCentralManager(delegate: self, queue: .main) }
         guard let central, central.state == .poweredOn else { return }
-        if let known = central.retrievePeripherals(withIdentifiers: [id]).first {
-            status = "Reconnecting to \(known.name ?? "your sensor")…"
-            peripheral = known; known.delegate = self
-            central.connect(known)
+        guard let known = central.retrievePeripherals(withIdentifiers: [id]).first else {
+            status = "Looking for your sensor…"
+            scan()
+            return
         }
+        status = "Reconnecting to \(known.name ?? "your sensor")…"
+        peripheral = known; known.delegate = self
+        central.connect(known)
         reconnectTimeout?.cancel()
         reconnectTimeout = Task { [weak self] in
             try? await Task.sleep(for: .seconds(20))
@@ -82,7 +85,8 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
     }
     private func beginScan() {
         guard central?.state == .poweredOn, wantsScan else { return }
-        devices = []; scanning = true; status = "Looking for a heart-rate sensor…"
+        devices = []; scanning = true
+        if !autoPairing && rememberedPeripheralID == nil { status = "Looking for a heart-rate sensor…" }
         central?.scanForPeripherals(withServices: [service])
         timeout?.cancel()
         timeout = Task { [weak self] in
@@ -110,8 +114,7 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
         peripheral = nil; connectedName = nil; bpm = nil; receivedAt = nil
         status = "No sensor connected"
     }
-    /// Drops the remembered sensor. An explicit disconnect means "not this
-    /// one next time"; account changes clear the whole suite.
+    /// Explicit disconnect: forgets the device and ends the stream.
     func disconnect() {
         forget()
         stopStreaming()
@@ -131,11 +134,12 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
         guard !devices.contains(where: { $0.id == peripheral.identifier }) else { return }
-        devices.append(Device(id: peripheral.identifier,
-                              name: peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Heart-rate sensor",
-                              peripheral: peripheral))
+        let device = Device(id: peripheral.identifier,
+                            name: peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Heart-rate sensor",
+                            peripheral: peripheral)
+        devices.append(device)
         if let id = rememberedPeripheralID, peripheral.identifier == id, self.peripheral == nil {
-            connect(devices.last!); return
+            connect(device); return
         }
         if autoPairing {
             switch WhoopAutoPair.choice(among: devices.map(\.name)) {

@@ -27,10 +27,10 @@ struct WorkoutLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
                         HStack(spacing: 14) {
-                            IslandReading(symbol: "heart.fill", value: readout.heartRate.map(String.init), unit: readout.zone.map { "Z\($0)" }, tint: readout.push.tint)
-                            IslandReading(symbol: "bolt.fill", value: readout.effort.map { String(format: "%.1f", $0) }, unit: "est", tint: .white)
-                            IslandReading(symbol: "flame.fill", value: readout.calories.map(String.init), unit: "kcal", tint: .white)
-                            IslandReading(symbol: "battery.75percent", value: readout.batteryPercent.map { "\($0)%" }, unit: "left", tint: .white)
+                            IslandReading(symbol: "heart.fill", value: readout.heartRateText, unit: readout.zone.map { "Z\($0)" }, tint: readout.push.tint)
+                            IslandReading(symbol: "bolt.fill", value: readout.effortText, unit: "est", tint: .white)
+                            IslandReading(symbol: "flame.fill", value: readout.caloriesText, unit: "kcal", tint: .white)
+                            IslandReading(symbol: "battery.75percent", value: readout.batteryText, unit: "left", tint: .white)
                         }
                         HStack {
                             Text(readout.isPaused ? "Paused" : readout.push.headline).foregroundStyle(.secondary)
@@ -69,6 +69,13 @@ private struct LockScreenView: View {
     let icon: String
     let readout: LiveSessionReadout
 
+    /// The ceiling's upper bound as a unit next to the effort value, "of 18",
+    /// only once there is an effort reading to attach it to.
+    private var effortUnit: String? {
+        guard readout.effort != nil, let target = readout.ceilingTarget else { return nil }
+        return "of \(Int(target.upperBound))"
+    }
+
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 14) {
@@ -85,10 +92,10 @@ private struct LockScreenView: View {
             }
             .foregroundStyle(.white)
             HStack(spacing: 8) {
-                Tile(eyebrow: readout.zone.map { "Z\($0)" } ?? "BPM", value: readout.heartRate.map(String.init), symbol: "heart.fill")
-                Tile(eyebrow: readout.ceilingTarget.map { "EST of \(Int($0.upperBound))" } ?? "EST", value: readout.effort.map { String(format: "%.1f", $0) }, symbol: "bolt.fill")
-                Tile(eyebrow: "KCAL", value: readout.calories.map(String.init), symbol: "flame.fill")
-                Tile(eyebrow: "LEFT", value: readout.batteryPercent.map { "\($0)%" }, symbol: "battery.75percent", ring: readout.batteryPercent)
+                Tile(eyebrow: readout.zone.map { "Z\($0)" } ?? "BPM", value: readout.heartRateText, symbol: "heart.fill")
+                Tile(eyebrow: "EST", value: readout.effortText, symbol: "bolt.fill", unit: effortUnit)
+                Tile(eyebrow: "KCAL", value: readout.caloriesText, symbol: "flame.fill")
+                Tile(eyebrow: "LEFT", value: readout.batteryText, symbol: "battery.75percent", ring: readout.batteryPercent)
             }
         }
         .padding(18)
@@ -106,17 +113,21 @@ private struct Tile: View {
     let eyebrow: String
     let value: String?
     let symbol: String
+    var unit: String? = nil
     var ring: Int? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Image(systemName: symbol).font(.caption2)
-                Text(eyebrow).font(.system(size: 10, weight: .semibold)).tracking(0.4)
+                Text(eyebrow).font(.system(size: 10, weight: .semibold)).tracking(0.4).lineLimit(1)
             }.opacity(0.75)
             HStack(spacing: 6) {
-                Text(value ?? "\u{2014}").font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
+                Text(value ?? LiveSessionReadout.missing).font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
+                if let unit {
+                    Text(unit).font(.caption2)
+                }
                 if let ring {
                     Circle().trim(from: 0, to: CGFloat(ring) / 100).stroke(style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(-90)).frame(width: 14, height: 14)
@@ -141,7 +152,7 @@ private struct IslandReading: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: symbol).font(.caption2).foregroundStyle(tint)
-            Text(value ?? "\u{2014}").font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(.white)
+            Text(value ?? LiveSessionReadout.missing).font(.subheadline.monospacedDigit().weight(.semibold)).foregroundStyle(.white)
             if let unit, value != nil { Text(unit).font(.caption2).foregroundStyle(.secondary) }
         }
     }

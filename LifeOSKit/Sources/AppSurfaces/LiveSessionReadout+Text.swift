@@ -4,12 +4,12 @@ import Foundation
 /// later surface agree on rounding and on the dash that means "no reading".
 public extension LiveSessionReadout {
     static let missing = "\u{2014}"
-    var heartRateText: String { heartRate.map(String.init) ?? Self.missing }
+    var heartRateText: String? { heartRate.map(String.init) }
     var zoneText: String? { zone.map { "Z\($0)" } }
-    var effortText: String { effort.map { String(format: "%.1f", $0) } ?? Self.missing }
-    var caloriesText: String { calories.map(String.init) ?? Self.missing }
-    var distanceKilometresText: String { distanceMeters.map { String(format: "%.2f", Double($0) / 1000) } ?? Self.missing }
-    var batteryText: String { batteryPercent.map { "\($0)%" } ?? Self.missing }
+    var effortText: String? { effort.map { String(format: "%.1f", $0) } }
+    var caloriesText: String? { calories.map(String.init) }
+    var distanceKilometresText: String? { distanceMeters.map { String(format: "%.2f", Double($0) / 1000) } }
+    var batteryText: String? { batteryPercent.map { "\($0)%" } }
     /// "WHOOP recovery", "Apple Health", or "Battery unknown".
     var capacitySourceName: String {
         switch capacitySource {

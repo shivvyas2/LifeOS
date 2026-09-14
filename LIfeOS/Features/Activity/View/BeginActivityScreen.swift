@@ -52,6 +52,7 @@ struct BeginActivityScreen: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(model.hasSession ? .dark : nil, for: .navigationBar)
             .navigationTitle(model.hasSession ? "Activity" : "Begin activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -117,18 +118,18 @@ struct BeginActivityScreen: View {
             let fresh = model.isRunning && model.heartRateDate.map { timeline.date.timeIntervalSince($0) < 15 } == true
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
-                          value: fresh ? readout.heartRate.map { _ in readout.heartRateText } : nil, unit: "bpm",
+                          value: fresh ? readout.heartRateText : nil, unit: "bpm",
                           caption: fresh ? "Live sensor reading" : model.isPaused ? "Activity paused" : model.sensor.status)
                 if model.zonesAvailable, model.selection != .yoga {
-                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effort.map { _ in readout.effortText },
+                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effortText,
                               unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
                               caption: capacityCaption(readout))
                 }
-                glassTile(icon: "flame.fill", label: "Calories", value: readout.calories.map { _ in readout.caloriesText }, unit: "kcal",
+                glassTile(icon: "flame.fill", label: "Calories", value: readout.caloriesText, unit: "kcal",
                           caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
                 if [.walk, .run, .cycle].contains(model.selection) {
                     glassTile(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
-                              value: readout.distanceMeters.map { _ in readout.distanceKilometresText }, unit: "km",
+                              value: readout.distanceKilometresText, unit: "km",
                               caption: readout.distanceMeters == nil ? "No distance reading" : "From Apple Health")
                 }
                 if !model.zonesAvailable {
@@ -140,14 +141,14 @@ struct BeginActivityScreen: View {
     }
 
     private func capacityCaption(_ readout: LiveSessionReadout) -> String {
-        readout.capacitySource == nil ? "Battery unknown · cautious target" : "Battery \(readout.batteryText) · \(readout.capacitySourceName)"
+        readout.capacitySource == nil ? "Battery unknown · cautious target" : "Battery \(readout.batteryText ?? LiveSessionReadout.missing) · \(readout.capacitySourceName)"
     }
 
     private func glassTile(icon: String, label: String, value: String?, unit: String?, caption: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(label, systemImage: icon).font(LifeOSType.label).opacity(0.75)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value ?? "\u{2014}").font(.title.bold()).monospacedDigit()
+                Text(value ?? LiveSessionReadout.missing).font(.title.bold()).monospacedDigit()
                 if let unit, value != nil { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
             }.lineLimit(1).minimumScaleFactor(0.7)
             Text(caption).font(.caption.weight(.medium)).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))

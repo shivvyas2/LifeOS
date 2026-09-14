@@ -299,7 +299,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             guard let self, self.active, self.session === workoutSession else { return }
             switch toState {
             case .paused: self.timer?.pause(at: date)
-            case .running: self.timer?.resume(at: date)
+            case .running: self.timer?.resume(at: date); self.lastReadingAt = nil
             case .stopped:
                 self.timer?.finish(at: date); self.persist()
                 if self.busy { await self.saveFinished() }

@@ -38,7 +38,7 @@ public struct HeartRateZones: Equatable, Sendable {
 /// it. The constants are pinned by calibration tests: a steady hour in zone 3
 /// is about 12, a hard ninety minutes about 18. Retuning is a deliberate
 /// change with a diff, not a drift.
-public struct EffortAccumulator: Codable, Equatable, Sendable {
+public struct EffortAccumulator: Equatable, Sendable {
     public static let weights: [Double] = [0, 0.15, 0.28, 0.35, 0.45, 0.63]
     public static let scale = 1500.0
     /// A gap in the stream is not effort that was measured. One reading

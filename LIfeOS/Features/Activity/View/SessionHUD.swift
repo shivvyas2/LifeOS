@@ -22,10 +22,10 @@ struct SessionHUD: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 14) {
                         if showsTimer { timer.frame(minWidth: 62, alignment: .leading) }
-                        reading(symbol: "heart.fill", value: readout.heartRate.map { _ in readout.heartRateText }, chip: readout.zoneText, tint: readout.push.tint)
+                        reading(symbol: "heart.fill", value: readout.heartRateText, chip: readout.zoneText, tint: readout.push.tint)
                         if showsEffort {
-                            reading(symbol: "bolt.fill", value: readout.effort.map { _ in readout.effortText }, chip: "est", tint: nil)
-                            reading(symbol: "battery.75percent", value: readout.batteryPercent.map { _ in readout.batteryText }, chip: nil, tint: nil)
+                            reading(symbol: "bolt.fill", value: readout.effortText, chip: "est", tint: nil)
+                            reading(symbol: "battery.75percent", value: readout.batteryText, chip: nil, tint: nil)
                         }
                         if activity == .strength {
                             reading(symbol: "repeat", value: nil, chip: "reps", tint: nil)
@@ -74,10 +74,10 @@ struct SessionHUD: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(ceilingLine).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             HStack(spacing: 16) {
-                reading(symbol: "flame.fill", value: readout.calories.map { _ in readout.caloriesText }, chip: "kcal", tint: nil)
+                reading(symbol: "flame.fill", value: readout.caloriesText, chip: "kcal", tint: nil)
                 if [.walk, .run, .cycle].contains(activity) {
                     reading(symbol: "point.bottomleft.forward.to.point.topright.scurvepath",
-                            value: readout.distanceMeters.map { _ in readout.distanceKilometresText }, chip: "km", tint: nil)
+                            value: readout.distanceKilometresText, chip: "km", tint: nil)
                 }
                 if readout.push == .overLimit { Text("Over your target").font(LifeOSType.label).foregroundStyle(LifeOSTokens.pushNear) }
             }

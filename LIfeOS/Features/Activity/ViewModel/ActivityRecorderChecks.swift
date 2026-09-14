@@ -28,12 +28,23 @@ import AppSurfaces
             let base = Date.now.addingTimeInterval(-30)
             for second in 0..<30 { recorder.sensor.onReading?(140, base.addingTimeInterval(Double(second))) }
             check(recorder.readout?.heartRate == 140 && recorder.readout?.zone == 3 && (recorder.readout?.effort ?? 0) > 0, "Readings yield zone and effort")
+            let beforePauseEffort = recorder.readout?.effort
+            let beforePauseHeartRate = recorder.readout?.heartRate
             let id = recorder.timer?.id
             recorder.togglePause()
+            for offset in 1...5 { recorder.sensor.onReading?(140, base.addingTimeInterval(30 + Double(offset))) }
+            check(recorder.readout?.effort == beforePauseEffort && recorder.readout?.heartRate == beforePauseHeartRate, "Paused readings accrue nothing")
             let paused = recorder.timer?.elapsed()
             check(recorder.isPaused && recorder.timer?.elapsed(at: .now.addingTimeInterval(600)) == paused, "Paused time stays fixed")
             recorder.togglePause()
             check(recorder.isRunning, "Resume keeps the activity")
+            let resumeEffort = recorder.readout?.effort
+            let resumeDate = Date.now
+            recorder.sensor.onReading?(175, resumeDate)
+            let afterFirstResumeReading = recorder.readout?.effort
+            recorder.sensor.onReading?(175, resumeDate.addingTimeInterval(1))
+            check(afterFirstResumeReading == resumeEffort && (recorder.readout?.effort ?? 0) > (afterFirstResumeReading ?? 0),
+                  "First reading after resume credits nothing, the second accrues")
             let restored = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: false)
             restored.birthDate = recorder.birthDate
             restored.attach(context)

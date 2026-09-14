@@ -41,8 +41,15 @@ struct LiveSessionReadoutTests {
         let now = start.addingTimeInterval(100)
         #expect(LiveActivityThrottle.shouldPublish(previous: nil, next: readout(bpm: 120), lastPublishedAt: nil, now: now))
         #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 121), lastPublishedAt: now.addingTimeInterval(-2), now: now))
-        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 123), lastPublishedAt: now.addingTimeInterval(-2), now: now))
-        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: nil), lastPublishedAt: now.addingTimeInterval(-2), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 123), lastPublishedAt: now.addingTimeInterval(-3), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: nil), lastPublishedAt: now.addingTimeInterval(-3), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120, push: .nearLimit), lastPublishedAt: now.addingTimeInterval(-1), now: now))
+    }
+
+    @Test func throttleSpacesHeartRateUpdates() {
+        let now = start.addingTimeInterval(200)
+        #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 123), lastPublishedAt: now.addingTimeInterval(-1), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 123), lastPublishedAt: now.addingTimeInterval(-3), now: now))
         #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120, push: .nearLimit), lastPublishedAt: now.addingTimeInterval(-1), now: now))
     }
 
@@ -56,7 +63,8 @@ struct LiveSessionReadoutTests {
 
     @Test func textFormattersKeepAbsenceAndRounding() {
         var readout = LiveSessionReadout(elapsed: 0, runningSince: nil, push: .onTrack)
-        #expect(readout.heartRateText == "\u{2014}" && readout.effortText == "\u{2014}" && readout.batteryText == "\u{2014}")
+        #expect(readout.heartRateText == nil && readout.effortText == nil && readout.batteryText == nil)
+        #expect(readout.caloriesText == nil && readout.distanceKilometresText == nil)
         #expect(readout.zoneText == nil && readout.capacitySourceName == "Battery unknown")
         readout.heartRate = 152; readout.zone = 4; readout.effort = 3.45; readout.calories = 0
         readout.distanceMeters = 1234; readout.batteryPercent = 0; readout.capacitySource = "whoop"
