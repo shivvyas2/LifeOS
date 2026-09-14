@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Sectors
 
 /// The Fitness half: output. The weekly burn, today's movement, strain, the
 /// sessions themselves, and how the training week is adding up.
@@ -7,6 +8,9 @@ struct FitnessSegmentView: View {
     let activity: ActivitySnapshot
     let recovery: RecoverySnapshot
     let wellness: WellnessSnapshot
+    /// Nil in the design previews, which render the segment without the app's
+    /// view models. The training card simply has no library row then.
+    var library: WorkoutLibraryViewModel?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -100,8 +104,34 @@ struct FitnessSegmentView: View {
                     Text("Avg session \(avg) min").font(LifeOSType.label.weight(.regular))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 }
+                if let library { libraryRow(library) }
             }
         }
+    }
+
+    /// The way into the workout library, with today's plan already on it so
+    /// the tap is a decision the person has already half made.
+    private func libraryRow(_ library: WorkoutLibraryViewModel) -> some View {
+        NavigationLink {
+            WorkoutLibraryScreen(model: library)
+        } label: {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Plan today's workout").font(LifeOSType.rowTitle)
+                    Text(library.plan.map { "\($0.split.capitalized) · \($0.minutes) min" } ?? "Set a goal for a plan")
+                        .font(LifeOSType.caption.weight(.medium))
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold))
+            }
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .padding(.vertical, 11).padding(.horizontal, 14)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LifeOSTokens.tileSurface.resolve(scheme)))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
     }
 }
 

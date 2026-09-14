@@ -13,6 +13,9 @@ struct HealthHubScreen: View {
 
     var isWhoopConnected = false
     var onSelectMetric: (TodayMetric) -> Void = { _ in }
+    /// Passed straight through to the Fitness segment's training card. Nil in
+    /// the previews, which have no app view models.
+    var library: WorkoutLibraryViewModel?
 
     @Binding var section: HealthSection
     @Binding var selectedDate: Date
@@ -49,7 +52,7 @@ struct HealthHubScreen: View {
                                           isWhoopConnected: isWhoopConnected)
                     case .fitness:
                         FitnessSegmentView(activity: activity, recovery: recovery,
-                                           wellness: wellness)
+                                           wellness: wellness, library: library)
                     }
                 }
                 .frame(maxWidth: layout.maxContentWidth)

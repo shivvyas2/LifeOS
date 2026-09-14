@@ -8,7 +8,9 @@ import Integrations
 /// In-memory visual fixtures. Provider clients have empty, isolated credentials.
 struct HealthActivityDesignPreview: View {
     @State private var fixture = HealthActivityFixture()
-    @State private var section = HealthSection.health
+    /// `--fitness` opens the hub on the Fitness half, where the library row
+    /// lives, without a tap the capture script cannot make.
+    @State private var section = ProcessInfo.processInfo.arguments.contains("--fitness") ? HealthSection.fitness : .health
     @State private var day = Date.now
     @State private var share = false
     @State private var checkResults = "Running checks…"
@@ -40,6 +42,9 @@ struct HealthActivityDesignPreview: View {
                     }
             }
             else if page == "profile" { ProfileDesignPreview() }
+            else if page == "library" || page == "library-empty" {
+                NavigationStack { WorkoutLibraryScreen(model: fixture.library) }
+            }
             else {
                 NavigationStack {
                     if page == "settings" { SettingsScreen(model: fixture.settings, whoop: fixture.whoop, fitbit: fixture.fitbit, health: fixture.health, plaid: fixture.plaid) }
@@ -60,7 +65,7 @@ struct HealthActivityDesignPreview: View {
                         HealthHubScreen(activity: .init(steps: 8240, exerciseMinutes: 35, activeEnergyKcal: 460),
                             weight: .init(weightKg: 77.4, weeklyDeltaKg: 0.2, recentWeights: fixture.weights), recovery: fixture.recovery,
                             wellness: .init(journal: [.init(id: UUID(), text: "A long walk, a good conversation, and a little time for myself.", date: .now)]),
-                            section: $section, selectedDate: $day)
+                            library: fixture.library, section: $section, selectedDate: $day)
                     }
                 }
             }
@@ -86,6 +91,10 @@ struct HealthActivityDesignPreview: View {
         sleepPerformancePct: 89, sleepEfficiencyPct: 92, sleepConsistencyPct: 84, sleepDebtMinutes: 18,
         calories: 460, nights: [SleepComposition(date: .now, lightMinutes: 220, remMinutes: 112, swsMinutes: 100, awakeMinutes: 18)])
     let weights = (0..<14).map { WeightPoint(id: Date.now.addingTimeInterval(Double($0 - 13) * 86400), weightKg: $0 == 5 ? nil : 77.2 + Double($0 % 4) / 10) }
+    /// The library reads the keychain for a token in the real app; the
+    /// fixture hands it an empty in-memory store so a preview never reaches
+    /// the network and the offline copy is what a capture shows.
+    let library = WorkoutLibraryViewModel(sessions: InMemoryAuthSessionStore())
     init() {
         recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: ProcessInfo.processInfo.arguments.contains("--live-activity"))
         recorder.saveToHealth = false
@@ -96,6 +105,53 @@ struct HealthActivityDesignPreview: View {
         health = HealthConnectionViewModel(defaults: defaults)
         plaid = PlaidConnectionViewModel(items: UserDefaultsPlaidItemStore(defaults: defaults), sessions: InMemoryAuthSessionStore(), defaults: defaults)
         settings.attach(container.mainContext)
+        seedLibrary()
+        library.attach(container.mainContext)
     }
+
+    /// Strength, dumbbells, thirty minutes, and a push day two days ago, so
+    /// the planner lands on a pull day of about half an hour. `library-empty`
+    /// keeps the preferences and leaves the catalog cache empty.
+    private func seedLibrary() {
+        let context = container.mainContext
+        if let goals = try? MetricsStore(context: context).goals() {
+            goals.trainingGoal = "strength"
+            goals.equipmentRaw = ["dumbbells", "bands"]
+            goals.sessionMinutes = 30
+        }
+        for (days, split, minutes) in [(2, "push", 32), (4, "legs", 41)] {
+            let record = WorkoutRecord(externalID: "design-\(split)", start: .now.addingTimeInterval(Double(-days) * 86400),
+                                       durationMinutes: minutes, activityName: "Strength")
+            record.split = split
+            context.insert(record)
+        }
+        if !ProcessInfo.processInfo.arguments.contains("--page=library-empty") {
+            try? CatalogStore.upsert(Self.catalog, context: context)
+        }
+        try? context.save()
+    }
+
+    /// Six rows lifted from the shipped seed, in the shape the server returns
+    /// them, so a capture shows the catalog's real thumbnails and titles.
+    private static let catalog: [CatalogVideoRow] = [
+        .init(youtubeID: "ifVk1E5My7M", title: "30 Min PULL DAY DUMBBELL WORKOUT | Back & Bicep | 13 of Hybrid Series",
+              channel: "Tom Peto Training", durationS: 1_800, goal: ["strength", "hypertrophy"], split: "pull",
+              muscles: ["back", "biceps"], equipment: ["dumbbells"], intensity: 2, verifiedAt: .now),
+        .init(youtubeID: "aFnUKszjprs", title: "30 Minute Back & Biceps AMRAP Workout",
+              channel: "Sydney Cummings Houdyshell", durationS: 1_800, goal: ["strength", "hypertrophy"], split: "pull",
+              muscles: ["back", "biceps"], equipment: ["dumbbells"], intensity: 2, verifiedAt: .now),
+        .init(youtubeID: "3pHz96dv8dE", title: "30 Minute Dumbbell Pull Workout For Strength & Mass Gain!",
+              channel: "Midas Movement", durationS: 1_800, goal: ["strength", "hypertrophy"], split: "pull",
+              muscles: ["back", "biceps"], equipment: ["dumbbells"], intensity: 3, verifiedAt: .now),
+        .init(youtubeID: "KqZG-vlcYhg", title: "Biceps and Triceps Superset Strength Workout",
+              channel: "FitnessBlender", durationS: 2_220, goal: ["strength", "hypertrophy"], split: "pull",
+              muscles: ["biceps", "triceps"], equipment: ["none", "dumbbells"], intensity: 2, verifiedAt: .now),
+        .init(youtubeID: "BoTAfri7Bec", title: "20 MIN PULL UP BAR + DUMBBELL WORKOUT | Follow Along",
+              channel: "Tom Peto Training", durationS: 1_200, goal: ["strength", "hypertrophy"], split: "pull",
+              muscles: ["back", "biceps"], equipment: ["dumbbells"], intensity: 2, verifiedAt: .now),
+        .init(youtubeID: "1fahiYJIYgI", title: "10 Minute Chest and Triceps",
+              channel: "FitnessBlender", durationS: 600, goal: ["strength", "hypertrophy"], split: "push",
+              muscles: ["chest", "triceps"], equipment: ["dumbbells"], intensity: 1, verifiedAt: .now)
+    ]
 }
 #endif

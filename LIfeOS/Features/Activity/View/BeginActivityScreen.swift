@@ -8,6 +8,9 @@ struct BeginActivityScreen: View {
     var onQuickLog: () -> Void = {}
     /// The design fixture opens the HUD expanded so both states can be captured.
     var startsExpanded = false
+    /// The workout library, when the app supplies it. Nil in the design
+    /// preview's plain recorder page, which has no library to push.
+    var library: WorkoutLibraryViewModel?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
@@ -25,7 +28,10 @@ struct BeginActivityScreen: View {
                         AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
                             detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
                         timerCard
-                        if !model.saved { activityPicker }
+                        if !model.saved {
+                            if let library { followVideoLink(library) }
+                            activityPicker
+                        }
                     }
                     if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
                     if let error = model.error {
@@ -170,6 +176,19 @@ struct BeginActivityScreen: View {
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .combine)
     }
+    /// Above the picker, because choosing a video is choosing the activity
+    /// too: the player maps the split onto the recorder's selection.
+    private func followVideoLink(_ library: WorkoutLibraryViewModel) -> some View {
+        NavigationLink {
+            WorkoutLibraryScreen(model: library)
+        } label: {
+            Label("Follow a video", systemImage: "play.rectangle")
+                .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
+        }
+        .buttonStyle(.bordered)
+        .disabled(model.busy)
+    }
+
     private var activityPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose your activity").font(LifeOSType.sectionTitle)

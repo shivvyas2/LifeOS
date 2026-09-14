@@ -50,6 +50,7 @@ struct RootView: View {
     @State private var weight = BodyViewModel()
     @State private var activity = ActivityViewModel()
     @State private var recorder = ActivityRecorder()
+    @State private var library = WorkoutLibraryViewModel()
     @State private var showActivity = false
     @State private var showNotifications = false
     @State private var coachAfterDismiss = false
@@ -138,7 +139,7 @@ struct RootView: View {
         .sheet(isPresented: $showActivity, onDismiss: {
             if quickLogAfterActivity { quickLogAfterActivity = false; showQuickLog = true }
         }) {
-            BeginActivityScreen(model: recorder, onQuickLog: { quickLogAfterActivity = true })
+            BeginActivityScreen(model: recorder, onQuickLog: { quickLogAfterActivity = true }, library: library)
         }
         .sheet(isPresented: $showNotifications, onDismiss: presentDeferredCoach) {
             NavigationStack {
@@ -440,6 +441,7 @@ struct RootView: View {
                         onConnectWhoop: { showWhoop = true },
                         isWhoopConnected: whoop.isConnected,
                         onSelectMetric: { openMetric = $0 },
+                        library: library,
                         section: $healthSection,
                         selectedDate: Binding(
                             get: { healthDate },
@@ -696,6 +698,7 @@ struct RootView: View {
         weight.attach(context)
         activity.attach(context)
         recorder.attach(context)
+        library.attach(context)
         recorder.whoopConnected = { [whoop] in whoop.isConnected }
         accountSession?.beforeAccountChange = { [recorder] in recorder.deactivate() }
         recorder.onSaved = {
@@ -805,6 +808,9 @@ struct RootView: View {
         activity.load()
         recovery.load()
         wellness.load()
+        // A finished workout is a split in the rotation, so today's plan is
+        // recomputed with everything else rather than at the next launch.
+        library.load()
         money.load(connection: plaid)
         reloadMoneyDetail()
         Task {
