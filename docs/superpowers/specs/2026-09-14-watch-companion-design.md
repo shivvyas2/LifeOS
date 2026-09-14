@@ -43,25 +43,39 @@ Out of scope: rep counting for anything but strength, exercise recognition
 
 ### 3.1 Choosing the source
 
-At `ActivityRecorder.start()` the recorder asks a new `WatchAvailability`
-value (built from `WCSession.default`): `isPaired && isWatchAppInstalled &&
-isReachable`. Reachable matters: an unreachable watch would leave the person
-waiting on a session that never starts.
+The hand-off is offered only when this workout is meant for Health
+(`saveToHealth`): the watch writes the workout to Health itself, so a person
+who turned that off keeps the phone path. Given that, `ActivityRecorder.start()`
+asks `WatchSessionBridge.watchAvailable` (built from `WCSession.default`):
+`activationState == .activated && isPaired && isWatchAppInstalled`. Not
+`isReachable`: on iOS that is true only while the watch app is already in the
+foreground, which is never so for a person tapping Begin on the phone.
+`startWatchApp(toHandle:)` exists to launch it, and the ten second timeout
+below already covers a session that never starts.
+
+Before the watch is asked, the phone requests its own Health authorization for
+the workout types (the same set the phone session requests). Authorization is
+shared with the paired watch, so this keeps the very first permission prompt on
+the phone rather than on the wrist while the phone counts down. If it is
+refused, the hand-off is skipped and the phone path runs.
 
 - **Watch available:** the phone calls
   `HKHealthStore.startWatchApp(toHandle: configuration)` with the activity
   type and waits up to 10 seconds for the mirrored session to arrive through
   `HKHealthStore.workoutSessionMirroringStartHandler`. The phone creates no
-  session of its own. If nothing arrives in 10 seconds, the recorder falls
-  back to the phone path and says "Apple Watch did not answer. Recording on
-  iPhone."
+  session of its own, and shows "Asking your Apple Watch…" while it waits. If
+  nothing arrives in 10 seconds, the recorder falls back to the phone path and
+  says "Apple Watch did not answer. Recording on iPhone."
 - **Watch not available:** the slice 1 phone path, unchanged.
 - **Started on the watch:** the watch app's own Start button runs the same
   session and mirrors it; the phone's mirroring handler creates the recorder
   session on arrival, so the phone HUD and Live Activity appear without any
   tap on the phone. The phone app is launched in the background by HealthKit
-  for this; the Live Activity request must happen inside that launch, which
-  the recorder already does on its first `persist()`.
+  for this, with no scene and so no recorder: the bridge's mirroring handler
+  therefore requests the Live Activity itself when no recorder is listening,
+  keeping its session id in `placeholderSessionID`. The recorder's timer takes
+  that id when it adopts the session, so the activity already on screen is
+  updated rather than duplicated.
 
 The recorder records its choice as `source: SessionSource` (`.phone`,
 `.watch`) in the draft. A restored draft with `.watch` asks
@@ -82,11 +96,16 @@ phone app.
 - For strength, runs the rep counter (section 4) on device motion.
 - Sends a `WatchPacket` (section 3.3) at most once a second, and immediately
   when reps change.
-- Receives `PhoneCommand`s: pause, resume, end, next set, manual rep. Applies
-  them to the session and the counter.
+- Receives `PhoneCommand`s: pause, resume, end, discard, next set, manual rep.
+  Applies them to the session and the counter.
 - On end, ends collection and `finishWorkout()`; the watch saves to Health.
   The phone does not save to Health for a watch-owned session, so nothing is
   saved twice.
+- On discard, stops motion, detaches the delegates, `discardWorkout()` and
+  ends the session without finishing it, so nothing reaches Health. The phone
+  sends `discard` when it refuses a mirrored session (it is already recording)
+  and when the person discards the activity there; `end` means save, and
+  sending it in those cases would leave a stub workout on the wrist.
 
 **Phone (`WatchSessionBridge`, new, in the app target):**
 - Installs `workoutSessionMirroringStartHandler` at app launch (in the app
@@ -105,6 +124,7 @@ nothing new) and are `Codable`, versioned by a leading `v: Int`:
 
 ```swift
 public struct WatchPacket: Codable, Equatable, Sendable {
+    public var kind: String = "packet"   // names the shape for the decoder
     public var v: Int = 1
     public var sentAt: Date
     public var heartRate: Int?
@@ -114,8 +134,9 @@ public struct WatchPacket: Codable, Equatable, Sendable {
     public var setIndex: Int?      // 1-based
     public var completedSets: [Int]? // reps per finished set
 }
-public enum PhoneCommand: String, Codable, Sendable { case configure, pause, resume, end, nextSet, addRep }
+public enum PhoneCommand: String, Codable, Sendable { case configure, pause, resume, end, nextSet, addRep, discard }
 public struct PhoneCommandEnvelope: Codable, Sendable {
+    public var kind: String = "command"
     public var v: Int = 1
     public var command: PhoneCommand
     public var sentAt: Date
@@ -124,7 +145,9 @@ public struct PhoneCommandEnvelope: Codable, Sendable {
 }
 ```
 
-A packet with an unknown `v` is ignored, never guessed at.
+A packet with an unknown `v` is ignored, never guessed at. `kind` is required
+too: the two shapes otherwise share every required key, so a command would
+decode as an empty packet.
 
 ## 4. Rep counting
 
@@ -151,7 +174,10 @@ public struct RepCounter: Sendable {
 
 1. Each axis is smoothed separately; the difference between the fast and slow
    averages is a vector, projected onto the direction of the first lift above
-   the threshold, which is locked for the set and cleared by `reset()`.
+   the threshold, which is locked for the set and cleared by `reset()`. The
+   axis locks only on a swing that is still growing (the difference magnitude
+   larger than the previous sample's), so a swing already fading when settling
+   ends does not pin the axis to its tail.
 2. Fast smoothing: exponential moving average with a 0.15 second time
    constant. Slow baseline: exponential moving average with a 2 second time
    constant. The signal `s` is that projection, which removes gravity drift
@@ -162,8 +188,8 @@ public struct RepCounter: Sendable {
    of the rise; when the fall arrives, the rise-to-fall half cycle must be
    between half of `minPeriod` and half of `maxPeriod` or it is discarded.
 4. Nothing counts during the first `settleSeconds` after `reset()` (the
-   person picking up the weight), and a completed rep starts a `minPeriod`
-   refractory window.
+   person picking up the weight), and a completed rep starts a refractory
+   window of half of `minPeriod`.
 
 Calibration is pinned by tests on synthetic signals: 10 cycles of a 1 Hz
 sine at 0.4 g amplitude with 0.05 g white noise count 10; the same at 0.08 g
@@ -280,7 +306,8 @@ and find one workout in Health. Record all five in
   keep the packet-driven re-attach either way.
 - **Two sessions at once.** If the phone path is already running when a
   mirrored session arrives (the person started on both), the recorder keeps
-  the phone session and ends the mirrored one with a notice; it never merges.
+  the phone session and *discards* the mirrored one with a notice; it never
+  merges, and it never ends it, since ending means saving on the wrist.
 - **Recovery behaviour is still unverified.** No hardware run has confirmed
   whether `recoverActiveWorkoutSession` returns a mirrored session after a
   phone relaunch; see `docs/design/watch-companion/report.md`.
