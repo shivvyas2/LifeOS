@@ -30,4 +30,27 @@ struct LiveSessionReadoutTests {
         #expect(PushState.nearLimit.headline == "Near your limit")
         #expect(PushState.overLimit.headline == "Over your target")
     }
+
+    private func readout(bpm: Int?, effort: Double? = 5, paused: Bool = false, push: PushState = .onTrack) -> LiveSessionReadout {
+        var value = LiveSessionReadout(elapsed: 60, runningSince: paused ? nil : start, push: push)
+        value.heartRate = bpm; value.effort = effort
+        return value
+    }
+
+    @Test func throttlePublishesFirstAndOnMeaningfulChange() {
+        let now = start.addingTimeInterval(100)
+        #expect(LiveActivityThrottle.shouldPublish(previous: nil, next: readout(bpm: 120), lastPublishedAt: nil, now: now))
+        #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 121), lastPublishedAt: now.addingTimeInterval(-2), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 123), lastPublishedAt: now.addingTimeInterval(-2), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: nil), lastPublishedAt: now.addingTimeInterval(-2), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120, push: .nearLimit), lastPublishedAt: now.addingTimeInterval(-1), now: now))
+    }
+
+    @Test func throttleFloorsSmallChangesAtTenSeconds() {
+        let now = start.addingTimeInterval(100)
+        #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120, effort: 5.0), next: readout(bpm: 120, effort: 5.1), lastPublishedAt: now.addingTimeInterval(-4), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120, effort: 5.0), next: readout(bpm: 120, effort: 5.1), lastPublishedAt: now.addingTimeInterval(-10), now: now))
+        #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120), lastPublishedAt: now.addingTimeInterval(-60), now: now))
+        #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120, paused: true), lastPublishedAt: now, now: now))
+    }
 }

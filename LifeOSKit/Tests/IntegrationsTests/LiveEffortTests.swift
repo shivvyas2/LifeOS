@@ -132,4 +132,47 @@ struct LiveEffortTests {
         #expect(EffortCeiling.forCapacity(33) == .red)
         #expect(EffortCeiling.conservative == .yellow)
     }
+
+    @Test func builderJoinsEverythingAndKeepsAbsence() throws {
+        let zones = try #require(HeartRateZones(birthDate: thirtyYearsOld, on: today, calendar: calendar))
+        var effort = EffortAccumulator(); effort.add(zone: 3, seconds: 1800)
+        let timer = ActivitySessionState(activity: "Run", at: today)
+        let capacity = Capacity(percent: 60, source: .whoop, measuredOn: today)
+        let readout = LiveReadoutBuilder.readout(timer: timer, heartRate: 150, zones: zones, effort: effort,
+                                                 capacity: capacity, energyKcal: 210.6, distanceMeters: 1234.9)
+        #expect(readout.heartRate == 150)
+        #expect(readout.zone == 4)
+        #expect(readout.effort == 7.2)
+        #expect(readout.calories == 211)
+        #expect(readout.distanceMeters == 1235)
+        #expect(readout.batteryPercent == 29)
+        #expect(readout.capacitySource == "whoop")
+        #expect(readout.ceilingMaxZone == 4)
+        #expect(readout.ceilingTarget == 10...14)
+        #expect(readout.push == .nearLimit)
+        #expect(readout.runningSince == today)
+    }
+
+    @Test func builderWithoutZonesReportsBeatsOnly() {
+        let timer = ActivitySessionState(activity: "Walk", at: today)
+        let readout = LiveReadoutBuilder.readout(timer: timer, heartRate: 120, zones: nil, effort: EffortAccumulator(load: 500),
+                                                 capacity: nil, energyKcal: nil, distanceMeters: nil)
+        #expect(readout.heartRate == 120)
+        #expect(readout.zone == nil)
+        #expect(readout.effort == nil)
+        #expect(readout.batteryPercent == nil)
+        #expect(readout.calories == nil)
+        #expect(readout.ceilingMaxZone == nil)
+        #expect(readout.push == .onTrack)
+    }
+
+    @Test func builderUsesConservativeCeilingWithoutCapacity() throws {
+        let zones = try #require(HeartRateZones(birthDate: thirtyYearsOld, on: today, calendar: calendar))
+        let timer = ActivitySessionState(activity: "Run", at: today)
+        let readout = LiveReadoutBuilder.readout(timer: timer, heartRate: 175, zones: zones, effort: EffortAccumulator(),
+                                                 capacity: nil, energyKcal: nil, distanceMeters: nil)
+        #expect(readout.batteryPercent == nil)
+        #expect(readout.ceilingMaxZone == 4)
+        #expect(readout.push == .overLimit)
+    }
 }

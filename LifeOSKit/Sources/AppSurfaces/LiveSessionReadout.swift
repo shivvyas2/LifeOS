@@ -46,3 +46,24 @@ public struct LiveSessionReadout: Codable, Hashable, Sendable {
     public var timerAnchor: Date? { runningSince?.addingTimeInterval(-elapsed) }
     public var isPaused: Bool { runningSince == nil }
 }
+
+/// Decides whether a new readout is worth an ActivityKit update. The sensor
+/// streams every second; the lock screen does not need to.
+public enum LiveActivityThrottle {
+    public static let heartRateStep = 3
+    public static let floor: TimeInterval = 10
+
+    public static func shouldPublish(previous: LiveSessionReadout?, next: LiveSessionReadout,
+                                     lastPublishedAt: Date?, now: Date) -> Bool {
+        guard let previous, let lastPublishedAt else { return true }
+        if previous == next { return false }
+        if previous.isPaused != next.isPaused { return true }
+        if previous.push != next.push { return true }
+        switch (previous.heartRate, next.heartRate) {
+        case let (old?, new?) where abs(old - new) >= heartRateStep: return true
+        case (nil, .some), (.some, nil): return true
+        default: break
+        }
+        return now.timeIntervalSince(lastPublishedAt) >= floor
+    }
+}

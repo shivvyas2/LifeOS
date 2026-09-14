@@ -164,3 +164,29 @@ public enum EffortMath {
         return .onTrack
     }
 }
+
+/// Joins the recorder's state into the one readout every surface renders.
+public enum LiveReadoutBuilder {
+    public static func readout(timer: ActivitySessionState, heartRate: Int?, zones: HeartRateZones?,
+                               effort: EffortAccumulator, capacity: Capacity?,
+                               energyKcal: Double?, distanceMeters: Double?) -> LiveSessionReadout {
+        let zone = zones.flatMap { zones in heartRate.map { zones.zone(for: $0) } }
+        let ceiling = capacity?.ceiling ?? .conservative
+        let push: PushState = zones == nil ? .onTrack : EffortMath.pushState(zone: zone, effort: effort.effort, ceiling: ceiling)
+        var readout = LiveSessionReadout(elapsed: timer.accumulated, runningSince: timer.runningSince, push: push)
+        readout.heartRate = heartRate
+        readout.zone = zone
+        readout.calories = energyKcal.map { Int($0.rounded()) }
+        readout.distanceMeters = distanceMeters.map { Int($0.rounded()) }
+        readout.capacitySource = capacity?.source.rawValue
+        if zones != nil {
+            readout.effort = (effort.effort * 10).rounded() / 10
+            readout.ceilingMaxZone = ceiling.maxZone
+            readout.ceilingTarget = ceiling.targetEffort
+            readout.batteryPercent = capacity.map {
+                EffortMath.batteryRemaining(capacity: $0.percent, effort: effort.effort, ceiling: ceiling)
+            }
+        }
+        return readout
+    }
+}
