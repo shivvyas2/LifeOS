@@ -46,12 +46,28 @@ import AppSurfaces
             lifter.deactivate()
             UserDefaults(suiteName: suite + ".lift")?.removePersistentDomain(forName: suite + ".lift")
             let waiter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".watch")!, liveActivitiesEnabled: false)
-            waiter.attach(context); waiter.saveToHealth = false
+            waiter.attach(context); waiter.saveToHealth = true
             waiter.watchAvailable = { true }; waiter.watchHandoffTimeout = 0.5
-            await waiter.start()
+            let handoff = Task { await waiter.start() }
+            // Health saving on is what offers the workout to the watch, so the
+            // hand-off has to begin with it on. Once the recorder is waiting on
+            // a watch that will never answer, take it off again: the fall-through
+            // would otherwise re-run the Health path, and the permission sheet
+            // that raises is one an unattended run can never answer.
+            var spins = 0
+            while waiter.source != .watch, spins < 200 { spins += 1; try? await Task.sleep(for: .milliseconds(5)) }
+            waiter.saveToHealth = false
+            await handoff.value
             check(waiter.source == .phone && waiter.hasSession && waiter.notice?.contains("did not answer") == true, "A watch that does not answer falls back to the phone")
             waiter.deactivate()
             UserDefaults(suiteName: suite + ".watch")?.removePersistentDomain(forName: suite + ".watch")
+            let phoneOnly = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".phoneonly")!, liveActivitiesEnabled: false)
+            phoneOnly.attach(context); phoneOnly.saveToHealth = false
+            phoneOnly.watchAvailable = { true }; phoneOnly.watchHandoffTimeout = 0.5
+            await phoneOnly.start()
+            check(phoneOnly.source == .phone && phoneOnly.hasSession && phoneOnly.notice == nil, "Health saving off keeps the session on the phone")
+            phoneOnly.deactivate()
+            UserDefaults(suiteName: suite + ".phoneonly")?.removePersistentDomain(forName: suite + ".phoneonly")
             let beforePauseEffort = recorder.readout?.effort
             let beforePauseHeartRate = recorder.readout?.heartRate
             let id = recorder.timer?.id
