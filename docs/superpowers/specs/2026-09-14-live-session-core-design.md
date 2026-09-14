@@ -65,10 +65,10 @@ Max heart rate is Tanaka: `208 - 0.7 * age`, rounded. Zone boundaries follow
 WHOOP's bands so numbers agree with the app the person already trusts: zone 1
 starts at 50 percent, then 60, 70, 80, 90. Below 50 percent is zone 0.
 
-Without a birth date there are no zones. The recorder then reports raw BPM and
-calories only, and the HUD shows a one-line hint, "Add your birth date in
-Profile for zones and effort." A guessed max heart rate would be a false
-reading and this app refuses those.
+Without a birth date there are no zones. Ages outside 10 to 120 also yield no
+zones. The recorder then reports raw BPM and calories only, and the HUD shows
+a one-line hint, "Add your birth date in Profile for zones and effort." A
+guessed max heart rate would be a false reading and this app refuses those.
 
 ### 3.2 Effort
 
@@ -234,7 +234,10 @@ Publish when there is no previous state, when the timer phase changed
 (pause, resume, finish), when heart rate moved by 3 bpm or more, when push
 state changed, or when 10 seconds passed since the last publish and anything
 differs. Otherwise skip. This keeps the activity within ActivityKit's update
-budget while the sensor streams every second.
+budget while the sensor streams every second. A heart-rate-driven update (the
+3 bpm step, or a reading appearing or disappearing) also waits for a 3 second
+minimum interval since the last publish, so a second-by-second sensor stream
+cannot alone drive one update per second.
 
 `staleDate` stays at 8 hours. `pushType` stays nil.
 
@@ -259,7 +262,7 @@ budget while the sensor streams every second.
   3. Calories: integer, eyebrow "KCAL".
   4. Battery: percent, eyebrow "LEFT", with a 3 point ring around a battery
      symbol showing the percent.
-  A tile with no value shows an en dash in the same weight, never a zero.
+  A tile with no value shows an em dash in the same weight, never a zero.
 - Text is white over the blue field. The bottom row sits over the paler part
   of the gradient, so tile text there is `Color(white: 0.12)`. Both are fixed
   by position, not by scheme, since the gradient is the same in light and
@@ -355,7 +358,7 @@ func autoPairWhoop()              // called instead when nothing is remembered a
 - `reconnectIfRemembered`: `retrievePeripherals(withIdentifiers:)`, connect,
   status "Reconnecting to WHOOP…" (or the remembered name). If no connection
   within 20 seconds, fall back to a scan and connect the first discovered
-  peripheral whose identifier or name matches the remembered one, then stop.
+  peripheral whose identifier matches the remembered one, then stop.
 - `autoPairWhoop`: scan for 30 seconds; when exactly one discovered
   peripheral has "WHOOP" in its name, connect and remember it. If several
   appear, stop and set status "More than one WHOOP nearby. Choose one under
@@ -413,8 +416,8 @@ The report follows the format in `design-qa.md`.
 - **Effort calibration** is a model, not WHOOP's algorithm. The constants are
   pinned by tests so a future retune is a deliberate change with a diff.
 - **ActivityKit budget.** The throttle is designed to sit well under the
-  system's limits; if updates still get deferred on hardware, widen the
-  10 second floor before touching anything else.
+  system's limits; a 3 second minimum interval on heart-rate-driven updates
+  is in place; widen it if hardware still shows deferred updates.
 - **Uncommitted foundation.** The recorder, sensor, Live Activity and watch
   target exist only as uncommitted files in the main checkout. The plan must
   start by committing that foundation on its own branch so this slice has
