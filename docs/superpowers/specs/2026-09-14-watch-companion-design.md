@@ -149,23 +149,26 @@ public struct RepCounter: Sendable {
 }
 ```
 
-1. Magnitude `m = sqrt(x² + y² + z²)` in g.
+1. Each axis is smoothed separately; the difference between the fast and slow
+   averages is a vector, projected onto the direction of the first lift above
+   the threshold, which is locked for the set and cleared by `reset()`.
 2. Fast smoothing: exponential moving average with a 0.15 second time
    constant. Slow baseline: exponential moving average with a 2 second time
-   constant. The signal is `s = fast - slow`, which removes gravity drift and
-   slow posture changes.
+   constant. The signal `s` is that projection, which removes gravity drift
+   and slow posture changes and keeps the sign of the swing rather than
+   rectifying it.
 3. Hysteresis: a rep is a rise of `s` above `+threshold` followed by a fall
    below `-threshold` (the lift and the return). The counter records the time
-   of the rise; when the fall arrives, the elapsed time must be between
-   `minPeriod` and `maxPeriod` or the cycle is discarded.
+   of the rise; when the fall arrives, the rise-to-fall half cycle must be
+   between half of `minPeriod` and half of `maxPeriod` or it is discarded.
 4. Nothing counts during the first `settleSeconds` after `reset()` (the
    person picking up the weight), and a completed rep starts a `minPeriod`
    refractory window.
 
 Calibration is pinned by tests on synthetic signals: 10 cycles of a 1 Hz
 sine at 0.4 g amplitude with 0.05 g white noise count 10; the same at 0.08 g
-amplitude count 0; 3 Hz jitter counts 0; a single slow 6 second push counts
-0; a burst of 8 cycles after 1 second of settling counts 8, not 9.
+amplitude count 0; 3 Hz jitter counts 0; a single slow 10 second push counts
+0; nine cycles whose first second is swallowed by settling count 8, not 9.
 
 Real-world accuracy is unknown until hardware: the label "auto" and the +1
 button are the honesty. Section 9 lists the hardware check.

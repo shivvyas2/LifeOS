@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "Insights", targets: ["Insights"]),
         .library(name: "Sectors", targets: ["Sectors"]),
         .library(name: "Assistant", targets: ["Assistant"]),
+        .library(name: "Motion", targets: ["Motion"]),
     ],
     targets: [
         .target(name: "AppSurfaces"),
@@ -28,5 +29,7 @@ let package = Package(
         .testTarget(name: "InsightsTests", dependencies: ["Insights"]),
         .testTarget(name: "SectorsTests", dependencies: ["Sectors"]),
         .testTarget(name: "AssistantTests", dependencies: ["Assistant"]),
+        .target(name: "Motion"),
+        .testTarget(name: "MotionTests", dependencies: ["Motion"]),
     ]
 )
