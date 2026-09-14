@@ -85,7 +85,7 @@ struct HealthActivityDesignPreview: View {
         calories: 460, nights: [SleepComposition(date: .now, lightMinutes: 220, remMinutes: 112, swsMinutes: 100, awakeMinutes: 18)])
     let weights = (0..<14).map { WeightPoint(id: Date.now.addingTimeInterval(Double($0 - 13) * 86400), weightKg: $0 == 5 ? nil : 77.2 + Double($0 % 4) / 10) }
     init() {
-        recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: false)
+        recorder = ActivityRecorder(defaults: defaults, liveActivitiesEnabled: ProcessInfo.processInfo.arguments.contains("--live-activity"))
         recorder.saveToHealth = false
         recorder.birthDate = { Calendar.current.date(from: DateComponents(year: 1996, month: 6, day: 1)) }
         _ = try? MetricsStore(context: container.mainContext).upsert(date: .now) { $0.whoopRecoveryPct = 82; $0.whoopSleepPerformancePct = 89 }

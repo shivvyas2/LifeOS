@@ -1,7 +1,7 @@
 # Live session core: effort, battery, and a glass Live Activity
 
 **Date:** 2026-09-14
-**Status:** approved in conversation, spec under review
+**Status:** implemented on feat/live-session-core, see docs/design/live-session/report.md
 **Builds on:** `docs/design/health-activity/implementation.md` (the native
 recorder, the Bluetooth sensor, the timer-only Live Activity),
 `2026-08-12-whoop-full-ingestion-design.md` (recovery, strain and sleep in
