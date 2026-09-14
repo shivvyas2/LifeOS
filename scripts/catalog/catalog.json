@@ -2130,5 +2130,257 @@
     ],
     "intensity": 2,
     "source_url": "https://www.youtube.com/watch?v=DNYCNCkDN4s"
+  },
+  {
+    "youtube_id": "1LMNa9C8gOo",
+    "title": "11 Minute Abs Workout // No Equipment, No Repeats",
+    "channel": "Heather Robertson",
+    "duration_s": 684,
+    "goal": [
+      "endurance"
+    ],
+    "split": "core",
+    "muscles": [
+      "core"
+    ],
+    "equipment": [
+      "none"
+    ],
+    "intensity": 1,
+    "source_url": "https://www.youtube.com/watch?v=1LMNa9C8gOo"
+  },
+  {
+    "youtube_id": "GoXGOtz6ft0",
+    "title": "10 Minute HIIT AB WORKOUT // No Equipment",
+    "channel": "Heather Robertson",
+    "duration_s": 652,
+    "goal": [
+      "endurance"
+    ],
+    "split": "core",
+    "muscles": [
+      "core"
+    ],
+    "equipment": [
+      "none"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=GoXGOtz6ft0"
+  },
+  {
+    "youtube_id": "8LMVy1tNnO4",
+    "title": "FLAT ABS Home Workout // No Equipment",
+    "channel": "Heather Robertson",
+    "duration_s": 619,
+    "goal": [
+      "endurance"
+    ],
+    "split": "core",
+    "muscles": [
+      "core"
+    ],
+    "equipment": [
+      "none"
+    ],
+    "intensity": 1,
+    "source_url": "https://www.youtube.com/watch?v=8LMVy1tNnO4"
+  },
+  {
+    "youtube_id": "fdN_DKwSlCU",
+    "title": "15 Minute LOWER AB FOCUS Workout (FOLLOW ALONG)",
+    "channel": "Athlean-XX for Women",
+    "duration_s": 835,
+    "goal": [
+      "strength",
+      "endurance"
+    ],
+    "split": "core",
+    "muscles": [
+      "core"
+    ],
+    "equipment": [
+      "none"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=fdN_DKwSlCU"
+  },
+  {
+    "youtube_id": "PaJnpbNoeus",
+    "title": "30 Minute LEAN LEGS WORKOUT! \ud83d\udd25Burn 370 Calories!* \ud83d\udd25Sydney Cummings",
+    "channel": "Sydney Cummings Houdyshell",
+    "duration_s": 1970,
+    "goal": [
+      "strength",
+      "endurance"
+    ],
+    "split": "lower",
+    "muscles": [
+      "glutes",
+      "quads",
+      "hamstrings"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=PaJnpbNoeus"
+  },
+  {
+    "youtube_id": "akrVNdF2Mpg",
+    "title": "40 MINUTE LEGS WORKOUT \ud83d\udd25BURN 425 CALORIES!* \ud83d\udd25with Sydney Cummings",
+    "channel": "Sydney Cummings Houdyshell",
+    "duration_s": 2611,
+    "goal": [
+      "strength",
+      "endurance"
+    ],
+    "split": "lower",
+    "muscles": [
+      "glutes",
+      "quads",
+      "hamstrings",
+      "calves"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 3,
+    "source_url": "https://www.youtube.com/watch?v=akrVNdF2Mpg"
+  },
+  {
+    "youtube_id": "H6mRkx1x77k",
+    "title": "The Ultimate Science-Based Leg Day For Muscle Growth (2023)",
+    "channel": "Jeff Nippard",
+    "duration_s": 679,
+    "goal": [
+      "strength",
+      "hypertrophy"
+    ],
+    "split": "lower",
+    "muscles": [
+      "quads",
+      "hamstrings",
+      "glutes",
+      "calves"
+    ],
+    "equipment": [
+      "barbell",
+      "dumbbells"
+    ],
+    "intensity": 3,
+    "source_url": "https://www.youtube.com/watch?v=H6mRkx1x77k"
+  },
+  {
+    "youtube_id": "7hgRJIvosvo",
+    "title": "Dumbbell LEG WORKOUT // For Strength",
+    "channel": "Heather Robertson",
+    "duration_s": 1437,
+    "goal": [
+      "strength",
+      "hypertrophy"
+    ],
+    "split": "lower",
+    "muscles": [
+      "glutes",
+      "quads",
+      "hamstrings"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=7hgRJIvosvo"
+  },
+  {
+    "youtube_id": "Zp2slDMBLMw",
+    "title": "Upper Body Strength + ARM TONING Workout",
+    "channel": "Heather Robertson",
+    "duration_s": 1894,
+    "goal": [
+      "strength",
+      "hypertrophy"
+    ],
+    "split": "arms",
+    "muscles": [
+      "biceps",
+      "triceps",
+      "shoulders"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=Zp2slDMBLMw"
+  },
+  {
+    "youtube_id": "_cCR_8sWlvU",
+    "title": "TONED ARMS // Tabata with Weights",
+    "channel": "Heather Robertson",
+    "duration_s": 606,
+    "goal": [
+      "strength",
+      "endurance"
+    ],
+    "split": "arms",
+    "muscles": [
+      "biceps",
+      "triceps"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 2,
+    "source_url": "https://www.youtube.com/watch?v=_cCR_8sWlvU"
+  },
+  {
+    "youtube_id": "J-5IcLRGMFk",
+    "title": "40 MIN KILLER TOTAL BODY Workout with Weights + AB FINISHER - No Repeat, No Talking Home Workout",
+    "channel": "growingannanas",
+    "duration_s": 2622,
+    "goal": [
+      "strength",
+      "hypertrophy",
+      "endurance"
+    ],
+    "split": "full",
+    "muscles": [
+      "chest",
+      "back",
+      "shoulders",
+      "glutes",
+      "quads",
+      "hamstrings",
+      "core"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 3,
+    "source_url": "https://www.youtube.com/watch?v=J-5IcLRGMFk"
+  },
+  {
+    "youtube_id": "0jHtQ5aJRMw",
+    "title": "40 Minute Full Body HIIT Workout with Dumbbells! \ud83d\udd25Burn 540 Calories!* \ud83d\udd25Sydney Cummings",
+    "channel": "Sydney Cummings Houdyshell",
+    "duration_s": 2586,
+    "goal": [
+      "strength",
+      "endurance"
+    ],
+    "split": "full",
+    "muscles": [
+      "chest",
+      "back",
+      "shoulders",
+      "glutes",
+      "quads",
+      "hamstrings",
+      "core"
+    ],
+    "equipment": [
+      "dumbbells"
+    ],
+    "intensity": 3,
+    "source_url": "https://www.youtube.com/watch?v=0jHtQ5aJRMw"
   }
 ]
