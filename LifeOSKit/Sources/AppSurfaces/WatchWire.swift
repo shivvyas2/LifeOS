@@ -4,6 +4,9 @@ import Foundation
 /// Every reading is optional: a packet without heart rate says "no reading",
 /// never zero. `completedSets` holds reps per finished set, oldest first.
 public struct WatchPacket: Codable, Equatable, Sendable {
+    /// Names the shape, so the version gate can tell a packet from a command:
+    /// both carry `v` and `sentAt`, and nothing else is required.
+    public var kind: String = WatchWire.packetKind
     public var v: Int = WatchWire.version
     public var sentAt: Date
     public var heartRate: Int?
@@ -18,11 +21,15 @@ public struct WatchPacket: Codable, Equatable, Sendable {
 
 /// What the phone asks the watch to do. `configure` carries the person's
 /// maximum heart rate once so the watch can show a zone chip.
+/// `end` finishes the workout and saves it to Health on the wrist; `discard`
+/// throws it away. The phone sends `discard` when it refuses a mirrored
+/// session or the person discards, so nothing half-recorded reaches Health.
 public enum PhoneCommand: String, Codable, Sendable {
-    case configure, pause, resume, end, nextSet, addRep
+    case configure, pause, resume, end, nextSet, addRep, discard
 }
 
 public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
+    public var kind: String = WatchWire.commandKind
     public var v: Int = WatchWire.version
     public var command: PhoneCommand
     public var sentAt: Date
@@ -36,6 +43,8 @@ public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
 /// Encoding and the version gate in one place, shared by both devices.
 public enum WatchWire {
     public static let version = 1
+    public static let packetKind = "packet"
+    public static let commandKind = "command"
 
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
@@ -44,12 +53,14 @@ public enum WatchWire {
     }
 
     public static func packet(from data: Data) -> WatchPacket? {
-        guard let packet = try? decoder.decode(WatchPacket.self, from: data), packet.v == version else { return nil }
+        guard let packet = try? decoder.decode(WatchPacket.self, from: data),
+              packet.kind == packetKind, packet.v == version else { return nil }
         return packet
     }
 
     public static func command(from data: Data) -> PhoneCommandEnvelope? {
-        guard let envelope = try? decoder.decode(PhoneCommandEnvelope.self, from: data), envelope.v == version else { return nil }
+        guard let envelope = try? decoder.decode(PhoneCommandEnvelope.self, from: data),
+              envelope.kind == commandKind, envelope.v == version else { return nil }
         return envelope
     }
 

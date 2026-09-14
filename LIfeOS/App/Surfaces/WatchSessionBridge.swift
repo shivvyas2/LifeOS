@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import WatchConnectivity
+import ActivityKit
 import AppSurfaces
 
 /// Owns the workout session mirrored from the watch. One per app: HealthKit
@@ -12,6 +13,9 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     private static let healthStore = HKHealthStore()
 
     private(set) var session: HKWorkoutSession?
+    /// The id of a Live Activity requested before any recorder was listening,
+    /// so the timer built later adopts it instead of asking for a second one.
+    private(set) var placeholderSessionID: UUID?
     var onSession: ((HKWorkoutSession) -> Void)?
     var onPacket: ((Data) -> Void)?
     var onStateChange: ((HKWorkoutSessionState, Date) -> Void)?
@@ -20,7 +24,17 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     /// Call once at launch, before any session can arrive.
     static func installMirroringHandler() {
         healthStore.workoutSessionMirroringStartHandler = { session in
-            Task { @MainActor in WatchSessionBridge.shared.adopt(session) }
+            Task { @MainActor in
+                let bridge = WatchSessionBridge.shared
+                // HealthKit launches the phone app in the background for a
+                // workout started on the wrist, with no scene and so no
+                // recorder. The Live Activity has to be requested inside that
+                // launch (spec 9), so ask for it here and let the recorder
+                // adopt its id when a screen finally attaches.
+                let unattended = bridge.onSession == nil
+                bridge.adopt(session)
+                if unattended { bridge.requestPlaceholderActivity(for: session) }
+            }
         }
     }
 
@@ -28,7 +42,11 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     static var watchAvailable: Bool {
         guard WCSession.isSupported() else { return false }
         let wc = WCSession.default
-        return wc.activationState == .activated && wc.isPaired && wc.isWatchAppInstalled && wc.isReachable
+        // Not `isReachable`: on iOS that is true only while the watch app is
+        // already in the foreground, which is never the case for a person
+        // tapping Begin on the phone. `startWatchApp` exists to launch it, and
+        // the hand-off timeout covers a session that never arrives.
+        return wc.activationState == .activated && wc.isPaired && wc.isWatchAppInstalled
     }
 
     /// Ask the watch to open Almanac with this workout.
@@ -48,9 +66,58 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         session.sendToRemoteWorkoutSession(data: data) { _, _ in }
     }
 
+    /// Sends a last command and drops the session only once it has left, in
+    /// the send's completion handler: releasing the session in the same
+    /// run-loop turn can cancel the send before the watch ever hears it.
+    func end(after command: PhoneCommand) {
+        guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now)) else {
+            end(); return
+        }
+        session.sendToRemoteWorkoutSession(data: data) { _, _ in
+            Task { @MainActor in self.end() }
+        }
+    }
+
     func end() {
         session?.delegate = nil
         session = nil
+    }
+
+    /// Called once the recorder's timer has taken the placeholder's id.
+    func clearPlaceholder() { placeholderSessionID = nil }
+
+    private func requestPlaceholderActivity(for session: HKWorkoutSession) {
+        guard placeholderSessionID == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let id = UUID()
+        let type = session.workoutConfiguration.activityType
+        let content = ActivityContent(state: LiveSessionReadout(elapsed: 0, runningSince: .now, push: .onTrack),
+                                      staleDate: Date.now.addingTimeInterval(8 * 3600))
+        let attributes = WorkoutActivityAttributes(sessionID: id, name: Self.name(for: type), icon: Self.icon(for: type))
+        guard (try? Activity.request(attributes: attributes, content: content, pushType: nil)) != nil else { return }
+        placeholderSessionID = id
+    }
+
+    /// The same names and icons `RecordedActivity` uses. Duplicated rather
+    /// than imported: the bridge runs before any recorder exists.
+    static func name(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .walking: "Walk"
+        case .running: "Run"
+        case .cycling: "Cycle"
+        case .traditionalStrengthTraining: "Strength"
+        case .yoga: "Yoga"
+        default: "Other"
+        }
+    }
+    static func icon(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .walking: "figure.walk"
+        case .running: "figure.run"
+        case .cycling: "figure.outdoor.cycle"
+        case .traditionalStrengthTraining: "dumbbell"
+        case .yoga: "figure.yoga"
+        default: "figure.mixed.cardio"
+        }
     }
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,

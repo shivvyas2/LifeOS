@@ -34,9 +34,9 @@ import AppSurfaces
             check(lifter.source == .phone && lifter.reps == 0 && lifter.setIndex == 1, "A phone strength session starts at set 1 with zero reps")
             lifter.addRep(); lifter.addRep(); lifter.nextSet(); lifter.addRep()
             check(lifter.reps == 1 && lifter.setIndex == 2 && lifter.completedSets == [2] && lifter.readout?.reps == 1, "Manual reps and sets count on the phone")
-            var stale = WatchPacket(sentAt: .now); stale.v = 99; stale.reps = 40
-            lifter.receiveWatchPacket(try WatchWire.encode(stale))
-            check(lifter.reps == 1, "A packet with an unknown version changes nothing")
+            var toAPhone = WatchPacket(sentAt: .now); toAPhone.reps = 40
+            lifter.receiveWatchPacket(try WatchWire.encode(toAPhone))
+            check(lifter.reps == 1, "A watch packet never reaches a phone session")
             await lifter.finish()
             let lifted = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Strength" }
             check(lifted?.sets == [2, 1], "Finishing writes the sets, current set included")
@@ -48,19 +48,52 @@ import AppSurfaces
             let waiter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".watch")!, liveActivitiesEnabled: false)
             waiter.attach(context); waiter.saveToHealth = true
             waiter.watchAvailable = { true }; waiter.watchHandoffTimeout = 0.5
+            // Health saving on is what offers the workout to the watch, and the
+            // hand-off now asks for Health access before it does: grant it here
+            // rather than raising a permission sheet an unattended run can
+            // never answer. Once the recorder is waiting on a watch that will
+            // never answer, take the toggle off again so the fall-through does
+            // not re-run the phone's own Health path either.
+            waiter.healthAuthorizationForHandoff = { true }
             let handoff = Task { await waiter.start() }
-            // Health saving on is what offers the workout to the watch, so the
-            // hand-off has to begin with it on. Once the recorder is waiting on
-            // a watch that will never answer, take it off again: the fall-through
-            // would otherwise re-run the Health path, and the permission sheet
-            // that raises is one an unattended run can never answer.
             var spins = 0
             while waiter.source != .watch, spins < 200 { spins += 1; try? await Task.sleep(for: .milliseconds(5)) }
+            check(waiter.notice == ActivityRecorder.waitingForWatch, "The wait for the watch says so")
             waiter.saveToHealth = false
             await handoff.value
             check(waiter.source == .phone && waiter.hasSession && waiter.notice?.contains("did not answer") == true, "A watch that does not answer falls back to the phone")
             waiter.deactivate()
             UserDefaults(suiteName: suite + ".watch")?.removePersistentDomain(forName: suite + ".watch")
+            // A watch-owned workout the phone only mirrors: the draft is the
+            // only way into that path without a watch, and it is the one place
+            // the packet decoder and the local save meet.
+            let watchSuite = suite + ".watchdraft"
+            let watchDefaults = UserDefaults(suiteName: watchSuite)!
+            ActivityRecorder.seedWatchDraft(into: watchDefaults)
+            let mirrored = ActivityRecorder(defaults: watchDefaults, liveActivitiesEnabled: false)
+            mirrored.watch = nil
+            mirrored.birthDate = recorder.birthDate
+            mirrored.attach(context)
+            var recoveries = 0
+            while mirrored.busy, recoveries < 400 { recoveries += 1; try? await Task.sleep(for: .milliseconds(5)) }
+            check(mirrored.source == .watch && mirrored.selection == .strength && mirrored.hasSession,
+                  "A watch draft restores as a watch session")
+            check(mirrored.saveToHealth, "A watch draft leaves Health saving on")
+            var unknown = WatchPacket(sentAt: .now); unknown.v = 99; unknown.reps = 40; unknown.heartRate = 200
+            unknown.heartRateAt = .now
+            mirrored.receiveWatchPacket(try WatchWire.encode(unknown))
+            check(mirrored.reps == 0 && mirrored.heartRate == nil, "A packet with an unknown version changes nothing")
+            var live = WatchPacket(sentAt: .now); live.reps = 3; live.setIndex = 1; live.heartRate = 130; live.heartRateAt = .now
+            mirrored.receiveWatchPacket(try WatchWire.encode(live))
+            check(mirrored.reps == 3 && mirrored.heartRate == 130 && mirrored.readout?.reps == 3,
+                  "A current-version packet carries reps and heart rate through")
+            await mirrored.finish()
+            let fromWatch = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Strength" }
+            check(fromWatch?.sets == [3] && mirrored.saved && !mirrored.healthSaved,
+                  "Finishing a watch session writes the local record and its sets")
+            if let fromWatch { context.delete(fromWatch); try context.save() }
+            mirrored.deactivate()
+            watchDefaults.removePersistentDomain(forName: watchSuite)
             let phoneOnly = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".phoneonly")!, liveActivitiesEnabled: false)
             phoneOnly.attach(context); phoneOnly.saveToHealth = false
             phoneOnly.watchAvailable = { true }; phoneOnly.watchHandoffTimeout = 0.5

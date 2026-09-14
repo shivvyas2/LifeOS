@@ -16,6 +16,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var state: State = .idle
     private(set) var activityName = ""
     private(set) var startedAt: Date?
+    /// The workout clock, kept the way `ActivitySessionState` keeps it on the
+    /// phone: a pause banks the time so far, a resume starts a new run. The
+    /// screen reads both so its timer does not count through a pause.
+    private(set) var accumulated: TimeInterval = 0
+    private(set) var runningSince: Date?
     private(set) var heartRate: Int?
     private(set) var energyKcal: Double?
     private(set) var reps: Int?
@@ -27,7 +32,6 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     /// say so rather than ending in silence.
     private(set) var lastError: String?
     var isStrength: Bool { session?.workoutConfiguration.activityType == .traditionalStrengthTraining }
-    var elapsed: TimeInterval { startedAt.map { Date.now.timeIntervalSince($0) } ?? 0 }
 
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -66,7 +70,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 session.delegate = self; builder.delegate = self
                 self.session = session; self.builder = builder
                 let started = Date.now
-                startedAt = started
+                startedAt = started; accumulated = 0; runningSince = started
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
                 mirroringFailed = false
@@ -88,7 +92,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 builder?.discardWorkout()
                 stopMotion()
                 self.session = nil; self.builder = nil
-                startedAt = nil; activityName = ""; mirroringFailed = false
+                startedAt = nil; accumulated = 0; runningSince = nil
+                activityName = ""; mirroringFailed = false
                 state = .idle
             }
         }
@@ -101,6 +106,19 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         state = .ending
         stopMotion()
         session.stopActivity(with: .now)
+    }
+    /// The phone refused this session, or the person discarded it there:
+    /// throw the workout away rather than writing a stub into Health. The
+    /// delegate comes off first, so no late `.ended` re-enters the teardown.
+    func discard() {
+        guard state != .ending, let session else { return }
+        state = .ending
+        stopMotion()
+        session.delegate = nil
+        builder?.delegate = nil
+        builder?.discardWorkout()
+        session.end()
+        resetAfterEnd()
     }
     func addRep() {
         guard isStrength, state == .running || state == .paused else { return }
@@ -141,7 +159,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private func resetAfterEnd() {
         stopMotion()
         session = nil; builder = nil
-        startedAt = nil; heartRate = nil; heartRateAt = nil; energyKcal = nil
+        startedAt = nil; accumulated = 0; runningSince = nil
+        heartRate = nil; heartRateAt = nil; energyKcal = nil
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
         counter.reset()
         activityName = ""; mirroringFailed = false; maxHeartRate = nil
@@ -170,6 +189,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         case .pause: pause()
         case .resume: resume()
         case .end: end()
+        case .discard: discard()
         case .nextSet: nextSet()
         case .addRep: addRep()
         }
@@ -209,8 +229,13 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
         Task { @MainActor in
             switch toState {
-            case .running: self.state = .running
-            case .paused: self.state = .paused
+            case .running:
+                self.state = .running
+                if self.runningSince == nil { self.runningSince = date }
+            case .paused:
+                self.state = .paused
+                if let since = self.runningSince { self.accumulated += max(0, date.timeIntervalSince(since)) }
+                self.runningSince = nil
             case .stopped: await self.finish(at: date)
             case .ended: self.resetAfterEnd()
             default: break

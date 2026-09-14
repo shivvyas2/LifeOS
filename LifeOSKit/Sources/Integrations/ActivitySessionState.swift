@@ -12,7 +12,13 @@ public struct ActivitySessionState: Codable, Equatable, Sendable {
     public private(set) var endedAt: Date?
 
     public init(activity: String, at date: Date = .now) {
-        id = UUID(); startedAt = date; self.activity = activity
+        self.init(id: UUID(), activity: activity, at: date)
+    }
+    /// The id is the Live Activity's key. A session the watch started may have
+    /// had its Live Activity requested before the timer existed, so the timer
+    /// adopts that id rather than orphaning the activity already on screen.
+    public init(id: UUID, activity: String, at date: Date = .now) {
+        self.id = id; startedAt = date; self.activity = activity
         phase = .running; accumulated = 0; runningSince = date
     }
     public func elapsed(at date: Date = .now) -> TimeInterval {

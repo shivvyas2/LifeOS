@@ -27,4 +27,12 @@ struct WatchWireTests {
         #expect(back == envelope)
         #expect(WatchWire.command(from: try WatchWire.encode(WatchPacket(sentAt: now))) == nil)
     }
+
+    /// The two shapes share `v` and `sentAt`, so without `kind` a command
+    /// decodes as an empty packet. Both directions have to refuse.
+    @Test func aCommandIsNeverReadAsAPacket() throws {
+        let envelope = PhoneCommandEnvelope(command: .discard, sentAt: now)
+        #expect(WatchWire.packet(from: try WatchWire.encode(envelope)) == nil)
+        #expect(WatchWire.command(from: try WatchWire.encode(envelope))?.command == .discard)
+    }
 }

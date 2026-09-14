@@ -9,11 +9,19 @@ struct WatchWorkoutScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 Text(workout.activityName).font(.headline)
-                if let startedAt = workout.startedAt, workout.state == .running {
-                    Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
+                // Anchored behind the banked time so the running timer reads
+                // the workout's elapsed time, not the time since this run began.
+                if let runningSince = workout.runningSince, workout.state == .running {
+                    Text(timerInterval: runningSince.addingTimeInterval(-workout.accumulated)...Date.distantFuture, countsDown: false)
+                        .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
+                } else if workout.state == .paused {
+                    Text(Duration.seconds(workout.accumulated).formatted(.time(pattern: .minuteSecond)))
                         .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
                 } else {
                     Text(statusText).font(.title3)
+                }
+                if workout.state == .paused {
+                    Text("Paused").font(.caption2).foregroundStyle(.secondary)
                 }
                 if let lastError = workout.lastError {
                     Text(lastError).font(.caption2).foregroundStyle(.orange)

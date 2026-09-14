@@ -101,7 +101,8 @@ private struct LockScreenView: View {
             HStack(spacing: 8) {
                 Tile(eyebrow: readout.zone.map { "Z\($0)" } ?? "BPM", value: readout.heartRateText, symbol: "heart.fill")
                 Tile(eyebrow: "EST", value: readout.effortText, symbol: "bolt.fill", unit: effortUnit)
-                Tile(eyebrow: readout.setText?.uppercased() ?? "KCAL", value: readout.repsText ?? readout.caloriesText, symbol: readout.reps == nil ? "flame.fill" : "repeat")
+                Tile(eyebrow: readout.setText?.uppercased() ?? "KCAL", value: readout.repsText ?? readout.caloriesText,
+                     symbol: readout.reps == nil ? "flame.fill" : "repeat", unit: readout.reps == nil ? nil : "reps")
                 Tile(eyebrow: "LEFT", value: readout.batteryText, symbol: "battery.75percent", ring: readout.batteryPercent)
             }
         }

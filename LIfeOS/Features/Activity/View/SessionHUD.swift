@@ -10,6 +10,9 @@ struct SessionHUD: View {
     let activity: RecordedActivity
     let zonesAvailable: Bool
     var showsTimer: Bool = true
+    /// Only a watch session counts reps by itself; on the phone every rep is
+    /// a tap, and calling that "auto" would invert the honesty label.
+    var countsAutomatically: Bool = false
     var onAddRep: () -> Void = {}
     var onNextSet: () -> Void = {}
     @Binding var isExpanded: Bool
@@ -20,8 +23,11 @@ struct SessionHUD: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 12) {
-            Button { withAnimation(.snappy) { isExpanded.toggle() } } label: {
-                VStack(alignment: .leading, spacing: 10) {
+            // The expand button wraps the top row alone. SwiftUI gives nested
+            // buttons no defined semantics, and with "+1" inside this button's
+            // label a rep also collapsed the HUD.
+            VStack(alignment: .leading, spacing: 10) {
+                Button { withAnimation(.snappy) { isExpanded.toggle() } } label: {
                     HStack(spacing: 14) {
                         if showsTimer { timer.frame(minWidth: 62, alignment: .leading) }
                         reading(symbol: "heart.fill", value: readout.heartRateText, chip: readout.zoneText, tint: readout.push.tint)
@@ -33,14 +39,16 @@ struct SessionHUD: View {
                             reading(symbol: "repeat", value: readout.repsText, chip: "reps", tint: nil)
                         }
                     }
-                    if isExpanded { expanded }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 18).padding(.vertical, isExpanded ? 14 : 10)
-                .frame(minHeight: 52)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .buttonStyle(.plain)
+                if isExpanded { expanded }
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18).padding(.vertical, isExpanded ? 14 : 10)
+            .frame(minHeight: 52)
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             .glassEffect(.regular.tint(readout.push.tint.opacity(0.18)).interactive(),
                          in: isExpanded ? AnyShape(RoundedRectangle(cornerRadius: 24, style: .continuous)) : AnyShape(Capsule()))
             .glassEffectID("hud", in: glass)
@@ -95,7 +103,8 @@ struct SessionHUD: View {
     }
 
     private var setLine: String {
-        [readout.setText, readout.repsText.map { "\($0) reps · auto" }].compactMap { $0 }.joined(separator: " · ")
+        let reps = readout.repsText.map { countsAutomatically ? "\($0) reps · auto" : "\($0) reps" }
+        return [readout.setText, reps].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var ceilingLine: String {
@@ -142,7 +151,7 @@ extension PushState {
                 LinearGradient(colors: [LifeOSTokens.liveGradientTop, LifeOSTokens.liveGradientBottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
                 VStack(spacing: 24) {
                     SessionHUD(readout: readout, activity: .run, zonesAvailable: true, isExpanded: $expanded)
-                    SessionHUD(readout: readout, activity: .strength, zonesAvailable: true, isExpanded: $expandedTwo)
+                    SessionHUD(readout: readout, activity: .strength, zonesAvailable: true, countsAutomatically: true, isExpanded: $expandedTwo)
                     SessionHUD(readout: LiveSessionReadout(elapsed: 30, runningSince: nil, push: .onTrack), activity: .yoga, zonesAvailable: false, isExpanded: $expanded)
                 }.padding()
             }

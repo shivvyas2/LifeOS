@@ -18,6 +18,17 @@ struct ActivitySessionStateTests {
         #expect(session.elapsed(at: start.addingTimeInterval(900)) == 90)
         #expect(session.endedAt == start.addingTimeInterval(630))
     }
+    /// A watch-started session's Live Activity exists before its timer does,
+    /// so the timer has to be able to take that activity's id.
+    @Test func aTimerCanAdoptAnExistingIdentity() {
+        let id = UUID()
+        let session = ActivitySessionState(id: id, activity: "Strength", at: start)
+        #expect(session.id == id)
+        #expect(session.startedAt == start)
+        #expect(session.phase == .running)
+        #expect(session.elapsed(at: start.addingTimeInterval(120)) == 120)
+    }
+
     @Test func restoredSessionRetainsIdentityAndTiming() throws {
         let session = ActivitySessionState(activity: "Run", at: start)
         let restored = try JSONDecoder().decode(ActivitySessionState.self, from: JSONEncoder().encode(session))

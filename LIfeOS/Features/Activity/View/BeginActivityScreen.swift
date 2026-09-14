@@ -6,6 +6,8 @@ import AppSurfaces
 struct BeginActivityScreen: View {
     @Bindable var model: ActivityRecorder
     var onQuickLog: () -> Void = {}
+    /// The design fixture opens the HUD expanded so both states can be captured.
+    var startsExpanded = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
@@ -62,6 +64,7 @@ struct BeginActivityScreen: View {
             }
         }
         .tint(LifeOSTokens.accent)
+        .onAppear { if startsExpanded { hudExpanded = true } }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
         .confirmationDialog("Discard this activity?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard activity", role: .destructive) { model.discard() }
@@ -107,6 +110,7 @@ struct BeginActivityScreen: View {
             }
             Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
             SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false,
+                       countsAutomatically: model.source == .watch,
                        onAddRep: { model.addRep() }, onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
                 .padding(.top, 10)
         }
@@ -128,7 +132,9 @@ struct BeginActivityScreen: View {
                 }
                 if model.selection == .strength {
                     glassTile(icon: "repeat", label: readout.setText ?? "Reps", value: readout.repsText, unit: "reps",
-                              caption: model.completedSets.isEmpty ? "Counted from your wrist · auto" : "Sets so far: \(model.completedSets.map(String.init).joined(separator: ", "))")
+                              caption: model.completedSets.isEmpty
+                                ? (model.source == .watch ? "Counted from your wrist · auto" : "Tap +1 for each rep")
+                                : "Earlier sets: \(model.completedSets.map(String.init).joined(separator: ", ")) reps")
                 }
                 glassTile(icon: "flame.fill", label: "Calories", value: readout.caloriesText, unit: "kcal",
                           caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
