@@ -28,7 +28,12 @@ check still pending on Shiv's iPhone and watch.
   - `session-strength-iphone.png` -- launched with
     `--design-preview --page=activity --live --strength`. The HUD capsule
     reads "1 reps", the Reps tile reads "Set 2" with value "1 reps" and
-    caption "Sets so far: 2".
+    caption "Earlier sets: 2 reps".
+  - `session-strength-hud-expanded.png` -- the same fixture with
+    `--hud-expanded` added, so the HUD opens expanded. Below the top row sit
+    the ceiling line, the calories row, and "Set 2 · 1 reps" with the "+1" and
+    "Next set" buttons, all inside the one glass container. No "· auto"
+    suffix: this is a phone session, where every rep is a tap.
   - `session-strength-lock-screen.png` -- same fixture relaunched with
     `--live-activity` added, then locked. The lock-screen card shows
     "Strength - Easy going" and tile three reading "SET 2 / 1".
@@ -115,8 +120,8 @@ One deviation per task, from each task's own report:
 
 ## Interaction and test evidence
 
-- `swift test` total (`LifeOSKit`, this run): **1245 tests in 163 suites
-  passed**, 0 failures.
+- `swift test` total (`LifeOSKit`, after the final-review fixes): **1247 tests
+  in 163 suites passed**, 0 failures.
 - Native app build (`xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS
   -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,
   OS=26.0' build`): `** BUILD SUCCEEDED **`.
@@ -125,7 +130,7 @@ One deviation per task, from each task's own report:
   `** BUILD SUCCEEDED **`.
 - Checks harness output (`--design-preview --page=checks`, clean install,
   iPhone 17 simulator `FC3C3AD5-CD98-4C7C-83AA-5E02587E6E68`, pasted
-  verbatim, 23 of 23 PASS, no FAILs):
+  verbatim, 29 of 29 PASS, no FAILs):
 
 ```
 PASS: Timer starts without Health access
@@ -133,9 +138,15 @@ PASS: Capacity comes from today's recovery at start
 PASS: Readings yield zone and effort
 PASS: A phone strength session starts at set 1 with zero reps
 PASS: Manual reps and sets count on the phone
-PASS: A packet with an unknown version changes nothing
+PASS: A watch packet never reaches a phone session
 PASS: Finishing writes the sets, current set included
+PASS: The wait for the watch says so
 PASS: A watch that does not answer falls back to the phone
+PASS: A watch draft restores as a watch session
+PASS: A watch draft leaves Health saving on
+PASS: A packet with an unknown version changes nothing
+PASS: A current-version packet carries reps and heart rate through
+PASS: Finishing a watch session writes the local record and its sets
 PASS: Health saving off keeps the session on the phone
 PASS: Paused readings accrue nothing
 PASS: Paused time stays fixed
@@ -152,6 +163,70 @@ PASS: Other account has no remembered sensor
 PASS: Forget clears the remembered sensor
 PASS: Account transition stops recording and rejects late starts
 ```
+
+## Final review fixes
+
+The read-only final review (`.superpowers/sdd/2026-09-14-watch-companion/final-review.md`)
+raised one critical and eight important issues. All were landed here; the
+five hardware checks below are still the only unverified part.
+
+- **C1, I1, I2 (the first hand-off).** `PhoneCommand.discard` was added:
+  on the wrist it stops motion, detaches the delegates, discards the builder
+  and ends the session without `finishWorkout()`, so a refused or discarded
+  session never reaches Health. The phone's refusal path and `discard()` send
+  it; `finish()` still sends `.end`. Commands that end the session now go
+  through `WatchSessionBridge.end(after:)`, which drops the session inside the
+  send's completion handler rather than in the same run-loop turn, so the
+  command actually leaves. `watchAvailable` no longer reads `isReachable`
+  (true only while the watch app is already in the foreground); it is
+  `activated && isPaired && isWatchAppInstalled`. The phone asks for its own
+  Health authorization before `startWatchApp`, so the first permission prompt
+  is on the phone, not the wrist, and a refusal falls through to the phone
+  path. The wait now says "Asking your Apple Watch…" instead of a silent ten
+  seconds.
+- **I3 (no Live Activity in a background launch).** When a mirrored session
+  arrives and no recorder is listening, the bridge requests the Live Activity
+  itself and keeps its id in `placeholderSessionID`; the recorder's timer
+  adopts that id (`ActivitySessionState(id:activity:at:)`, new) so the card
+  already on screen is updated rather than duplicated.
+- **I4 (adopting onto a saved timer).** `adoptMirroredSession` treats a
+  finished, saved timer like no timer and builds a fresh one, from the
+  mirrored session's own start date; `start()` clears the timer alongside
+  `saved`.
+- **I5 (the `.watch` restore branch).** A watch draft keeps Health saving on,
+  a recovered session already stopped or ended finishes the timer and says
+  "Your watch finished this workout. Save it here.", and nothing recovered
+  says the watch is still recording and will reconnect.
+- **I6 (manual counts labelled "auto").** `SessionHUD` gained
+  `countsAutomatically`; the "· auto" suffix and the "Counted from your wrist ·
+  auto" caption render only for a watch session. A phone strength session says
+  "Tap +1 for each rep".
+- **I7 (nested buttons).** The expand/collapse button now wraps the collapsed
+  top row alone; the expanded rows, including "+1" and "Next set", sit below it
+  inside the same glass container. Verified on the simulator: tapping "+1" took
+  the count from 1 to 2 and left the HUD expanded.
+- **I8 and the deferred docs.** Spec 4.2 step 4 records the `minPeriod / 2`
+  refractory window and step 1 the rising-swing axis lock; spec 3.1 records the
+  `saveToHealth` precondition and the new availability gate; 3.2 and 3.3
+  describe `.discard` and the `kind` field; section 9's "ends the mirrored one"
+  became "discards".
+- **Deferred fix-before-merge.** `ActivityRecorderChecks` now seeds a `.watch`
+  draft (`ActivityRecorder.seedWatchDraft`, `#if DEBUG`) so the unknown-version
+  check is no longer vacuous: an unknown packet changes nothing, a valid one
+  carries reps 3 and heart rate 130 through, and `finish()` writes the local
+  record with `sets == [3]`. `start()`'s success path adopts the bridge's
+  session itself if the callback was missed.
+- **Minors landed.** `kind` on both wire shapes with a reverse-direction test;
+  the watch screen's timer is pause-aware (`accumulated` plus `runningSince`,
+  like `ActivitySessionState`) and the dead `elapsed` is gone; "Sets so far: 2"
+  became "Earlier sets: 2 reps"; the lock-screen reps tile carries the "reps"
+  unit; `sensor.prepareForSession` runs only for a phone session and adopting a
+  mirrored one stops the strap; the watch half of the recorder moved into
+  `ActivityRecorder+Watch.swift`.
+- **One bug the new check found.** A packet carrying both a heart rate and a
+  rep change published the *previous* rep count, because the single readout
+  refresh ran inside `receiveHeartRate` before the counts were applied. The
+  counts are now applied first.
 
 ## Hardware checks: pending
 
