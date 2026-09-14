@@ -9,7 +9,7 @@ import Motion
 /// motion for strength. Packets go out once a second and on every rep.
 @MainActor @Observable
 final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
-    enum State { case idle, running, paused, ending }
+    enum State { case idle, starting, running, paused, ending }
     static let startable: [(name: String, type: HKWorkoutActivityType)] = [
         ("Walk", .walking), ("Run", .running), ("Cycle", .cycling), ("Strength", .traditionalStrengthTraining), ("Yoga", .yoga), ("Other", .other)]
 
@@ -23,6 +23,9 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var completedSets: [Int] = []
     private(set) var maxHeartRate: Int?
     private(set) var mirroringFailed = false
+    /// Set when the workout could not be written to Health, so the screen can
+    /// say so rather than ending in silence.
+    private(set) var lastError: String?
     var isStrength: Bool { session?.workoutConfiguration.activityType == .traditionalStrengthTraining }
     var elapsed: TimeInterval { startedAt.map { Date.now.timeIntervalSince($0) } ?? 0 }
 
@@ -31,6 +34,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private var builder: HKLiveWorkoutBuilder?
     private let motion = CMMotionManager()
     private var counter = RepCounter()
+    /// Taps on "+1", kept apart from the counter so the next automatic rep
+    /// adds to them instead of overwriting them.
+    private var manualReps = 0
+    /// When the most recent heart rate was actually measured, not when it was sent.
+    private var heartRateAt: Date?
     private var lastPacketAt: Date = .distantPast
 
     func start(type: HKWorkoutActivityType) {
@@ -42,6 +50,10 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
 
     func start(_ configuration: HKWorkoutConfiguration) {
         guard state == .idle else { return }
+        // Synchronous, before the Task: the authorization prompt can take a
+        // while and a second Start tap must not open a second session.
+        state = .starting
+        lastError = nil
         activityName = Self.startable.first { $0.type == configuration.activityType }?.name ?? "Other"
         Task {
             do {
@@ -64,10 +76,20 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                     mirroringFailed = true
                 }
                 state = .running
-                if isStrength { reps = 0; setIndex = 1; completedSets = []; startMotion() }
+                if isStrength { reps = 0; setIndex = 1; completedSets = []; manualReps = 0; startMotion() }
                 sendPacket(force: true)
             } catch {
-                state = .idle; self.session = nil; self.builder = nil
+                // A throw after `startActivity` leaves a live session behind.
+                // Detach it first so no late delegate callback can put this
+                // controller back into `.running` on a session that is gone.
+                session?.delegate = nil
+                builder?.delegate = nil
+                session?.end()
+                builder?.discardWorkout()
+                stopMotion()
+                self.session = nil; self.builder = nil
+                startedAt = nil; activityName = ""; mirroringFailed = false
+                state = .idle
             }
         }
     }
@@ -80,11 +102,18 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         stopMotion()
         session.stopActivity(with: .now)
     }
-    func addRep() { guard isStrength else { return }; reps = (reps ?? 0) + 1; sendPacket(force: true) }
+    func addRep() {
+        guard isStrength, state == .running || state == .paused else { return }
+        manualReps += 1
+        reps = counter.reps + manualReps
+        sendPacket(force: true)
+    }
     func nextSet() {
-        guard isStrength else { return }
-        completedSets.append(reps ?? 0); reps = 0; setIndex = (setIndex ?? 1) + 1
-        counter.reset(); sendPacket(force: true)
+        guard isStrength, state == .running || state == .paused else { return }
+        completedSets.append(reps ?? 0)
+        counter.reset(); manualReps = 0; reps = 0
+        setIndex = (setIndex ?? 1) + 1
+        sendPacket(force: true)
     }
 
     private func startMotion() {
@@ -100,7 +129,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 guard self.state == .running else { return }
                 let acceleration = data.userAcceleration
                 if self.counter.add(RepCounter.Sample(t: data.timestamp, x: acceleration.x, y: acceleration.y, z: acceleration.z)) {
-                    self.reps = self.counter.reps
+                    self.reps = self.counter.reps + self.manualReps
                     self.sendPacket(force: true)
                 }
             }
@@ -108,15 +137,29 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     }
     private func stopMotion() { motion.stopDeviceMotionUpdates() }
 
+    /// The one teardown path: everything the next workout must not inherit.
+    private func resetAfterEnd() {
+        stopMotion()
+        session = nil; builder = nil
+        startedAt = nil; heartRate = nil; heartRateAt = nil; energyKcal = nil
+        reps = nil; setIndex = nil; completedSets = []; manualReps = 0
+        counter.reset()
+        activityName = ""; mirroringFailed = false; maxHeartRate = nil
+        state = .idle
+    }
+
     private func sendPacket(force: Bool) {
         guard let session, state != .idle else { return }
         let now = Date.now
         guard force || now.timeIntervalSince(lastPacketAt) >= 1 else { return }
         lastPacketAt = now
         var packet = WatchPacket(sentAt: now)
-        packet.heartRate = heartRate; packet.heartRateAt = heartRate == nil ? nil : now
+        packet.heartRate = heartRate; packet.heartRateAt = heartRate == nil ? nil : heartRateAt
         packet.energyKcal = energyKcal
-        if isStrength { packet.reps = reps; packet.setIndex = setIndex; packet.completedSets = completedSets }
+        if isStrength {
+            packet.reps = reps; packet.setIndex = setIndex
+            packet.completedSets = completedSets.isEmpty ? nil : completedSets
+        }
         guard let data = try? WatchWire.encode(packet) else { return }
         session.sendToRemoteWorkoutSession(data: data) { _, _ in }
     }
@@ -133,8 +176,18 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     }
 
     private func finish(at date: Date) async {
-        do { try await builder?.endCollection(at: date); _ = try await builder?.finishWorkout() } catch {}
-        session?.end()
+        // Captured before the first suspension: `self.builder` and
+        // `self.session` can be nil by the time these awaits resume.
+        let builder = self.builder
+        let session = self.session
+        guard let builder, let session else { return }
+        do {
+            try await builder.endCollection(at: date)
+            _ = try await builder.finishWorkout()
+        } catch {
+            lastError = "Could not save to Health"
+        }
+        session.end()
     }
 
     private func collect(_ identifiers: [HKQuantityTypeIdentifier]) {
@@ -144,6 +197,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             switch identifier {
             case .heartRate:
                 heartRate = stats.mostRecentQuantity().map { Int($0.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))) }
+                heartRateAt = heartRate == nil ? nil : stats.mostRecentQuantityDateInterval()?.end
             case .activeEnergyBurned:
                 energyKcal = stats.sumQuantity()?.doubleValue(for: .kilocalorie())
             default: break
@@ -158,16 +212,13 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             case .running: self.state = .running
             case .paused: self.state = .paused
             case .stopped: await self.finish(at: date)
-            case .ended:
-                self.state = .idle; self.session = nil; self.builder = nil
-                self.startedAt = nil; self.heartRate = nil; self.energyKcal = nil
-                self.reps = nil; self.setIndex = nil; self.completedSets = []; self.mirroringFailed = false
+            case .ended: self.resetAfterEnd()
             default: break
             }
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        Task { @MainActor in self.state = .idle; self.session = nil; self.builder = nil }
+        Task { @MainActor in self.resetAfterEnd() }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {
         Task { @MainActor in for item in data { if let envelope = WatchWire.command(from: item) { self.handle(envelope) } } }

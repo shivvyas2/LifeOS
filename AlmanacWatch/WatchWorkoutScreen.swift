@@ -3,7 +3,7 @@ import SwiftUI
 /// The wrist view of a running workout: timer, heart rate with a zone chip,
 /// reps and set for strength, pause and end.
 struct WatchWorkoutScreen: View {
-    @Bindable var workout: WatchWorkoutController
+    let workout: WatchWorkoutController
 
     var body: some View {
         ScrollView {
@@ -13,7 +13,10 @@ struct WatchWorkoutScreen: View {
                     Text(timerInterval: startedAt...Date.distantFuture, countsDown: false)
                         .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
                 } else {
-                    Text(workout.state == .paused ? "Paused" : "Ending…").font(.title3)
+                    Text(statusText).font(.title3)
+                }
+                if let lastError = workout.lastError {
+                    Text(lastError).font(.caption2).foregroundStyle(.orange)
                 }
                 if workout.mirroringFailed {
                     Text("Not connected to iPhone").font(.caption2).foregroundStyle(.secondary)
@@ -34,10 +37,12 @@ struct WatchWorkoutScreen: View {
                         Spacer()
                         Text("Set \(workout.setIndex ?? 1)").font(.caption)
                     }
-                    HStack {
-                        Button("+1") { workout.addRep() }
-                        Button("Next set") { workout.nextSet() }
-                    }.tint(.orange)
+                    if workout.state != .ending {
+                        HStack {
+                            Button("+1") { workout.addRep() }
+                            Button("Next set") { workout.nextSet() }
+                        }.tint(.orange)
+                    }
                 }
                 HStack {
                     if workout.state == .paused { Button("Resume") { workout.resume() } }
@@ -47,6 +52,15 @@ struct WatchWorkoutScreen: View {
             }.padding(.horizontal, 4)
         }
         .navigationTitle("Workout")
+    }
+
+    private var statusText: String {
+        switch workout.state {
+        case .starting: return "Starting…"
+        case .paused: return "Paused"
+        case .ending: return "Ending…"
+        case .idle, .running: return "—"
+        }
     }
 
     /// The five band starts from spec 3.1 of slice 1, duplicated because the
