@@ -53,4 +53,15 @@ struct LiveSessionReadoutTests {
         #expect(!LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120), lastPublishedAt: now.addingTimeInterval(-60), now: now))
         #expect(LiveActivityThrottle.shouldPublish(previous: readout(bpm: 120), next: readout(bpm: 120, paused: true), lastPublishedAt: now, now: now))
     }
+
+    @Test func textFormattersKeepAbsenceAndRounding() {
+        var readout = LiveSessionReadout(elapsed: 0, runningSince: nil, push: .onTrack)
+        #expect(readout.heartRateText == "\u{2014}" && readout.effortText == "\u{2014}" && readout.batteryText == "\u{2014}")
+        #expect(readout.zoneText == nil && readout.capacitySourceName == "Battery unknown")
+        readout.heartRate = 152; readout.zone = 4; readout.effort = 3.45; readout.calories = 0
+        readout.distanceMeters = 1234; readout.batteryPercent = 0; readout.capacitySource = "whoop"
+        #expect(readout.heartRateText == "152" && readout.zoneText == "Z4" && readout.effortText == "3.5")
+        #expect(readout.caloriesText == "0" && readout.distanceKilometresText == "1.23" && readout.batteryText == "0%")
+        #expect(readout.capacitySourceName == "WHOOP recovery")
+    }
 }

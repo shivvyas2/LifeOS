@@ -128,7 +128,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         }
     }
 
-    func start() async {
+    func start(at started: Date = .now) async {
         guard active, !busy, !hasSession else { return }
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false
         zones = HeartRateZones(birthDate: birthDate())
@@ -157,13 +157,12 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 self.builder = builder
                 session.delegate = self; builder.delegate = self
                 builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
-                let started = Date.now
                 timer = ActivitySessionState(activity: selection.rawValue, at: started)
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
                 guard active else { session.end(); builder.discardWorkout(); return }
             } else {
-                timer = ActivitySessionState(activity: selection.rawValue)
+                timer = ActivitySessionState(activity: selection.rawValue, at: started)
             }
             persist()
         } catch {

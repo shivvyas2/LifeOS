@@ -105,7 +105,7 @@ struct BeginActivityScreen: View {
                     .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
             }
             Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
-            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, isExpanded: $hudExpanded)
+            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false, isExpanded: $hudExpanded)
                 .padding(.top, 10)
         }
         .foregroundStyle(.white)
@@ -117,18 +117,18 @@ struct BeginActivityScreen: View {
             let fresh = model.isRunning && model.heartRateDate.map { timeline.date.timeIntervalSince($0) < 15 } == true
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                 glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
-                          value: fresh ? readout.heartRate.map(String.init) : nil, unit: "bpm",
+                          value: fresh ? readout.heartRate.map { _ in readout.heartRateText } : nil, unit: "bpm",
                           caption: fresh ? "Live sensor reading" : model.isPaused ? "Activity paused" : model.sensor.status)
                 if model.zonesAvailable, model.selection != .yoga {
-                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effort.map { String(format: "%.1f", $0) },
+                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effort.map { _ in readout.effortText },
                               unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
                               caption: capacityCaption(readout))
                 }
-                glassTile(icon: "flame.fill", label: "Calories", value: readout.calories.map(String.init), unit: "kcal",
+                glassTile(icon: "flame.fill", label: "Calories", value: readout.calories.map { _ in readout.caloriesText }, unit: "kcal",
                           caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
                 if [.walk, .run, .cycle].contains(model.selection) {
                     glassTile(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
-                              value: readout.distanceMeters.map { String(format: "%.2f", Double($0) / 1000) }, unit: "km",
+                              value: readout.distanceMeters.map { _ in readout.distanceKilometresText }, unit: "km",
                               caption: readout.distanceMeters == nil ? "No distance reading" : "From Apple Health")
                 }
                 if !model.zonesAvailable {
@@ -140,11 +140,7 @@ struct BeginActivityScreen: View {
     }
 
     private func capacityCaption(_ readout: LiveSessionReadout) -> String {
-        switch readout.capacitySource {
-        case "whoop": "Battery \(readout.batteryPercent.map { "\($0)%" } ?? "\u{2014}") · WHOOP recovery"
-        case "health": "Battery \(readout.batteryPercent.map { "\($0)%" } ?? "\u{2014}") · Apple Health"
-        default: "Battery unknown · cautious target"
-        }
+        readout.capacitySource == nil ? "Battery unknown · cautious target" : "Battery \(readout.batteryText) · \(readout.capacitySourceName)"
     }
 
     private func glassTile(icon: String, label: String, value: String?, unit: String?, caption: String) -> some View {

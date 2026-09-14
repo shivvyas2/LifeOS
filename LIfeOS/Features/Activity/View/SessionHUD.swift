@@ -9,6 +9,7 @@ struct SessionHUD: View {
     let readout: LiveSessionReadout
     let activity: RecordedActivity
     let zonesAvailable: Bool
+    var showsTimer: Bool = true
     @Binding var isExpanded: Bool
     @Environment(\.colorScheme) private var scheme
     @Namespace private var glass
@@ -20,11 +21,11 @@ struct SessionHUD: View {
             Button { withAnimation(.snappy) { isExpanded.toggle() } } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 14) {
-                        timer
-                        reading(symbol: "heart.fill", value: readout.heartRate.map(String.init), chip: readout.zone.map { "Z\($0)" }, tint: readout.push.tint)
+                        if showsTimer { timer.frame(minWidth: 62, alignment: .leading) }
+                        reading(symbol: "heart.fill", value: readout.heartRate.map { _ in readout.heartRateText }, chip: readout.zoneText, tint: readout.push.tint)
                         if showsEffort {
-                            reading(symbol: "bolt.fill", value: readout.effort.map { String(format: "%.1f", $0) }, chip: "est", tint: nil)
-                            reading(symbol: "battery.75percent", value: readout.batteryPercent.map { "\($0)%" }, chip: nil, tint: nil)
+                            reading(symbol: "bolt.fill", value: readout.effort.map { _ in readout.effortText }, chip: "est", tint: nil)
+                            reading(symbol: "battery.75percent", value: readout.batteryPercent.map { _ in readout.batteryText }, chip: nil, tint: nil)
                         }
                         if activity == .strength {
                             reading(symbol: "repeat", value: nil, chip: "reps", tint: nil)
@@ -32,6 +33,7 @@ struct SessionHUD: View {
                     }
                     if isExpanded { expanded }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18).padding(.vertical, isExpanded ? 14 : 10)
                 .frame(minHeight: 52)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
@@ -54,17 +56,16 @@ struct SessionHUD: View {
                 Text(Duration.seconds(readout.elapsed).formatted(.time(pattern: .minuteSecond)))
             }
         }
-        .font(.system(.headline, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+        .font(.system(.headline, design: .rounded)).monospacedDigit().lineLimit(1)
     }
 
     private func reading(symbol: String, value: String?, chip: String?, tint: Color?) -> some View {
         HStack(spacing: 4) {
             Image(systemName: symbol).font(.caption).foregroundStyle(tint ?? LifeOSTokens.secondaryText.resolve(scheme))
-            Text(value ?? "\u{2014}").font(.headline).monospacedDigit()
-                .minimumScaleFactor(0.6).lineLimit(1)
+            Text(value ?? LiveSessionReadout.missing).font(.headline).monospacedDigit()
+                .minimumScaleFactor(0.8).lineLimit(1).frame(minWidth: 30, alignment: .leading)
             if let chip {
                 Text(chip).font(LifeOSType.eyebrow).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    .minimumScaleFactor(0.6).lineLimit(1)
             }
         }.lineLimit(1)
     }
@@ -73,10 +74,10 @@ struct SessionHUD: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(ceilingLine).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
             HStack(spacing: 16) {
-                reading(symbol: "flame.fill", value: readout.calories.map(String.init), chip: "kcal", tint: nil)
+                reading(symbol: "flame.fill", value: readout.calories.map { _ in readout.caloriesText }, chip: "kcal", tint: nil)
                 if [.walk, .run, .cycle].contains(activity) {
                     reading(symbol: "point.bottomleft.forward.to.point.topright.scurvepath",
-                            value: readout.distanceMeters.map { String(format: "%.2f", Double($0) / 1000) }, chip: "km", tint: nil)
+                            value: readout.distanceMeters.map { _ in readout.distanceKilometresText }, chip: "km", tint: nil)
                 }
                 if readout.push == .overLimit { Text("Over your target").font(LifeOSType.label).foregroundStyle(LifeOSTokens.pushNear) }
             }
@@ -86,11 +87,7 @@ struct SessionHUD: View {
     private var ceilingLine: String {
         if activity == .yoga { return "Recovery session" }
         guard zonesAvailable else { return "Add your birth date in Profile for zones and effort." }
-        let source = switch readout.capacitySource {
-            case "whoop": "WHOOP recovery"
-            case "health": "Apple Health"
-            default: "Battery unknown"
-        }
+        let source = readout.capacitySourceName
         guard let zone = readout.ceilingMaxZone, let target = readout.ceilingTarget else { return source }
         return "Up to zone \(zone) today · target \(Int(target.lowerBound)) to \(Int(target.upperBound)) · \(source)"
     }
