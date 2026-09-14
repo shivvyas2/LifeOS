@@ -18,7 +18,7 @@ let package = Package(
         .testTarget(name: "AppSurfacesTests", dependencies: ["AppSurfaces"]),
         .target(name: "DesignSystem"),
         .target(name: "Persistence"),
-        .target(name: "Integrations", dependencies: ["Persistence"]),
+        .target(name: "Integrations", dependencies: ["Persistence", "AppSurfaces"]),
         .target(name: "Insights", dependencies: ["Persistence"]),
         .target(name: "Sectors", dependencies: ["Persistence"]),
         .target(name: "Assistant", dependencies: ["Insights", "Persistence"]),
