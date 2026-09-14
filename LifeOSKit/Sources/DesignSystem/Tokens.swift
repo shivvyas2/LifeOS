@@ -88,6 +88,17 @@ public enum LifeOSTokens {
     /// and is identical in both schemes so it reads the same everywhere.
     public static let accent = Color(red: 0.94, green: 0.34, blue: 0.18)
 
+    /// Live session push states. Identical in both schemes because they sit
+    /// on the live gradient, which is also the same in both.
+    public static let pushEasy = Color(red: 0.20, green: 0.72, blue: 0.45)
+    public static let pushNear = Color(red: 0.96, green: 0.65, blue: 0.14)
+    public static let pushOver = Color(red: 0.90, green: 0.27, blue: 0.23)
+
+    /// The live session gradient: the recovery blue at the top, near white
+    /// at the bottom, on the lock screen and the in-session hero alike.
+    public static let liveGradientTop = ModuleHue.recovery.top
+    public static let liveGradientBottom = Color(white: 0.97)
+
     /// Warm off-white canvas for the neutral hub.
     public static let canvas = AdaptiveColor(
         light: Color(red: 0.949, green: 0.945, blue: 0.933),
