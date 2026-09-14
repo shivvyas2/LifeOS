@@ -46,7 +46,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private(set) var readout: LiveSessionReadout?
     var error: String?
     var notice: String?
-    let sensor = LiveHeartRateSensor()
+    let sensor: LiveHeartRateSensor
     /// Injected so previews and checks can fix an age without a profile.
     var birthDate: () -> Date? = { ProfileStore.load().birthDate }
     /// Whether the WHOOP cloud account is connected; decides auto-pairing.
@@ -83,6 +83,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
         self.defaults = defaults
         self.liveActivitiesEnabled = liveActivitiesEnabled
+        sensor = LiveHeartRateSensor(defaults: defaults)
         super.init()
         sensor.onReading = { [weak self] bpm, date in self?.receiveHeartRate(bpm, at: date) }
     }
@@ -219,7 +220,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             try context.save()
             liveActivity.end()
             saved = true; defaults.removeObject(forKey: Self.draftKey)
-            sensor.disconnect(); session = nil; builder = nil
+            sensor.stopStreaming(); session = nil; builder = nil
             onSaved?()
         } catch {
             self.error = "Your activity is kept here. Saving failed: \(error.localizedDescription). Try Save again."
@@ -229,7 +230,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         liveActivity.end()
         session?.delegate = nil; builder?.delegate = nil
         session?.end(); builder?.discardWorkout(); session = nil; builder = nil
-        sensor.disconnect(); timer = nil; saved = false; healthSaved = false
+        sensor.stopStreaming(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
         error = nil; notice = nil; busy = false

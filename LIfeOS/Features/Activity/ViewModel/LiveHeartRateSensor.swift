@@ -1,6 +1,7 @@
 import Foundation
 import CoreBluetooth
 import Integrations
+import Persistence
 
 @MainActor @Observable
 final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDelegate, @preconcurrency CBPeripheralDelegate {
@@ -22,8 +23,58 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
     private let service = CBUUID(string: "180D")
     private let measurement = CBUUID(string: "2A37")
     private var wantsScan = false
+    private let defaults: UserDefaults
+    private static let rememberedKey = "lastHeartRateSensorID"
+    private var reconnectTimeout: Task<Void, Never>?
+    private var autoPairing = false
+    private(set) var rememberedPeripheralID: UUID?
 
-    func prepareForSession(whoopConnected: Bool) {}
+    init(defaults: UserDefaults = .currentAccount) {
+        self.defaults = defaults
+        rememberedPeripheralID = defaults.string(forKey: Self.rememberedKey).flatMap(UUID.init)
+        super.init()
+    }
+
+    /// Called by the recorder at session start. Reconnects the last sensor,
+    /// or looks for a lone WHOOP when the account is connected to WHOOP and
+    /// nothing was ever paired here.
+    func prepareForSession(whoopConnected: Bool) {
+        if rememberedPeripheralID != nil { reconnectIfRemembered() }
+        else if whoopConnected { autoPairWhoop() }
+    }
+
+    func reconnectIfRemembered() {
+        guard let id = rememberedPeripheralID, connectedName == nil else { return }
+        if central == nil { central = CBCentralManager(delegate: self, queue: .main) }
+        guard let central, central.state == .poweredOn else { return }
+        if let known = central.retrievePeripherals(withIdentifiers: [id]).first {
+            status = "Reconnecting to \(known.name ?? "your sensor")…"
+            peripheral = known; known.delegate = self
+            central.connect(known)
+        }
+        reconnectTimeout?.cancel()
+        reconnectTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled, let self, self.connectedName == nil else { return }
+            self.status = "Looking for your sensor…"
+            self.scan()
+        }
+    }
+
+    func autoPairWhoop() {
+        guard connectedName == nil else { return }
+        autoPairing = true
+        scan()
+        status = "Looking for your WHOOP…"
+    }
+
+    /// Drops the remembered sensor. An explicit disconnect means "not this
+    /// one next time"; account changes clear the whole suite.
+    func forget() {
+        rememberedPeripheralID = nil
+        defaults.removeObject(forKey: Self.rememberedKey)
+    }
+
     func scan() {
         wantsScan = true
         if central == nil { central = CBCentralManager(delegate: self, queue: .main) }
@@ -44,22 +95,32 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
     func stopScan() {
         wantsScan = false; scanning = false
         central?.stopScan(); timeout?.cancel(); timeout = nil
+        autoPairing = false; reconnectTimeout?.cancel(); reconnectTimeout = nil
     }
     func connect(_ device: Device) {
-        disconnect(); stopScan()
+        stopStreaming()
         peripheral = device.peripheral; peripheral?.delegate = self
         status = "Connecting to \(device.name)…"
         central?.connect(device.peripheral)
     }
-    func disconnect() {
+    /// Ends the stream without forgetting the device.
+    func stopStreaming() {
         stopScan()
         if let peripheral { central?.cancelPeripheralConnection(peripheral) }
         peripheral = nil; connectedName = nil; bpm = nil; receivedAt = nil
         status = "No sensor connected"
     }
+    /// Drops the remembered sensor. An explicit disconnect means "not this
+    /// one next time"; account changes clear the whole suite.
+    func disconnect() {
+        forget()
+        stopStreaming()
+    }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
-        case .poweredOn: beginScan()
+        case .poweredOn:
+            if rememberedPeripheralID != nil, connectedName == nil, peripheral == nil, !wantsScan { reconnectIfRemembered() }
+            beginScan()
         case .unauthorized: status = "Allow Bluetooth in Settings to use a sensor."; scanning = false
         case .poweredOff: status = "Turn on Bluetooth to connect a sensor."; scanning = false
         case .unsupported: status = "Bluetooth sensors are unavailable on this device."; scanning = false
@@ -73,12 +134,25 @@ final class LiveHeartRateSensor: NSObject, @preconcurrency CBCentralManagerDeleg
         devices.append(Device(id: peripheral.identifier,
                               name: peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Heart-rate sensor",
                               peripheral: peripheral))
+        if let id = rememberedPeripheralID, peripheral.identifier == id, self.peripheral == nil {
+            connect(devices.last!); return
+        }
+        if autoPairing {
+            switch WhoopAutoPair.choice(among: devices.map(\.name)) {
+            case .one(let index): connect(devices[index])
+            case .several: stopScan(); status = "More than one WHOOP nearby. Choose one under Manage."
+            case .none: break
+            }
+        }
     }
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard self.peripheral?.identifier == peripheral.identifier else { return }
         connectedName = peripheral.name ?? "Heart-rate sensor"
         status = "Connected · waiting for a reading"
         peripheral.discoverServices([service])
+        reconnectTimeout?.cancel(); autoPairing = false
+        rememberedPeripheralID = peripheral.identifier
+        defaults.set(peripheral.identifier.uuidString, forKey: Self.rememberedKey)
     }
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         guard self.peripheral?.identifier == peripheral.identifier else { return }

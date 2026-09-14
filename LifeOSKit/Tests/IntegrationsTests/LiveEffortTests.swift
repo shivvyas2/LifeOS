@@ -175,4 +175,11 @@ struct LiveEffortTests {
         #expect(readout.ceilingMaxZone == 4)
         #expect(readout.push == .overLimit)
     }
+
+    @Test func autoPairPicksExactlyOneWhoop() {
+        #expect(WhoopAutoPair.choice(among: []) == .none)
+        #expect(WhoopAutoPair.choice(among: ["Polar H10"]) == .none)
+        #expect(WhoopAutoPair.choice(among: ["Polar H10", "WHOOP 4A0B"]) == .one(1))
+        #expect(WhoopAutoPair.choice(among: ["whoop", "WHOOP 4A0B"]) == .several)
+    }
 }
