@@ -7,6 +7,7 @@ import DesignSystem
 struct CoachResponseView: View {
     let text: String
     var onAura = false
+    var style: CoachScreenStyle = .text
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -15,7 +16,7 @@ struct CoachResponseView: View {
             if onAura {
                 Label("LIFO", systemImage: "sparkle")
                     .font(.caption.weight(.semibold)).tracking(1)
-                    .foregroundStyle(LifeOSTokens.accent)
+                    .foregroundStyle(onAura ? style.cardAccent : LifeOSTokens.accent)
             }
             ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
@@ -34,7 +35,7 @@ struct CoachResponseView: View {
                             HStack(alignment: .top, spacing: 12) {
                                 Text("\(index + 1)")
                                     .font(.caption.bold())
-                                    .foregroundStyle(LifeOSTokens.accent)
+                                    .foregroundStyle(onAura ? style.cardAccent : LifeOSTokens.accent)
                                     .frame(width: 22, alignment: .leading)
                                 richText(item).font(.subheadline)
                             }
@@ -59,14 +60,14 @@ struct CoachResponseView: View {
         .background {
             if onAura {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(red: 0.98, green: 0.98, blue: 0.96))
+                    .fill(style.card)
                     .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
             }
         }
         .environment(\.colorScheme, onAura ? .light : scheme)
     }
 
-    private var surface: Color { onAura ? Color(red: 0.96, green: 0.91, blue: 0.81) : LifeOSTokens.cardSurface.resolve(scheme) }
+    private var surface: Color { onAura ? style.cell : LifeOSTokens.cardSurface.resolve(scheme) }
 
     private func richText(_ value: String) -> Text {
         Text((try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value))
@@ -103,7 +104,7 @@ struct CoachResponseView: View {
                             .padding(12)
                     }
                 }
-                .background(onAura ? Color(red: 0.92, green: 0.83, blue: 0.66) : LifeOSTokens.accent.opacity(0.10))
+                .background(onAura ? style.cell.opacity(0.8) : LifeOSTokens.accent.opacity(0.10))
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { column, value in

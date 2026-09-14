@@ -9,23 +9,23 @@ struct CoachDesignPreview: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            previewControls
-            LifoCoachScreen(model: model, onDismiss: {})
+            if ProcessInfo.processInfo.arguments.contains("--controls") { previewControls }
+            LifoCoachScreen(model: model, onDismiss: {}, initialMode: ProcessInfo.processInfo.arguments.contains("--voice") ? .voice : .text)
         }
         .preferredColorScheme(.dark)
         .task {
-            model.history = [LifoTurn(question: "Give me a quick look at my week.", answer: Self.sample)]
+            if !ProcessInfo.processInfo.arguments.contains("--empty") { model.history = [LifoTurn(question: "Give me a quick look at my week.", answer: Self.sample)] }
         }
         .task(id: simulatedAudio) { await animateSample() }
     }
 
     private var previewControls: some View {
         HStack {
-                Text("PREVIEW · SAMPLE REPLY").font(.caption2)
-                Spacer()
-                Toggle("Sound", isOn: $simulatedAudio).font(.caption).fixedSize()
-            }
-            .padding(.horizontal, 16).padding(.vertical, 6)
+            Text("PREVIEW · SAMPLE REPLY").font(.caption2)
+            Spacer()
+            Toggle("Sound", isOn: $simulatedAudio).font(.caption).fixedSize()
+        }
+        .padding(.horizontal, 16).padding(.vertical, 6)
     }
 
     private func animateSample() async {

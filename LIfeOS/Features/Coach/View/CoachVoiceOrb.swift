@@ -2,7 +2,7 @@ import SwiftUI
 import SceneKit
 import Insights
 
-/// A continuous folded ribbon. Voice gently opens the folds; touch tilts the sculpture.
+/// A softly glowing emerald sphere with liquid currents and voice-driven breathing.
 struct CoachVoiceOrb: UIViewRepresentable {
     var level: CGFloat
     var isResponding = false
@@ -64,96 +64,101 @@ struct CoachVoiceOrb: UIViewRepresentable {
             camera.camera?.usesOrthographicProjection = true
             camera.camera?.orthographicScale = 1.48
             camera.camera?.wantsHDR = true
-            camera.camera?.exposureOffset = -0.35
+            camera.camera?.exposureOffset = -0.55
             camera.position = SCNVector3(0, 0, 6)
             scene.rootNode.addChildNode(camera)
             scene.rootNode.addChildNode(bubble)
 
-            let ribbon = Self.ribbonGeometry()
+            let orb = SCNSphere(radius: 0.92)
+            orb.segmentCount = 96
             shell.lightingModel = .physicallyBased
-            shell.diffuse.contents = UIColor(red: 1, green: 0.61, blue: 0.10, alpha: 1)
-            shell.metalness.contents = 0.18
-            shell.roughness.contents = 0.48
-            shell.isDoubleSided = true
-            shell.transparency = 0.94
-            shell.shaderModifiers = [.geometry: Self.foldShader, .surface: """
+            shell.diffuse.contents = UIColor(red: 0.12, green: 0.85, blue: 0.62, alpha: 1)
+            shell.metalness.contents = 0.28
+            shell.roughness.contents = 0.34
+            shell.isDoubleSided = false
+            shell.transparency = 1
+            shell.shaderModifiers = [.geometry: Self.orbShader, .surface: """
                 uniform float phase;
+                uniform float energy;
                 #pragma body
-                float u = _surface.diffuseTexcoord.x * 6.2831853;
-                float warmth = clamp(0.5 + _surface.position.x * 0.72 - _surface.position.y * 0.20, 0.0, 1.0);
-                float3 gold = float3(0.94, 0.56, 0.055);
-                float3 coral = float3(0.93, 0.105, 0.025);
-                float3 silk = mix(gold, coral, smoothstep(0.18, 0.88, warmth));
-                float row = _surface.diffuseTexcoord.y * 80.0;
-                float aa = max(fwidth(row), 0.04);
-                float filament = 1.0 - smoothstep(0.025, 0.025 + aa, abs(fract(row) - 0.5));
-                _surface.diffuse.rgb = silk * (1.0 - filament * 0.08);
-                _surface.emission.rgb = silk * 0.065;
+                float3 p = _surface.position;
+                float flow = phase * 0.32;
+                // Smooth, layered currents give the solid sphere a liquid interior.
+                float cloud = sin(p.x * 3.8 + sin(p.y * 4.0 + flow))
+                            * cos(p.z * 3.1 - flow * 0.7);
+                float current = p.y + 0.16 * sin(p.x * 3.0 + flow)
+                              + 0.10 * sin(p.z * 4.0 - flow);
+                float band = smoothstep(-0.10, 0.08, current)
+                           - smoothstep(0.13, 0.34, current);
+                float pool = smoothstep(-0.75, 0.85, cloud + p.y * 0.55);
+                float3 teal = float3(0.004, 0.14, 0.12);
+                float3 emerald = float3(0.035, 0.57, 0.31);
+                float3 jade = mix(teal, emerald, pool);
+                jade = mix(jade, float3(0.035, 0.36, 0.29), band * 0.48);
+                float shimmer = sin(p.x * 34.0 + sin(p.y * 27.0))
+                              * sin(p.z * 31.0 - flow);
+                _surface.diffuse.rgb = jade * (1.0 + shimmer * 0.012);
+                _surface.emission.rgb = jade * (0.12 + energy * 0.07);
                 """]
             shell.setValue(Float(0), forKey: "phase")
             shell.setValue(Float(0), forKey: "energy")
-            ribbon.firstMaterial = shell
-            bubble.geometry = ribbon
+            orb.firstMaterial = shell
+            bubble.geometry = orb
+            addGlow()
             bubble.eulerAngles = SCNVector3(-0.32, 0.18, -0.2)
 
-            light(.ambient, color: UIColor(white: 0.9, alpha: 1), intensity: 150, position: SCNVector3Zero)
-            light(.omni, color: UIColor(red: 1, green: 0.94, blue: 0.76, alpha: 1), intensity: 420, position: SCNVector3(-2.5, 3, 4))
-            light(.omni, color: UIColor(red: 1, green: 0.47, blue: 0.2, alpha: 1), intensity: 200, position: SCNVector3(3, -1, 1))
-            light(.omni, color: UIColor(red: 1, green: 0.86, blue: 0.45, alpha: 1), intensity: 280, position: SCNVector3(-2, -1, -2))
+            light(.ambient, color: UIColor(white: 0.9, alpha: 1), intensity: 110, position: SCNVector3Zero)
+            light(.omni, color: UIColor(red: 0.85, green: 1, blue: 0.95, alpha: 1), intensity: 300, position: SCNVector3(-2.5, 3, 4))
+            light(.omni, color: UIColor(red: 0.1, green: 0.85, blue: 0.7, alpha: 1), intensity: 100, position: SCNVector3(3, -1, 1))
+            light(.omni, color: UIColor(red: 0.4, green: 1, blue: 0.8, alpha: 1), intensity: 160, position: SCNVector3(-2, -1, -2))
         }
 
-        // The thin closed tube makes a three-half-twist ribbon, with a real
-        // opening and self-occluding folds rather than a displaced sphere.
-        private static func ribbonGeometry() -> SCNGeometry {
-            let around = 160, across = 32
-            var vertices: [SCNVector3] = []
-            var normals: [SCNVector3] = []
-            var coordinates: [CGPoint] = []
-            var indices: [UInt32] = []
-            for i in 0...around {
-                for j in 0...across {
-                    let u = Float(i) / Float(around) * 2 * .pi
-                    let v = Float(j) / Float(across) * 2 * .pi
-                    // Nondegenerate bounds for SceneKit culling. The GPU evaluates
-                    // the animated surface and its normals from these UVs.
-                    vertices.append(SCNVector3((0.76 + 0.4 * cos(v)) * cos(u), (0.76 + 0.4 * cos(v)) * sin(u), 0.4 * sin(v)))
-                    normals.append(SCNVector3(cos(v) * cos(u), cos(v) * sin(u), sin(v)))
-                    coordinates.append(CGPoint(x: Double(i) / Double(around), y: Double(j) / Double(across)))
-                    if i < around && j < across {
-                        let a = UInt32(i * (across + 1) + j), b = a + UInt32(across + 1)
-                        indices += [a, b, a + 1, a + 1, b, b + 1]
-                    }
-                }
-            }
-            return SCNGeometry(sources: [.init(vertices: vertices), .init(normals: normals), .init(textureCoordinates: coordinates)],
-                               elements: [.init(indices: indices, primitiveType: .triangles)])
-        }
-
-        private static let foldShader = """
+        private static let orbShader = """
             uniform float phase;
             uniform float energy;
-            float3 coachFold(float u, float v, float t, float e) {
-                float twist = 1.5 * u + 0.26 * sin(t * 0.65);
-                float radius = 0.66 + 0.10 * cos(3.0 * u + t * 0.35);
-                float width = 0.38 + 0.055 * sin(3.0 * u - t * 0.6) + e * 0.055;
-                float a = width * cos(v);
-                float b = 0.055 * sin(v);
-                float r = radius + a * cos(twist) - b * sin(twist);
-                float z = a * sin(twist) + b * cos(twist)
-                        + (0.22 + e * 0.065) * sin(3.0 * u + t * 0.4);
-                return float3(r * cos(u), r * sin(u), z);
+            float3 liquidOrb(float3 n, float t, float e) {
+                float swell = 0.022 * sin(n.y * 3.2 + t * 0.7) * sin(n.x * 3.0 - t * 0.45)
+                            + 0.015 * sin(n.z * 4.0 + n.y * 2.0 + t * 0.6)
+                            + e * 0.016 * sin(n.x * 5.0 + n.z * 3.0 - t);
+                return n * (0.92 + swell);
             }
             #pragma body
-            float u = _geometry.texcoords[0].x * 6.2831853;
-            float v = _geometry.texcoords[0].y * 6.2831853;
-            float3 p = coachFold(u, v, phase, energy);
-            float3 du = coachFold(u + 0.002, v, phase, energy) - coachFold(u - 0.002, v, phase, energy);
-            float3 dv = coachFold(u, v + 0.002, phase, energy) - coachFold(u, v - 0.002, phase, energy);
-            _geometry.position.xyz = p;
+            float3 n = normalize(_geometry.position.xyz);
+            float3 axis = abs(n.y) < 0.95 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
+            float3 tangent = normalize(cross(axis, n));
+            float3 bitangent = cross(n, tangent);
+            float3 du = liquidOrb(normalize(n + tangent * 0.002), phase, energy)
+                      - liquidOrb(normalize(n - tangent * 0.002), phase, energy);
+            float3 dv = liquidOrb(normalize(n + bitangent * 0.002), phase, energy)
+                      - liquidOrb(normalize(n - bitangent * 0.002), phase, energy);
+            _geometry.position.xyz = liquidOrb(n, phase, energy);
             _geometry.normal = normalize(cross(du, dv));
             """
 
-        func setOpaque(_ opaque: Bool) { shell.transparency = opaque ? 1 : 0.94 }
+        private let glow = SCNNode()
+
+        private func addGlow() {
+            let plane = SCNPlane(width: 2.8, height: 2.8)
+            let material = SCNMaterial()
+            material.lightingModel = .constant
+            material.isDoubleSided = true
+            material.writesToDepthBuffer = false
+            material.blendMode = .add
+            material.shaderModifiers = [.fragment: """
+                #pragma transparent
+                #pragma body
+                float radius = length(_surface.position.xy) / 1.4;
+                float halo = exp(-radius * radius * 5.5) * (1.0 - smoothstep(0.65, 1.0, radius));
+                _output.color = float4(float3(0.02, 0.80, 0.48) * halo * 0.24, halo * 0.24);
+                """]
+            plane.firstMaterial = material
+            glow.geometry = plane
+            glow.position = SCNVector3(0, 0, -1.2)
+            glow.renderingOrder = -1
+            scene.rootNode.addChildNode(glow)
+        }
+
+        func setOpaque(_ opaque: Bool) { glow.isHidden = opaque }
 
         private func light(_ type: SCNLight.LightType, color: UIColor, intensity: CGFloat, position: SCNVector3) {
             let node = SCNNode()
@@ -171,6 +176,8 @@ struct CoachVoiceOrb: UIViewRepresentable {
             guard enabled && !reduced else {
                 stop()
                 bubble.scale = SCNVector3(1, 1, 1)
+                glow.scale = SCNVector3(1, 1, 1)
+                glow.opacity = 1
                 bubble.eulerAngles = SCNVector3(-0.32, 0.18, -0.2)
                 shell.setValue(Float(0), forKey: "energy")
                 shell.setValue(Float(0), forKey: "phase")
@@ -200,8 +207,8 @@ struct CoachVoiceOrb: UIViewRepresentable {
             let dt = lastTime == 0 ? 1.0 / 60 : min(display.timestamp - lastTime, 0.05)
             lastTime = display.timestamp
             let energy = envelope.update(target: target, elapsed: dt)
-            time += dt * (responding ? 0.8 : 0.5)
-            impulse *= exp(-dt * 5)
+            time += dt * ((responding ? 1.0 : 0.72) + energy * 0.35)
+            impulse *= exp(-dt * 2.8)
             if !dragging {
                 tiltX *= Float(exp(-dt * 6))
                 tiltY *= Float(exp(-dt * 6))
@@ -209,9 +216,11 @@ struct CoachVoiceOrb: UIViewRepresentable {
             SCNTransaction.begin()
             SCNTransaction.disableActions = true
             shell.setValue(Float(time), forKey: "phase")
-            shell.setValue(Float(energy), forKey: "energy")
-            let breath = Float(1 + 0.018 * sin(time * 2) + energy * 0.09)
-            bubble.scale = SCNVector3(breath + Float(impulse * 0.08), breath - Float(impulse * 0.05), breath)
+            shell.setValue(Float(min(1, energy + impulse * 0.45)), forKey: "energy")
+            let breath = Float(1 + 0.018 * sin(time * 2) + energy * 0.035)
+            glow.scale = SCNVector3(breath, breath, 1)
+            glow.opacity = CGFloat(0.75 + energy * 0.25)
+            bubble.scale = SCNVector3(breath + Float(impulse * 0.03), breath - Float(impulse * 0.02), breath)
             bubble.eulerAngles = SCNVector3(-0.32 + tiltX + Float(sin(time * 0.5) * 0.2), 0.18 + tiltY + Float(sin(time * 0.4) * 0.38), -0.2 + Float(sin(time * 0.3) * 0.22))
             SCNTransaction.commit()
         }

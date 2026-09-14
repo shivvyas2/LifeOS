@@ -84,6 +84,7 @@ final class CoachViewModel {
     /// What was sent with `pendingQuestion`, available before the answer is.
     var pendingSent: SentContext?
     var isTyping = false
+    var voiceScreenActive = false
     var draft = ""
     var level: CGFloat = 0
     /// True when the last failure is the on-device model being unavailable,
@@ -195,10 +196,17 @@ final class CoachViewModel {
     }
 
     func showKeyboard() {
-        speech.stop()
-        phase = .idle
+        // Keep an in-flight answer (or final transcription) intact across screens.
+        if phase == .listening {
+            speech.stop()
+            phase = .idle
+            liveTranscript = ""
+            level = 0
+        }
+        stopSpeaking()
+        voiceScreenActive = false
         isTyping = true
-        status = "Type to talk to LIFO."
+        if phase != .thinking { status = "Type to talk to LIFO." }
     }
 
     func disappear() {
@@ -239,7 +247,7 @@ final class CoachViewModel {
 
     func sendTyped() async {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty, phase != .thinking, !isSending else { return }
         draft = ""
         isTyping = false
         await send(text)
@@ -254,7 +262,7 @@ final class CoachViewModel {
     /// nothing to report.
     private func speak(_ text: String) {
         let defaults = UserDefaults.standard
-        guard isVisible, defaults.bool(forKey: AssistantVoice.enabledKey),
+        guard isVisible, voiceScreenActive, defaults.bool(forKey: AssistantVoice.enabledKey),
               let key = AppConfig.elevenLabsAPIKey
         else { return }
 
