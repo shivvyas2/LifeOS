@@ -2,6 +2,7 @@ import SwiftUI
 import AppSurfaces
 import DesignSystem
 import Persistence
+import Integrations
 
 /// One video, and the session that follows it.
 ///
@@ -37,8 +38,8 @@ struct VideoWorkoutScreen: View {
 
     var body: some View {
         Group {
-            if isLandscape {
-                if VideoWorkoutLayout.landscapeOverlay { landscapeOverlay } else { landscapeRail }
+            if isLandscape, VideoWorkoutLayout.landscapeOverlay {
+                landscapeOverlay
             } else {
                 portrait
             }
@@ -65,8 +66,10 @@ struct VideoWorkoutScreen: View {
                     details
                     if model.hasSession || model.saved {
                         if let readout = model.readout {
+                            elapsedLine
                             SessionHUD(readout: readout, activity: model.selection,
-                                       zonesAvailable: model.zonesAvailable,
+                                       zonesAvailable: model.zonesAvailable, showsTimer: false,
+                                       countsAutomatically: model.source == .watch,
                                        onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
                                        isExpanded: $hudExpanded)
                         }
@@ -104,6 +107,28 @@ struct VideoWorkoutScreen: View {
             .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The clock on its own line, the way Begin Activity's hero carries it.
+    /// Five readings plus a timer do not fit the capsule at phone width, and
+    /// the reading that truncated was the battery percentage, which is the one
+    /// number that must never be half a number.
+    private var elapsedLine: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let elapsed = model.timer?.elapsed(at: timeline.date) ?? 0
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Duration.seconds(elapsed).formatted(.time(pattern: .minuteSecond)))
+                    .font(.system(size: 34, weight: .medium, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                Text("Elapsed time")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement()
+            .accessibilityLabel("Elapsed time, \(Duration.seconds(elapsed).formatted(.units(allowed: [.minutes, .seconds], width: .wide)))")
+        }
     }
 
     private var intensityName: String {
@@ -180,7 +205,8 @@ struct VideoWorkoutScreen: View {
     /// cover the very thing the person is watching.
     private func hudCapsule(_ readout: LiveSessionReadout) -> some View {
         SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
-                   showsTimer: true, onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
+                   showsTimer: false, countsAutomatically: model.source == .watch,
+                   onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
                    isExpanded: .constant(false))
             .fixedSize(horizontal: true, vertical: false)
             .frame(maxHeight: VideoWorkoutLayout.overlayMaxHeight)
@@ -206,29 +232,6 @@ struct VideoWorkoutScreen: View {
         .foregroundStyle(.white)
         .background(LifeOSTokens.accent, in: Capsule())
         .disabled(model.busy)
-    }
-
-    /// The fallback behind `landscapeOverlay`, kept compiling so the retreat
-    /// from an overlay YouTube objects to is a flag flip.
-    private var landscapeRail: some View {
-        HStack(spacing: 0) {
-            player
-            VStack(alignment: .leading, spacing: 12) {
-                if model.hasSession, let readout = model.readout {
-                    SessionHUD(readout: readout, activity: model.selection,
-                               zonesAvailable: model.zonesAvailable,
-                               onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
-                               isExpanded: $hudExpanded)
-                    ActivityControls(model: model, onDone: { dismiss() })
-                } else if !model.saved {
-                    startButton
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(width: 180)
-            .padding(12)
-        }
-        .background(LifeOSTokens.canvas.resolve(scheme))
     }
 
     private var controlsSheet: some View {
@@ -264,9 +267,9 @@ struct VideoWorkoutScreen: View {
 
     private func start() async {
         model.selection = Self.activity(for: video.split)
-        model.pendingVideoID = video.youtubeID
-        model.pendingSplit = video.split
-        model.following = (video.title, video.channel)
-        await model.start()
+        // Passed to `start`, not set before it: a start that bails must not
+        // leave this video stamped on whatever session comes next.
+        await model.start(following: (id: video.youtubeID, split: video.split,
+                                      title: video.title, channel: video.channel))
     }
 }

@@ -61,7 +61,8 @@ final class ActivityViewModel {
                         strain: $0.strain,
                         averageHR: $0.averageHR,
                         distanceMeters: $0.distanceMeters,
-                        percentRecorded: $0.percentRecorded
+                        percentRecorded: $0.percentRecorded,
+                        split: $0.split
                     )
                 },
                 weekCalories: weekCalories

@@ -47,7 +47,10 @@ public enum CatalogStore {
     /// Replace the cache with `rows`: update matches, insert new, delete absent.
     public static func upsert(_ rows: [CatalogVideoRow], context: ModelContext, now: Date = .now) throws {
         let existing = try all(context: context)
-        let incoming = Dictionary(uniqueKeysWithValues: rows.map { ($0.youtubeID, $0) })
+        // `uniquingKeysWith`, not `uniqueKeysWithValues`: the primary key
+        // makes a duplicate id impossible from the real table, and a trap on a
+        // malformed response is a crash where keeping the last row is not.
+        let incoming = Dictionary(rows.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
         for video in existing {
             if let row = incoming[video.youtubeID] {
                 video.title = row.title; video.channel = row.channel; video.durationS = row.durationS; video.goal = row.goal

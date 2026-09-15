@@ -116,6 +116,13 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         var reps: Int?
         var setIndex: Int?
         var completedSets: [Int]?
+        /// Optional, so a draft written before this slice still decodes. A
+        /// session restored after a relaunch mid-video keeps the "Following:"
+        /// line and, more importantly, still stamps the saved record.
+        var videoID: String?
+        var split: String?
+        var followingTitle: String?
+        var followingChannel: String?
     }
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
@@ -152,6 +159,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         timer = draft.timer; healthSaved = draft.healthSaved; energy = draft.energy; distance = draft.distance
         capacity = draft.capacity; effort = EffortAccumulator(load: draft.effortLoad ?? 0)
         source = draft.source ?? .phone; reps = draft.reps; setIndex = draft.setIndex; completedSets = draft.completedSets ?? []
+        pendingVideoID = draft.videoID; pendingSplit = draft.split
+        if let title = draft.followingTitle, let channel = draft.followingChannel { following = (title, channel) }
         zones = HeartRateZones(birthDate: birthDate())
         selection = RecordedActivity(rawValue: draft.timer.activity) ?? .other
         persist()
@@ -208,8 +217,20 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
 
     /// `backdatedStart` exists for the design fixture only; real sessions
     /// start when the clock is read, after Health has answered.
-    func start(backdatedTo backdatedStart: Date? = nil) async {
+    ///
+    /// `following` belongs to *this* start, not to the recorder: set before
+    /// the call, a start that bails (Health refused, a mirrored watch session
+    /// arriving) left the fields behind and the next freeform Walk was saved
+    /// stamped with a video nobody watched. Passing it here means every start
+    /// that is not from the player clears them.
+    func start(backdatedTo backdatedStart: Date? = nil,
+               following video: (id: String, split: String, title: String, channel: String)? = nil) async {
         guard active, !busy, !hasSession else { return }
+        if let video {
+            pendingVideoID = video.id; pendingSplit = video.split; following = (video.title, video.channel)
+        } else {
+            pendingVideoID = nil; pendingSplit = nil; following = nil
+        }
         // `!hasSession` means the timer is either nil or a finished, saved one
         // from the last workout; either way this start owns a fresh one.
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false; timer = nil
@@ -359,7 +380,9 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         guard active, !saved, let timer,
               let data = try? JSONEncoder().encode(Draft(timer: timer, healthSaved: healthSaved, recordsHealth: recordingHealth,
                                                          energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load,
-                                                         source: source, reps: reps, setIndex: setIndex, completedSets: completedSets)) else { return }
+                                                         source: source, reps: reps, setIndex: setIndex, completedSets: completedSets,
+                                                         videoID: pendingVideoID, split: pendingSplit,
+                                                         followingTitle: following?.title, followingChannel: following?.channel)) else { return }
         defaults.set(data, forKey: Self.draftKey)
         lastDraftWriteAt = date
     }
@@ -460,6 +483,18 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         let draft = Draft(timer: ActivitySessionState(activity: activity, at: date), healthSaved: false,
                           recordsHealth: false, energy: nil, distance: nil, capacity: nil, effortLoad: 0,
                           source: .watch, reps: 0, setIndex: 1, completedSets: [])
+        guard let data = try? JSONEncoder().encode(draft) else { return }
+        defaults.set(data, forKey: draftKey)
+    }
+
+    /// The same, for a phone session that was following a video, so the checks
+    /// can prove a relaunch mid-video still stamps the saved record.
+    static func seedDraft(into defaults: UserDefaults, activity: String = "Strength", at date: Date = .now,
+                          videoID: String, split: String, title: String, channel: String) {
+        let draft = Draft(timer: ActivitySessionState(activity: activity, at: date), healthSaved: false,
+                          recordsHealth: false, energy: nil, distance: nil, capacity: nil, effortLoad: 0,
+                          source: .phone, reps: 0, setIndex: 1, completedSets: [],
+                          videoID: videoID, split: split, followingTitle: title, followingChannel: channel)
         guard let data = try? JSONEncoder().encode(draft) else { return }
         defaults.set(data, forKey: draftKey)
     }

@@ -55,11 +55,10 @@ struct HealthActivityDesignPreview: View {
                     guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
                     let video = fixture.playerVideo
                     fixture.recorder.selection = VideoWorkoutScreen.activity(for: video.split)
-                    fixture.recorder.pendingVideoID = video.youtubeID
-                    fixture.recorder.pendingSplit = video.split
-                    fixture.recorder.following = (video.title, video.channel)
                     let start = Date.now.addingTimeInterval(-724)
-                    await fixture.recorder.start(backdatedTo: start)
+                    await fixture.recorder.start(backdatedTo: start,
+                                                 following: (id: video.youtubeID, split: video.split,
+                                                             title: video.title, channel: video.channel))
                     for second in stride(from: 0, to: 720, by: 2) {
                         fixture.recorder.sensor.onReading?(second < 120 ? 118 : second < 480 ? 146 : 156, start.addingTimeInterval(Double(second)))
                     }

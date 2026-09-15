@@ -143,8 +143,7 @@ import AppSurfaces
             remembering.deactivate(); stranger.deactivate()
             let follower = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".follower")!, liveActivitiesEnabled: false)
             follower.attach(context); follower.saveToHealth = false
-            follower.pendingVideoID = "abcdefghijk"; follower.pendingSplit = "pull"
-            await follower.start()
+            await follower.start(following: (id: "abcdefghijk", split: "pull", title: "A pull day", channel: "A channel"))
             let followerID = "almanac:\(follower.timer!.id.uuidString)"
             await follower.finish()
             var followerFetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == followerID })
@@ -155,6 +154,57 @@ import AppSurfaces
             if let followed { context.delete(followed); try context.save() }
             follower.deactivate()
             UserDefaults(suiteName: suite + ".follower")?.removePersistentDomain(forName: suite + ".follower")
+            // A start that never reaches a session must not leave the video
+            // behind for whatever the person starts next. Health authorisation
+            // cannot be refused unattended, so the bail is engineered from the
+            // hand-off: the app goes away while the watch is being offered the
+            // workout, which is exactly the shape of a start that sets the
+            // video and then returns with no timer.
+            let stale = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".stale")!, liveActivitiesEnabled: false)
+            stale.attach(context); stale.saveToHealth = true
+            stale.watchAvailable = { true }; stale.watchHandoffTimeout = 5
+            stale.healthAuthorizationForHandoff = { true }
+            let bail = Task { await stale.start(following: (id: "abcdefghijk", split: "pull", title: "A pull day", channel: "A channel")) }
+            var offers = 0
+            while stale.source != .watch, offers < 400 { offers += 1; try? await Task.sleep(for: .milliseconds(5)) }
+            // Not `deactivate()`, which discards and would clear the fields by
+            // itself: this is the start alone failing, with the state it left.
+            stale.active = false
+            await bail.value
+            let bailed = !stale.hasSession && stale.pendingVideoID == "abcdefghijk"
+            stale.active = true; stale.saveToHealth = false; stale.selection = .walk
+            await stale.start()
+            let staleID = "almanac:\(stale.timer?.id.uuidString ?? "none")"
+            await stale.finish()
+            var staleFetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == staleID })
+            staleFetch.fetchLimit = 1
+            let plain = try context.fetch(staleFetch).first
+            check(bailed && stale.pendingVideoID == nil && stale.pendingSplit == nil && stale.following == nil
+                  && plain?.activityName == "Walk" && plain?.videoID == nil && plain?.split == nil,
+                  "A failed start does not stamp the next session")
+            if let plain { context.delete(plain); try context.save() }
+            stale.deactivate()
+            UserDefaults(suiteName: suite + ".stale")?.removePersistentDomain(forName: suite + ".stale")
+            // A relaunch mid-video: the draft carries the video, so the record
+            // the restored session finally writes still names it.
+            let restoredSuite = suite + ".videodraft"
+            let restoredDefaults = UserDefaults(suiteName: restoredSuite)!
+            ActivityRecorder.seedDraft(into: restoredDefaults, videoID: "zyxwvutsrqp", split: "legs",
+                                       title: "A legs day", channel: "A channel")
+            let resumed = ActivityRecorder(defaults: restoredDefaults, liveActivitiesEnabled: false)
+            resumed.watch = nil
+            resumed.birthDate = recorder.birthDate
+            resumed.attach(context)
+            let resumedID = "almanac:\(resumed.timer?.id.uuidString ?? "none")"
+            await resumed.finish()
+            var resumedFetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == resumedID })
+            resumedFetch.fetchLimit = 1
+            let resumedRow = try context.fetch(resumedFetch).first
+            check(resumed.following?.title == "A legs day" && resumedRow?.videoID == "zyxwvutsrqp"
+                  && resumedRow?.split == "legs", "A restored draft keeps its video")
+            if let resumedRow { context.delete(resumedRow); try context.save() }
+            resumed.deactivate()
+            restoredDefaults.removePersistentDomain(forName: restoredSuite)
             recorder.deactivate()
             await recorder.start()
             check(recorder.timer == nil && !recorder.hasSession, "Account transition stops recording and rejects late starts")

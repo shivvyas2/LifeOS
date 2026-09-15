@@ -4,9 +4,11 @@ import Foundation
 ///
 /// Section 5.3: in landscape the collapsed capsule floats at the top leading
 /// edge, the region farthest from the control bar and the branding that
-/// YouTube's terms name. The side rail is kept as a code path behind
-/// `landscapeOverlay` so that, if the overlay is ever flagged, the fallback is
-/// a flag flip rather than a redesign.
+/// YouTube's terms name. `landscapeOverlay` off falls back to the portrait
+/// stack, which is the layout this app actually renders and verifies today.
+/// The side rail the spec sketched is not kept as a second code path: an
+/// off-branch that has never rendered is not a retreat path, and it is in
+/// git history if rotation is ever enabled.
 enum VideoWorkoutLayout {
     static let landscapeOverlay = true
     /// Inset from the safe area's top leading corner, in points.
@@ -24,8 +26,16 @@ enum VideoWorkoutLayout {
     /// page and the iframe agree about where this embed is.
     static let embedOrigin = "https://www.youtube-nocookie.com"
 
+    /// YouTube ids are exactly eleven characters of an unreserved alphabet.
+    /// Rows come from a service-role-written table, so a stray quote is not
+    /// expected; checking anyway means nothing but an id is ever interpolated
+    /// into the URL or the wrapper page's HTML, and the player says plainly
+    /// that it cannot play a row that fails.
+    static let idPattern = /^[A-Za-z0-9_-]{11}$/
+
     static func embedURL(youtubeID: String) -> URL? {
-        URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)"
+        guard youtubeID.wholeMatch(of: idPattern) != nil else { return nil }
+        return URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)"
             + "?origin=\(embedOrigin)&enablejsapi=1&playsinline=1&rel=0&modestbranding=1")
     }
 }

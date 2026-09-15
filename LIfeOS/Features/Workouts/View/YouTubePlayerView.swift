@@ -6,8 +6,8 @@ import WebKit
 /// There is no JavaScript bridge here on purpose: the person taps YouTube's
 /// play button, which is the one gesture the embed needs, and the recorder
 /// times the session rather than trying to follow the video's clock. When the
-/// page itself cannot load, `onLoadFailure` raises the "Open in YouTube"
-/// fallback. A video the owner has barred from embedding loads a page that
+/// page itself cannot load, or the row's id is not a YouTube id at all,
+/// `onLoadFailure` raises the "Open in YouTube" fallback. A video the owner has barred from embedding loads a page that
 /// says so inside the player, which no delegate call can see without the
 /// JavaScript bridge this slice leaves out; YouTube's own card carries a
 /// "Watch video on YouTube" button in that case.
@@ -45,7 +45,17 @@ struct YouTubePlayerView: UIViewRepresentable {
         init(onLoadFailure: @escaping () -> Void) { self.onLoadFailure = onLoadFailure }
 
         func load(_ videoID: String, into view: WKWebView) {
-            guard loaded != videoID, let url = VideoWorkoutLayout.embedURL(youtubeID: videoID) else { return }
+            guard loaded != videoID else { return }
+            guard let url = VideoWorkoutLayout.embedURL(youtubeID: videoID) else {
+                // Not a YouTube id, so nothing is interpolated anywhere. Said
+                // out loud on the next turn of the run loop, because this runs
+                // inside `makeUIView` and a state change during a body pass is
+                // a change SwiftUI has already started rendering past.
+                loaded = videoID
+                let report = onLoadFailure
+                DispatchQueue.main.async { report() }
+                return
+            }
             loaded = videoID
             // Loading the embed URL straight into the web view answers with
             // "Video player configuration error, Error 153": the embed needs a

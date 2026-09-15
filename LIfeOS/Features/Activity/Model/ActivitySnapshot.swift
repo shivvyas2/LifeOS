@@ -32,6 +32,9 @@ struct WorkoutSummary: Equatable, Identifiable {
     /// 40% is not an easy workout, and letting a low strain speak for it would
     /// say exactly that.
     let percentRecorded: Double?
+    /// The split a video-led session followed, per spec 6 step 4. Nil for
+    /// every workout that came from a provider or from a freeform timer.
+    let split: String?
 
     var isPartlyRecorded: Bool {
         guard let percentRecorded else { return false }

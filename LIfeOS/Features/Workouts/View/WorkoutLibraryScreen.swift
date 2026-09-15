@@ -100,7 +100,7 @@ struct WorkoutLibraryScreen: View {
                     }
                 }
                 Divider().frame(height: 22)
-                ForEach(DurationBand.allCases) { band in
+                ForEach(DurationBand.allCases, id: \.self) { band in
                     chip(band.title, selected: model.durationBand == band) {
                         model.durationBand = model.durationBand == band ? nil : band
                     }

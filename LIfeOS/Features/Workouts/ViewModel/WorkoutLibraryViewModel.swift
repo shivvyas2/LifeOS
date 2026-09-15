@@ -4,26 +4,15 @@ import Persistence
 import Integrations
 import Sectors
 
-/// The three length bands the library filters by. Bounds are inclusive at the
-/// bottom and exclusive at the top so every minute count lands in exactly one.
-enum DurationBand: String, CaseIterable, Identifiable, Sendable {
-    case under20, twentyToForty, overForty
-
-    var id: String { rawValue }
-
+/// The band titles the chip rail renders. The bands themselves live in
+/// `Sectors` beside the filter that reads them, so the rule and its names
+/// cannot drift apart.
+extension DurationBand {
     var title: String {
         switch self {
         case .under20: "Under 20"
-        case .twentyToForty: "20 to 40"
-        case .overForty: "Over 40"
-        }
-    }
-
-    func contains(_ minutes: Int) -> Bool {
-        switch self {
-        case .under20: minutes < 20
-        case .twentyToForty: (20...40).contains(minutes)
-        case .overForty: minutes > 40
+        case .from20to40: "20 to 40"
+        case .over40: "Over 40"
         }
     }
 }
@@ -80,6 +69,10 @@ final class WorkoutLibraryViewModel {
     func attach(_ context: ModelContext) {
         self.context = context
         load()
+        // Raised once, on the first open with no goal. `load()` runs again on
+        // every scene activation and Health sync, and deciding it there put
+        // the sheet back up the moment a person dismissed it.
+        needsPreferences = goals?.trainingGoal == nil
     }
 
     /// Everything the screen needs, read in one pass: preferences, the cache,
@@ -99,7 +92,6 @@ final class WorkoutLibraryViewModel {
         plan = WorkoutPlanner.plan(goal: goals?.trainingGoal, sessionMinutes: goals?.sessionMinutes,
                                    batteryPercent: capacity?.percent, recentSplits: recent,
                                    now: today, calendar: calendar)
-        needsPreferences = goals?.trainingGoal == nil
         applyFilters()
     }
 
@@ -113,13 +105,20 @@ final class WorkoutLibraryViewModel {
         let due = force || newest.map { now().timeIntervalSince($0) > Self.refreshInterval } ?? true
         guard due else { return }
 
-        guard let baseURL = AppConfig.supabaseURL, let anonKey = AppConfig.supabaseAnonKey,
-              let token = sessions.load()?.accessToken else { noteOffline(); return }
+        guard let baseURL = AppConfig.supabaseURL, let anonKey = AppConfig.supabaseAnonKey else { noteOffline(); return }
+        guard let token = sessions.load()?.accessToken else { noteSignedOut(); return }
 
         isRefreshing = true
         defer { isRefreshing = false }
         do {
             let rows = try await WorkoutCatalogClient(baseURL: baseURL, anonKey: anonKey).videos(accessToken: token)
+            // A 200 with no rows is far more often an unseeded table or a
+            // policy that stopped matching than a library that really emptied.
+            guard CatalogRefresh.shouldReplace(cacheCount: videos.count, incoming: rows.count) else {
+                refreshNotice = "The catalog came back empty. Showing the last one we downloaded."
+                applyFilters()
+                return
+            }
             try CatalogStore.upsert(rows, context: context, now: now())
             refreshNotice = nil
             load()
@@ -135,43 +134,35 @@ final class WorkoutLibraryViewModel {
         applyFilters()
     }
 
+    /// Not a connection problem: the catalog is read with the person's own
+    /// token, so the way forward is signing in, not finding signal.
+    private func noteSignedOut() {
+        refreshNotice = "Sign in to download the library."
+        applyFilters()
+    }
+
     // MARK: - Filtering
 
-    /// The plan first: its split, its intensity cap, its length give or take
-    /// fifteen minutes. An empty result widens one step at a time and says
-    /// which step it took, so a short list is never a mystery.
+    /// The rule itself lives in `Sectors` as a pure function with tests; this
+    /// maps the cache into it and the chosen ids back out.
     private func applyFilters() {
         guard let plan else {
             filtered = videos
             status = refreshNotice
             return
         }
-        let split = splitFilter ?? plan.split
-        let base = videos.filter { video in
-            video.intensity <= plan.maxIntensity
-                && (equipmentFilter.map { video.equipment.contains($0) } ?? true)
-        }
-        func inBand(_ video: CatalogVideo) -> Bool {
-            if let durationBand { return durationBand.contains(video.durationMinutes) }
-            return abs(video.durationMinutes - plan.minutes) <= 15
-        }
-
-        var widened: String?
-        var result = base.filter { $0.split == split && inBand($0) }
-        if result.isEmpty {
-            result = base.filter { $0.split == split }
-            if !result.isEmpty { widened = "Widened to any length." }
-        }
-        if result.isEmpty {
-            result = base.filter { video in goals?.trainingGoal.map { video.goal.contains($0) } ?? true }
-            if !result.isEmpty { widened = "Widened to any split for your goal." }
-        }
-
-        filtered = result.sorted {
-            let left = abs($0.durationMinutes - plan.minutes), right = abs($1.durationMinutes - plan.minutes)
-            return left == right ? $0.title < $1.title : left < right
-        }
-        status = widened ?? refreshNotice
+        let byID = Dictionary(videos.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
+        let result = WorkoutLibraryFilter.apply(
+            videos: videos.map {
+                LibraryVideo(id: $0.youtubeID, title: $0.title, split: $0.split, intensity: $0.intensity,
+                             durationMinutes: $0.durationMinutes, goal: $0.goal, equipment: $0.equipment)
+            },
+            plan: plan, goal: goals?.trainingGoal, split: splitFilter, band: durationBand,
+            equipment: equipmentFilter.map { Set([$0]) } ?? [])
+        filtered = result.rows.compactMap { byID[$0.id] }
+        // Both lines, not one: a person offline on a widened list needs to
+        // know the list is short *and* that the catalog is stale.
+        status = [result.note, refreshNotice].compactMap { $0 }.joined(separator: "\n").nilIfEmpty
     }
 
     /// The splits worth offering: the ones the cache actually holds, with the
@@ -209,4 +200,8 @@ final class WorkoutLibraryViewModel {
         // The plan is built from these three, so it is recomputed, not nudged.
         load()
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -154,6 +154,15 @@ struct WorkoutRow: View {
                     Text(workout.displaySport)
                         .font(LifeOSType.rowTitle)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    if let split = workout.split {
+                        // The plan's own word for the session, so a pull day
+                        // in the library reads as a pull day in the list.
+                        Text(split.capitalized)
+                            .font(LifeOSType.eyebrow.weight(.medium))
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(LifeOSTokens.cardSurface.resolve(scheme), in: Capsule())
+                    }
                     if workout.isPartlyRecorded {
                         // Named, not silently dropped: a partly captured session
                         // has a misleadingly low strain, and the reader needs to
