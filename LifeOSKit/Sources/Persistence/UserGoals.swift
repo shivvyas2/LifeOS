@@ -9,10 +9,12 @@ public final class UserGoals {
     public var exerciseMinutesGoal: Int
     public var waterMLGoal: Double
     public var requiredCount: Int
-    /// The workout library's preferences, asked on first open. Optional so
-    /// the existing row migrates without a value.
+    /// The workout library's preferences, asked on first open. Optional, or
+    /// defaulted, so the row people already have migrates in place: a
+    /// mandatory column with no default makes SwiftData refuse to open the
+    /// store at all, and the app then has no account to show.
     public var trainingGoal: String?
-    public var equipmentRaw: [String]
+    public var equipmentRaw: [String] = []
     public var sessionMinutes: Int?
 
     public init(
