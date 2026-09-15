@@ -15,6 +15,9 @@ const out = outFlag === -1 ? DEFAULT_OUT : Deno.args[outFlag + 1];
 if (!out) { console.error("--out needs a path"); Deno.exit(2); }
 
 const rows = parseCatalog(await Deno.readTextFile("scripts/catalog/catalog.json"));
+// The trailing delete makes a seed a full sync, which makes an empty catalog
+// a migration that wipes the table. Refuse before a single oEmbed call.
+if (rows.length === 0) { console.error("catalog.json is empty; refusing to write a seed"); Deno.exit(1); }
 const verifiedAt = new Date().toISOString();
 const failures: string[] = [];
 for (const row of rows) {

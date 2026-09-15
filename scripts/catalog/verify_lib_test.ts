@@ -45,3 +45,7 @@ Deno.test("the seed ends with a delete naming every verified id, so a run is a f
   const sweep = sql.trimEnd().split("\n").at(-1)!;
   assertEquals(sweep, "delete from public.workout_videos where youtube_id not in ('abc123XYZ_-','bbc123XYZ_-');");
 });
+
+Deno.test("an empty catalog cannot become a seed, because the delete would empty the table", () => {
+  assertThrows(() => seedSQL([], "2026-09-15T09:00:00Z"));
+});

@@ -185,6 +185,30 @@ import AppSurfaces
             if let plain { context.delete(plain); try context.save() }
             stale.deactivate()
             UserDefaults(suiteName: suite + ".stale")?.removePersistentDomain(forName: suite + ".stale")
+            // A workout started on the wrist is not the video the player was
+            // queuing. `adoptMirroredSession` needs a real HKWorkoutSession,
+            // which no harness can build, so the clearing it calls is
+            // exercised directly, on both sides of its one guard.
+            let wrist = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".wrist")!, liveActivitiesEnabled: false)
+            wrist.attach(context); wrist.saveToHealth = true
+            wrist.watchAvailable = { true }; wrist.watchHandoffTimeout = 5
+            wrist.healthAuthorizationForHandoff = { true }
+            let offer = Task { await wrist.start(following: (id: "abcdefghijk", split: "pull", title: "A pull day", channel: "A channel")) }
+            var waits = 0
+            while wrist.source != .watch, waits < 400 { waits += 1; try? await Task.sleep(for: .milliseconds(5)) }
+            // Mid hand-off `busy` is true: the session the watch is about to
+            // send back is this player's, so the video must survive.
+            wrist.clearPendingVideoIfIdle()
+            let keptDuringHandoff = wrist.pendingVideoID == "abcdefghijk" && wrist.following != nil
+            wrist.active = false
+            await offer.value
+            wrist.active = true
+            // Idle: nothing here asked for the session, so it follows nothing.
+            wrist.clearPendingVideoIfIdle()
+            check(keptDuringHandoff && wrist.pendingVideoID == nil && wrist.pendingSplit == nil && wrist.following == nil,
+                  "A wrist-started session carries no stale video")
+            wrist.deactivate()
+            UserDefaults(suiteName: suite + ".wrist")?.removePersistentDomain(forName: suite + ".wrist")
             // A relaunch mid-video: the draft carries the video, so the record
             // the restored session finally writes still names it.
             let restoredSuite = suite + ".videodraft"

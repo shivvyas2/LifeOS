@@ -342,6 +342,15 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             self.error = "Your activity is kept here. Saving failed: \(error.localizedDescription). Try Save again."
         }
     }
+    /// A workout the person started on their wrist is not the video the
+    /// player was queuing. `busy` is the tell: it is true only while
+    /// `start(following:)` is still in flight, which is the one case these
+    /// fields were set for the session now arriving. Idle means nobody here
+    /// asked for this session, so nothing it saves should name a video.
+    func clearPendingVideoIfIdle() {
+        guard !busy else { return }
+        pendingVideoID = nil; pendingSplit = nil; following = nil
+    }
     func discard() {
         liveActivity.end()
         // `discard`, not `end`: on the wrist `end` means finish and save, so

@@ -54,19 +54,19 @@ Final result: passed
   hero's precedent) gives the five readings the width they need, and the
   battery percentage, the one reading that must never be half a number, now
   reads in full.
-- **`player-landscape-live.png`: pending, not captured.** The app is
+- **`player-landscape-live.png`: pending, not captured.** The iPhone app is
   portrait-only (`INFOPLIST_KEY_UISupportedInterfaceOrientations` in
   `project.pbxproj` is `UIInterfaceOrientationPortrait` only), so rotating
   the simulator device leaves the app rendering portrait; two attempts both
   came back 1206x2622 and the bogus file was discarded rather than
-  committed as a landscape capture. Spec section 5.3 already records this:
-  "The app is portrait-only on iPhone today; this layout is reachable only
-  once the iPhone app allows rotation, which is a separate product
-  decision." The
-  landscape capsule's 16-point inset and 44-point height cap are therefore
-  unverified in a real landscape render; they are exercised only by the
-  `landscapeOverlay` flag's code path and the phone's existing
-  `verticalSizeClass` plumbing.
+  committed as a landscape capture. Spec section 5.3 records this: "The app
+  is portrait-only on iPhone today (iPad allows rotation but keeps the
+  portrait layout, since its vertical size class stays regular); this layout
+  is reachable only once the iPhone app allows rotation, which is a separate
+  product decision." The landscape capsule's 16-point inset and 44-point
+  height cap are therefore unverified in a real landscape render; they are
+  exercised only by the `landscapeOverlay` flag's code path and the phone's
+  existing `verticalSizeClass` plumbing.
 
 ## Embed spot-check
 
@@ -227,7 +227,7 @@ PASS: Account transition stops recording and rejects late starts
 
 ## Residual test gaps
 
-- **`player-landscape-live.png` is not captured** because the app is
+- **`player-landscape-live.png` is not captured** because the iPhone app is
   portrait-only; the landscape capsule's inset and 44-point cap are
   unverified in a real landscape render (see "Evidence and normalization").
 - **In-player errors are invisible to the app.** `onLoadFailure` only
@@ -295,18 +295,23 @@ below landed before merge; the per-item detail is in
   and 14: the refresh notice is shown alongside a widening note rather than
   hidden by it, and a signed-out person is told "Sign in to download the
   library." Minor 16: `CatalogStore.upsert` can no longer trap on a duplicate
-  id. Minor 18: spec 5.3 now says "portrait-only on iPhone".
+  id. Minor 18: spec 5.3 now reads "The app is portrait-only on iPhone today
+  (iPad allows rotation but keeps the portrait layout, since its vertical
+  size class stays regular)", and both 5.3 and section 8 record that the
+  overlay stays behind `VideoWorkoutLayout.landscapeOverlay` with the
+  portrait stack as the off-branch.
 
 New counts after the wave:
 
 - LifeOSKit: **1266 tests in 168 suites, all passing** (was 1258 in 166; the
   new suites are `CatalogRefreshTests` with 3 and `WorkoutLibraryFilterTests`
   with 5).
-- `scripts/catalog`: **6 Deno tests, all passing** (was 4; `channelMatches`
-  and `seedSQL` each gained one).
-- Recorder checks page on the iPhone 17 Pro simulator: **32 of 32 PASS** (was
-  30), the two new ones being "A failed start does not stamp the next
-  session" and "A restored draft keeps its video".
+- `scripts/catalog`: **7 Deno tests, all passing** (was 4; `channelMatches`
+  and `seedSQL` gained one each, plus the empty-catalog refusal).
+- Recorder checks page on the iPhone 17 Pro simulator: **33 of 33 PASS** (was
+  30), the three new ones being "A failed start does not stamp the next
+  session", "A wrist-started session carries no stale video" and "A restored
+  draft keeps its video".
 - App build: `xcodebuild ... -destination 'platform=iOS Simulator,name=iPhone
   17 Pro,OS=26.0'` **BUILD SUCCEEDED**.
 

@@ -60,6 +60,9 @@ extension ActivityRecorder {
         // A finished, saved timer is the resting "Done" screen. A workout
         // started on the wrist now is a new one, not a continuation of it.
         if timer == nil || saved {
+            // Before the fresh timer, because the record this session
+            // eventually saves reads these three.
+            clearPendingVideoIfIdle()
             saved = false; healthSaved = false
             selection = RecordedActivity.allCases.first { $0.healthType == mirrored.workoutConfiguration.activityType } ?? .other
             zones = HeartRateZones(birthDate: birthDate()); capacity = loadCapacity()

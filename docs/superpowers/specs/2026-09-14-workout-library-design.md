@@ -209,14 +209,20 @@ HUD capsule floats at the top leading edge with 16 points of inset,
 `showsTimer: false`, at most 44 points tall, and never expands in landscape
 (a tap shows the controls sheet instead). The timer is out of the capsule on
 both orientations for the reason in 5.2: a timer plus five readings does not
-fit, and the reading that truncates is the battery percentage. The top edge is the region
-farthest from YouTube's control bar and its bottom-right branding, which is
-what the terms name. Risk recorded: if YouTube flags the overlay, the
-fallback is a side rail, which the layout keeps as a code path behind one
-flag (`VideoWorkoutLayout.landscapeOverlay`).
+fit, and the reading that truncates is the battery percentage. The top edge
+is the region farthest from YouTube's control bar and its bottom-right
+branding, which is what the terms name.
 
-The app is portrait-only today; this layout is reachable only once the app
-allows rotation, which is a separate product decision.
+The overlay stays behind `VideoWorkoutLayout.landscapeOverlay`, and the
+flag's off-branch is the portrait stack. The side rail this spec first
+sketched as the fallback was removed: an off-branch that has never rendered
+is an unverified second layout, not a retreat path, and it is in git history
+if rotation is ever enabled.
+
+The app is portrait-only on iPhone today (iPad allows rotation but keeps the
+portrait layout, since its vertical size class stays regular); this layout is
+reachable only once the iPhone app allows rotation, which is a separate
+product decision.
 
 ### 5.4 Fitness segment and Begin Activity
 
@@ -262,8 +268,9 @@ landscape with the capsule, and the empty and offline states.
 
 ## 8. Risks and open checks
 
-- **Overlay and YouTube's terms** (5.3): recorded, with a side-rail fallback
-  behind a flag.
+- **Overlay and YouTube's terms** (5.3): recorded. The overlay stays behind
+  `VideoWorkoutLayout.landscapeOverlay`, and the flag's off-branch is the
+  portrait stack; the side rail was removed as an unverified second layout.
 - **Embed playback in a web view** may show "Video unavailable" for videos
   whose owners disable embedding. The verify script cannot see that flag
   through oEmbed; the seed list is spot-checked by playing five videos on a
