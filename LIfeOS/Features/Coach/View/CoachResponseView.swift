@@ -18,7 +18,27 @@ struct CoachResponseView: View {
                     .font(.caption.weight(.semibold)).tracking(1)
                     .foregroundStyle(onAura ? style.cardAccent : LifeOSTokens.accent)
             }
-            ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { index, block in
+                blockView(block)
+                    .modifier(BlockReveal(index: index))
+            }
+        }
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(onAura ? .light : scheme))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
+        .padding(onAura ? 20 : 0)
+        .background {
+            if onAura {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(style.card)
+                    .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
+            }
+        }
+        .environment(\.colorScheme, onAura ? .light : scheme)
+    }
+
+    @ViewBuilder
+    private func blockView(_ block: CoachResponse.Block) -> some View {
                 switch block {
                 case .paragraph(let text):
                     richText(text)
@@ -51,20 +71,6 @@ struct CoachResponseView: View {
                         comparisonTable(headers: headers, rows: rows)
                     }
                 }
-            }
-        }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(onAura ? .light : scheme))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .textSelection(.enabled)
-        .padding(onAura ? 20 : 0)
-        .background {
-            if onAura {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(style.card)
-                    .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
-            }
-        }
-        .environment(\.colorScheme, onAura ? .light : scheme)
     }
 
     private var surface: Color { onAura ? style.cell : LifeOSTokens.cardSurface.resolve(scheme) }
@@ -121,6 +127,29 @@ struct CoachResponseView: View {
         .background(surface)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityHint("Scroll horizontally for additional columns")
+    }
+}
+
+/// Each block comes up a beat after the one above it.
+///
+/// The answer is held until the voice starts, then arrives while it is
+/// speaking; a screen that fills in one frame under a voice still on its
+/// first sentence reads as two things happening, and a screen that fills in
+/// step with it reads as one. State lives on the block, so a block already
+/// on screen is never re-animated when the text under it streams on.
+private struct BlockReveal: ViewModifier {
+    let index: Int
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || reduceMotion ? 0 : 10)
+            .onAppear {
+                let delay = Double(min(index, 5)) * 0.14
+                withAnimation(.easeOut(duration: 0.4).delay(delay)) { shown = true }
+            }
     }
 }
 

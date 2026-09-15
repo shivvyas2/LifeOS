@@ -1,6 +1,7 @@
 import Foundation
 import FoundationModels
 import SwiftData
+import SwiftUI
 import Insights
 import Integrations
 import Persistence
@@ -95,6 +96,22 @@ final class CoachViewModel {
     private var context: ModelContext?
     private var isSending = false
     private var isVisible = false
+
+    /// The turn in flight, when its answer is being held back for the voice.
+    ///
+    /// The spoken line is asked for first and read the moment it lands, so
+    /// the voice starts while the cards are still being written. The cards
+    /// then wait for the voice to begin, so that what is said comes first and
+    /// what is shown comes up under it, rather than a screen full of tables
+    /// arriving in silence a second before anyone speaks. `latestShown` keeps
+    /// the text that would have been on screen, and `reveal()` puts it there.
+    private var holdingAnswer = false
+    private var latestShown = ""
+    private var heldTurn: LifoTurn?
+    private var revealTimeout: Task<Void, Never>?
+    /// Set once per turn so a spoken line is read once, not once per chunk.
+    private var spokeThisTurn = false
+    private var turnID = UUID()
     private let accountSessions = KeychainAuthSessionStore()
 
     /// Whether a session exists, read at the moment of failure rather than
@@ -253,18 +270,32 @@ final class CoachViewModel {
         await send(text)
     }
 
-    /// Reads the answer aloud, when asked to.
+    /// Whether a reply asked for right now would be read aloud.
     ///
-    /// Fire and forget, and deliberately not awaited by `send`: the text is
-    /// already on screen and a person should be reading it while the audio is
-    /// still being fetched, not waiting for it. A failure is silence, which is
-    /// the same thing the feature does when it is switched off, so there is
-    /// nothing to report.
-    private func speak(_ text: String) {
+    /// Read at the start of a turn, not at its end: it decides whether the
+    /// model is asked for a spoken line at all, and a typed question on the
+    /// text screen should cost no extra tokens for a voice nobody will hear.
+    private var voiceAvailable: Bool {
+        isVisible && voiceScreenActive
+            && UserDefaults.standard.bool(forKey: AssistantVoice.enabledKey)
+            && AppConfig.elevenLabsAPIKey != nil
+    }
+
+    /// Reads the spoken line aloud, and lets the answer onto the screen the
+    /// moment playback starts.
+    ///
+    /// Fire and forget, and deliberately not awaited by `send`: the rest of
+    /// the answer is still streaming while the audio is fetched. Whatever
+    /// happens to the audio, a failure, a cancellation or a voice switched off
+    /// between asking and answering, the held answer is revealed on the way
+    /// out, because silence is acceptable and a blank screen is not. The turn
+    /// id keeps a late exit from an old reply from revealing a new one early.
+    private func speak(_ text: String, turn: UUID) {
         let defaults = UserDefaults.standard
-        guard isVisible, voiceScreenActive, defaults.bool(forKey: AssistantVoice.enabledKey),
-              let key = AppConfig.elevenLabsAPIKey
-        else { return }
+        guard voiceAvailable, let key = AppConfig.elevenLabsAPIKey else {
+            reveal(turn)
+            return
+        }
 
         let voice = AssistantVoice(
             rawValue: defaults.string(forKey: AssistantVoice.voiceKey) ?? ""
@@ -272,12 +303,63 @@ final class CoachViewModel {
 
         voiceTask?.cancel()
         voiceTask = Task { [voicePlayer] in
+            defer { reveal(turn) }
             guard let audio = try? await ElevenLabsVoiceClient.speech(
                 for: text, voice: voice, apiKey: key
             ) else { return }
             guard !Task.isCancelled else { return }
             voicePlayer.play(audio)
         }
+    }
+
+    /// Puts the held answer on screen. Idempotent, and a no-op for any turn
+    /// but the current one.
+    private func reveal(_ turn: UUID) {
+        guard turn == turnID, holdingAnswer else { return }
+        holdingAnswer = false
+        revealTimeout?.cancel()
+        revealTimeout = nil
+        withAnimation(.easeOut(duration: 0.35)) {
+            if let heldTurn {
+                finish(heldTurn)
+                self.heldTurn = nil
+            } else {
+                answer = latestShown
+            }
+        }
+    }
+
+    /// The turn is over and on screen: the transcript takes it, the pending
+    /// question comes down.
+    private func finish(_ turn: LifoTurn) {
+        answer = turn.answer
+        history.append(turn)
+        pendingQuestion = ""
+        pendingSent = nil
+    }
+
+    /// A chunk of the answer as written so far.
+    private func received(_ text: String) {
+        let reply = SpokenReply(parsing: text)
+        latestShown = reply.shown
+        if holdingAnswer {
+            if !spokeThisTurn, let spoken = reply.spoken {
+                spokeThisTurn = true
+                speak(spoken, turn: turnID)
+            }
+        } else {
+            answer = reply.shown
+        }
+    }
+
+    /// What to say when the model was asked for a spoken line and did not
+    /// write one: the first plain sentence or two of the answer, never a
+    /// table read aloud.
+    private static func fallbackSpokenLine(_ shown: String) -> String? {
+        for block in CoachResponse(shown).blocks {
+            if case .paragraph(let text) = block { return ResponseStyle.clean(text) }
+        }
+        return nil
     }
 
     /// Stops whatever is being said. Asking a new question while the last
@@ -337,6 +419,18 @@ final class CoachViewModel {
         status = "Thinking…"
         level = 0
         needsAppleIntelligence = false
+        // A new turn id after `stopSpeaking()`, so the old voice task's exit
+        // reveals nothing of this turn. Whether the answer is held for the
+        // voice is decided here, once, and it is the same decision as whether
+        // the model is asked for a spoken line at all.
+        turnID = UUID()
+        spokeThisTurn = false
+        holdingAnswer = voiceAvailable
+        latestShown = ""
+        heldTurn = nil
+        revealTimeout?.cancel()
+        revealTimeout = nil
+        let spokenLine = holdingAnswer
 
         guard let context else {
             fail("LIFO could not read your metrics.")
@@ -367,8 +461,8 @@ final class CoachViewModel {
                 .map { ChatTurnMessage(role: $0.role == .user ? .user : .assistant,
                                        text: $0.text) }
 
-            let onDevice = Self.coachInstructions(bundle, for: .onDevice)
-            let cloud = Self.coachInstructions(bundle, for: .offDevice)
+            let onDevice = Self.coachInstructions(bundle, for: .onDevice, spokenLine: spokenLine)
+            let cloud = Self.coachInstructions(bundle, for: .offDevice, spokenLine: spokenLine)
 
             do {
                 let reply = try await AssistantTurn.run(
@@ -391,7 +485,7 @@ final class CoachViewModel {
                     onPartial: { [weak self] text in
                         Task { @MainActor in
                             guard let self, self.phase == .thinking else { return }
-                            self.answer = text
+                            self.received(text)
                         }
                     }
                 )
@@ -401,15 +495,39 @@ final class CoachViewModel {
                     text: reply.tier == .cloud ? cloud : onDevice,
                     tier: reply.tier
                 )
-                try? store.append(conversationID: conversationID, role: .assistant,
-                                  text: reply.text)
-                answer = reply.text
-                history.append(LifoTurn(question: question, answer: reply.text, sent: sent))
-                pendingQuestion = ""
-                pendingSent = nil
+                // The spoken line is for the voice and nobody else: it is not
+                // rendered, not kept in the transcript, and not written to the
+                // store the next prompt is built from. A reply that was only a
+                // spoken line is shown as itself rather than as nothing.
+                let final = SpokenReply(parsing: reply.text)
+                let shown = final.shown.isEmpty ? (final.spoken ?? reply.text) : final.shown
+                try? store.append(conversationID: conversationID, role: .assistant, text: shown)
+                let turn = LifoTurn(question: question, answer: shown, sent: sent)
                 phase = .answered
                 status = "LIFO"
-                speak(CoachResponse(reply.text).spokenText)
+                if holdingAnswer {
+                    heldTurn = turn
+                    latestShown = shown
+                    if !spokeThisTurn {
+                        spokeThisTurn = true
+                        if let spoken = final.spoken ?? Self.fallbackSpokenLine(shown) {
+                            speak(spoken, turn: turnID)
+                        } else {
+                            reveal(turnID)
+                        }
+                    }
+                    // Whatever the voice does, the answer is on screen within
+                    // two seconds of being finished. A slow synthesis is a
+                    // reason to read first, not a reason to see nothing.
+                    let id = turnID
+                    revealTimeout = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(2))
+                        guard !Task.isCancelled else { return }
+                        self?.reveal(id)
+                    }
+                } else {
+                    finish(turn)
+                }
             } catch RemoteEngineError.refused(let reason) {
                 fail(reason)
             } catch RemoteEngineError.exhausted {
@@ -445,13 +563,14 @@ final class CoachViewModel {
 
     /// The data bundle as one tier is allowed to see it.
     private static func coachInstructions(
-        _ bundle: ContextBundle, for audience: MetricsDigest.Audience
+        _ bundle: ContextBundle, for audience: MetricsDigest.Audience, spokenLine: Bool
     ) -> String {
         """
         You answer questions about one person's life: their health metrics, \
         money, and life-sector scores.
 
         \(CoachPresentation.instruction)
+        \(spokenLine ? CoachPresentation.spokenLineInstruction : "")
 
         Here is what their data shows:
 
@@ -469,5 +588,9 @@ final class CoachViewModel {
         // said something and then contradicted itself.
         answer = ""
         pendingSent = nil
+        holdingAnswer = false
+        heldTurn = nil
+        revealTimeout?.cancel()
+        revealTimeout = nil
     }
 }

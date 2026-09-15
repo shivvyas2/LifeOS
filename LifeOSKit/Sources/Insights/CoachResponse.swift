@@ -118,6 +118,22 @@ public enum CoachPresentation {
     Ask one concise question only when essential information is missing.
     """
 
+    /// Added behind `instruction` only when the reply will be read aloud.
+    ///
+    /// The voice gets its own line rather than a flattening of the tables,
+    /// because a table read out is a robot and a sentence said is a person.
+    /// Asked for first so it is the first thing to arrive: the voice starts
+    /// on it while the rest of the answer is still being written.
+    public static let spokenLineInstruction = """
+    Your reply will be spoken aloud and shown on screen, and the two parts are different.
+    Begin with exactly one line that starts with \(SpokenReply.prefix) followed by what \
+    you would actually say out loud: one or two short, warm sentences in plain spoken \
+    English, the way a person talks to a friend, with at most one figure and no markdown, \
+    no list, no table, no quotation marks. Do not read out the details; the screen shows them.
+    Then a blank line, then the written answer following the rules above. The written \
+    answer must not repeat the \(SpokenReply.prefix) line word for word.
+    """
+
     public static func isStructured(_ instructions: String) -> Bool { instructions.contains(marker) }
 
     public static func clean(_ text: String, instructions: String) -> String {
