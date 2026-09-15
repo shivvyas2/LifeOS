@@ -26,11 +26,15 @@ public struct LibraryVideo: Equatable, Sendable {
     public let durationMinutes: Int
     public let goal: [String]
     public let equipment: [String]
+    public let channel: String
+    public let muscles: [String]
 
     public init(id: String, title: String, split: String, intensity: Int,
-                durationMinutes: Int, goal: [String], equipment: [String]) {
+                durationMinutes: Int, goal: [String], equipment: [String],
+                channel: String = "", muscles: [String] = []) {
         self.id = id; self.title = title; self.split = split; self.intensity = intensity
         self.durationMinutes = durationMinutes; self.goal = goal; self.equipment = equipment
+        self.channel = channel; self.muscles = muscles
     }
 }
 
@@ -39,14 +43,19 @@ public struct LibraryVideo: Equatable, Sendable {
 /// step it took, so a short list is never a mystery.
 public enum WorkoutLibraryFilter {
     public static func apply(videos: [LibraryVideo], plan: TrainingPlan, goal: String?, split: String?,
-                             band: DurationBand?, equipment: Set<String>) -> (rows: [LibraryVideo], note: String?) {
+                             band: DurationBand?, equipment: Set<String>, query: String = "") -> (rows: [LibraryVideo], note: String?) {
         let chosenSplit = split ?? plan.split
+        // A search the person typed narrows the catalog before anything
+        // else, and stays narrowed through every widening step below: the
+        // plan's filters are preferences to relax, the query is not.
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         // The intensity cap and the equipment the person owns are never
         // widened away: a battery ceiling and a kit list are facts, not
         // preferences to relax when the list comes back short.
         let base = videos.filter { video in
             video.intensity <= plan.maxIntensity
                 && (equipment.isEmpty || !Set(video.equipment).isDisjoint(with: equipment))
+                && (normalizedQuery.isEmpty || matches(video, query: normalizedQuery))
         }
         func inBand(_ video: LibraryVideo) -> Bool {
             if let band { return band.contains(video.durationMinutes) }
@@ -72,5 +81,11 @@ public enum WorkoutLibraryFilter {
             return left == right ? $0.title < $1.title : left < right
         }
         return (rows, note)
+    }
+
+    private static func matches(_ video: LibraryVideo, query: String) -> Bool {
+        video.title.lowercased().contains(query)
+            || video.channel.lowercased().contains(query)
+            || video.muscles.contains { $0.lowercased().contains(query) }
     }
 }

@@ -25,7 +25,7 @@ public struct WatchPacket: Codable, Equatable, Sendable {
 /// throws it away. The phone sends `discard` when it refuses a mirrored
 /// session or the person discards, so nothing half-recorded reaches Health.
 public enum PhoneCommand: String, Codable, Sendable {
-    case configure, pause, resume, end, nextSet, addRep, discard
+    case configure, pause, resume, end, nextSet, addRep, removeRep, discard
 }
 
 public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {

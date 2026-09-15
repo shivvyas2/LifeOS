@@ -28,6 +28,13 @@ struct WatchWireTests {
         #expect(WatchWire.command(from: try WatchWire.encode(WatchPacket(sentAt: now))) == nil)
     }
 
+    @Test func removeRepCommandRoundTrips() throws {
+        let envelope = PhoneCommandEnvelope(command: .removeRep, sentAt: now)
+        let back = try #require(WatchWire.command(from: try WatchWire.encode(envelope)))
+        #expect(back == envelope)
+        #expect(back.command == .removeRep)
+    }
+
     /// The two shapes share `v` and `sentAt`, so without `kind` a command
     /// decodes as an empty packet. Both directions have to refuse.
     @Test func aCommandIsNeverReadAsAPacket() throws {

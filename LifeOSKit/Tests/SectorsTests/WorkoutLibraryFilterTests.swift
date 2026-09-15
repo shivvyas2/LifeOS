@@ -3,9 +3,10 @@ import Testing
 
 struct WorkoutLibraryFilterTests {
     private func video(_ id: String, title: String = "A workout", split: String = "pull", intensity: Int = 2,
-                       minutes: Int = 30, goal: [String] = ["strength"], equipment: [String] = ["dumbbells"]) -> LibraryVideo {
+                       minutes: Int = 30, goal: [String] = ["strength"], equipment: [String] = ["dumbbells"],
+                       channel: String = "A Channel", muscles: [String] = []) -> LibraryVideo {
         LibraryVideo(id: id, title: title, split: split, intensity: intensity, durationMinutes: minutes,
-                     goal: goal, equipment: equipment)
+                     goal: goal, equipment: equipment, channel: channel, muscles: muscles)
     }
     private let plan = TrainingPlan(split: "pull", minutes: 30, maxIntensity: 2, reason: "Pull day.")
 
@@ -77,5 +78,47 @@ struct WorkoutLibraryFilterTests {
         let result = WorkoutLibraryFilter.apply(videos: [bands, dumbbells], plan: plan, goal: "strength",
                                                 split: nil, band: .under20, equipment: ["bands"])
         #expect(result.rows.map(\.id) == ["bands"])
+    }
+
+    @Test func searchMatchesTitleChannelOrMuscle() {
+        let byTitle = video("byTitle", title: "Back and Biceps Burner")
+        let byChannel = video("byChannel", title: "Something Else", channel: "Athlean Extra")
+        let byMuscle = video("byMuscle", title: "Nothing Related", channel: "Other", muscles: ["Hamstrings"])
+        let miss = video("miss", title: "Nope", channel: "Nada", muscles: ["Quads"])
+        let result = WorkoutLibraryFilter.apply(videos: [byTitle, byChannel, byMuscle, miss], plan: plan,
+                                                goal: "strength", split: nil, band: nil, equipment: [],
+                                                query: "  BICEPS ")
+        #expect(result.rows.map(\.id) == ["byTitle"])
+
+        let channelResult = WorkoutLibraryFilter.apply(videos: [byTitle, byChannel, byMuscle, miss], plan: plan,
+                                                        goal: "strength", split: nil, band: nil, equipment: [],
+                                                        query: "athlean")
+        #expect(channelResult.rows.map(\.id) == ["byChannel"])
+
+        let muscleResult = WorkoutLibraryFilter.apply(videos: [byTitle, byChannel, byMuscle, miss], plan: plan,
+                                                       goal: "strength", split: nil, band: nil, equipment: [],
+                                                       query: "hamstrings")
+        #expect(muscleResult.rows.map(\.id) == ["byMuscle"])
+    }
+
+    @Test func searchSurvivesWidening() {
+        // Only a long, off-plan-length pull video matches the query: widening
+        // for length must still keep the query narrowing it to just that row.
+        let matchLong = video("matchLong", title: "Deadlift Deep Dive", split: "pull", minutes: 75)
+        let noMatchAtPlanLength = video("noMatch", title: "Row City", split: "pull", minutes: 30)
+        let result = WorkoutLibraryFilter.apply(videos: [matchLong, noMatchAtPlanLength], plan: plan,
+                                                goal: "strength", split: nil, band: nil, equipment: [],
+                                                query: "deadlift")
+        #expect(result.rows.map(\.id) == ["matchLong"])
+    }
+
+    @Test func emptyQueryChangesNothing() {
+        let rows = [video("a", title: "Alpha"), video("b", title: "Bravo")]
+        let withoutQuery = WorkoutLibraryFilter.apply(videos: rows, plan: plan, goal: "strength",
+                                                       split: nil, band: nil, equipment: [])
+        let withEmptyQuery = WorkoutLibraryFilter.apply(videos: rows, plan: plan, goal: "strength",
+                                                         split: nil, band: nil, equipment: [], query: "   ")
+        #expect(withoutQuery.rows.map(\.id) == withEmptyQuery.rows.map(\.id))
+        #expect(withoutQuery.note == withEmptyQuery.note)
     }
 }
