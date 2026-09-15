@@ -246,7 +246,8 @@ export function chatBody(
 Answer directly in one or two sentences. Usually stay under 120 words unless asked for detail.
 Use brief Markdown tables for supplied metrics or comparisons, and at most three bullets for actions.
 Use at most three sections. No greeting, filler, repeated conclusion, or invented numbers.
-Keep units and time periods. Say when data is missing. Follow the requested presentation format.`;
+Keep units and time periods. Say when data is missing. Follow the requested presentation format.
+When the presentation format asks for a SAY: line, write it first, on its own line, before anything else.`;
   const system = [{ role: "system", content: structuredCoach ? coachStyle : TASKS.chat.system }];
   if (context) system.push({ role: "system", content: context });
 

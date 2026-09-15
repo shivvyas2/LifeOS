@@ -508,4 +508,8 @@ Deno.test("structured coach keeps scope and permits concise native table output"
   assertEquals(system.includes("Markdown tables"), true);
   assertEquals(system.includes("Never use markdown"), false);
   assertEquals(system.includes("invented numbers"), true);
+  // The spoken line is the first thing the phone needs, so the cloud tier is
+  // told to put it first even though the device's own instruction says so
+  // too: the provider weights the server's system message more heavily.
+  assertEquals(system.includes("SAY: line, write it first"), true);
 });
