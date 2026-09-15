@@ -1,7 +1,7 @@
 # Workout library: curated videos, a planner, and the HUD on the player
 
 **Date:** 2026-09-14
-**Status:** approved in conversation, spec under review
+**Status:** implemented on feat/workout-library, see docs/design/workout-library/report.md
 **Builds on:** `2026-09-14-live-session-core-design.md` (readout, HUD,
 recorder), `2026-09-14-watch-companion-design.md` (reps and sets),
 `2026-08-25-health-restructure-restyle-design.md` (Fitness segment, tokens).
