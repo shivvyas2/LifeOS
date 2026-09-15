@@ -60,6 +60,7 @@ create table public.workout_videos (
   updated_at   timestamptz not null default now()
 );
 alter table public.workout_videos enable row level security;
+revoke all on public.workout_videos from anon, authenticated;
 grant select on public.workout_videos to authenticated;
 create policy "catalog is readable when signed in" on public.workout_videos
   for select to authenticated using (true);
@@ -67,7 +68,12 @@ create policy "catalog is readable when signed in" on public.workout_videos
 
 Enums are text, as the notes table does, so a new split lands as data. No
 insert, update or delete grant for `authenticated`: writes are the service
-role's, through migrations.
+role's, through migrations. The `revoke all` is not decoration: Supabase
+grants `all` on a new public table to `anon` and `authenticated` by default,
+so without it the sentence above would be untrue at the grant layer (RLS
+would still refuse the write, but a later permissive policy would not). It
+also takes away TRUNCATE, which bypasses row-level security. Same shape as
+`20260914090000_social_groups.sql`.
 
 ### 3.2 Seed and verification
 
@@ -180,7 +186,10 @@ through a "Follow a video" button above the picker.
   with `allowsInlineMediaPlayback`, `mediaTypesRequiringUserActionForPlayback
   = []` so the person's tap on the YouTube play button is the only gesture
   needed. No JavaScript bridge in this slice.
-- Under it, the `SessionHUD` (with the timer) and, before Start, the video's
+- Under it, the elapsed time on its own monospaced line (a `TimelineView`,
+  as Begin Activity's hero has), then the `SessionHUD` with
+  `showsTimer: false` and `countsAutomatically: model.source == .watch`, and,
+  before Start, the video's
   title, channel and duration with a "Start this workout" primary button.
   Start calls `recorder.start()` with `selection` mapped from the split
   (strength splits and arms, chest, back, shoulders, core: `.strength`;
@@ -197,8 +206,10 @@ through a "Follow a video" button above the picker.
 
 Shiv chose the overlaid capsule. The player fills the screen; the collapsed
 HUD capsule floats at the top leading edge with 16 points of inset,
-`showsTimer: true`, at most 44 points tall, and never expands in landscape
-(a tap shows the controls sheet instead). The top edge is the region
+`showsTimer: false`, at most 44 points tall, and never expands in landscape
+(a tap shows the controls sheet instead). The timer is out of the capsule on
+both orientations for the reason in 5.2: a timer plus five readings does not
+fit, and the reading that truncates is the battery percentage. The top edge is the region
 farthest from YouTube's control bar and its bottom-right branding, which is
 what the terms name. Risk recorded: if YouTube flags the overlay, the
 fallback is a side rail, which the layout keeps as a code path behind one
@@ -258,7 +269,21 @@ landscape with the capsule, and the empty and offline states.
   through oEmbed; the seed list is spot-checked by playing five videos on a
   device before merge, and the player shows an "Open in YouTube" link when
   the embed fails to load.
-- **Curation quality** is a human judgement. The seed is a starting set;
-  adding a row is a migration and a verify run, nothing else.
+- **Curation quality** is a human judgement. The seed is a starting set.
+  Adding or removing a row is an edit to `scripts/catalog/catalog.json` plus
+  a verify run, nothing else. Before the first `supabase db push` the run
+  rewrites the existing seed in place; after it, the file name is frozen (a
+  migration Supabase has recorded is never re-run), so the run writes a new
+  timestamped migration with `--out
+  supabase/migrations/<stamp>_workout_videos_seed.sql`.
+- **Removals reach the server**: every generated seed ends with one
+  `delete from public.workout_videos where youtube_id not in (...)` naming
+  every verified id, so a seed run is a full sync rather than an append and a
+  row dropped from `catalog.json` leaves the table on the next push.
 - **Catalog freshness**: a deleted or privated video stays in the cache
-  until the next daily refresh removes rows absent from the server.
+  until the next daily refresh removes rows absent from the server. A refresh
+  that comes back empty is the one exception: it is far more often an
+  unseeded table or a policy that stopped matching than a library that really
+  emptied, so the cache is kept and the screen says "The catalog came back
+  empty. Showing the last one we downloaded."
+  (`Sectors.CatalogRefresh.shouldReplace`).

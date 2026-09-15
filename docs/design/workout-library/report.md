@@ -46,19 +46,23 @@ Final result: passed
   title bar and YouTube's own play button, an "Open in YouTube" link under
   the player, then the title, channel, duration, and the split/intensity/
   equipment chips above a "Start this workout" button.
-- `player-portrait-live.png`: the same poster with the HUD capsule reading
-  `12:16`, a green heart at 152 bpm, effort 3.5, battery truncated to
-  "67…", and one rep, over Pause, Finish & save and Discard. The battery
-  truncation is `SessionHUD` at full width, the same as it looks on Begin
-  Activity; it was not touched in this slice (see task-7's concern 4).
+- `player-portrait-live.png` (**recaptured after the final-review fixes**):
+  the same poster, then `12:13` on its own monospaced line under "Elapsed
+  time", then the HUD capsule reading a green heart at 152 bpm, effort 3.5
+  `est`, battery `67%` and `1 reps`, over Pause, Finish & save and Discard.
+  Nothing truncates: moving the timer out of the capsule (the Begin Activity
+  hero's precedent) gives the five readings the width they need, and the
+  battery percentage, the one reading that must never be half a number, now
+  reads in full.
 - **`player-landscape-live.png`: pending, not captured.** The app is
   portrait-only (`INFOPLIST_KEY_UISupportedInterfaceOrientations` in
   `project.pbxproj` is `UIInterfaceOrientationPortrait` only), so rotating
   the simulator device leaves the app rendering portrait; two attempts both
   came back 1206x2622 and the bogus file was discarded rather than
   committed as a landscape capture. Spec section 5.3 already records this:
-  "The app is portrait-only today; this layout is reachable only once the
-  app allows rotation, which is a separate product decision." The
+  "The app is portrait-only on iPhone today; this layout is reachable only
+  once the iPhone app allows rotation, which is a separate product
+  decision." The
   landscape capsule's 16-point inset and 44-point height cap are therefore
   unverified in a real landscape render; they are exercised only by the
   `landscapeOverlay` flag's code path and the phone's existing
@@ -236,10 +240,6 @@ PASS: Account transition stops recording and rejects late starts
 - Real-device embed playback (as opposed to the simulator) has not been
   exercised; spec section 8's device spot-check requirement is satisfied
   by the six simulator checks above, not a physical device.
-- `player-portrait-live.png`'s battery reading truncates to "67…" and the
-  effort "est" chip clips at full HUD width; this is existing `SessionHUD`
-  behavior shared with Begin Activity, not new to this feature, and was
-  left unchanged.
 - iOS 27 and unannounced device configurations have not been
   runtime-tested; only iOS 26.0 simulators were used.
 - The migrations (`20260915090000_workout_videos.sql`,
@@ -247,5 +247,71 @@ PASS: Account transition stops recording and rejects late starts
   `scripts/catalog/verify.ts` and verified against live oEmbed for all 122
   rows, but **`supabase db push` has not been run**; the controller applies
   them at the finishing step.
+
+## Final review fixes
+
+The read-only final review (`.superpowers/sdd/2026-09-14-workout-library/
+final-review.md`) raised seven Important and eleven Minor items. The wave
+below landed before merge; the per-item detail is in
+`final-fix-report.md` beside the review.
+
+- **Empty response keeps the cache** (Important 1). A successful fetch that
+  returns zero rows no longer replaces a full cache; the screen says "The
+  catalog came back empty. Showing the last one we downloaded." The rule is
+  `Sectors.CatalogRefresh.shouldReplace(cacheCount:incoming:)`, with three
+  tests including the empty-cache case, which still returns true.
+- **Default grants revoked** (Important 2). `20260915090000_workout_videos.sql`
+  now does `revoke all ... from anon, authenticated;` before the `grant
+  select`, matching `20260914090000_social_groups.sql`; spec 3.1 says why.
+- **The seed is a full sync** (Important 3). `verify.ts` takes `--out`, so a
+  curation pass after the first `supabase db push` writes a new timestamped
+  migration instead of rewriting one Supabase has already recorded, and every
+  generated seed ends with one `delete ... where youtube_id not in (...)`
+  naming all 122 verified ids. The seed was regenerated against live oEmbed:
+  122 of 122 rows confirmed, the file identical apart from fresh
+  `verified_at` timestamps and the new trailing delete.
+- **Stale pending video cleared** (Important 4, Minor 15).
+  `ActivityRecorder.start(backdatedTo:following:)` owns the video for the
+  start that sets it, and clears it when there is none; the three fields are
+  in `Draft`, so a session restored after a relaunch mid-video still stamps
+  the record.
+- **Preferences sheet asked once** (Important 5), decided in `attach` rather
+  than in every `load`, so a Health sync no longer re-raises it after Cancel.
+- **Split chip on the Fitness rows** (Important 6, spec 6 step 4).
+  `WorkoutSummary` carries `split`; `WorkoutRow` shows it capitalised.
+- **HUD no longer clips** (Important 7). The player renders the elapsed time
+  as its own `TimelineView` line above the capsule and passes
+  `showsTimer: false` and `countsAutomatically: model.source == .watch` at
+  both `SessionHUD` call sites. Recaptured: see `player-portrait-live.png`
+  above.
+- **Video ids validated** (Minor 8) against `^[A-Za-z0-9_-]{11}$` before
+  interpolation; a row that fails shows "This video will not play here."
+- **Dead landscape rail deleted** (Minor 9); the overlay stays behind
+  `VideoWorkoutLayout.landscapeOverlay`, whose off branch is now the portrait
+  stack, a layout this report actually captured.
+- **Filtering is pure and tested** (review recommendation 3). The widening
+  rule moved to `Sectors.WorkoutLibraryFilter.apply`, with four named tests
+  including "an explicit split chip is not widened away" (Minor 13). Minor 12
+  and 14: the refresh notice is shown alongside a widening note rather than
+  hidden by it, and a signed-out person is told "Sign in to download the
+  library." Minor 16: `CatalogStore.upsert` can no longer trap on a duplicate
+  id. Minor 18: spec 5.3 now says "portrait-only on iPhone".
+
+New counts after the wave:
+
+- LifeOSKit: **1266 tests in 168 suites, all passing** (was 1258 in 166; the
+  new suites are `CatalogRefreshTests` with 3 and `WorkoutLibraryFilterTests`
+  with 5).
+- `scripts/catalog`: **6 Deno tests, all passing** (was 4; `channelMatches`
+  and `seedSQL` each gained one).
+- Recorder checks page on the iPhone 17 Pro simulator: **32 of 32 PASS** (was
+  30), the two new ones being "A failed start does not stamp the next
+  session" and "A restored draft keeps its video".
+- App build: `xcodebuild ... -destination 'platform=iOS Simulator,name=iPhone
+  17 Pro,OS=26.0'` **BUILD SUCCEEDED**.
+
+New capture: `player-portrait-live.png`, retaken on the iPhone 17 Pro
+simulator (1206 x 2622, 402 x 874 points at 3x) after the HUD change, read
+back and confirmed clip-free.
 
 Final result: passed
