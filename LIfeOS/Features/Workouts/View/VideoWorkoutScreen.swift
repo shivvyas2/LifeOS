@@ -6,11 +6,13 @@ import Integrations
 
 /// One video, and the session that follows it.
 ///
-/// The rings float over the video in both orientations, at the top leading
-/// edge, the corner farthest from YouTube's control bar and its branding.
-/// Portrait keeps the workout's details, the clock and the recorder's controls
-/// under the player; landscape hands the screen to the video and puts the
-/// controls behind one glass button.
+/// The rings float over the video in every layout, wherever the person last
+/// put them; they start at the top leading edge, the corner farthest from
+/// YouTube's control bar and its branding, and a drop onto that bar is moved
+/// off it. Portrait keeps the workout's details, the clock and the recorder's
+/// controls under the player. Full screen, entered by a button or by turning
+/// the phone, hands the screen to the video and puts the controls behind one
+/// glass button.
 struct VideoWorkoutScreen: View {
     let video: CatalogVideo
     @Bindable var model: ActivityRecorder
@@ -18,6 +20,12 @@ struct VideoWorkoutScreen: View {
     @State private var hudExpanded = true
     @State private var playerFailed = false
     @State private var showControls = false
+    /// Full screen chosen by the button, as opposed to by rotation.
+    @State private var immersive = false
+    /// Where the letterboxed player sits in full screen portrait, so the
+    /// control strip the HUD avoids is the player's, not the screen's.
+    @State private var playerFrame = CGRect.zero
+    @State private var host = YouTubePlayerHost()
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
@@ -34,21 +42,29 @@ struct VideoWorkoutScreen: View {
     }
 
     private var isLandscape: Bool { verticalSizeClass == .compact }
+    private var isFullScreen: Bool { (isLandscape && VideoWorkoutLayout.landscapeOverlay) || immersive }
     private var watchURL: URL? { URL(string: "https://www.youtube.com/watch?v=\(video.youtubeID)") }
 
     var body: some View {
         Group {
-            if isLandscape, VideoWorkoutLayout.landscapeOverlay {
-                landscapeOverlay
+            if isFullScreen {
+                fullScreen
             } else {
                 portrait
             }
         }
         .navigationTitle("Workout")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(isLandscape && VideoWorkoutLayout.landscapeOverlay ? .hidden : .visible, for: .navigationBar)
+        .toolbar(isFullScreen ? .hidden : .visible, for: .navigationBar)
+        .toolbar(isFullScreen ? .hidden : .visible, for: .tabBar)
+        .statusBarHidden(isFullScreen)
         .sheet(isPresented: $showControls) { controlsSheet }
         .tint(LifeOSTokens.accent)
+        // The one screen on a phone allowed to turn. Handed back on the way
+        // out, so the next screen is not asked to draw a landscape it has no
+        // layout for.
+        .onAppear { if UIDevice.current.userInterfaceIdiom == .phone { OrientationLock.allow(.allButUpsideDown) } }
+        .onDisappear { OrientationLock.release() }
     }
 
     // MARK: Portrait
@@ -62,10 +78,16 @@ struct VideoWorkoutScreen: View {
                         .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay(alignment: .topLeading) {
+                        .overlay {
                             if model.hasSession, let readout = model.readout {
-                                rings(readout, repControls: false).padding(VideoWorkoutLayout.overlayInset)
+                                DraggableHUD(placement: "compact",
+                                             avoiding: { VideoWorkoutLayout.controlStrip(in: $0) }) {
+                                    rings(readout, repControls: false)
+                                }
                             }
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            fullScreenButton(entering: true).padding(VideoWorkoutLayout.overlayInset)
                         }
                     openInYouTube
                     details
@@ -181,23 +203,65 @@ struct VideoWorkoutScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Landscape
+    // MARK: Full screen
 
-    private var landscapeOverlay: some View {
+    /// The video and nothing else, in either orientation.
+    ///
+    /// Landscape lets the player fill the screen; portrait letterboxes it
+    /// across the width. The rings, the start pill and the two glass buttons
+    /// sit in one overlay inside the safe area, which is also the space the
+    /// rings can be dragged around in.
+    private var fullScreen: some View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
-            player.ignoresSafeArea()
-            HStack(alignment: .top, spacing: 10) {
-                if model.hasSession, let readout = model.readout {
-                    rings(readout)
-                    controlsButton
-                } else if !model.saved {
-                    landscapeStart
-                }
-                Spacer(minLength: 0)
+            if isLandscape {
+                player.ignoresSafeArea()
+            } else {
+                player
+                    .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(edges: .horizontal)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.overlaySpace)) } action: {
+                        playerFrame = $0
+                    }
             }
-            .padding(VideoWorkoutLayout.overlayInset)
+            ZStack(alignment: .topLeading) {
+                if model.hasSession, let readout = model.readout {
+                    DraggableHUD(placement: isLandscape ? "landscape" : "fullscreen",
+                                 avoiding: { [isLandscape, playerFrame] size in
+                                     VideoWorkoutLayout.controlStrip(in: size, player: isLandscape ? nil : playerFrame)
+                                 }) {
+                        rings(readout)
+                    }
+                } else if !model.saved {
+                    landscapeStart.padding(VideoWorkoutLayout.overlayInset)
+                }
+                HStack(spacing: 10) {
+                    if model.hasSession { controlsButton }
+                    if !isLandscape { fullScreenButton(entering: false) }
+                }
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+                .padding(VideoWorkoutLayout.overlayInset)
+            }
         }
+        .coordinateSpace(.named(Self.overlaySpace))
+    }
+
+    private nonisolated static let overlaySpace = "videoWorkoutOverlay"
+
+    /// Into full screen from the portrait player, and back out of it. Not
+    /// offered in landscape, where turning the phone is the way out.
+    private func fullScreenButton(entering: Bool) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3)) { immersive = entering }
+        } label: {
+            Image(systemName: entering ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left")
+                .font(.headline).foregroundStyle(.white)
+                .frame(width: 44, height: 44).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Circle())
+        .accessibilityLabel(entering ? "Full screen" : "Exit full screen")
     }
 
     private func rings(_ readout: LiveSessionReadout, repControls: Bool = true) -> some View {
@@ -221,7 +285,7 @@ struct VideoWorkoutScreen: View {
         .controlSize(.large)
     }
 
-    /// Pause, finish and discard live in a sheet in landscape, behind one
+    /// Pause, finish and discard live in a sheet in full screen, behind one
     /// glass button, so nothing but the rings sits over the video.
     private var controlsButton: some View {
         Button { showControls = true } label: {
@@ -272,7 +336,7 @@ struct VideoWorkoutScreen: View {
     // MARK: Pieces
 
     private var player: some View {
-        YouTubePlayerView(videoID: video.youtubeID) { playerFailed = true }
+        YouTubePlayerView(videoID: video.youtubeID, host: host) { playerFailed = true }
             .background(Color.black)
             .accessibilityLabel("\(video.title), YouTube player")
     }

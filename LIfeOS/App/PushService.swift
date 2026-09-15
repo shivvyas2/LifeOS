@@ -212,6 +212,16 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         return true
     }
 
+    /// Orientation is decided per screen; see `OrientationLock`. This is the
+    /// one place UIKit asks, so it is answered here rather than by a second
+    /// delegate.
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        MainActor.assumeIsolated { OrientationLock.mask }
+    }
+
     func application(
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data

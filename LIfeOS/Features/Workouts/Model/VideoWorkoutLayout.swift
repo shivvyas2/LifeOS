@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// Where the rings sit over YouTube's player.
 ///
@@ -13,6 +14,19 @@ enum VideoWorkoutLayout {
     static let overlayMaxHeight: CGFloat = 44
     /// The player's aspect ratio in portrait.
     static let playerAspectRatio: CGFloat = 16.0 / 9.0
+    /// The band along the bottom of the player where YouTube draws its
+    /// control bar and its logo. The rings can be dragged anywhere else; a
+    /// drop here is moved off it, so the terms the top leading default was
+    /// chosen for still hold wherever the rings end up.
+    static let controlStripHeight: CGFloat = 56
+
+    /// The strip for a player that fills `container`, or one whose frame
+    /// inside it is known.
+    static func controlStrip(in container: CGSize, player: CGRect? = nil) -> CGRect {
+        let frame = player ?? CGRect(origin: .zero, size: container)
+        return CGRect(x: frame.minX, y: frame.maxY - controlStripHeight,
+                      width: frame.width, height: controlStripHeight)
+    }
 
     /// `origin` and `enablejsapi` are what the embed checks before it will
     /// play: with no origin at all it answers "Video player configuration
@@ -31,7 +45,11 @@ enum VideoWorkoutLayout {
 
     static func embedURL(youtubeID: String) -> URL? {
         guard youtubeID.wholeMatch(of: idPattern) != nil else { return nil }
+        // `fs=0` removes YouTube's own full screen button. That button hands
+        // the video to a system layer above the whole app, where no HUD can
+        // be drawn; the screen offers its own full screen instead, with the
+        // rings still over the picture.
         return URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)"
-            + "?origin=\(embedOrigin)&enablejsapi=1&playsinline=1&rel=0&modestbranding=1")
+            + "?origin=\(embedOrigin)&enablejsapi=1&playsinline=1&rel=0&modestbranding=1&fs=0")
     }
 }
