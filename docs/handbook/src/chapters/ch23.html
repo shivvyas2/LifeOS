@@ -1,10 +1,150 @@
-<section class="chapter" id="ch23" data-hue="notes">
-<p class="chapter-kicker">Chapter 23</p>
-<h2><span class="num">23</span><span>Stub ch23</span></h2>
-<p class="lede">Stub lede for ch23 &amp; friends.</p>
-<h3 id="s23-1"><span class="num">23.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch23a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch23a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s23-2"><span class="num">23.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="ch23">
+<p class="chapter-kicker">Chapter twenty-three</p>
+<h2><span class="num">23</span><span>Operations</span></h2>
+<p class="lede">How to build the app from a clean machine, what has to exist on the server side before it signs anyone in, how a build reaches TestFlight, and how the code is kept honest: 1,298 package tests, 100 Deno tests, 7 catalog tests, a native checks harness, a typography guard and a way of working that survives six sessions editing one checkout.</p>
+
+<h3 id="s23-1"><span class="num">23.1</span><span>Setup runbook</span></h3>
+<h4>1 · Local build</h4>
+<pre><code>git clone https://github.com/shivvyas2/LifeOS.git
+cd LifeOS
+cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+swift test --package-path LifeOSKit      # no simulator needed
+open LIfeOS.xcodeproj</code></pre>
+<p>The package declares an iOS 26 platform and also builds for macOS purely so that <code>swift test</code> runs from the terminal. The Xcode project holds four targets: <code>LIfeOS</code> (the phone and iPad app, still spelled with the capital I because renaming a target churns the project file for no user-visible gain), <code>AlmanacWatch</code>, <code>AlmanacWatchWidgets</code> and <code>AlmanacWidgets</code>. The display name under the icon is Almanac; the bundle id is <code>com.shivvyas.lifeos</code>; the team is <code>Z42YU5W6WY</code>. The app's folders under <code>LIfeOS/</code> are picked up automatically, as described in <a href="#ch2">Chapter 2</a>.</p>
+<div class="note caution"><b>A missing Secrets.xcconfig does not fail the build</b>xcconfig substitution of a missing variable yields an empty string. A clean checkout builds, archives and launches, then shows a sign-in screen that can never sign anyone in. Confirm the file exists and is populated before archiving on any machine that is not the usual one.</div>
+<h4>2 · Supabase</h4>
+<pre><code>supabase link --project-ref &lt;ref&gt;
+supabase db push                          # 18 migrations: schema, RLS, functions, seed
+supabase config push                      # auth: email OTP via Resend, SMS, Apple, templates
+supabase secrets set \
+  OPENAI_API_KEY=... \
+  WHOOP_CLIENT_ID=... WHOOP_CLIENT_SECRET=... \
+  FITBIT_CLIENT_ID=... FITBIT_CLIENT_SECRET=... \
+  PLAID_CLIENT_ID=... PLAID_SECRET=... PLAID_ENV=sandbox \
+  PLAID_REDIRECT_URI=https://almanac.shivvyas.com/plaid-oauth \
+  TWILIO_ACCOUNT_SID=... TWILIO_AUTH_TOKEN=... TWILIO_VERIFY_SERVICE_SID=... \
+  OTP_PEPPER=... \
+  APNS_KEY_ID=... APNS_TEAM_ID=Z42YU5W6WY APNS_BUNDLE_ID=com.shivvyas.lifeos \
+  APNS_KEY="$(cat AuthKey.p8)" APNS_SANDBOX=true
+supabase functions deploy</code></pre>
+<p>Then put the project URL and anon key into <code>Config/Secrets.xcconfig</code>. Thirteen Edge Functions deploy from <code>supabase/functions/</code>: <code>otp-start</code>, <code>otp-check</code>, <code>whoop-callback</code>, <code>whoop-token</code>, <code>fitbit-token</code>, <code>fitbit-sync</code>, <code>plaid-link-token</code>, <code>plaid-exchange</code>, <code>plaid-sync</code>, <code>plaid-disconnect</code>, <code>lifo-agent</code>, <code>lifo-nudge</code>, and the shared modules under <code>_shared/</code>. Two of them declare <code>verify_jwt = false</code> in <code>config.toml</code>: <code>whoop-callback</code>, because a browser following Whoop's 302 carries no Authorization header and cannot be made to, and <code>whoop-token</code>, which validates the bearer itself with <code>resolveUser</code> before touching account data. Stating it in config rather than passing <code>--no-verify-jwt</code> means a deploy from anywhere gets it right.</p>
+<p>Two server-side steps cannot live in a migration. The hourly nudge schedule needs the project's own function URL and the service role key, so <code>supabase/functions/lifo-nudge/schedule.sql</code> is run once from the SQL editor after storing both in Vault. And the auth email templates must be pushed, because Supabase's stock templates send a magic link and the app's sign-in is a six-digit code that has to be typable.</p>
+<h4>3 · Provider developer accounts</h4>
+<div class="tablewrap"><table><thead><tr><th>Provider</th><th>What to register</th><th>Where the pieces go</th></tr></thead><tbody>
+<tr><td>Whoop</td><td>An app at developer.whoop.com (needs an active membership). Redirect URI is the https <code>whoop-callback</code> function, which bridges to the app's own scheme; the app answers to both <code>lifeos://</code> and <code>com.shivvyas.almanac.whoop</code>. Request every scope listed in <code>WhoopCollection</code> including <code>offline</code></td><td>Client id in the xcconfig; secret in function env</td></tr>
+<tr><td>Fitbit</td><td>An app with a custom-scheme redirect, <code>lifeos://fitbit-callback</code>. Fitbit permits a custom scheme for a native app, so no bridge function</td><td>Client id in the xcconfig; secret in function env; tokens live server-side under a lease</td></tr>
+<tr><td>Plaid</td><td>Products Transactions and Accounts. Allowed redirect URI <code>https://almanac.shivvyas.com/plaid-oauth</code>. Plaid refuses to mint a link token carrying a redirect it has not been shown, so register this before setting <code>PLAID_REDIRECT_URI</code></td><td>Client id and secret in function env only; no Plaid call ever originates on the device</td></tr>
+<tr><td>The universal link site</td><td>The <code>web/</code> folder deploys to Vercel as project <code>almanac-links</code>; point <code>almanac.shivvyas.com</code> at it and add the domain. <code>vercel.json</code> forces <code>application/json</code> on the association file, without which iOS ignores it and every OAuth bank silently falls back to Safari</td><td>Check with <code>curl -sI</code>: wants 200 and that content type</td></tr>
+<tr><td>OpenAI</td><td>A key with access to <code>gpt-5-mini</code>. The model name is in <code>_shared/lifo.ts</code>, so a model change is a function deploy</td><td>Function env only</td></tr>
+<tr><td>ElevenLabs</td><td>A key for Scribe (speech to text) and Flash v2.5 (text to speech)</td><td>Today in the xcconfig and therefore in the bundle; moving it behind an Edge Function and rotating it is item 2 of the privacy plan in <a href="#chA">Appendix A</a></td></tr>
+<tr><td>Twilio Verify</td><td>A Verify service. The committed config enables SMS with placeholder SIDs, and every number in <code>[auth.sms.test_otp]</code> short-circuits before Twilio is called, so the flow is fully exercisable with no account</td><td>Function env; real numbers start working when real credentials replace the zeros</td></tr>
+<tr><td>Resend</td><td>SMTP for the email code; <code>admin_email</code> is required in config whenever SMTP is enabled</td><td><code>config.toml</code> with <code>RESEND_API_KEY</code> in the environment when pushing</td></tr>
+<tr><td>APNs</td><td>A .p8 key with the Push Notifications capability. Sandbox host for development builds, production for TestFlight; the wrong one answers 400 <code>BadDeviceToken</code> on every send</td><td>Function env; the sandbox flag is configuration, not a guess</td></tr>
+</tbody></table></div>
+<h4>4 · The workout catalog</h4>
+<pre><code>deno run --allow-net --allow-read --allow-write scripts/catalog/verify.ts \
+  --out supabase/migrations/&lt;stamp&gt;_workout_videos_seed.sql
+supabase db push</code></pre>
+<p>Curation is an edit to <code>scripts/catalog/catalog.json</code> plus a verify run. The script checks every id against YouTube's keyless oEmbed endpoint for title, channel and plausible duration, refuses an empty catalog, and writes a seed whose last statement deletes every row not in the verified list, so a seed run is a full sync. The first seed is a migration Supabase has already recorded and will never re-run, which is why later passes write a new timestamped file with <code>--out</code>. The catalog ships at 122 verified videos.</p>
+<h4>5 · Device</h4>
+<p>HealthKit background delivery, the Whoop and Fitbit OAuth round trips, the Plaid universal link, a real <code>HKWorkoutSession</code>, the watch hand-off and push delivery cannot be verified in the simulator. All need a physical device with a signing team, and the watch checks need a paired watch. The list of what is still pending on hardware is in <a href="#chA">Appendix A</a>.</p>
+
+<h3 id="s23-2"><span class="num">23.2</span><span>Secrets</span></h3>
+<p>There is no runtime <code>.env</code> on iOS. The app is a signed bundle; anything shipped inside it is extractable. The governing rule is therefore: <strong>what must never leak lives server-side.</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Tier</th><th>Location</th><th>Contents</th><th>In git?</th></tr></thead><tbody>
+<tr><td>1 · Build config</td><td><code>Config/Secrets.xcconfig</code></td><td>Supabase URL and anon key, Whoop client id and redirect, Plaid redirect, Fitbit client id and redirect, ElevenLabs key</td><td>Gitignored. Template committed as <code>Secrets.example.xcconfig</code></td></tr>
+<tr><td>2 · Runtime</td><td>Keychain, per account slot</td><td>Supabase session (access and refresh token), Whoop tokens</td><td>Never</td></tr>
+<tr><td>2b · Runtime</td><td><code>UserDefaults</code>, per account suite</td><td>Plaid sync cursors, connection state, tour and migration markers, the APNs token</td><td>Never; dies with the app container on purpose</td></tr>
+<tr><td>3 · Server</td><td>Edge Function environment</td><td><code>SUPABASE_SERVICE_ROLE_KEY</code>, <code>OPENAI_API_KEY</code>, <code>WHOOP_CLIENT_SECRET</code>, <code>FITBIT_CLIENT_SECRET</code>, <code>PLAID_SECRET</code>, Twilio credentials, <code>OTP_PEPPER</code>, <code>APNS_KEY</code></td><td>Never. Never on the device either</td></tr>
+<tr><td>3b · Database</td><td>Tables with no client policies</td><td><code>plaid_items.access_token</code>, <code>fitbit_connections</code> tokens, <code>whoop_connections</code> tokens, <code>lifo_usage</code>, <code>otp_events</code></td><td>Readable only by the service role from inside a function</td></tr>
+</tbody></table></div>
+<p>Nothing in tier 1 is truly secret except the ElevenLabs key. The anon key is designed to ship in clients and is safe precisely because RLS gates every row; the OAuth client ids are public by design. The xcconfig has one trap: <code>//</code> starts a comment, so every URL in it breaks the scheme separator with <code>$()</code> or the value truncates to <code>lifeos:</code>.</p>
+<div class="note blocked"><b>service_role is the one that matters</b>It bypasses RLS entirely. It belongs only in an Edge Function environment and in Vault for the cron schedule: never in an xcconfig, never in the app target, never in git. Every other secret in this system is recoverable by rotation; this one grants total read and write access to everything, including three tables of plaintext bank and wearable credentials that are an accepted single-user trade and must be encrypted before a second person's data lands in them.</div>
+
+<h3 id="s23-3"><span class="num">23.3</span><span>Shipping to TestFlight</span></h3>
+<p>Everything the repo can settle is settled: display name, bundle id, team, iOS 26 floor, export compliance declared exempt. The parts that need an Apple ID are in <code>docs/handbook/testflight-release.md</code>; the two that bite are here.</p>
+<p><strong>Bump the build number first, and commit it.</strong> App Store Connect rejects a <code>(version, build)</code> pair it has already seen, and it rejects it after the upload finishes. <code>CURRENT_PROJECT_VERSION</code> is 17 today, in both Debug and Release; raise it for every upload, even a re-upload, and a rejected upload still burns the number. Through build 15 the number in git never moved off 1 because each archive was made from an uncommitted edit, so nothing in the repository could answer what was uploaded last. Committing it is what made the guess go away.</p>
+<p>Then: destination Any iOS Device, Product → Archive, Distribute App → TestFlight, accept automatic signing (the Apple Distribution identity, not the Apple Development one a local archive uses). Internal testers get the build with no review. Two warnings are not failures: the missing dSYM for <code>LinkKit.framework</code> is Plaid shipping no debug symbols in any slice, and must not be silenced by stripping the app's own symbols; and the first Live Activity request on a fresh install raises the system's own consent alert.</p>
+<p>The app icon is rendered from <code>docs/brand/lifeos-icon.svg</code> with headless Chrome at 1024 pixels. The original artwork clipped to a squircle and left the corners transparent; iOS applies its own mask and rejects an icon with an alpha channel at validation, so the shipping SVG lets the gradient run to the edges. Check <code>hasAlpha</code> reads <code>no</code> with <code>sips</code> before committing.</p>
+
+<h3 id="s23-4"><span class="num">23.4</span><span>Testing strategy</span></h3>
+<p>Logic that can be tested without a simulator lives in the package and is developed test-first. Feature view models are exercised through the native checks harness against the real store, because the Xcode project still has no test target. SwiftUI view bodies are verified by design-preview captures and a build, because asserting on view structure is ceremony that breaks on every layout change without catching real defects.</p>
+<p>The counts below are from runs on 15 September 2026, on this machine, against the tip of <code>main</code>:</p>
+<pre><code>$ swift test --package-path LifeOSKit 2&gt;&amp;1 | tail -2
+Test run with 1298 tests in 173 suites passed after 4.589 seconds.
+
+$ cd supabase/functions &amp;&amp; deno test --allow-all 2&gt;&amp;1 | tail -2
+ok | 100 passed | 0 failed (1s)
+
+$ cd scripts/catalog &amp;&amp; deno test --allow-all 2&gt;&amp;1 | tail -2
+ok | 7 passed | 0 failed (42ms)</code></pre>
+<div class="tablewrap"><table><thead><tr><th>Target</th><th>What is tested</th><th>How</th></tr></thead><tbody>
+<tr><td><code>PersistenceTests</code></td><td>Goal evaluation, streaks, anomaly baselines, upsert invariants, money rollup and cents, buckets, plan ticks, calendar windows and free slots, chat recency, the whole notes store, block editor and parser, indexer and index migration, sector store, catalog and bookmarks, user scopes, the schema default rule</td><td>Swift Testing over an in-memory <code>ModelContainer</code>; a fixed calendar injected</td></tr>
+<tr><td><code>IntegrationsTests</code></td><td>Whoop wire format, pagination, arbitration and tokens; Fitbit wire format, derivation, OAuth and sync; Plaid client, mapping, item store and sync; HealthKit apply and window; the metric arbiter; calendar merge and sync; note wire format and sync indexing; auth error mapping, session refresh, keep-alive, profiles, social, groups, shared stats, push tokens; live effort; staleness</td><td>Recorded payload fixtures; injected <code>URLProtocol</code> stubs and fake APIs; no network</td></tr>
+<tr><td><code>InsightsTests</code></td><td>Routing and escalation, the digest and context bundle under budget, brief cache, coach tasks and tools, tool schema and invoker, chat wire and the remote chat engine round loop, response style, spoken reply, speech endpointer and capture plan, spend series, recurring spend, model availability</td><td>No model weights, no network; scripted streams</td></tr>
+<tr><td><code>SectorsTests</code></td><td>Every scorer, evidence factory, check-in, close schedule and progress, month windows and inputs, projections, levers and leverage, bands, history and observations, budget periods, the workout planner and filter, catalog refresh</td><td>Pure functions; deterministic fixtures</td></tr>
+<tr><td><code>AssistantTests</code></td><td>The six calendar tools against a fake calendar and the assistant context</td><td>Fake <code>CalendarWriting</code></td></tr>
+<tr><td><code>DesignSystemTests</code></td><td>Tokens and dark variants, layout metrics, month grid maths, trend series, bar chart geometry, sleep composition, sign-in chrome, the scanline slicer</td><td>Swift Testing, fixed UTC calendar</td></tr>
+<tr><td><code>AppSurfacesTests</code>, <code>MotionTests</code></td><td>The readout the widget decodes, HUD placement, ring maths, watch wire packets; the rep counter's six synthetic signals</td><td>Foundation only, so both link into the watch</td></tr>
+<tr><td>Deno, <code>supabase/functions</code></td><td>OTP session and Twilio classification, Plaid helpers, Fitbit quota and lease arithmetic, LIFO task config, budget cutoff, SSE framing, stream chunks, refusals, request parsing, the nudge triggers and fallbacks, APNs token and payload rules</td><td>Pure functions behind injected fetch fakes</td></tr>
+<tr><td>Deno, <code>scripts/catalog</code></td><td>Catalog parsing, title and channel matching, duration plausibility, seed SQL, the empty-catalog refusal</td><td>Pure</td></tr>
+<tr><td>SQL, <code>supabase/tests</code></td><td>Group membership and wellness leaderboard policies</td><td>pgTAP-style assertions against the local database</td></tr>
+<tr><td>Native checks</td><td>The recorder, sensors, drafts, watch hand-off and video stamping</td><td><code>--design-preview --page=checks</code> on a simulator; 34 of 34</td></tr>
+<tr><td>Views</td><td>Both themes, every hue, empty and live states</td><td>Design-preview captures in <code>docs/design/</code>, reviewed in each slice's QA report</td></tr>
+<tr><td>Integrations on hardware</td><td>Background delivery, OAuth round trips, real sensors, watch, push</td><td>Manual, physical device</td></tr>
+</tbody></table></div>
+<div class="note good"><b>The one test that matters most</b>For every screen, an empty store must produce a snapshot whose readings are all nil. It is a four-line test per feature and it is the regression guard against the single worst bug this app can have: a confident zero where there is no data.</div>
+<p>Two habits keep the suite useful. Assertions are written so they cannot pass for the wrong reason: the Plaid cursor tests were rewritten so the "cursor did not move" assertion fails on an empty store, and the money tests dropped a stale comment that described a case they did not cover. And when a check fails during a slice, the rule is fix the cause, never the check: the strength-session check that regressed "Repeated save creates one workout" was fixed by deleting the row it left in the shared context, not by relaxing the assertion.</p>
+
+<h3 id="s23-5"><span class="num">23.5</span><span>The design preview and native checks harness</span></h3>
+<p>Since 14 September 2026 the app has a DEBUG-only launch argument, <code>--design-preview</code>, that mounts a fixture instead of the signed-in shell. It exists because the recorder, the sensors and the Live Activity cannot be reached by <code>swift test</code>, and because every design QA capture needs the same screen in the same state on every run, with no account loaded.</p>
+<div class="tablewrap"><table><thead><tr><th>Argument</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>--page=gallery</code></td><td>The default: a gallery of surfaces</td></tr>
+<tr><td><code>--page=activity</code></td><td>Begin Activity over <code>HealthActivityFixture</code>, a fixed WHOOP recovery of 82 percent and a live reading of 152 bpm</td></tr>
+<tr><td><code>--page=player --video=&lt;id&gt;</code></td><td>The video player on one catalog id, used for the embed spot-check</td></tr>
+<tr><td><code>--page=checks</code></td><td>Runs <code>ActivityRecorderChecks</code> and prints one PASS or FAIL line per check to the console</td></tr>
+<tr><td><code>--page=inbox</code>, <code>--page=settings</code></td><td>The notification inbox and the settings screen</td></tr>
+<tr><td><code>--live</code>, <code>--strength</code>, <code>--dark</code>, <code>--live-activity</code>, <code>--hud-collapsed</code>, <code>--hud-expanded</code></td><td>Drive the in-session fixture: a running session, a strength activity with reps, dark mode, a real Live Activity request, the rings folded to a bar</td></tr>
+</tbody></table></div>
+<p>The checks are the recorder's test suite. Each is a named closure that builds a recorder over an in-memory store with injected answers for Health authorization, the watch bridge and the age, drives it, and asserts. They cover the paths a unit test cannot: a timer starting without Health access, paused readings accruing nothing, a draft restoring after relaunch, a second account being unable to see the first's draft, a watch that never answers, a packet with an unknown version. The rule that applies to them is the same as for tests: fix the cause, never the check.</p>
+
+<h3 id="s23-6"><span class="num">23.6</span><span>Driving the simulator from the terminal</span></h3>
+<p><code>idb</code> is not installed and <code>simctl</code> cannot tap, so UI automation goes through clicks at absolute screen coordinates with <code>cliclick</code>, and only while the Simulator is frontmost. The recipe that works, run before every click:</p>
+<pre><code>osascript -e 'tell application "System Events" to set frontmost of process "Simulator" to true'
+sleep 1
+cliclick -w 150 c:X,Y</code></pre>
+<p>Coordinates come from the Simulator's own geometry: the device screen is drawn into the first <code>AXGroup</code> of the window, so read its position and size through System Events and scale a pixel measured on the full-resolution screenshot (1206 by 2622 for an iPhone 17) into it. Re-read the group after every boot or window move, because the origin changes. Screenshot after every tap rather than firing three and checking at the end, since a tap during a transition is swallowed. The simulator keychain survives <code>simctl uninstall</code>, so a reinstall skips onboarding; <code>xcrun simctl keychain &lt;sim&gt; reset</code> clears it while the device is booted. Never tap within a hundred pixels of a Plaid entry point without a screenshot confirming what is under the point: on 1 September 2026 a mapped tap landed seventy pixels high, opened Plaid Link and sent a real login code. Build destinations must be iOS 26 runtimes; check <code>xcodebuild -showdestinations</code>, not <code>simctl list devices</code>.</p>
+
+<h3 id="s23-7"><span class="num">23.7</span><span>Working in parallel</span></h3>
+<p>Five or six sessions routinely run against the one checkout at <code>/Users/shivvyas/LIfeOS</code>, switching branches and pushing under each other, so <code>HEAD</code> in the shared checkout can move mid-task. The conventions that make this survivable:</p>
+<ul>
+  <li><strong>Never commit to main.</strong> A branch per logical change: <code>feat/</code>, <code>fix/</code>, <code>docs/</code>, <code>chore/</code>. Branches are reviewed and merged by hand; unrelated changes mixed into one commit or dumped on main make that impossible.</li>
+  <li><strong>Conventional commits.</strong> <code>type(scope): imperative summary</code> with a short body explaining what and why, matching the history. No em dashes anywhere in a message, and no attribution trailers.</li>
+  <li><strong>A private worktree for any multi-commit task.</strong> <code>git worktree add .claude/worktrees/&lt;name&gt;</code>, then copy the untracked <code>Config/Secrets.xcconfig</code> in, because the app will not sign in without it. Never under a temporary directory that a tool may clear mid-task. Re-read <code>origin/main</code> immediately before every push.</li>
+  <li><strong>Each slice leaves a paper trail.</strong> A spec under <code>docs/superpowers/specs/</code>, a plan under <code>docs/superpowers/plans/</code>, and a QA report under <code>docs/design/&lt;slice&gt;/report.md</code> with the captures beside it. The report records every deviation from the plan and every check still pending on hardware.</li>
+</ul>
+
+<h3 id="s23-8"><span class="num">23.8</span><span>Guards that run without a test</span></h3>
+<p><code>scripts/check-typography.sh</code> greps the app and package sources for any font declared outside <code>LifeOSType</code>: a literal point size, a UIKit <code>systemFont(ofSize:)</code>, a rounded or serif design, or one of Apple's semantic text styles. The app once carried 376 hand-written font calls across 28 sizes because nothing stopped a screen inventing its own. Adding a step is a deliberate edit to <code>Typography.swift</code>, not something that happens by accident on a Tuesday. It exits non-zero on any hit.</p>
+<p>The schema test in <a href="#s21-13">21.13</a> is the other guard worth knowing by name. When you add a field to an existing model, add its name to the list there; the test reads the schema itself rather than the source, so it catches a default removed by a refactor as well as one never written.</p>
+
+<h3 id="s23-9"><span class="num">23.9</span><span>Study notes</span></h3>
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Config/Secrets.example.xcconfig</code>, every key annotated with where its real secret lives.</li>
+  <li><code>supabase/config.toml</code>, the auth and function blocks.</li>
+  <li><code>docs/handbook/testflight-release.md</code>.</li>
+  <li><code>LIfeOS/App/LIfeOSApp.swift</code> and <code>App/Surfaces/SurfaceDesignPreview.swift</code>, for how <code>--design-preview</code> takes over the scene.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorderChecks.swift</code>.</li>
+  <li><code>scripts/check-typography.sh</code> and <code>scripts/catalog/verify.ts</code>.</li>
+  <li><code>LifeOSKit/Package.swift</code>, for the eight targets and their dependency edges.</li>
+</ol>
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does a clean checkout build without secrets?</strong> xcconfig substitution of a missing variable is an empty string, not an error.</li>
+  <li><strong>Why does <code>whoop-callback</code> skip JWT verification?</strong> A browser following Whoop's redirect carries no bearer; the function holds no secret and only redirects into an app that checks PKCE and state itself.</li>
+  <li><strong>What must happen before every TestFlight upload?</strong> Raise <code>CURRENT_PROJECT_VERSION</code> in both configurations and commit it.</li>
+  <li><strong>Where do the recorder's tests run?</strong> On a simulator, through <code>--design-preview --page=checks</code>, because they need HealthKit, Bluetooth and ActivityKit.</li>
+  <li><strong>Why a worktree under <code>.claude/worktrees</code> and not a temporary directory?</strong> A temporary directory can be cleared mid-task; the worktrees directory persists and is where every other session puts its own.</li>
+</ul>
 </section>

@@ -1,10 +1,197 @@
-<section class="chapter" id="chA" data-hue="notes">
-<p class="chapter-kicker">Chapter A</p>
-<h2><span class="num">A</span><span>Stub chA</span></h2>
-<p class="lede">Stub lede for chA &amp; friends.</p>
-<h3 id="sA-1"><span class="num">A.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="chAa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#chAa)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="sA-2"><span class="num">A.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="chA">
+<p class="chapter-kicker">Appendix A</p>
+<h2><span class="num">A</span><span>Product thesis and roadmap</span></h2>
+
+<p class="lede">
+  Why the app exists, in the words that were used before any of it was built, and where it stands
+  on 15 September 2026: what shipped in the three weeks since Revision D, and what is still open.
+</p>
+
+<h3 id="sA-1"><span class="num">A.1</span><span>The thesis</span></h3>
+
+<p>
+  Every health app you already have is a silo. Whoop knows your recovery but not that you skipped
+  breakfast. Apple Health knows your steps but not that you blew the grocery budget and slept badly
+  because of it. Each one gives advice that is correct in isolation and useless in context.
+</p>
+
+<p>
+  Almanac is built on a single bet: <strong>the value is in the join, not the collection.</strong>
+  A coach that can see you missed meditation, logged five hours of sleep, wrote "low focus" in a
+  note, and went over budget can say something no single-purpose app can. That is the entire reason
+  to build one app instead of using five.
+</p>
+
+<p>
+  Everything in the architecture follows from that bet. There is one table keyed by date that every
+  source writes into and every reader reads from. The nine sectors of the Life board exist to give
+  the join a shape a person can act on: not "here is a chart" but "here is the one lever that still
+  moves this month." And LIFO, the coach, is handed the join already summed rather than being asked
+  to reason over rows, which is what makes it affordable, private, and fast.
+</p>
+
+<h3 id="sA-2"><span class="num">A.2</span><span>Product PR FAQ</span></h3>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Almanac is a personal almanac of your own life. It pulls together everything your devices already
+  know about you: weight from your scale, recovery from your strap, movement from your watch,
+  spending from your bank, the day from your calendar, and what you wrote down. It answers one
+  question every morning, am I on track, and one question every month, where did the month go.
+  Open it and a grid of dots shows the month at a glance. Ask LIFO anything and it answers from your
+  numbers, out loud if you like. Nine cards score the parts of your life that matter, and the ones
+  no device can measure get asked, not guessed.
+</p>
+
+<p class="faq-q">Who is this for?</p>
+<p class="faq-a">
+  It began as one person's app, sideloaded on the author's own devices, and that constraint shaped
+  the architecture. It is now on TestFlight with accounts, friends and groups, and the load-bearing
+  assumption has shifted from "one user" to "every user's data stays on their own phone." The
+  server holds what has to be shared or what has to survive a reinstall, and nothing else.
+</p>
+
+<p class="faq-q">Why not just use Apple Health?</p>
+<p class="faq-a">
+  Apple Health is an excellent store and a poor interpreter. It will show you a chart of anything
+  and tell you the meaning of nothing. Almanac reads from it, then adds the layer Health
+  deliberately does not: a definition of a good day, a streak that survives days you forgot to log,
+  a monthly score with the evidence behind it, and a coach that reads across domains.
+</p>
+
+<p class="faq-q">Does my data go to a server?</p>
+<p class="faq-a">
+  Your health rows, your transactions and your sector scores never do. Your notes, your profile,
+  and the three figures you choose to share with friends do, under row-level security that names
+  friendship in the policy. When LIFO answers from the cloud it is handed derived numbers, never a
+  heart-rate series, and every answer carries a disclosure you can open that shows exactly what was
+  sent. <a href="#ch1">Chapter 1</a> draws the boundary; <a href="#ch14">Chapter 14</a> enforces it.
+</p>
+
+<p class="faq-q">What is explicitly not in this product?</p>
+<p class="faq-a">
+  Screen time analysis. It was requested and it cannot be built, because Apple's API forbids
+  reading the values into the app; see <a href="#ch19">Chapter 19</a>. Food logging by photo, which
+  Revision D promised, has not been built and is not scheduled. Guest mode was removed: a store
+  belongs to an account.
+</p>
+
+<p class="faq-q">What is the hardest part?</p>
+<p class="faq-a">
+  Not the integrations. It is friction: any app that requires daily manual logging dies in about
+  eleven days. Every product decision here is subordinate to keeping the daily cost near zero, which
+  is why a note is one line into an Inbox, a workout is one tap on a video, and the sectors that need
+  a human answer ask two questions a month, not twenty.
+</p>
+
+<p class="faq-q">What does it cost to run?</p>
+<p class="faq-a">
+  Under two dollars per user per month, by design and by a ledger in the database.
+  <a href="#ch24">Chapter 24</a> has the arithmetic and the two lines that are not yet metered.
+</p>
+</div>
+
+<h3 id="sA-3"><span class="num">A.3</span><span>What shipped since Revision D</span></h3>
+
+<p>
+  Revision D was written on 25 August 2026. Between then and 15 September, 436 commits landed on
+  <code>main</code>. Each project got its own spec and plan under <code>docs/superpowers/</code>,
+  and each rewrote or added one chapter here when it landed. Grouped by area, with the dates the
+  work was merged:
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Area</th><th>Dates</th><th>What landed</th><th>Chapter</th></tr></thead>
+<tbody>
+<tr><td>Sign-in and accounts</td><td>25 to 27 Aug</td><td>Email six-digit code as the default channel; the returning-user door; Twilio failures mapped to causes a person can act on; a six-box code field; every account gets its own store and several can share a device; the session renews before the hour is up; sign out stays signed out</td><td><a href="#ch4">4</a></td></tr>
+<tr><td>Life board and sectors</td><td>25 to 27 Aug</td><td>The nine sectors named; evidence rows and one shared scoring rule; scorers for Body, Money, Mission, Growth, Mind and Soul; check-in questions for the relational sectors; the on-device sector note; the Life board as the fifth tab, the wallet deck, the monthly close; sector history in four bands; the in-flight month scored as a reachable band, coasting and perfect-finish projections, levers ranked by what still moves the score</td><td><a href="#ch13">13</a></td></tr>
+<tr><td>Money</td><td>26 Aug to 1 Sep</td><td>Real bank sync through Plaid: four Edge Functions, credentials behind service-role-only RLS, a per-Item cursor on the device, transfers kept out of income and spending; budgets as buckets with a single holder per claim key and an unclaimed-spend band; the rebuilt finance tab as banded sections behind a rail; merchant entity, mask, subtype and both balances decoded; cents exact through <code>MoneyParts</code>; merchant logos; drill-down pages by category and merchant; the three charts; collapsible cards; the sample month removed</td><td><a href="#ch11">11</a></td></tr>
+<tr><td>Calendar and Today</td><td>26 Aug to 1 Sep</td><td>The calendar core: EventKit behind a source protocol, a windowed SwiftData cache, dedup merge, free slots; agenda, upcoming and the day schedule on Today; add and edit events from the agenda; a month you can walk through; a metric opens on a page of its own; today's numbers keep moving while the app is open</td><td><a href="#ch6">6</a></td></tr>
+<tr><td>The calendar assistant</td><td>26 to 27 Aug</td><td>The Assistant target with six calendar tools; on-device session turns binding tools; the confirmation broker gating and capping writes; chat conversations persisted locally; the assistant sheet from Today; the calendar drawn as a day you can move around in</td><td><a href="#ch15">15</a></td></tr>
+<tr><td>LIFO</td><td>26 Aug to 15 Sep</td><td>The <code>lifo-agent</code> Edge Function with a JWT gate, server-side task config, guardrails, reply parsing and a daily token ledger; the device-assembled context bundle with audience renders; the widened Whoop digest; cloud first and the device after; the conversational core with tools run against the cloud from the device; tier preference; LIFO remembers the conversation; the aura, then the orb, then text and voice split into two screens; three voices; streaming answers; the mic closing when the sentence ends; one spoken line first with the cards following the voice; proactive nudges, LIFO speaking first</td><td><a href="#ch14">14</a></td></tr>
+<tr><td>Health and wearables</td><td>26 to 27 Aug</td><td>Apple Health read in full, showing what exists and filling the gaps Whoop leaves; Health connected from onboarding and Settings; cycle data asked separately and only where it applies; Fitbit as a second wearable with server-held tokens under a refresh lease; the arbiter merging contested columns by rank instead of a boolean; the fortnight trends as minimal lines; the sleep dashboard</td><td><a href="#ch7">7</a>, <a href="#ch19">19</a></td></tr>
+<tr><td>Notes</td><td>26 Aug to 13 Sep</td><td>The notes tab rebuilt as a PARA library with Supabase sync; iPad three columns, hardware keyboard, the Pencil writing and drawing in place; the index layer: to-do rows, a wiki-link edge set, a title index rebuilt once; a capture-first Inbox; the phone drawer, later replaced by a sheet; the plan migrated into pages, habits kept as plan entries</td><td><a href="#ch12">12</a></td></tr>
+<tr><td>Profile and social</td><td>26 to 28 Aug, 14 Sep</td><td>A profile screen behind the avatar with settings inside it; the profile and avatar kept on the server, the bucket closed to the anonymous internet; profiles, friendships and messages with RLS doing the guarding; find people, message a friend, share three figures; requests and conversations given a place to wait; groups and wellness leaderboards</td><td><a href="#ch16">16</a>, <a href="#ch17">17</a></td></tr>
+<tr><td>Design and shell</td><td>26 to 28 Aug, 14 Sep</td><td>The app renamed Almanac with a new icon; every font on one type scale; the iPad rail that steps aside; landscape layouts; the three actions collapsed into a fan, later flattened into every tab's bar; an animated first-run tour and the dotted cat; push-state tints and the live gradient</td><td><a href="#ch3">3</a>, <a href="#ch5">5</a></td></tr>
+<tr><td>Live sessions</td><td>14 Sep</td><td>Heart-rate zones from age, estimated effort from seconds in zone, capacity, ceiling, battery and push state; a live readout the widget can decode; the glass HUD and the gradient hero; a Live Activity with live readings; sensors that reconnect on their own; the glass rings over the hero and the video</td><td><a href="#ch8">8</a>, <a href="#ch18">18</a></td></tr>
+<tr><td>Watch companion</td><td>14 to 15 Sep</td><td>A pure rep counter on wrist acceleration; watch wire types; the session handed to a nearby Apple Watch and run and mirrored from the wrist; reps and sets on every surface; correct a rep and recover an active workout</td><td><a href="#ch9">9</a></td></tr>
+<tr><td>Workout library</td><td>14 to 15 Sep</td><td>A verified table of curated videos and a read-only client; catalog cache, training preferences, workout split and video on the record; a planner for today's workout; the library with today's plan; a video played behind the live HUD with the nocookie origin fix; bookmarks, scheduling and search; full screen and landscape video with a HUD you can move; the equipment column given a default so installed stores migrate</td><td><a href="#ch10">10</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note">
+  <b>The V1 to V7 slice scheme is retired</b>
+  Revision C numbered work V1 to V7 and Revision D carried a six-row project table. Neither maps
+  onto what happened: the calendar shipped before nutrition, the Life board was not in either list,
+  and the API backbone on Cloud Run was never built because Supabase Edge Functions turned out to
+  be enough. The table above is the record; the table below is the live list.
+</div>
+
+<h3 id="sA-4"><span class="num">A.4</span><span>What is still open</span></h3>
+
+<p>
+  Everything here is known, written down somewhere in the repository, and not done. The order is
+  roughly the order it should be picked up.
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Item</th><th>State</th><th>Where it is recorded</th></tr></thead>
+<tbody>
+<tr><td>Privacy plan item 1: the off-device prompt sends spending-by-category totals, never transaction rows</td><td>Done on the branch <code>feat/privacy-aggregate-prompts</code>, not merged</td><td>Worktree <code>.claude/worktrees/privacy-aggregates</code></td></tr>
+<tr><td>Privacy plan item 2: move ElevenLabs behind an Edge Function (<code>lifo-speak</code>) and rotate the key that ships in the bundle</td><td>Open; the function does not exist</td><td><a href="#s24-4">24.4</a>, <a href="#ch14">Chapter 14</a></td></tr>
+<tr><td>Privacy plan item 3: the <code>profiles</code> select policy is <code>using (true)</code> and the row now carries birth date, height and gender; split or tighten it</td><td>Open</td><td><a href="#ch20">Chapter 20</a></td></tr>
+<tr><td>Privacy plan item 4: encrypt <code>plaid_items.access_token</code>, and the Whoop and Fitbit tokens, at rest with the key in the function environment only</td><td>Open; accepted as a single-user trade today</td><td><a href="#ch23">Chapter 23</a>, secrets tier 3b</td></tr>
+<tr><td>Privacy plan item 5: delete the unused server-side health tables from the initial schema; <code>lifo-nudge</code> still reads <code>daily_metrics</code>, so that read must move first</td><td>Open</td><td><a href="#ch20">Chapter 20</a></td></tr>
+<tr><td>Privacy plan item 6: file protection on the SwiftData store</td><td>Open</td><td>Memory note, 2 September 2026</td></tr>
+<tr><td>Privacy plan item 7: an account deletion path; sign out leaves the local store on disk and Apple requires deletion</td><td>Open</td><td><a href="#ch4">Chapter 4</a></td></tr>
+<tr><td>Privacy plan item 8: a <code>PrivacyInfo.xcprivacy</code> manifest, then a Privacy screen in Settings stating the three guarantees</td><td>Open</td><td>Memory note, 2 September 2026</td></tr>
+<tr><td>The assistant's one-time privacy disclosure before first use, promised in the calendar spec</td><td>Not implemented; every LIFO answer carries a per-answer disclosure instead</td><td><a href="#ch15">Chapter 15</a></td></tr>
+<tr><td>Five watch hardware checks: watch launch and heart-rate hand-off within ten seconds; a watch-started session raising the phone Live Activity; rep accuracy over ten slow curls; plus the two checks after them and one recovery-behaviour check</td><td>Pending on a physical iPhone and Watch; only the no-watch fallback is exercised by the simulator checks</td><td><code>docs/design/watch-companion/report.md</code>, <a href="#ch9">Chapter 9</a></td></tr>
+<tr><td>The landscape capture of the video player</td><td>Pending; the layout is reachable now that <code>OrientationLock</code> lets the player rotate, but no capture has been committed</td><td><code>docs/design/workout-library/report.md</code>, <a href="#ch10">Chapter 10</a></td></tr>
+<tr><td>Proactive LIFO slice 3: device-side triggers, sector snapshots on the server, open commitments</td><td>No code; slices 1 and 2 shipped</td><td><code>docs/superpowers/specs/2026-08-28-proactive-lifo-design.md</code></td></tr>
+<tr><td>The notes Inbox screen and its view model compile but nothing routes to them since the phone shell changed on 13 September</td><td>Dead code to delete or re-route</td><td><a href="#ch12">Chapter 12</a></td></tr>
+<tr><td><code>CoachViewModel</code> still builds a <code>CoachRouter</code> it never calls</td><td>Safe to delete</td><td><a href="#ch14">Chapter 14</a></td></tr>
+<tr><td>The savings-goal band reads two defaults keys nothing in the app writes</td><td>Open; "Set a goal" opens the bucket editor instead</td><td><a href="#ch11">Chapter 11</a></td></tr>
+<tr><td><code>scripts/check-typography.sh</code> fails on three font calls in the intro and signup screens</td><td>Open</td><td><a href="#ch3">Chapter 3</a></td></tr>
+<tr><td>The cloud budget is a cap with a one-turn overshoot, not a reservation</td><td>Accepted for now; revisit before a shared provider key serves many people</td><td><a href="#s24-3">24.3</a></td></tr>
+<tr><td>Food logging by photo</td><td>Not started; the vision role in the router has no task behind it</td><td>Revision D, Appendix A</td></tr>
+<tr><td>The feature layer has no unit test target; view models are covered by native checks and the design preview</td><td>Open since Revision B</td><td><a href="#ch23">Chapter 23</a></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note good">
+  <b>Why the cheap modules were not an afterthought</b>
+  The Life board, the workout library and the nudges are each one or two SwiftData models, one hue,
+  one feature folder and a handful of pure functions in the package, assembled from components that
+  already existed. They were cheap because the foundations were built properly: the design system,
+  the daily spine, the MVVM template, the preview harness. They also carry disproportionate value,
+  because every domain added to the join makes the coach materially better at its job.
+</div>
+
+<h3 id="sA-5"><span class="num">A.5</span><span>Study notes</span></h3>
+
+<div class="study">
+<h4>Read in this order</h4>
+<ol>
+  <li><code>docs/superpowers/specs/2026-08-10-life-os-design.md</code>: the original design, to see what survived.</li>
+  <li><code>docs/superpowers/specs/2026-08-25-life-sectors-spine-design.md</code>: the nine sectors, the largest addition since.</li>
+  <li><code>docs/superpowers/specs/2026-08-26-lifo-agent-design.md</code> and <code>2026-08-28-proactive-lifo-design.md</code>: the coach's cloud tier and its slices.</li>
+  <li><code>docs/design/watch-companion/report.md</code> and <code>docs/design/workout-library/report.md</code>: what a QA report looks like and what "pending" means in one.</li>
+  <li>The memory note on the privacy plan, dated 2 September 2026.</li>
+</ol>
+<p class="q">What is the one bet every architectural decision follows from?</p>
+<p class="a">The value is in the join, not the collection: one table keyed by day, every source writes in, every reader reads out.</p>
+<p class="q">Which Revision D promise was never built, and why does it not matter to the architecture?</p>
+<p class="a">The Cloud Run API backbone; Edge Functions carried every server job that arrived, including long Whoop syncs under a lease.</p>
+<p class="q">Which open item is a cost problem as much as a privacy one?</p>
+<p class="a">Moving ElevenLabs behind an Edge Function: the key in the bundle has no per-user cap.</p>
+<p class="q">What changed about the load-bearing assumption between Revision D and E?</p>
+<p class="a">From "one user, no accounts" to "many accounts, each person's data on their own phone"; the server holds only what must be shared or must survive a reinstall.</p>
+</div>
+
 </section>

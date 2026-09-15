@@ -1,10 +1,774 @@
-<section class="chapter" id="ch07" data-hue="notes">
-<p class="chapter-kicker">Chapter 7</p>
-<h2><span class="num">7</span><span>Stub ch07</span></h2>
-<p class="lede">Stub lede for ch07 &amp; friends.</p>
+<section class="chapter" id="ch7" data-hue="health">
+<p class="chapter-kicker">Chapter seven</p>
+<h2><span class="num">7</span><span>Health</span></h2>
+
+<p class="lede">
+  One tab for everything the body reports: how it is doing, and what it did. Two halves behind an
+  underline picker, one week strip that moves both to the same day, and a rule that runs through
+  every card on the screen: a missing reading is a dash, never a zero.
+</p>
+
 <h3 id="s7-1"><span class="num">7.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch07a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch07a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s7-2"><span class="num">7.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<p>
+  Revision D called this tab Body and split it four ways: Activity, Weight, Recovery, Wellness. The
+  restructure of 25 August folded those four into two halves that answer two different questions.
+  <strong>Health</strong> is how the body is doing: recovery, sleep, vitals against their own
+  baselines, weight, and the journal. <strong>Fitness</strong> is what it did: calories burnt,
+  steps, strain, the sessions themselves, and the training week. The tab bar has five slots and
+  this one takes one of them, because Almanac is still not a fitness app; it is the place a life's
+  signals meet, and the body is one of nine sectors (<a href="#ch13">Chapter 13</a>).
+</p>
+
+<div class="prfaq">
+  <p class="prfaq-kicker">Working backwards</p>
+  <p class="release">
+    Open Health and the day is already chosen for you: today, with a week strip to step back. Four
+    tracking tiles across the top show steps, sleep, weight and recovery for that day, each a door
+    to its own history. Below them, Health or Fitness. Health opens with anything that is off, then
+    recovery and calories, a sleep card with the night's stages, HRV and resting heart rate, blood
+    oxygen and skin temperature read against your own fortnight, and every other reading Apple
+    Health had for the day, grouped and listed only where a value exists. Fitness opens with the
+    week's burn as bars, then today's movement, strain and heart rates, the day's workouts, and a
+    card that says how the training week is adding up with a row into the workout library.
+  </p>
+  <p class="faq-q">Why does the whole tab move to one selected day?</p>
+  <p class="faq-a">
+    Because both halves are readings of the same day. If Health kept Tuesday and Fitness kept
+    Thursday, a reader could compare Tuesday's recovery with Thursday's session and draw a
+    conclusion from a comparison that was never real. <code>RootView</code> owns one date and fans
+    it out to all four view models at once.
+  </p>
+  <p class="faq-q">Both my iPhone and Watch count steps. Does that double?</p>
+  <p class="faq-a">
+    No. Steps arrive through <code>HKStatisticsQuery</code> with a cumulative-sum option, which
+    de-duplicates overlapping samples across sources. Summing raw samples client-side would roughly
+    double every step count on a day you carried both devices.
+  </p>
+  <p class="faq-q">What does "everything Apple Health holds" mean in practice?</p>
+  <p class="faq-a">
+    Forty-seven metrics in a vocabulary enum, read every day the sync touches. Ten of them have
+    named columns on the day row because scorers and charts read them by name; the other
+    thirty-seven live in a JSON bag on the same row. The screen lists whichever groups actually have
+    a value, so a person with a blood pressure cuff sees blood pressure and a person without never
+    learns the row existed.
+  </p>
+  <p class="faq-q">Where does weight come from?</p>
+  <p class="faq-a">
+    The Renpho scale, via Apple Health. Renpho already syncs there, so Almanac never talks to Renpho
+    directly: one less integration, one less credential to store.
+  </p>
+</div>
+
+<h4>What the tab deliberately does not do</h4>
+<ul>
+  <li>It never diagnoses. An anomaly banner says "Resting HR is well above your 2-week baseline" and stops. "See a doctor" is a claim this data cannot support.</li>
+  <li>It never invents a verdict from missing data. No sleep all week means no sleep verdict, not "Low".</li>
+  <li>It never colours strain with the recovery bands. High recovery is good and green; high strain is hard work, and green would read as praise. Strain gets one plain accent.</li>
+</ul>
+
+<h3 id="s7-2"><span class="num">7.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Health/
+├── Model/
+│   └── HealthSection.swift            health · fitness, each with its hue
+└── View/
+    ├── HealthHubScreen.swift          the hub: title, date, week strip, tiles, picker, switch
+    ├── HealthSegmentView.swift        the Health half
+    ├── FitnessSegmentView.swift       the Fitness half, plus WorkoutRow
+    ├── SleepDashboardCard.swift       night duration, stages, quality rows
+    ├── HealthReadingCard.swift        one reading on a pastel card
+    ├── StatGroup.swift                a featured reading and a grid of supporting values
+    ├── HealthActivityDesignPreview.swift   fixture pages: health, activity, library, player, checks
+    └── CalendarHealthDesignPreview.swift   fixture for the calendar and health captures
+
+Features/Body/                          the Weight card and the wellness rollup
+├── Model/BodySnapshot.swift            weight, weekly delta, 14 points
+├── Model/WellnessSnapshot.swift        week rollup, verdicts, journal, Health groups
+├── View/BodyScreen.swift               WeightSection and its bar chart
+├── ViewModel/BodyViewModel.swift       sixty days to find one delta
+└── ViewModel/WellnessViewModel.swift   week averages, journal writes, the Health groups
+
+Features/Activity/                      the day's movement and the week of calories
+├── Model/ActivitySnapshot.swift        steps, minutes, energy, workouts, weekCalories
+└── ViewModel/ActivityViewModel.swift   seven rows, one day picked out
+
+Features/Recovery/                      recovery, sleep, vitals, the fortnight
+├── Model/RecoverySnapshot.swift        the day plus eight TrendSeries and the nights
+├── ViewModel/RecoveryViewModel.swift   one fetch, trends, anomalies
+├── View/WhoopDetailScreen.swift        the 14-day screen
+└── View/TrendChart.swift               one metric as a line, gaps kept
+
+Features/Settings/ViewModel/
+└── HealthConnectionViewModel.swift     the permission prompt, the sync, the foreground watch
+
+LifeOSKit/Sources/Integrations/
+├── HealthKitReader.swift               the actor that talks to HKHealthStore
+├── HealthMetric.swift                  the 47-metric vocabulary and the merge rules
+├── HealthDaySummary.swift              a day's readings, grouped for display
+├── HealthApply.swift                   HealthMetric meets DailyMetrics columns
+├── HealthSyncWindow.swift              which days a sync re-reads
+├── MetricArbiter.swift                 the merge rule, pure
+└── MetricSource.swift                  who wrote a value, and the ranking
+
+LifeOSKit/Sources/Persistence/
+├── DailyMetrics.swift                  the day row, with the extras and sources bags
+├── AnomalyEvaluation.swift             baseline and threshold maths
+└── MetricsStore.swift                  metrics(from:to:), sleepRecords, workouts
+
+LifeOSKit/Sources/DesignSystem/
+├── TrendSeries.swift                   points with gaps, average, latest, delta
+├── SleepComposition.swift              a night's stages and their fixed order
+├── WeekStrip.swift                     the seven-day selector
+└── RecoveryBand.swift                  green, yellow, red from a percentage</pre>
+
+<div class="rail">
+  <h4>Four view models, one screen</h4>
+  <p>
+    Activity, Body, Recovery and Wellness keep their own folders even though none of them owns a
+    tab any more. A section is a view concern; what each one derives is not. Merging them into one
+    view model would produce a class that loads a day, a week, a fortnight and sixty days for four
+    unrelated readings, and would reload all of it whenever any part changed. Four small loaders
+    means a date change costs exactly four fetches and nothing else.
+  </p>
+</div>
+
+<h3 id="s7-3"><span class="num">7.3</span><span>Model</span></h3>
+
+<p>
+  Every snapshot is a value type with optional fields. That is the rule the whole app is built on,
+  enforced by the types rather than by discipline at each call site. A day with the watch on the
+  charger produces nils, and every nil renders as a dash.
+</p>
+
+<pre><code>// LIfeOS/Features/Recovery/Model/RecoverySnapshot.swift
+struct RecoverySnapshot: Equatable {
+    // The day
+    var recoveryPct: Double?
+    var hrvMs: Double?
+    var restingHR: Double?
+    var dayStrain: Double?
+
+    // Sleep quality
+    var sleepMinutes: Int?
+    var sleepPerformancePct: Double?
+    var sleepEfficiencyPct: Double?
+    var sleepConsistencyPct: Double?
+    var sleepDebtMinutes: Int?
+
+    // Vitals, each read against its own baseline
+    var spo2Percentage: Double?
+    var skinTempCelsius: Double?
+    var respiratoryRate: Double?
+
+    // The fortnight
+    var recoveryTrend = TrendSeries(points: [])
+    var hrvTrend = TrendSeries(points: [])
+    var spo2Trend = TrendSeries(points: [])
+    // ... five more series, the nights, naps, anomalies, weekRecovery
+
+    var hasAnyReading: Bool {
+        recoveryPct != nil || sleepMinutes != nil || dayStrain != nil || hrvMs != nil
+    }
+}</code></pre>
+
+<p>
+  The fortnight rides inside the day's snapshot because half of these readings mean nothing alone.
+  An SpO2 of 97.2 tells a reader nothing; a tenth above their own baseline does. So every vital
+  carries a <code>TrendSeries</code>, and the card renders the delta from that series' average
+  rather than the bare number.
+</p>
+
+<p>
+  <code>hasAnyReading</code> is how the screens tell "not connected" apart from "connected and
+  quiet". Without it the Connect Whoop card would show to someone whose strap simply had a slow
+  night.
+</p>
+
+<h4>TrendSeries keeps its gaps</h4>
+
+<pre><code>// LifeOSKit/Sources/DesignSystem/TrendSeries.swift
+public struct TrendPoint: Sendable, Equatable, Identifiable {
+    public let date: Date
+    public let value: Double?      // nil is a day with no reading
+}
+
+public struct TrendSeries: Sendable, Equatable {
+    public let points: [TrendPoint]
+    public var hasAnyReading: Bool { points.contains { $0.value != nil } }
+    public var average: Double? {   // mean of the readings that exist
+        guard !readings.isEmpty else { return nil }
+        return readings.reduce(0, +) / Double(readings.count)
+    }
+    public var latest: Double? {    // most recent reading, not the last slot
+        points.reversed().first { $0.value != nil }?.value ?? nil
+    }
+    public var deltaFromAverage: Double? {
+        guard readings.count &gt; 1, let latest, let average else { return nil }
+        return latest - average
+    }
+}</code></pre>
+
+<p>
+  Three decisions live here. The average ignores gaps rather than counting them as zero. The latest
+  reading is the last non-nil point, because the window usually ends on a day Whoop has not scored
+  yet. And a series with one reading has no delta: a lone value is its own average, and "0 from
+  baseline" would imply a history that has not been collected.
+</p>
+
+<h4>The day row and its two bags</h4>
+
+<p>
+  <code>DailyMetrics</code> keeps its ten named health columns from Revision D (steps, exercise
+  minutes, sleep minutes, active energy, weight, water, resting HR, HRV, SpO2, respiratory rate)
+  and the Whoop columns. What is new is a long tail of Apple Health metrics that have no column of
+  their own, and a record of who wrote each value.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/DailyMetrics.swift
+/// Everything Apple Health can supply that does not have a column of its
+/// own, as a JSON dictionary keyed by `HealthMetric.rawValue`.
+public var extrasData: Data?
+
+/// Who wrote each value, as a JSON dictionary keyed by `HealthMetric.rawValue`.
+public var sourcesData: Data?
+
+public func extra(_ key: String) -&gt; Double? { extras[key] }
+public func setExtra(_ key: String, _ value: Double?) {
+    var bag = extras
+    if let value { bag[key] = value } else { bag.removeValue(forKey: key) }
+    extras = bag
+}</code></pre>
+
+<p>
+  Why a bag and not thirty-seven more columns: most people have no data for most of the tail, and a
+  column each would mean a schema change per metric for fields nothing queries. The bag keeps
+  adding a metric to one enum case and one mapping. The one thing a bag must not lose is the
+  distinction this model is built on: a missing key means no reading, and writing <code>nil</code>
+  removes the key rather than storing a zero. Both bags are optional so a store written before they
+  existed opens without a migration, which matters after the lesson in
+  <a href="#s10-8">10.8</a>.
+</p>
+
+<p>
+  <code>sourcesData</code> stores raw strings rather than a typed source because
+  <code>Persistence</code> sits below <code>Integrations</code> and must not import it. The
+  vocabulary lives up there.
+</p>
+
+<h4>The vocabulary</h4>
+
+<p>
+  <code>HealthMetric</code> is its own enum, deliberately not a set of HealthKit types, so the file
+  builds and tests without the framework. It carries nine groups (movement, heart and fitness,
+  body, sleep, vitals, intake, mind, walking, cycle), a title, a unit label, a decimal count, and
+  three merge properties the arbiter reads:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/HealthMetric.swift
+/// Measured by a strap worn on the body, so a wearable outranks the phone.
+public var claimedByWearable: Bool {
+    switch self {
+    case .restingHR, .hrvMs, .spo2Percentage, .respiratoryRate,
+         .sleepMinutes, .deepSleepMinutes, .remSleepMinutes,
+         .coreSleepMinutes, .awakeMinutes, .timeInBedMinutes,
+         .sleepEfficiencyPercentage, .readinessScore:
+        true
+    default:
+        false
+    }
+}
+
+/// A person can type this into the app, so a background sync must not
+/// replace what they entered on purpose.
+public var acceptsManualEntry: Bool {
+    switch self {
+    case .weightKg, .waterML: true
+    default: false
+    }
+}
+
+/// Health is the top authority among syncing sources: nothing else measures
+/// this and nobody types it, so the latest reading is simply the truth.
+public var healthIsAuthoritative: Bool {
+    !claimedByWearable &amp;&amp; !acceptsManualEntry
+}</code></pre>
+
+<p>
+  Cycle metrics (basal temperature, menstrual flow) are their own group and are gated by
+  <code>needsCycleConsent</code>. The first authorisation request never asks for them. Not because
+  they are more private than a heart rate, but because a permission sheet that asks every person
+  for menstrual data is telling most of them the app has misread who they are.
+</p>
+
+<h3 id="s7-4"><span class="num">7.4</span><span>ViewModel</span></h3>
+
+<p>
+  Four view models, each with the same shape: <code>attach(context)</code>, <code>select(date)</code>,
+  <code>load()</code>. Each reads a different window and derives a different thing.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>View model</th><th>Window</th><th>Derives</th></tr></thead>
+<tbody>
+<tr><td><code>ActivityViewModel</code></td><td>7 days</td><td>Today's steps, minutes, energy, resting HR; the day's workouts; seven <code>DayValue</code>s of calories, Whoop's figure first, Health's as fallback</td></tr>
+<tr><td><code>BodyViewModel</code></td><td>60 days</td><td>The latest weigh-in, the weekly delta, 14 points for the chart</td></tr>
+<tr><td><code>RecoveryViewModel</code></td><td>14 days</td><td>The day's readings, eight trend series, the nights, naps, five anomaly checks, the week strip's recovery rings</td></tr>
+<tr><td><code>WellnessViewModel</code></td><td>7 days, plus the selected day</td><td>Average sleep and exercise, workout days, two verdicts, the journal, the Apple Health groups</td></tr>
+</tbody></table></div>
+
+<h4>Recovery: one fetch, many readings</h4>
+
+<pre><code>// LIfeOS/Features/Recovery/ViewModel/RecoveryViewModel.swift
+let end = selectedDate
+let start = calendar.date(byAdding: .day, value: -(Self.windowDays - 1), to: end) ?? end
+
+// One fetch for the whole window. The selected day is picked out of
+// it rather than fetched again.
+let rows = try store.metrics(from: start, to: end)
+let day = rows.first { calendar.isDate($0.date, inSameDayAs: end) }
+
+let restingTrend = trend(rows, from: start, to: end) { $0.restingHR }
+
+// History excludes the selected day: a spike must not drag the
+// baseline toward itself on the very day it is being judged.
+func history(_ series: TrendSeries) -&gt; [Double?] {
+    series.points.dropLast().map(\.value)
+}
+
+let anomalies = [
+    AnomalyEvaluation.evaluate(metric: "Resting HR", today: day?.restingHR,
+        history: history(restingTrend), threshold: .relativeAbove(0.10)),
+    AnomalyEvaluation.evaluate(metric: "Skin temp", today: day?.skinTempCelsius,
+        history: history(skinTrend), threshold: .absoluteAbove(1.0)),
+    AnomalyEvaluation.evaluate(metric: "Blood oxygen", today: day?.spo2Percentage,
+        history: history(spo2TrendSeries), threshold: .absoluteBelow(3.0)),
+    AnomalyEvaluation.evaluate(metric: "HRV", today: day?.hrvMs,
+        history: history(hrvTrendSeries), threshold: .relativeBelow(0.30)),
+    // ... respiratory rate at .relativeAbove(0.08)
+].compactMap { $0 }</code></pre>
+
+<p>
+  The window is fourteen days because the Whoop sync window is fourteen days, so a chart never has
+  a gap the sync could have filled. The <code>trend</code> helper builds a point for every calendar
+  day in the window, not only the days with rows, which is what keeps a day Whoop never reported as
+  a visible gap. Thresholds are relative where the metric scales with the person (heart rate, HRV)
+  and absolute where it has a physiological unit (a degree of skin temperature means the same at
+  any baseline). <code>AnomalyEvaluation</code> refuses to judge with fewer than seven readings in
+  the history, because a noisy baseline raises false alarms.
+</p>
+
+<h4>Body: sixty days to find one number</h4>
+
+<pre><code>// LIfeOS/Features/Body/ViewModel/BodyViewModel.swift
+let start = calendar.date(byAdding: .day, value: -60, to: selectedDate) ?? .distantPast
+let rows = try store.metrics(from: start, to: selectedDate)   // most-recent-first
+
+let weighed = rows.compactMap { row in row.weightKg.map { (date: row.date, kg: $0) } }
+var delta: Double?
+if let newest = weighed.first,
+   let weekAgo = weighed.first(where: { $0.date &lt;= newest.date.addingTimeInterval(-6 * 86_400) }) {
+    delta = newest.kg - weekAgo.kg
+}</code></pre>
+
+<p>
+  The hero is the most recent row that actually has a weight, which is not necessarily the most
+  recent row. The delta is that weight minus the most recent weigh-in at least six days older; if
+  none exists the delta is suppressed rather than computed over a shorter window, because a "weekly
+  change" measured over two days is a wrong number wearing a right label. Sixty days rather than
+  fourteen because people skip weeks, and a fortnight would suppress the delta for anyone who steps
+  on the scale fortnightly.
+</p>
+
+<h4>Wellness: the journal is a note now</h4>
+
+<p>
+  Revision D stored a journal entry as a <code>PlanEntry</code> of kind <code>.journal</code>. It is
+  now a note page, one per day, in the notes store (<a href="#ch12">Chapter 12</a>). Writing twice
+  in one evening appends to the day's page rather than filing a second entry, because two rows
+  dated the same day would break the "did I write today" question the streak is built on.
+</p>
+
+<pre><code>// LIfeOS/Features/Body/ViewModel/WellnessViewModel.swift
+func addJournal(_ text: String) {
+    let store = NotesStore(context: context, calendar: calendar)
+    let entry = try store.journalEntry()
+    var blocks = entry.blocks.filter { !($0.kind == .paragraph &amp;&amp; $0.isEmpty) }
+    blocks.append(contentsOf: NoteBlockParser.blocks(fromMarkdown: trimmed))
+    try store.update(entry, blocks: blocks)
+    load()
+}</code></pre>
+
+<p>
+  The same view model builds the Apple Health groups for the selected day. The week of rows above
+  cannot answer "what did Health have for this day", so it fetches the one row separately and hands
+  it to <code>HealthDaySummary.groups(for:includingCycle:)</code>. The cycle switch it passes is the
+  same <code>UserDefaults</code> key the sync reads, so what is on screen and what is being read can
+  never disagree.
+</p>
+
+<h4>The connection view model</h4>
+
+<p>
+  <code>HealthConnectionViewModel</code> is deliberately thinner than its Whoop counterpart: Health
+  has no OAuth, no tokens and no server. What it does have is a permission model that refuses to
+  tell the app anything, which shapes everything in it.
+</p>
+
+<pre><code>// LIfeOS/Features/Settings/ViewModel/HealthConnectionViewModel.swift
+enum State: Equatable {
+    case unavailable          // iPad without Health, or a device that has none
+    case notAsked             // never asked; the row offers to connect
+    case syncing
+    case synced(days: Int)    // days touched, not days with data
+    case noData               // asked, and nothing came back
+    case failed(String)
+}</code></pre>
+
+<p>
+  <code>.noData</code> deliberately does not say "denied". HealthKit never reports whether read
+  access was granted, because admitting a refusal would leak that the user has no data of that
+  type. Claiming a denial the app cannot see would be a guess presented as a fact, so the copy says
+  "No data yet. Check Almanac in Health &gt; Sharing" and points at the one place that knows.
+</p>
+
+<h3 id="s7-5"><span class="num">7.5</span><span>View</span></h3>
+
+<p>
+  <code>HealthHubScreen</code> takes four value snapshots, two bindings, and a handful of closures.
+  It owns no view model, which is what lets its preview be a single literal and every section be
+  looked at in any state without a store.
+</p>
+
+<pre><code>// LIfeOS/Features/Health/View/HealthHubScreen.swift
+struct HealthHubScreen: View {
+    let activity: ActivitySnapshot
+    let weight: BodySnapshot
+    let recovery: RecoverySnapshot
+    let wellness: WellnessSnapshot
+    var onAddJournal: () -&gt; Void = {}
+    var onConnectWhoop: () -&gt; Void = {}
+    var isWhoopConnected = false
+    var onSelectMetric: (TodayMetric) -&gt; Void = { _ in }
+    var library: WorkoutLibraryViewModel?     // nil in previews
+    var recorder: ActivityRecorder?           // travels with the library
+    @Binding var section: HealthSection
+    @Binding var selectedDate: Date
+    @Environment(\.layout) private var layout</code></pre>
+
+<p>
+  The layout, top to bottom: "Your health" as a large title with a date picker capped at today;
+  <code>WeekStrip</code>; a <code>LazyVGrid</code> of four tracking tiles built from
+  <code>TodayMetric.allCases</code>, each a button into <code>MetricDetailScreen</code>
+  (<a href="#ch6">Chapter 6</a>); an <code>UnderlinePicker</code> over the two sections; and the
+  section view. The content column reads <code>layout.maxContentWidth</code>,
+  <code>layout.gutter</code> and <code>layout.railInset</code> from the environment, so on an iPad
+  the same screen sits inside a bounded column beside the side rail without a second layout.
+</p>
+
+<h4>The Health half</h4>
+
+<p>Order matters here, and each card is a decision:</p>
+<ol>
+  <li><code>AlertBanner</code> with the anomalies. First, because "is anything off" is the question a person opens the tab to answer.</li>
+  <li>A Connect Whoop card, shown only when there is no reading and Whoop is not connected.</li>
+  <li>Recovery (with its <code>RecoveryBand</code> label in caps) and calories, two <code>HealthReadingCard</code>s in an adaptive grid.</li>
+  <li><code>SleepDashboardCard</code>: the night's duration at large-title size, a <code>SleepStageBar</code> when stages exist, then quality rows (performance, efficiency, consistency, debt, naps), each row present only when its value is.</li>
+  <li>HRV and resting HR; then blood oxygen and skin temperature, each captioned with its signed delta from the fortnight average.</li>
+  <li>A Vitals <code>StatGroup</code> for respiratory rate.</li>
+  <li><code>appleHealthGroups</code>: one <code>StatGroup</code> per <code>HealthDaySummary.Group</code> that has a reading, coloured by category.</li>
+  <li><code>WeightSection</code>, the journal card, a "14-day trends" link, and a "Synced 3h ago" line.</li>
+</ol>
+
+<pre><code>// LIfeOS/Features/Health/View/HealthSegmentView.swift
+/// Listed rather than designed: a panel appears for each group that has a
+/// reading and the rest are simply absent, so a person with a blood
+/// pressure cuff sees blood pressure and a person without never learns the
+/// row existed.
+@ViewBuilder
+private var appleHealthGroups: some View {
+    ForEach(wellness.healthGroups) { group in
+        StatGroup(
+            title: group.title,
+            rows: group.items.map { StatGroup.Row(label: $0.title, value: $0.formatted) },
+            hue: categoryStyle(group.title).0, icon: categoryStyle(group.title).1
+        )
+    }
+}</code></pre>
+
+<p>
+  <code>StatGroup</code> renders nothing at all when no row has a value; otherwise the first row
+  with a value becomes the featured reading and the rest form an adaptive grid whose minimum cell
+  width grows to 240 points at accessibility text sizes.
+</p>
+
+<h4>The Fitness half</h4>
+
+<p>
+  Calories first, as seven <code>RoundedBarChart</code> bars for the week ending on the selected day
+  with the total in the header. Then steps and active time; strain, average HR and max HR; the
+  day's workouts as <code>WorkoutRow</code>s (only when there are any, so most days render no empty
+  frame); the training card; and the trends link. The training card carries the way into the
+  workout library with today's plan already on it (<a href="#ch10">Chapter 10</a>), but only when
+  both the library view model and the recorder were handed down, because the player the library
+  pushes records the session.
+</p>
+
+<p>
+  <code>WorkoutRow</code> shows a "partial" label when Whoop captured less than 95 percent of a
+  session. A workout recorded at 40 percent is not an easy workout, and letting its low strain
+  speak for it would say exactly that. It also shows the split chip when the session followed a
+  catalog video, so a pull day in the library reads as a pull day in the list.
+</p>
+
+<h4>The fortnight screen</h4>
+
+<p>
+  <code>WhoopDetailScreen</code> opens with <code>SleepCompositionChart</code>, one column per
+  night, because it is the only chart showing structure rather than quantity: a short night and a
+  fragmented night look identical on the duration chart and obviously different here, which is the
+  reason the stages are ingested at all. Below it, five <code>TrendChart</code>s.
+</p>
+
+<pre><code>// LIfeOS/Features/Recovery/View/TrendChart.swift
+/// A run of consecutive days that all have readings.
+///
+/// Swift Charts joins a line straight across a day it was given no mark
+/// for, which would draw a reading that never happened. Splitting the
+/// window into runs and giving each its own series keeps the gap a gap.
+private var segments: [Segment] {
+    var runs: [Segment] = []
+    var current: [TrendPoint] = []
+    for point in series.points {
+        if point.value != nil {
+            current.append(point)
+        } else if !current.isEmpty {
+            runs.append(Segment(id: runs.count, points: current))
+            current = []
+        }
+    }
+    if !current.isEmpty { runs.append(Segment(id: runs.count, points: current)) }
+    return runs
+}</code></pre>
+
+<p>
+  The chart is a line, not bars, because the shape of a fortnight is a direction and a line draws a
+  direction. The chrome is almost absent: no gridlines, no y axis, two date labels in the footer.
+  The y domain is the data's own range with a quarter of headroom, never anchored at zero, because
+  a resting heart rate plotted from zero is a flat line with no shape in it. The current figure
+  lives in the header in text ink, because the warmer module hues fall under 3:1 contrast on this
+  surface and a visible label is the relief.
+</p>
+
+<h3 id="s7-6"><span class="num">7.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 360" role="img" aria-label="Apple Health, Whoop and Fitbit each write into the DailyMetrics row through the arbiter; the row saves; RootView reloads four view models; the hub renders four snapshots.">
+  <defs>
+    <marker id="ch7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch7b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">WRITERS</text>
+  <text class="lbl-sm" x="300" y="24">THE JOIN</text>
+  <text class="lbl-sm" x="560" y="24">READERS</text>
+
+  <rect class="box" x="20" y="44" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="69" text-anchor="middle">HealthKitReader</text>
+  <rect class="box" x="20" y="104" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="129" text-anchor="middle">WhoopDerivation</text>
+  <rect class="box" x="20" y="164" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="189" text-anchor="middle">FitbitDerivation</text>
+  <rect class="box-alt" x="20" y="224" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="249" text-anchor="middle">Quick log (typed)</text>
+
+  <rect class="box-hot" x="300" y="100" width="180" height="90" rx="10"/>
+  <text class="lbl" x="390" y="128" text-anchor="middle">MetricArbiter</text>
+  <text class="lbl-hot" x="390" y="148" text-anchor="middle">rank incoming vs held</text>
+  <text class="lbl-hot" x="390" y="166" text-anchor="middle">manual 4 · authority 3</text>
+
+  <rect class="box" x="300" y="230" width="180" height="70" rx="10"/>
+  <text class="lbl" x="390" y="258" text-anchor="middle">DailyMetrics</text>
+  <text class="lbl-sm" x="390" y="278" text-anchor="middle">columns · extras · sources</text>
+
+  <rect class="box" x="560" y="44" width="150" height="40" rx="8"/>
+  <text class="lbl" x="635" y="69" text-anchor="middle">Activity VM · 7d</text>
+  <rect class="box" x="560" y="104" width="150" height="40" rx="8"/>
+  <text class="lbl" x="635" y="129" text-anchor="middle">Body VM · 60d</text>
+  <rect class="box" x="560" y="164" width="150" height="40" rx="8"/>
+  <text class="lbl" x="635" y="189" text-anchor="middle">Recovery VM · 14d</text>
+  <rect class="box" x="560" y="224" width="150" height="40" rx="8"/>
+  <text class="lbl" x="635" y="249" text-anchor="middle">Wellness VM · 7d</text>
+
+  <rect class="box-hot" x="740" y="134" width="100" height="60" rx="10"/>
+  <text class="lbl" x="790" y="160" text-anchor="middle">Health</text>
+  <text class="lbl" x="790" y="178" text-anchor="middle">hub</text>
+
+  <path class="flow" d="M190 64 L 250 64 L 250 130 L 294 130" marker-end="url(#ch7a)"/>
+  <path class="flow" d="M190 124 L 294 138" marker-end="url(#ch7a)"/>
+  <path class="flow" d="M190 184 L 250 184 L 250 150 L 294 150" marker-end="url(#ch7a)"/>
+  <path class="flow-dash" d="M190 244 L 294 260" marker-end="url(#ch7a)"/>
+  <path class="flow-hot" d="M390 190 L 390 224" marker-end="url(#ch7b)"/>
+  <text class="lbl-sm" x="400" y="212">upsert, merge never replace</text>
+
+  <path class="flow-dash" d="M480 265 L 520 265 L 520 64 L 554 64" marker-end="url(#ch7a)"/>
+  <path class="flow-dash" d="M520 124 L 554 124" marker-end="url(#ch7a)"/>
+  <path class="flow-dash" d="M520 184 L 554 184" marker-end="url(#ch7a)"/>
+  <path class="flow-dash" d="M520 244 L 554 244" marker-end="url(#ch7a)"/>
+  <text class="lbl-sm" x="486" y="330">didSave, then reloadAll()</text>
+
+  <path class="flow" d="M710 64 L 730 64 L 730 164 L 734 164" marker-end="url(#ch7a)"/>
+  <path class="flow" d="M710 124 L 734 158" marker-end="url(#ch7a)"/>
+  <path class="flow" d="M710 184 L 734 170" marker-end="url(#ch7a)"/>
+  <path class="flow" d="M710 244 L 730 244 L 730 174 L 734 174" marker-end="url(#ch7a)"/>
+</svg>
+<figcaption>
+  Three syncing sources and a typed value all pass through one pure arbiter before they touch the
+  day row. Readers never see a source; they see a row and a snapshot.
+</figcaption>
+</figure>
+
+<h4>Step by step: a foreground sync</h4>
+<ol>
+  <li><code>RootView</code> comes to the foreground and calls <code>health.startWatching()</code>. If permission has ever been asked, the view model opens <code>reader.changes()</code>, an <code>AsyncStream</code> fed by one <code>HKObserverQuery</code> per universal metric type.</li>
+  <li>Health records a batch of steps. The observer yields once; the stream buffers at most one event, so thirty batches landing together are one reason to re-read, not thirty.</li>
+  <li>The view model runs <code>sync()</code>. If a sync is already in flight it awaits that one rather than starting a second: a launch task and a foreground transition arriving together do one pass.</li>
+  <li><code>HealthSyncWindow.days(since:)</code> decides which days to re-read: always today; the day of the last sync as well (a night's sleep is recorded against the morning it ends, so a day already covered can gain a value); thirty days on a first sync or after a gap that long; only today when the stamp is in the future, because that is a clock change, not a missing sync.</li>
+  <li>For each day, <code>reader.day(_:includingCycle:)</code> runs one query per metric. Counts use <code>.cumulativeSum</code>; measurements use <code>.discreteAverage</code>, because summing a heart rate would produce a number in the thousands. Sleep is a category, not a quantity, so one <code>HKSampleQuery</code> answers all six sleep metrics by hand. A metric that errors is dropped rather than failing the day: one unreadable type must not cost the other forty-six.</li>
+  <li>A day Health knows nothing about is skipped rather than written. An upsert would create an empty row and put a blank day on the calendar that nothing ever fills.</li>
+  <li><code>HealthApply.write</code> upserts the row. For each incoming value it reads the held value and the held source, asks <code>MetricArbiter.resolve</code>, writes the winner into the named column or the bag, and records the winning source.</li>
+  <li><code>MetricsStore</code> saves. <code>ModelContext.didSave</code> fires. <code>RootView.reloadAll()</code> reloads every snapshot. The tiles repaint through the path they already used; nothing here knows about a screen.</li>
+  <li>The watch sleeps fifteen seconds before listening again.</li>
+</ol>
+
+<h4>The arbiter</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/MetricArbiter.swift
+public static func resolve(
+    metric: HealthMetric,
+    existing: Double?, existingSource: MetricSource?,
+    incoming: Double?, incomingSource: MetricSource,
+    ranking: SourceRanking
+) -&gt; (value: Double?, source: MetricSource?) {
+    // A source having no reading is not evidence of zero.
+    guard let incoming else { return (existing, existingSource) }
+    guard existing != nil else { return (incoming, incomingSource) }
+
+    let held = existingSource ?? MetricSource.legacy(for: metric)
+
+    // Greater than or equal, not greater than. Equal rank means the same
+    // source syncing again, which must be allowed to correct itself.
+    guard ranking.rank(incomingSource, for: metric) &gt;= ranking.rank(held, for: metric) else {
+        return (existing, held)
+    }
+    return (incoming, incomingSource)
+}</code></pre>
+
+<p>
+  Revision D merged with a boolean: fill gaps only. That could not tell a Whoop value from a typed
+  one, which is exactly the distinction a second wearable forces. <code>SourceRanking</code> turns a
+  source into a rank per metric: 4 for a typed value, 3 for the authority (Apple Health for
+  passively counted metrics, the primary strap for wearable-claimed ones), 2 for a secondary
+  reading, 1 for a fallback, 0 for unknown. The primary wearable defaults to Whoop, so an unset
+  preference reproduces the old behaviour exactly.
+</p>
+
+<p>
+  One legacy rule matters: a value written before provenance existed reads as rank 0 for almost
+  everything, so the next sync re-attributes it. Weight and water are the exception. A figure the
+  user typed before this shipped is unattributed too, and treating it as unknown would let the next
+  Health sync silently replace it. That is the one path that destroys data a person entered by
+  hand, so an unattributed value for a typed metric is read as typed.
+</p>
+
+<h3 id="s7-7"><span class="num">7.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>One fetch per view model per date change.</strong> Recovery fetches fourteen rows once and picks the selected day out of them. Activity fetches seven. Nothing fetches the same window twice.</li>
+  <li><strong>Observer, not timer.</strong> A step count changes dozens of times an hour and not at all overnight. A polling interval short enough to look live wastes queries; one cheap enough to run is not live. <code>HKObserverQuery</code> fires when Health already knows something arrived.</li>
+  <li><strong>Buffer of one, sleep of fifteen.</strong> The stream uses <code>.bufferingNewest(1)</code> and the consumer sleeps fifteen seconds after each pass. A day's steps arrive in dozens of batches, and re-reading forty-seven metrics for each one would spend the afternoon in HealthKit to move a numeral.</li>
+  <li><strong>Foreground only.</strong> <code>enableBackgroundDelivery</code> needs an entitlement and wakes the app to write rows nobody is looking at. The launch and foreground syncs already cover the time the app was away. <code>stopWatching()</code> runs on every scene deactivation so a phone in a pocket is not running ten queries a quarter minute.</li>
+  <li><strong>Bounded backfill.</strong> Thirty days is the month the dot grid shows. Going further would spend forty-seven queries a day on history no screen displays, and Health keeps the data regardless.</li>
+  <li><strong>Every observer completes.</strong> The handler calls <code>completion()</code> on the error path too. HealthKit retries a query whose handler never completed, and a silent leak of those is how an app ends up with a hundred live observers.</li>
+  <li><strong>The actor.</strong> <code>HealthKitReader</code> is an actor because <code>HKHealthStore</code> is a shared resource and the sync can be entered from two places at once. The observer array is actor state rather than a local because <code>HKObserverQuery</code> is not <code>Sendable</code>.</li>
+  <li><strong>Nothing leaves the device.</strong> Apple Health readings are written to the local store and never synced to Supabase. The only health figures that ever leave are the three a person chooses to share with friends (<a href="#ch16">Chapter 16</a>).</li>
+  <li><strong>No chart draws from nothing.</strong> <code>TrendChart</code> returns no view at all when a series has no reading, so a fresh install renders no empty axes.</li>
+</ul>
+
+<div class="note caution">
+  <b>A unit bug worth remembering</b>
+  <code>HKUnit.percent()</code> yields 0.98 for a 98 percent blood oxygen reading. The app stores
+  percentages as percentages everywhere else, Whoop included, so a Health-sourced SpO2 was landing
+  two orders of magnitude below a Whoop-sourced one and rendering as "1.0". It went unnoticed
+  because Whoop owned the field and Health only filled its gaps. <code>HealthKitReader.scale(for:)</code>
+  now multiplies every percent-unit metric by 100 on the way in.
+</div>
+
+<h3 id="s7-8"><span class="num">7.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Watch on the charger all day</td><td>Every Activity reading nil; dashes, never zeros</td></tr>
+<tr><td>Never weighed</td><td>Hero reads "No weigh-in", delta suppressed, chart bars all short and grey</td></tr>
+<tr><td>Fewer than 7 days between weigh-ins</td><td>Delta suppressed entirely rather than shortened</td></tr>
+<tr><td>Gap in the middle of the fortnight</td><td>Point kept as nil; the line breaks into two runs; the axis position is preserved</td></tr>
+<tr><td>Whoop not connected and nothing read</td><td>Connect Whoop card shows; recovery, HRV and strain nil; sleep may still arrive from Health</td></tr>
+<tr><td>Whoop connected but a quiet night</td><td><code>hasAnyReading</code> is true, so no Connect card; the readings show dashes</td></tr>
+<tr><td>Health permission refused</td><td>Indistinguishable from no data by Apple's design; state is <code>.noData</code> and the row points at Health &gt; Sharing</td></tr>
+<tr><td>Health sync while a sync is running</td><td>The second caller awaits the first; one pass</td></tr>
+<tr><td>Last-sync stamp in the future</td><td>Read as a clock change; only today is re-read</td></tr>
+<tr><td>A day Health has nothing for</td><td>Skipped, not upserted; no blank row on the calendar</td></tr>
+<tr><td>Health and Whoop both report resting HR</td><td>Whoop wins (claimed by wearable, rank 3 vs 1); Health fills the gap on days Whoop missed</td></tr>
+<tr><td>Health and the user both report weight</td><td>The typed value wins (rank 4); Health may still correct a weight it wrote itself</td></tr>
+<tr><td>A pre-provenance typed weight</td><td>Read as typed via <code>MetricSource.legacy</code>; never replaced by a sync</td></tr>
+<tr><td>Cycle tracking turned off after data was read</td><td><code>HealthDaySummary</code> hides the cycle group anyway; showing it would betray the switch</td></tr>
+<tr><td>Fewer than 7 readings behind a vital</td><td>No baseline, no anomaly, no banner</td></tr>
+<tr><td>Today's reading is the spike</td><td>History drops the selected day so a spike cannot drag its own baseline</td></tr>
+<tr><td>Whoop captured 40 percent of a session</td><td>The row is labelled "partial" so the low strain is not read as an easy day</td></tr>
+<tr><td>Extras bag bytes are unreadable</td><td>Decoded as empty; the named columns still render rather than losing the screen over the tail</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>MetricArbiterTests</code> (10 tests): a missing reading never clears a value; Health does not overwrite Whoop; Health fills a Whoop gap; Health overwrites its own counts; a hand-entered value survives; the chosen strap overwrites the other; the secondary strap still fills a gap; an unattributed typed value is treated as typed.</li>
+  <li><code>HealthApplyTests</code> (9 tests) against a real in-memory store: every column fills; Whoop values survive a Health sync; a later sync corrects a step count; counts are stored as integers; a write records its provenance; the long tail is attributed too. These exist because the arbiter can be perfectly correct and still be wired into the wrong column.</li>
+  <li><code>WhoopArbitrationTests</code> (5): Whoop owns what it measures, does not overwrite the phone's exercise minutes or a typed weight, yields to the chosen strap.</li>
+  <li><code>HealthSyncWindowTests</code> (8): a first sync backfills a month; today is always included; a recent sync re-reads only today; a gap is backfilled including the day before it; a very old sync is capped; the window never reaches the future.</li>
+  <li><code>HealthMetricVocabularyTests</code> and <code>CycleConsentTests</code>: every metric has a title and group; raw values are unique; the first request never asks for cycle data; universal and cycle partition every metric.</li>
+  <li><code>AnomalyEvaluationTests</code> (10): the baseline needs seven readings; relative and absolute thresholds flag at the boundary and stay quiet below it.</li>
+  <li><code>TrendSeriesTests</code> (13) and <code>SleepCompositionTests</code> (6): averages ignore gaps; a single reading has no delta; points keep their gaps; a night with no stages is not renderable; awake counts toward the bar but not toward sleep.</li>
+</ul>
+
+<div class="note">
+  <b>Still not covered</b>
+  The four feature view models have no tests, for the reason recorded in the decision log: they
+  take a context through <code>attach</code> rather than a protocol through <code>init</code>.
+  The delta suppression in <code>BodyViewModel</code> and the verdict thresholds in
+  <code>WellnessViewModel</code> (420 sleep minutes reads "Optimal", 20 exercise minutes counts as a
+  workout day, 4 workout days reads "Consistent") are the ones most worth writing first.
+</div>
+
+<h3 id="s7-9"><span class="num">7.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Integrations/HealthMetric.swift</code>, the vocabulary and the three merge properties.</li>
+  <li><code>LifeOSKit/Sources/Integrations/MetricSource.swift</code> and <code>MetricArbiter.swift</code>, the ranking and the rule.</li>
+  <li><code>LifeOSKit/Sources/Integrations/HealthApply.swift</code>, where the rule meets the row.</li>
+  <li><code>LifeOSKit/Sources/Integrations/HealthKitReader.swift</code>, particularly <code>changes()</code> and <code>read(_:on:)</code>.</li>
+  <li><code>LIfeOS/Features/Settings/ViewModel/HealthConnectionViewModel.swift</code>, the sync loop and the watch.</li>
+  <li><code>LIfeOS/Features/Recovery/ViewModel/RecoveryViewModel.swift</code>, the one-fetch pattern and the anomaly checks.</li>
+  <li><code>LIfeOS/Features/Health/View/HealthSegmentView.swift</code>, then <code>TrendChart.swift</code>.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does the arbiter use greater-than-or-equal rather than greater-than?</strong> Equal rank means the same source syncing again, and a source must be allowed to correct itself, which is how an afternoon sync fixes the morning's step count.</li>
+  <li><strong>Why is a Health-sourced SpO2 multiplied by 100?</strong> <code>HKUnit.percent()</code> returns a fraction; the app stores percentages as percentages, and the mismatch rendered "1.0" for a 98 percent reading.</li>
+  <li><strong>What does the observer stream's buffer size of one buy?</strong> A batch of samples is one reason to re-read the day, not thirty, and a throttled consumer never returns to a queue of stale events.</li>
+  <li><strong>Why does the recovery baseline exclude the selected day?</strong> A spike on the day being judged would drag its own baseline toward itself and hide itself.</li>
+  <li><strong>Why is a legacy unattributed weight treated as typed?</strong> It is the one path where a sync could destroy a value a person entered by hand.</li>
+  <li><strong>Why does the app never say Health access was denied?</strong> HealthKit deliberately hides the answer, so any claim of denial would be a guess presented as fact.</li>
+</ul>
+
 </section>

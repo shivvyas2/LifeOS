@@ -1,10 +1,201 @@
-<section class="chapter" id="chC" data-hue="notes">
-<p class="chapter-kicker">Chapter C</p>
-<h2><span class="num">C</span><span>Stub chC</span></h2>
-<p class="lede">Stub lede for chC &amp; friends.</p>
-<h3 id="sC-1"><span class="num">C.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="chCa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#chCa)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="sC-2"><span class="num">C.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="chC">
+<p class="chapter-kicker">Appendix C</p>
+<h2><span class="num">C</span><span>Glossary and reading order</span></h2>
+<p class="lede">The words this book uses in a particular sense, each in one line, and a route through the code for someone studying it one evening at a time.</p>
+<h3 id="sC-1"><span class="num">C.1</span><span>Glossary</span></h3>
+<p>Terms are alphabetical. A term in <code>code</code> is a real symbol in the repository; the rest are the book's names for things the code has no single name for.</p>
+<div class="tablewrap"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>AccountSession</code></td><td>The app-level object that owns which account scope and ModelContainer are open, and tears surfaces down when the account changes.</td></tr>
+<tr><td><code>AccountStore</code></td><td>The roster of signed-in accounts in defaults plus one keychain session item per user id.</td></tr>
+<tr><td>Agenda card</td><td>The week strip and day rows drawn under a calendar assistant reply, read live from the calendar store rather than parsed from the prose.</td></tr>
+<tr><td>Arbiter</td><td>MetricArbiter.resolve, the pure rank-based rule that decides which source&#x27;s value a DailyMetrics column keeps when two sources write the same day.</td></tr>
+<tr><td><code>AssistantTurn</code></td><td>The chat router in Insights: cloud first, the device after; refusals and confirmed writes are never retried on the other tier.</td></tr>
+<tr><td>Audience</td><td>Who a prompt render is for. An onDevice render may carry raw physiology; an offDevice render never does.</td></tr>
+<tr><td><code>AvatarStamp</code></td><td>missing, unknown, or at(updated_at): the three answers to whether a person&#x27;s avatar must be downloaded again.</td></tr>
+<tr><td>Band (sector)</td><td>The floor-to-ceiling range an in-flight sector month can still close in, drawn on the Life board before the month ends.</td></tr>
+<tr><td>Block</td><td>One typed line of a note: text, heading, to-do, sketch. A note document is an array of blocks stored as JSON.</td></tr>
+<tr><td>Bucket (money)</td><td>A budget that claims one or more Plaid category codes and counts the month&#x27;s spend against a limit; the unclaimed band shows what no bucket claims.</td></tr>
+<tr><td>Bucket (notes)</td><td>One of the PARA folders a page can be filed into: Projects, Areas, Research, Archive.</td></tr>
+<tr><td>Capacity</td><td>Today&#x27;s battery percentage and its source, Whoop recovery or Health HRV, computed once at the start of a live session.</td></tr>
+<tr><td><code>ChatEngine</code></td><td>The protocol both chat tiers implement: a thread and tools in, a reply and partial text out.</td></tr>
+<tr><td>Check-in</td><td>Two or three questions asked at the monthly close for a sector with no tracked data, scored by CheckInScorer.</td></tr>
+<tr><td>Claim key</td><td>The raw category code, or a manual entry&#x27;s category, that a budget bucket counts. Held by at most one bucket.</td></tr>
+<tr><td>Close (monthly)</td><td>The nine-step walk through the sectors of a month that has ended, one screen per sector, producing a SectorScore row each.</td></tr>
+<tr><td>Coasting</td><td>A projection where the rest of the month continues at the month-to-date pace; the floor of the in-flight band.</td></tr>
+<tr><td>Collapse id</td><td>apns-collapse-id set to lifo-nudge so a phone that was off receives one nudge, not several.</td></tr>
+<tr><td>Composition root</td><td>RootView: owns every view model, attaches the model context, reloads on ModelContext.didSave and presents every sheet.</td></tr>
+<tr><td><code>ConfirmationBroker</code></td><td>The actor whose continuation suspends a gated calendar write until the person answers the confirmation card.</td></tr>
+<tr><td><code>ContextBundle</code></td><td>The digest plus money and sector figures, rendered under one character budget for a given audience.</td></tr>
+<tr><td>Cursor (Plaid)</td><td>Plaid&#x27;s transactions sync bookmark, held on the device per Item and advanced only after a successful ingest.</td></tr>
+<tr><td><code>DailyMetrics</code></td><td>The one SwiftData row per calendar day that every source writes into and every screen reads from. Every field is optional.</td></tr>
+<tr><td>Dash rule</td><td>A missing value renders as a dash, drawn by the component from a nil String, never as a zero.</td></tr>
+<tr><td><code>DayStatus</code></td><td>The evaluated result of a day against GoalTargets: onTarget, missed or noData. noData never breaks a streak.</td></tr>
+<tr><td>Decided</td><td>The share of an in-flight sector&#x27;s score that can no longer move: one minus the band&#x27;s width over ten.</td></tr>
+<tr><td>Definer function</td><td>A security definer RPC in Postgres that runs with its owner&#x27;s rights and takes the caller only from auth.uid(); used where a row policy cannot express the rule.</td></tr>
+<tr><td>Derived row</td><td>A NoteTask or NoteLink mirrored out of a page&#x27;s blocks by the indexer; never synced, always rebuildable.</td></tr>
+<tr><td>Design preview</td><td>The --design-preview --page= launch harness that renders any screen from an in-memory fixture without an account.</td></tr>
+<tr><td>Digest</td><td>MetricsDigest, the value type of derived daily numbers that is the only health data an engine ever sees.</td></tr>
+<tr><td>Effort</td><td>Estimated exertion from seconds spent in each heart-rate zone, weighted and passed through a saturating curve; a daily credit against capacity.</td></tr>
+<tr><td>Effort, Recharge, Rest</td><td>The app&#x27;s own 0 to 100 daily comparison scores for group leaderboards; not a vendor&#x27;s strain, recovery or sleep score.</td></tr>
+<tr><td>Endpointer</td><td>SpeechEndpointer, the pure state machine that decides from microphone level alone when a spoken question is over.</td></tr>
+<tr><td>Evidence</td><td>The rows behind a proposed sector score, each normalised to 0 to 1 and weighted; their weighted mean scaled to 0 to 10.</td></tr>
+<tr><td>Extras bag</td><td>DailyMetrics.extrasData, a JSON dictionary of the long-tail Health metrics that have no named column; an absent key means no reading.</td></tr>
+<tr><td>Floor and ceiling</td><td>Where an in-flight sector closes if the month coasts, and if the remaining days hit the person&#x27;s targets.</td></tr>
+<tr><td><code>GoalTargets</code></td><td>The person&#x27;s targets for steps, sleep, water and weight, read from UserGoals and evaluated per day.</td></tr>
+<tr><td>Hand-off</td><td>The phone starting a workout on a paired Apple Watch and mirroring it, so the watch owns the HKWorkoutSession and the phone shows it.</td></tr>
+<tr><td><code>hasProfile</code></td><td>The AuthSession flag, from user metadata, that tells a returning person from a new one after the code is verified.</td></tr>
+<tr><td><code>HUD</code></td><td>SessionRings, the glass heads-up display of three rings and a rep count over a live session or a workout video; collapses to a bar and can be dragged.</td></tr>
+<tr><td>Inbox (notes)</td><td>Pages whose filedAt is nil: captured but not yet given a home in a PARA bucket.</td></tr>
+<tr><td>Ink layer</td><td>The page-wide PencilKit annotation canvas on a note, distinct from an inline sketch block.</td></tr>
+<tr><td>Item (Plaid)</td><td>Plaid&#x27;s name for one connected bank login; billed monthly; one sync cursor each.</td></tr>
+<tr><td>Lease</td><td>A short server-side lock, thirty seconds for Fitbit, so exactly one caller rotates a single-use refresh token.</td></tr>
+<tr><td>Lever</td><td>One of seven dimensions (sleep, exercise, steps, water, journal, habits, spend) a projection can perfect on its own to show what still moves a score.</td></tr>
+<tr><td><code>LifeSector</code></td><td>The enum of nine sectors: Family, Romance, Soul, Friends, Growth, Money, Mission, Body, Mind.</td></tr>
+<tr><td><code>lifo_usage</code></td><td>The per-user, per-day, per-kind token ledger the daily caps read and lifo_debit adds to atomically.</td></tr>
+<tr><td><code>LiveActivityThrottle</code></td><td>The pure decision on whether a new readout deserves an ActivityKit update, so a strap streaming every second stays inside the budget.</td></tr>
+<tr><td><code>LiveSessionReadout</code></td><td>The one value the HUD, the lock screen and the Dynamic Island all render; every reading optional.</td></tr>
+<tr><td>Module hue</td><td>ModuleHue, the one colour a domain screen owns, drawn as a pastel wash on its canvas.</td></tr>
+<tr><td><code>MoneyParts</code></td><td>The whole and cents of an amount, rounded to total cents first and then split, so a figure never renders as 19.100.</td></tr>
+<tr><td>Native checks</td><td>ActivityRecorderChecks and SurfaceNativeChecks: in-process PASS/FAIL runs over real view models that the QA reports paste verbatim.</td></tr>
+<tr><td><code>NoteIndex</code></td><td>The derived task rows, link edges and title index rebuilt from note documents and kept current on every store write.</td></tr>
+<tr><td>Nudge</td><td>The once-a-day push chosen by a rule and phrased by a model; LIFO speaking first. The fallback sentence covers an outage.</td></tr>
+<tr><td><code>nudge_log</code></td><td>One row per user per local day recording that a nudge went and which trigger fired; never the text.</td></tr>
+<tr><td>Observation</td><td>A deterministic note on a sector that needs three calendar-adjacent months, such as a repeated answer or a low score.</td></tr>
+<tr><td>Origin id</td><td>The stable id a note page or migrated plan entry carries so a second device does not produce a second copy.</td></tr>
+<tr><td><code>OTP</code></td><td>The one-time six-digit code sent by email or SMS; the only credential the app has.</td></tr>
+<tr><td><code>PARA</code></td><td>Projects, Areas, Resources, Archive: the filing method the notes library sorts by actionability.</td></tr>
+<tr><td>Pepper</td><td>OTP_PEPPER, mixed into the hash so otp_events holds no phone numbers.</td></tr>
+<tr><td>Pill bar</td><td>PillNavBar, the floating capsule of tab buttons; horizontal on a phone, a vertical rail on an iPad.</td></tr>
+<tr><td>Placeholder session id</td><td>The Live Activity the watch bridge requests during a background launch, adopted by the timer once the session is real.</td></tr>
+<tr><td>Primary wearable</td><td>The strap the person named as authority for contested metrics; defaults to Whoop.</td></tr>
+<tr><td>Provenance bag</td><td>DailyMetrics.sourcesData, the parallel dictionary recording which MetricSource wrote each metric, read back by the arbiter.</td></tr>
+<tr><td>Provisional row</td><td>A chat message shown before the server confirms it, with a negative id, kept in a separate pending array.</td></tr>
+<tr><td>Pumping prefix</td><td>A country code plus the first national digits, used to rate-limit SMS fraud across a number range.</td></tr>
+<tr><td>Push state</td><td>easy, onTrack, nearLimit or overLimit: how hard a live session presses against the day&#x27;s capacity, with its headline and tint.</td></tr>
+<tr><td>Quick actions</td><td>The three top-bar actions on every tab: the calendar assistant, LIFO, and begin activity.</td></tr>
+<tr><td><code>railInset</code></td><td>The 112-point leading room regular-width screens leave for the iPad rail.</td></tr>
+<tr><td>Readout</td><td>See LiveSessionReadout.</td></tr>
+<tr><td>Refresh lease</td><td>See Lease.</td></tr>
+<tr><td><code>RepCounter</code></td><td>The pure rep detector on wrist acceleration: two moving averages, an axis lock, signed hysteresis, a timing window and a refractory period.</td></tr>
+<tr><td><code>resolveUser</code></td><td>The Edge Function door: the caller&#x27;s id from their own JWT, never from the request body.</td></tr>
+<tr><td>SAY: line</td><td>The one spoken sentence the model writes first when a reply will be read aloud; SpokenReply splits it from the shown answer.</td></tr>
+<tr><td><code>SCOPE</code></td><td>The server-held guardrail system prompt every lifo-agent request starts with; a client cannot strip what it never carries.</td></tr>
+<tr><td>Sector</td><td>One of nine areas of life scored monthly on the Life board.</td></tr>
+<tr><td><code>SectorEvidenceFactory</code></td><td>The one place that turns a month&#x27;s inputs into evidence rows, used by the close and the in-flight band alike.</td></tr>
+<tr><td>Security definer RPC</td><td>See Definer function.</td></tr>
+<tr><td><code>SessionKeepAlive</code></td><td>The pure schedule that renews an unexpired session 45 seconds before it lapses.</td></tr>
+<tr><td><code>SleepRecord</code></td><td>One night of sleep as a source record; attributed to the day it ends.</td></tr>
+<tr><td>Source ranking</td><td>manual 4, authority 3, secondary 2, fallback 1, unattributed 0; the primary wearable is the authority.</td></tr>
+<tr><td>Spine</td><td>The DailyMetrics table seen as the thing every source writes into and every reader reads from.</td></tr>
+<tr><td><code>SurfaceRoute</code></td><td>The almanac:// deep link (today, health, activity, notifications) the widgets and pushes open, strictly parsed.</td></tr>
+<tr><td><code>SurfaceSnapshot</code></td><td>The credential-free App Group value the widgets and the watch read; a tombstone when ownerID is nil.</td></tr>
+<tr><td>Tier</td><td>Which model a task needs at minimum: the device, or a named cloud task. A floor, not a model.</td></tr>
+<tr><td>Together</td><td>The social hub reached from the profile: People, Groups, Rankings.</td></tr>
+<tr><td>Tombstone</td><td>A row with deletedAt set, kept until the server confirms the delete; also the SurfaceSnapshot written on sign-out.</td></tr>
+<tr><td><code>ToolInvoker</code></td><td>The per-turn executor of tool calls: a six-call cap, the confirmation gate, error shaping, activity chips.</td></tr>
+<tr><td><code>TrendSeries</code></td><td>A fixed window of readings with gaps kept as nil; the average ignores gaps and the latest is the last non-nil.</td></tr>
+<tr><td>Two locks</td><td>The session and the open store, both required before RootView mounts.</td></tr>
+<tr><td>Universal link</td><td>https://almanac.shivvyas.com/plaid-oauth, claimed by the app through apple-app-site-association so an OAuth bank lands back in the app.</td></tr>
+<tr><td><code>UserGoals</code></td><td>The stored targets and the dot-grid rule (three of four by default).</td></tr>
+<tr><td><code>UserScope</code></td><td>An account&#x27;s id and the path to its own store file and defaults suite.</td></tr>
+<tr><td><code>WatchWire</code></td><td>The versioned, kinded packet and command shapes exchanged between the watch and the phone.</td></tr>
+<tr><td>Widening</td><td>The library filter relaxing length, then split, when today&#x27;s plan finds nothing; a tapped chip never widens.</td></tr>
+<tr><td>Wiki link</td><td>[[title]] inside a note block; resolved by folded title at index time into a NoteLink edge, which may dangle.</td></tr>
+<tr><td><code>WorkoutBookmark</code></td><td>A saved and or scheduled mark on a catalog video; deleted when it is neither.</td></tr>
+<tr><td><code>WorkoutRecord</code></td><td>One workout as a source record, with split, reps, sets, video id and an externalID that makes a repeated save one workout.</td></tr>
+</tbody></table></div>
+<h3 id="sC-2"><span class="num">C.2</span><span>Reading order</span></h3>
+<p>Ten sittings, each an evening. The order builds: the package before the app, the shell before the screens, one feature at a time, the backend where a feature first needs it. Read each file top to bottom, then its test file if one is named, then grep the type across the app to see where it is used. Every chapter's own study notes go deeper into its files; this is the route between them.</p>
+<div class="study"><h4>Sitting one: the package and the spine</h4><ol>
+<li><code>LifeOSKit/Package.swift</code>: the eight targets and which may import which.</li>
+<li><code>LifeOSKit/Sources/Persistence/DailyMetrics.swift</code>: every field optional; the extras and sources bags.</li>
+<li><code>LifeOSKit/Sources/Persistence/MetricsStore.swift</code>: the protocol every screen reads through.</li>
+<li><code>LifeOSKit/Sources/Integrations/MetricSource.swift</code>: the ranks.</li>
+<li><code>LifeOSKit/Sources/Integrations/MetricArbiter.swift</code>: the merge rule, then its tests in IntegrationsTests.</li>
+<li><code>LifeOSKit/Sources/Persistence/LifeOSContainer.swift</code>: the schema list and the migration rule.</li>
+<li><code>LifeOSKit/Sources/Persistence/UserScope.swift</code>: one store per account.</li>
+</ol></div>
+<div class="study"><h4>Sitting two: the shell</h4><ol>
+<li><code>LIfeOS/App/LIfeOSApp.swift</code>: @main to the first tab.</li>
+<li><code>LIfeOS/App/AppShell.swift</code>: the two locks and the re-root.</li>
+<li><code>LIfeOS/App/AccountSession.swift</code>: switching accounts.</li>
+<li><code>LIfeOS/App/RootView.swift</code>: the composition root; read attachAll and reloadAll first.</li>
+<li><code>LifeOSKit/Sources/Integrations/SupabaseAuth.swift</code>: the three auth calls.</li>
+<li><code>LifeOSKit/Sources/Integrations/SessionRefresh.swift and SessionKeepAlive.swift</code>: when a session is refused and when it is renewed.</li>
+<li><code>LIfeOS/Features/Onboarding/View/SignupScreens.swift</code>: the code field and the returning-user door.</li>
+</ol></div>
+<div class="study"><h4>Sitting three: the design system</h4><ol>
+<li><code>LifeOSKit/Sources/DesignSystem/Tokens.swift</code>: colours and hues.</li>
+<li><code>LifeOSKit/Sources/DesignSystem/Typography.swift</code>: the one type scale.</li>
+<li><code>LifeOSKit/Sources/DesignSystem/LayoutMetrics.swift</code>: phone against iPad.</li>
+<li><code>LifeOSKit/Sources/DesignSystem/PillNavBar.swift and GradientCanvas.swift</code>: the shell&#x27;s chrome.</li>
+<li><code>LifeOSKit/Sources/DesignSystem/SoftCard.swift and MetricTile.swift</code>: the card vocabulary and the dash rule.</li>
+<li><code>LifeOSKit/Sources/DesignSystem/MonthGridLayout.swift</code>: calendar maths under test.</li>
+<li><code>scripts/check-typography.sh</code>: the guard.</li>
+</ol></div>
+<div class="study"><h4>Sitting four: Today and Health</h4><ol>
+<li><code>LIfeOS/Features/Today/ViewModel/TodayViewModel.swift</code>: one snapshot per screen.</li>
+<li><code>LIfeOS/Features/Today/Model/TodaySnapshot.swift and TodayMetric.swift</code>: what a screen is handed.</li>
+<li><code>LifeOSKit/Sources/Persistence/CalendarStore.swift and Integrations/CalendarSync.swift</code>: the windowed cache and the merge.</li>
+<li><code>LIfeOS/Features/Health/View/HealthHubScreen.swift</code>: two halves over one week strip.</li>
+<li><code>LifeOSKit/Sources/Integrations/HealthKitReader.swift and HealthApply.swift</code>: reading everything Health holds and applying it through the arbiter.</li>
+<li><code>LifeOSKit/Sources/Integrations/HealthSyncWindow.swift</code>: which days a sync re-reads.</li>
+</ol></div>
+<div class="study"><h4>Sitting five: wearables and the backend door</h4><ol>
+<li><code>LifeOSKit/Sources/Integrations/WhoopClient.swift, WhoopSync.swift, WhoopDerivation.swift</code>: archive raw, then derive.</li>
+<li><code>LifeOSKit/Sources/Integrations/FitbitSync.swift and FitbitDerivation.swift</code>: the second wearable.</li>
+<li><code>supabase/functions/_shared/supabase.ts</code>: resolveUser, the door.</li>
+<li><code>supabase/functions/whoop-token/index.ts and fitbit-token/index.ts</code>: tokens held server-side under a lease.</li>
+<li><code>supabase/migrations/20260811164841_initial_schema.sql</code>: the first schema and what is now unused.</li>
+<li><code>supabase/config.toml</code>: auth channels, verify_jwt overrides.</li>
+</ol></div>
+<div class="study"><h4>Sitting six: live sessions and the watch</h4><ol>
+<li><code>LifeOSKit/Sources/Integrations/LiveEffort.swift</code>: zones, effort, capacity, ceiling; then LiveEffortTests.</li>
+<li><code>LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift</code>: the one value every surface renders.</li>
+<li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift</code>: the session lifecycle.</li>
+<li><code>LIfeOS/Features/Activity/ViewModel/LiveHeartRateSensor.swift</code>: reconnecting on its own.</li>
+<li><code>AlmanacWidgets/WorkoutLiveActivity.swift</code>: the lock screen and the island.</li>
+<li><code>LifeOSKit/Sources/Motion/RepCounter.swift and its tests</code>: reps from acceleration.</li>
+<li><code>LIfeOS/App/Surfaces/WatchSessionBridge.swift and AlmanacWatch/WatchWorkoutController.swift</code>: the hand-off from both ends.</li>
+</ol></div>
+<div class="study"><h4>Sitting seven: the workout library</h4><ol>
+<li><code>LifeOSKit/Sources/Sectors/WorkoutPlanner.swift</code>: four rules and a reason.</li>
+<li><code>LifeOSKit/Sources/Sectors/WorkoutLibraryFilter.swift</code>: widening that names its step.</li>
+<li><code>LifeOSKit/Sources/Persistence/CatalogVideo.swift and WorkoutBookmark.swift</code>: the cache and the marks.</li>
+<li><code>LIfeOS/Features/Workouts/ViewModel/WorkoutLibraryViewModel.swift</code>: the plan, the list, the refresh.</li>
+<li><code>LIfeOS/Features/Workouts/View/YouTubePlayerView.swift</code>: the nocookie origin fix.</li>
+<li><code>LIfeOS/Features/Workouts/View/VideoWorkoutScreen.swift and DraggableHUD.swift</code>: one web view across three layouts.</li>
+<li><code>scripts/catalog/verify.ts</code>: how a video earns its row.</li>
+</ol></div>
+<div class="study"><h4>Sitting eight: Money and the Life board</h4><ol>
+<li><code>LifeOSKit/Sources/Persistence/MoneyEntry.swift and MoneyStore.swift</code>: the sign convention and the rollup.</li>
+<li><code>LifeOSKit/Sources/Integrations/PlaidSync.swift and PlaidMapping.swift</code>: ingest, remove, upsert, then the cursor.</li>
+<li><code>LifeOSKit/Sources/Persistence/SpendBucket.swift and Sectors/BudgetPeriod.swift</code>: buckets and the assessment.</li>
+<li><code>LifeOSKit/Sources/Sectors/SectorEvidenceFactory.swift</code>: every score goes through here.</li>
+<li><code>LifeOSKit/Sources/Sectors/ProjectedInputs.swift and Leverage.swift</code>: coasting, perfect finish, levers.</li>
+<li><code>LIfeOS/Features/Life/ViewModel/MonthlyCloseViewModel.swift</code>: the walk and its pure policies.</li>
+</ol></div>
+<div class="study"><h4>Sitting nine: LIFO</h4><ol>
+<li><code>LifeOSKit/Sources/Insights/Context/MetricsDigest.swift</code>: the privacy boundary in one parameter.</li>
+<li><code>LifeOSKit/Sources/Insights/Context/ContextBundle.swift</code>: the character budget.</li>
+<li><code>LifeOSKit/Sources/Insights/AssistantTurn.swift</code>: cloud first, device after.</li>
+<li><code>LifeOSKit/Sources/Insights/Chat/RemoteChatEngine.swift and ChatWire.swift</code>: the wire to lifo-agent.</li>
+<li><code>LifeOSKit/Sources/Insights/ToolInvoker.swift and ToolGate.swift</code>: the confirmation gate.</li>
+<li><code>supabase/functions/_shared/lifo.ts and lifo-agent/index.ts</code>: SCOPE, the caps, the debit.</li>
+<li><code>LIfeOS/Features/Coach/ViewModel/CoachViewModel.swift and Model/SpeechListener.swift</code>: speech in and out.</li>
+<li><code>supabase/functions/_shared/nudge.ts</code>: rules decide, the model phrases.</li>
+</ol></div>
+<div class="study"><h4>Sitting ten: Notes and Social</h4><ol>
+<li><code>LifeOSKit/Sources/Persistence/NoteDocument.swift and NoteBlock.swift</code>: blocks as the unit.</li>
+<li><code>LifeOSKit/Sources/Persistence/NoteIndexer.swift</code>: the derived rows and the title index.</li>
+<li><code>LifeOSKit/Sources/Integrations/NoteSync.swift</code>: folders first, batches of 25, push before pull.</li>
+<li><code>LIfeOS/Features/Notes/ViewModel/NotesViewModel.swift</code>: the shelf, the sheet, the commands.</li>
+<li><code>LifeOSKit/Sources/Integrations/SocialAPI.swift and GroupAPI.swift</code>: the thin PostgREST client and the RPCs.</li>
+<li><code>supabase/migrations/20260827130000_friends_and_messages.sql and 20260914090000_social_groups.sql</code>: RLS doing the guarding.</li>
+<li><code>LifeOSKit/Sources/Integrations/SocialWellness.swift</code>: Effort, Recharge, Rest.</li>
+</ol></div>
+<div class="note good">
+  <b>After the tenth sitting</b>
+  Run <code>swift test --package-path LifeOSKit</code> and read the names of the suites as a table of contents of what the app promises. Then open <a href="#chB">Appendix B</a> and, for any row you cannot explain from memory, go back to the chapter it names.
+</div>
 </section>

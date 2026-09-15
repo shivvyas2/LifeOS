@@ -1,10 +1,702 @@
-<section class="chapter" id="ch06" data-hue="notes">
-<p class="chapter-kicker">Chapter 6</p>
-<h2><span class="num">6</span><span>Stub ch06</span></h2>
-<p class="lede">Stub lede for ch06 &amp; friends.</p>
+<section class="chapter" id="ch6" data-hue="today">
+<p class="chapter-kicker">Chapter six</p>
+<h2><span class="num">6</span><span>Today and the calendar</span></h2>
+<p class="lede">
+  The hub. A month of dots, a streak, today's schedule, and four tiles that each carry their own
+  week. Every number on it comes from one local table and one local cache, and every tap opens
+  something rather than explaining something.
+</p>
+
 <h3 id="s6-1"><span class="num">6.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch06a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch06a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s6-2"><span class="num">6.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Today opens on a grid of dots, one per day this month. Filled dots are days you hit your
+  targets, hollow dots are misses, faint dots are days with no data, and today is orange. Under it
+  sit your schedule for the day and the week ahead, drawn from the phone's calendar, then a streak,
+  then four tiles: steps, sleep, weight, recovery, each with the last seven days as bars. Tap a
+  dot and the day opens in full; tap a tile and the metric opens on a page of its own with a
+  week, a month or a year behind it; tap the calendar icon and a month you can walk through opens.
+</p>
+<p class="faq-q">What makes a dot fill?</p>
+<p class="faq-a">
+  Meeting 3 of 4 daily goals: steps 8,000, sleep 7h, exercise 30 min, water 2,500 ml. All five
+  values are editable in Settings (<a href="#ch17">Chapter 17</a>). The rule is deliberately
+  explicit; a vague definition makes the entire grid meaningless.
+</p>
+<p class="faq-q">What happens on a day with no data at all?</p>
+<p class="faq-a">
+  It renders as no-data, not as a miss, and it is excluded from streak arithmetic entirely.
+  Leaving your watch on the charger is not a moral failure, and a system that punishes it teaches
+  you to distrust the streak. A day with some data is judged on what it has: if steps are logged at
+  500 and nothing else was recorded, that is a miss.
+</p>
+<p class="faq-q">If I change a goal, does history change?</p>
+<p class="faq-a">
+  Yes. Status is computed on read, never stored, so past dots re-evaluate against the new target
+  immediately. The grid answers "how am I doing against my current standard".
+</p>
+<p class="faq-q">Where does the schedule come from?</p>
+<p class="faq-a">
+  From EventKit, through a local SwiftData cache. The permission prompt fires from the agenda
+  card's own connect button, never at launch, and the phone's calendar app remains the source of
+  truth: Almanac reads a window of 30 days back and 90 forward, writes go straight back to
+  EventKit, and the cache is re-synced afterwards so it shows what the provider actually stored.
+</p>
+<p class="faq-q">Why is there a separate month screen?</p>
+<p class="faq-a">
+  Today's month grid shows how the streak has been going and cannot leave the current month. The
+  month screen answers the other question, what is on, across any month, with day numbers and up to
+  three event dots per day. Two questions, two grids.
+</p>
+</div>
+
+<h3 id="s6-2"><span class="num">6.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Today/
+├── Model/
+│   ├── TodaySnapshot.swift          everything the hub renders, plus CalendarAccessState and UpcomingEvent
+│   ├── TodayMetric.swift            steps · sleep · weight · recovery: icon, hue, unit, format, goal, value
+│   ├── MetricDetailSnapshot.swift   MetricRange (week/month/year), MetricBar, the page's values
+│   └── DayDetailSnapshot.swift      one day: metrics, habits, events
+├── ViewModel/
+│   ├── TodayViewModel.swift         the 400-day pass: grid, streak, week series, agenda, day sheet
+│   ├── MetricDetailViewModel.swift  one fetch, bucketed by day or month
+│   └── MonthViewModel.swift         one fetch per month, grouped by day, reversible stepping
+└── View/
+    ├── TodayScreen.swift            layout only; one column or two
+    ├── AgendaCard.swift             today's schedule and Upcoming, journey rows, DayPart
+    ├── CalendarEventRow.swift       the month screen's row (multi-day spans)
+    ├── DayDetailSheet.swift         the day in full; only today gets controls
+    ├── EventSheet.swift             create or edit one event; recurring is read-only
+    ├── MetricDetailScreen.swift     chart, summary, all readings, tracking help
+    └── MonthScreen.swift            the month grid, swipe to step, date jump
+
+Components/View/QuickLogSheet.swift          water and weight, the two metrics with no automatic source
+Components/ViewModel/QuickLogViewModel.swift
+Components/View/JournalEntrySheet.swift      free text, no title
+
+LifeOSKit/Sources/Persistence/
+├── CalendarEvent.swift      @Model, CalendarEventSnapshot (Sendable), CalendarEventDraft
+├── CalendarStore.swift      windowed reads, apply() reconcile, freeSlots()
+├── CalendarDayIndex.swift   overlapping events grouped per visible day
+├── GoalEvaluation.swift     DayStatus, evaluate(_:against:)
+└── Streak.swift             currentStreak(statuses:)
+LifeOSKit/Sources/Integrations/
+├── CalendarSource.swift     the provider protocol
+├── EventKitSource.swift     EventKit behind it, an actor
+├── CalendarSync.swift       pull every authorised source, merge, reconcile; route writes
+├── CalendarMerge.swift      title + start dedup, EventKit wins
+└── HealthSyncWindow.swift   which days a Health sync re-reads
+LifeOSKit/Sources/DesignSystem/
+├── MonthGridLayout.swift    DotState, DotCell, the padding maths, stepping()
+├── MonthCalendarView.swift  DateHeadline, WeekdayHeader, DotGrid composition
+├── TrendSeries.swift        TrendPoint, the seven-slot window
+├── TrendStatTile.swift      the tile with the week
+└── RoundedBarChart.swift    tracks, bars, gaps, two baselines</pre>
+
+<h3 id="s6-3"><span class="num">6.3</span><span>Model</span></h3>
+
+<h4>The hub's snapshot</h4>
+
+<pre><code>// LIfeOS/Features/Today/Model/TodaySnapshot.swift
+struct TodaySnapshot: Equatable {
+    var date: Date = .now
+    var cells: [DotCell] = []
+    var streak: Int = 0
+
+    var steps: Int?
+    var stepsProgress: Double?
+    var sleepMinutes: Int?
+    var sleepProgress: Double?
+    var weightKg: Double?
+    var recoveryPct: Double?
+
+    var stepsWeek: TrendSeries = TrendSeries(points: [])
+    var sleepWeek: TrendSeries = TrendSeries(points: [])
+    var weightWeek: TrendSeries = TrendSeries(points: [])
+    var recoveryWeek: TrendSeries = TrendSeries(points: [])
+    var stepsTarget: Double?
+    var sleepTargetMinutes: Double?
+
+    var calendarAccess: CalendarAccessState = .notDetermined
+    var agenda: [CalendarEventSnapshot] = []
+    var upcoming: [UpcomingEvent] = []
+    var scheduledWorkoutTitle: String?
+
+    var hasNoHealthData: Bool {
+        steps == nil &amp;&amp; sleepMinutes == nil &amp;&amp; weightKg == nil &amp;&amp; recoveryPct == nil
+            &amp;&amp; stepsWeek.points.isEmpty &amp;&amp; sleepWeek.points.isEmpty
+    }
+}</code></pre>
+
+<p>
+  Every metric is an optional, and each one that has a goal carries its progress alongside it,
+  already divided. The view receives numbers it can render and nothing it has to interpret: it
+  never sees a <code>DailyMetrics</code>, so rendering cannot fault a SwiftData object or trigger
+  a fetch mid-layout. Two things are new since the previous edition. Each figure carries its week
+  as a <code>TrendSeries</code> with a slot for every day, so a gap stays a gap in the chart
+  rather than closing up. And <code>hasNoHealthData</code> exists because the app used to seed
+  sixty days of invented history at first launch, so an empty hub was unreachable; now that the
+  numbers are real, an unconnected day is the normal first thing a person sees and the screen has
+  to offer a connection rather than a grid of dashes.
+</p>
+
+<h4>One metric, described once</h4>
+
+<pre><code>// LIfeOS/Features/Today/Model/TodayMetric.swift
+enum TodayMetric: String, Identifiable, Hashable, CaseIterable {
+    case steps, sleep, weight, recovery
+
+    var icon: String { ... }          // figure.walk, moon.fill, scalemass.fill, bolt.heart.fill
+    var hue: ModuleHue { ... }        // activity, nutrition, body, recovery
+    var unit: String? { ... }         // nil, nil, "kg", "%"
+    var baseline: RoundedBarChart.Baseline { self == .weight ? .windowMinimum : .zero }
+    var higherIsBetter: Bool { self != .weight }
+
+    func value(in row: DailyMetrics) -> Double? { ... }
+    func goal(in targets: GoalTargets) -> Double? { ... }
+    func format(_ value: Double) -> String { ... }
+}</code></pre>
+
+<p>
+  The tile and the detail page used to be able to disagree: the grid decided steps were
+  <code>figure.walk</code> in the activity hue, and a second screen would have decided again. Icon,
+  hue, unit, formatting, the reading a row yields and the goal a day is judged against all live
+  here once, and both surfaces read them. It also gives the navigation destination something to
+  be: a value the stack can carry, rather than four booleans. Weight is the one exception that runs
+  through everything. It is read against its own window rather than against nought, because it
+  moves about a percent over a week and bars measured from zero would be indistinguishable, and it
+  has no goal, because it is not a target to hit.
+</p>
+
+<h4>The calendar event, in three shapes</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/CalendarEvent.swift
+public struct CalendarEventSnapshot: Equatable, Identifiable, Sendable {
+    public let id: UUID            // local; provisional on a provider fetch
+    public let source: CalendarEventSource
+    public let sourceID: String    // EKEvent.eventIdentifier, qualified for recurring rows
+    public let calendarTitle: String
+    public let title: String
+    public let startDate: Date
+    public let endDate: Date
+    public let isAllDay: Bool
+    public let isRecurring: Bool
+    public let location: String?
+    public let notes: String?
+}
+
+public struct CalendarEventDraft: Equatable, Sendable {
+    public var title: String
+    public var startDate: Date
+    public var endDate: Date
+    public var isAllDay: Bool
+    public var location: String?
+    public var notes: String?
+}
+
+@Model public final class CalendarEvent { ... var sourceRaw: String ... var lastSyncedAt: Date }</code></pre>
+
+<p>
+  The <code>@Model</code> is the cache row. The snapshot is what views and assistant tools
+  receive, and <code>Sendable</code> is the point: a tool result crosses into an inference engine
+  (<a href="#ch15">Chapter 15</a>), and a <code>CalendarEvent</code> cannot make that trip. The
+  draft is what a caller supplies to create or edit, with no id and no source, because routing
+  decides those. The natural key of a row is <code>(source, sourceID)</code>; the local
+  <code>id</code> never leaves the device. For a recurring occurrence the source id is qualified
+  with the occurrence's start, because EventKit reuses one identifier across a whole series. A
+  qualified id never resolves through <code>event(withIdentifier:)</code>, so a write against an
+  occurrence fails with <code>unknownEvent</code> instead of silently editing the wrong one, and
+  the sheet refuses such writes before that can happen.
+</p>
+
+<h4>The day sheet and the metric page</h4>
+
+<p>
+  <code>DayDetailSnapshot</code> is <code>Identifiable</code> on its date because
+  <code>.sheet(item:)</code> presents it. It lists every habit that currently exists, done or not,
+  deliberately not filtered by creation date, which is why the sheet's header is a count and never
+  a grade: an old day can list a habit that did not exist then. <code>MetricDetailSnapshot</code>
+  carries a <code>MetricRange</code> of week, month or year and a <code>MetricBar</code> per
+  bucket. The grain is not a separate choice: a week is seven days, a month thirty days, a year
+  twelve months, because a year drawn as 365 bars is a smear three points wide and a week drawn as
+  one bar is not a chart.
+</p>
+
+<h3 id="s6-4"><span class="num">6.4</span><span>ViewModel</span></h3>
+
+<h4>TodayViewModel.load(): one pass over the rows</h4>
+
+<pre><code>// LIfeOS/Features/Today/ViewModel/TodayViewModel.swift
+func load() {
+    guard let context else { return }
+    let store = MetricsStore(context: context, calendar: calendar)
+    do {
+        let targets = try store.goals().targets
+        let start = calendar.date(byAdding: .day, value: -400, to: .now) ?? .distantPast
+        let rows = try store.metrics(from: start, to: .now)      // most recent first
+
+        var statusByDay: [Date: DayStatus] = [:]
+        var ordered: [DayStatus] = []
+        for row in rows {
+            let status = evaluate(row.reading, against: targets)
+            statusByDay[calendar.startOfDay(for: row.date)] = status
+            ordered.append(status)
+        }
+
+        let cells = MonthGridLayout.cells(monthContaining: .now, calendar: calendar, today: .now,
+            status: { date in
+                switch statusByDay[calendar.startOfDay(for: date)] {
+                case .onTarget: .onTarget
+                case .missed:   .missed
+                case .noData, nil: .noData
+                }
+            })
+
+        var rowByDay: [Date: DailyMetrics] = [:]
+        for row in rows { rowByDay[calendar.startOfDay(for: row.date)] = row }
+        let week = TrendSeries.days(endingOn: .now, count: 7, calendar: calendar)
+        func series(_ value: (DailyMetrics) -> Double?) -> TrendSeries {
+            TrendSeries(points: week.map { day in
+                TrendPoint(date: day, value: rowByDay[day].flatMap(value))
+            })
+        }
+        ...
+        snapshot = TodaySnapshot(... streak: currentStreak(statuses: ordered), ...)
+        if let detail { select(detail.date) }
+    } catch {
+        assertionFailure("Today load failed: \(error)")
+    }
+}</code></pre>
+
+<p>Inside <code>load()</code>, in order:</p>
+<ol>
+  <li>Read <code>GoalTargets</code> from the store, which materialises defaults on first access.</li>
+  <li>Fetch four hundred days ending now, most-recent-first. Bounded on purpose: the grid needs this
+    month and the streak needs recent history, never the whole table.</li>
+  <li><code>evaluate</code> each row once into a date-keyed dictionary. Rebuilding that map inside
+    the per-day closure would re-evaluate every row about thirty times per load.</li>
+  <li>Ask <code>MonthGridLayout</code> for the cells, mapping <code>DayStatus</code> to
+    <code>DotState</code> here because Persistence must not depend on DesignSystem.</li>
+  <li>Compute <code>currentStreak</code> from the same ordered statuses.</li>
+  <li>Build the four week series from the rows already in hand: a second dictionary and seven
+    lookups per metric rather than a second query. The rows stay inside this method; only plain
+    numbers reach the snapshot.</li>
+  <li>Read today's agenda and the next seven days from <code>CalendarStore</code>, two windowed
+    fetches.</li>
+  <li>Read the title of any workout scheduled for today from the bookmark store and the catalog
+    cache (<a href="#ch10">Chapter 10</a>). Two reads rather than a relationship: the catalog is a
+    cache the next refresh can drop a row from, so a schedule pointing at a vanished video simply
+    shows nothing.</li>
+  <li>Publish one <code>TodaySnapshot</code>. A single assignment means a single render.</li>
+  <li>If the day sheet is open, re-derive it, so an external write, a WHOOP sync or a habit tick,
+    updates the sheet as well as the grid behind it.</li>
+</ol>
+
+<p>
+  A read failure trips an <code>assertionFailure</code> and leaves the previous snapshot in place
+  rather than blanking the screen. Nothing about a failed local fetch is recoverable by the user,
+  so the last good state is the most useful thing to keep showing.
+</p>
+
+<p>
+  <code>select(date)</code> builds the day sheet from three stores: the metrics row for that day,
+  the habit ticks on it, and the events overlapping it. A day with no metrics row is not an early
+  return; its habits are still worth showing and the metric rows render as blanks.
+  <code>toggleHabit</code> writes through <code>PlanStore</code> and then does nothing else: the
+  save fires <code>ModelContext.didSave</code>, <code>RootView</code> reloads every view model,
+  and <code>load()</code> re-derives the open sheet. That is the one refresh path; calling
+  <code>select()</code> again here would repeat the 400-day pass a second time per tap.
+</p>
+
+<h4>MetricDetailViewModel: its own object, on purpose</h4>
+
+<p>
+  A view model of its own rather than more fields on <code>TodayViewModel</code>, because that one
+  runs a 400-day pass on every save in the app, and hanging a year of bucketing off it would repeat
+  that work for a screen nobody is looking at. <code>load(metric)</code> makes one fetch bounded by
+  the range, then buckets in memory:
+</p>
+
+<pre><code>// LIfeOS/Features/Today/ViewModel/MetricDetailViewModel.swift
+let buckets = Self.buckets(range: range, endingOn: now, calendar: calendar)
+guard let start = buckets.first else { return }
+let rows = try store.metrics(from: start, to: now)     // one fetch, not one per bucket
+
+var readingsByBucket: [Date: [Double]] = [:]
+for row in rows {
+    guard let value = metric.value(in: row),
+          let bucket = Self.bucket(for: row.date, range: range, calendar: calendar)
+    else { continue }
+    readingsByBucket[bucket, default: []].append(value)
+}
+let bars = buckets.map { bucket in
+    MetricBar(date: bucket,
+              label: Self.label(for: bucket, range: range, calendar: calendar),
+              value: readingsByBucket[bucket].map { $0.reduce(0, +) / Double($0.count) })
+}</code></pre>
+
+<p>
+  Every bucket is present whether or not it has a reading, for the same reason
+  <code>TrendSeries.days</code> keeps gaps: compacting the buckets that do have readings draws a
+  chart whose neighbouring bars are not a bucket apart, which is a quieter lie than a false zero
+  but a lie. A day has at most one row, so the mean is that row's own value in the two short
+  windows; it only averages anything in the year view, where a bucket is a month. The month view
+  labels one bar in five, because thirty labelled bars on a phone is a grey smudge. The headline
+  figure is the most recent actual reading in the window, which is usually but not always today: a
+  night's sleep or a recovery score can be a day behind, and the year view's monthly aggregate must
+  never replace it.
+</p>
+
+<h4>MonthViewModel: one fetch per month</h4>
+
+<p>
+  The month screen fetches the visible month padded by a week either side, then groups with
+  <code>CalendarDayIndex.group</code> so a cell asks a dictionary rather than the store. A month is
+  up to 42 cells and every one wants a count; one fetch, not one per cell. The padding is what makes
+  the leading and trailing cells answerable, since the first row of a month usually starts in the
+  previous one. Stepping remembers the day number the person last picked separately from the
+  selection, so walking from 31 March to February and back returns to the 31st rather than the
+  28th; <code>MonthGridLayout.stepping</code> clamps only for display.
+</p>
+
+<h3 id="s6-5"><span class="num">6.5</span><span>View</span></h3>
+
+<pre><code>// LIfeOS/Features/Today/View/TodayScreen.swift
+struct TodayScreen: View {
+    let snapshot: TodaySnapshot
+    let onSelectDay: (Date) -> Void
+    let onConnectCalendar: () -> Void
+    let onAddEvent: () -> Void
+    let onTapEvent: (CalendarEventSnapshot) -> Void
+    let onOpenToday: () -> Void
+    var onConnectHealth: () -> Void = {}
+    var isHealthConnected = false
+    var onSelectMetric: (TodayMetric) -> Void = { _ in }
+    ...
+}</code></pre>
+
+<p>
+  The screen takes a value and a set of intents and owns nothing: no view model, no store, no
+  context. Every tap names what was tapped and stops there. What a day opens, what a metric opens,
+  whether the permission sheet fires, are all the shell's decisions, which is what keeps this a
+  pure function of its inputs and a preview a single literal.
+</p>
+
+<h4>One column or two</h4>
+
+<p>
+  On a phone the order is month, scheduled workout, agenda, streak, health prompt, stat grid, with
+  <code>layout.statColumns</code> deciding whether tiles are one or two across. On a wide pane the
+  month, workout, agenda and streak stand in a left column capped at 520 points, and the stats stand
+  beside them two across. The cap is the point, not merely a column count: a dot grid divides
+  whatever width it is given by seven, so a full-width month on a 1300 point pane draws 170 point
+  dots and shoves every stat below the fold, the opposite of what more room should buy. There is no
+  <code>maxContentWidth</code> on this screen, because both arrangements are grids and the cap
+  exists for prose.
+</p>
+
+<h4>The pieces</h4>
+
+<ul>
+  <li><strong><code>MonthCalendarView</code></strong> composes <code>DateHeadline</code> (the day
+    numeral at masthead size), <code>WeekdayHeader</code> (narrow symbols rotated to the calendar's
+    first weekday, today's column accented) and <code>DotGrid</code>. Cells arrive already
+    computed; deriving them in a body would re-run the calendar maths on every render.</li>
+  <li><strong><code>AgendaCard</code></strong> always renders, because it carries the three
+    permission states. Not determined shows "Connect calendar", denied shows "Open Settings",
+    authorised shows up to four rows grouped by <code>DayPart</code> (all day, morning, afternoon,
+    evening, each with its own icon and pastel) and a "+N more" that opens the day sheet. Upcoming
+    is a second card, shown only with access and something to show, five rows grouped by day
+    label. Rows are capped before grouping so the card's height budget stays the same whatever
+    shape the day has.</li>
+  <li><strong><code>TrendStatTile</code></strong> is the tile with the week: label, pastel icon
+    bubble, the numeral, and a <code>RoundedBarChart</code> of seven bars at 74 points on a phone
+    and 88 on a wide pane. A week with no readings draws the plain figure and still holds the
+    chart's height, so a dataless tile stands as tall as its siblings. Every tile is a plain button
+    into <code>MetricDetailScreen</code>, built from <code>TodayMetric.allCases</code> rather than
+    written out four times.</li>
+  <li><strong>The health prompt</strong> appears only when there is nothing to show and nothing
+    attached. A connected strap that has not synced yet is a different situation, and telling that
+    person to connect something would be wrong.</li>
+  <li><strong>The scheduled workout card</strong> is informational: the library is where a
+    workout is played, and a card that opened a video would put the player two taps from a
+    calendar grid.</li>
+</ul>
+
+<h4>The sheets</h4>
+
+<p>
+  <code>DayDetailSheet</code> renders past days as history with static marks and gives only today
+  controls, so the grid can never be rewritten after the fact. A not-done habit on a past day is a
+  dash rather than a cross, because the list may include habits that did not exist that day and a
+  cross would read as a verdict the sheet has no standing to make. A missing metric renders as a
+  dash rather than hiding the row, so the sheet's height does not jump between days.
+</p>
+
+<p>
+  <code>EventSheet</code> is a pure function of its <code>EventSheetPresentation</code>, create or
+  edit. Every write goes out through <code>onSave</code> and <code>onDelete</code>, which is what
+  keeps it previewable without EventKit. A recurring occurrence renders read-only, fields disabled,
+  Save and Delete hidden, with "This repeats. Edit the series in your calendar app." Editing one
+  occurrence needs series semantics the app does not implement, and pointing at the calendar app is
+  honest where silently mutating the occurrence would not be. The end date is clamped on save
+  rather than blocked: a timed event floors at fifteen minutes after its start, an all-day event
+  only at its start, since end equals start is the normal single-day shape. A new event defaults
+  to the next full hour today, or 9am on any other day, because "next Tuesday at 16:41" is nobody's
+  intent.
+</p>
+
+<p>
+  <code>MonthScreen</code> carries a swipe gesture on the grid to step months, chevrons for anyone
+  who would rather aim than swipe, a date jump sheet, and a "Today" button disabled while today is
+  selected. On a wide enough pane <code>ViewThatFits</code> puts the 400 point calendar panel and
+  the agenda side by side. It never writes: create and edit leave through the caller, which owns
+  <code>CalendarSync</code>, and it re-reads on <code>ModelContext.didSave</code> so a write from
+  the sheet it opened lands in its dots.
+</p>
+
+<h4>The quick log and the journal</h4>
+
+<p>
+  <code>QuickLogSheet</code> logs water and weight, the two metrics with no automatic source, and
+  is now reached from inside Begin Activity rather than from a bar button. Water accumulates:
+  "add 250 ml" is the intent, not "today's total is 250 ml". <code>JournalEntrySheet</code> is a
+  bare text editor with no title and no fields, because asking for either is friction on the one
+  thing that has to stay effortless.
+</p>
+
+<h3 id="s6-6"><span class="num">6.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 360" role="img" aria-label="Writers on the left (Health sync, WHOOP sync, quick log, habit tick, calendar sync) save into SwiftData; ModelContext.didSave fans out to RootView.reloadAll, which runs TodayViewModel.load; it reads 400 days of DailyMetrics and two calendar windows and publishes one snapshot to TodayScreen. EventKit is synced by CalendarSync on scene activation and after every write.">
+  <defs>
+    <marker id="ch6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">WRITERS</text>
+  <text class="lbl-sm" x="300" y="24">STORE</text>
+  <text class="lbl-sm" x="500" y="24">DERIVATION</text>
+  <text class="lbl-sm" x="720" y="24">SCREEN</text>
+
+  <rect class="box" x="20" y="40" width="140" height="34" rx="8"/>
+  <text class="lbl" x="90" y="62" text-anchor="middle">Health sync</text>
+  <rect class="box" x="20" y="84" width="140" height="34" rx="8"/>
+  <text class="lbl" x="90" y="106" text-anchor="middle">WHOOP / Fitbit</text>
+  <rect class="box" x="20" y="128" width="140" height="34" rx="8"/>
+  <text class="lbl" x="90" y="150" text-anchor="middle">Quick log</text>
+  <rect class="box" x="20" y="172" width="140" height="34" rx="8"/>
+  <text class="lbl" x="90" y="194" text-anchor="middle">Habit tick</text>
+  <rect class="box" x="20" y="250" width="140" height="34" rx="8"/>
+  <text class="lbl" x="90" y="272" text-anchor="middle">EventKit</text>
+
+  <rect class="box-hot" x="300" y="80" width="150" height="70" rx="10"/>
+  <text class="lbl" x="375" y="106" text-anchor="middle">DailyMetrics</text>
+  <text class="lbl-hot" x="375" y="126" text-anchor="middle">PlanEntry · HabitTick</text>
+  <rect class="box-hot" x="300" y="236" width="150" height="62" rx="10"/>
+  <text class="lbl" x="375" y="262" text-anchor="middle">CalendarEvent</text>
+  <text class="lbl-hot" x="375" y="282" text-anchor="middle">30 back · 90 forward</text>
+
+  <path class="flow" d="M160 57 L200 57 L200 100 L294 100" marker-end="url(#ch6a)"/>
+  <path class="flow" d="M160 101 L294 108" marker-end="url(#ch6a)"/>
+  <path class="flow" d="M160 145 L200 145 L200 116 L294 116" marker-end="url(#ch6a)"/>
+  <path class="flow" d="M160 189 L220 189 L220 130 L294 130" marker-end="url(#ch6a)"/>
+  <rect class="box" x="180" y="250" width="100" height="34" rx="8"/>
+  <text class="lbl" x="230" y="272" text-anchor="middle">CalendarSync</text>
+  <path class="flow" d="M160 267 L174 267" marker-end="url(#ch6a)"/>
+  <path class="flow" d="M280 267 L294 267" marker-end="url(#ch6a)"/>
+  <text class="lbl-sm" x="182" y="302">apply(): upsert by (source, id), prune</text>
+
+  <rect class="box" x="500" y="150" width="170" height="48" rx="8"/>
+  <text class="lbl" x="585" y="170" text-anchor="middle">ModelContext.didSave</text>
+  <text class="lbl-sm" x="585" y="188" text-anchor="middle">RootView.reloadAll()</text>
+  <path class="flow-dash" d="M450 115 L500 160" marker-end="url(#ch6a)"/>
+  <path class="flow-dash" d="M450 267 L500 190" marker-end="url(#ch6a)"/>
+
+  <rect class="box-hot" x="500" y="222" width="170" height="70" rx="10"/>
+  <text class="lbl" x="585" y="246" text-anchor="middle">TodayViewModel.load()</text>
+  <text class="lbl-hot" x="585" y="264" text-anchor="middle">400 days, evaluated once</text>
+  <text class="lbl-hot" x="585" y="280" text-anchor="middle">grid · streak · 4 weeks · agenda</text>
+  <path class="flow-hot" d="M585 198 L585 216" marker-end="url(#ch6b)"/>
+
+  <rect class="box" x="720" y="230" width="120" height="54" rx="8"/>
+  <text class="lbl" x="780" y="252" text-anchor="middle">TodaySnapshot</text>
+  <text class="lbl-sm" x="780" y="270" text-anchor="middle">one assignment</text>
+  <path class="flow-hot" d="M670 257 L714 257" marker-end="url(#ch6b)"/>
+
+  <rect class="box" x="720" y="310" width="120" height="34" rx="8"/>
+  <text class="lbl" x="780" y="332" text-anchor="middle">TodayScreen</text>
+  <path class="flow" d="M780 284 L780 304" marker-end="url(#ch6a)"/>
+</svg>
+<figcaption>
+  Nothing polls. Every writer saves through the store, the save notification reloads every view
+  model, and the hub's view model publishes one value. The calendar cache is filled by an ambient
+  sync on scene activation and after every write, and pruned only for sources that actually
+  answered.
+</figcaption>
+</figure>
+
+<h4>The calendar pipeline</h4>
+
+<ol>
+  <li><code>RootView.syncCalendar()</code> runs on the launch task, on every scene activation, and
+    after any calendar write. It does nothing unless <code>CalendarAccessState.current</code> is
+    <code>.authorized</code>, which requires both the system permission and the per-account opt-in
+    flag: a device permission granted for one Almanac account does not authorise another.</li>
+  <li><code>CalendarSync.sync()</code> asks each source whether it is authorised, fetches the
+    window from those that are, and skips any that throw. Partial data beats an empty screen, and
+    errors are not surfaced because sync is ambient, never a user-visible request.</li>
+  <li><code>CalendarMerge.merge</code> dedups across sources on lowercased title plus start date,
+    EventKit winning because that copy is writable offline and is what the OS shows elsewhere.
+    Google is the second source the protocol is shaped for; today only EventKit is wired.</li>
+  <li><code>CalendarStore.apply</code> reconciles the fetch into the cache by natural key: an
+    existing row is updated in place and keeps its local id, a new one adopts the snapshot's, and
+    in-window rows absent from the fetch are deleted only when their source was authoritative this
+    pass. Rows outside the window are never touched.</li>
+  <li>The save fires <code>didSave</code> and the hub's agenda repaints.</li>
+</ol>
+
+<p>
+  Writes go the other way. <code>EventSheet</code> hands a draft to <code>RootView</code>, which
+  calls <code>calendarSync.create</code>, <code>update</code> or <code>delete</code>. Sync routes
+  the write to the source that owns the event, and then runs a full <code>sync()</code> so the
+  cache reflects what the provider actually stored. Providers normalise all-day handling and time
+  zones, so trusting the local draft would drift.
+</p>
+
+<h4>Keeping today's numbers moving</h4>
+
+<p>
+  A step count climbs until midnight, and a sync at breakfast is stale by lunch. Two mechanisms
+  keep the tiles honest while the app is open. <code>HealthSyncWindow.days(since:)</code> decides
+  which days a sync re-reads: always today, plus the day of the last sync and every day since,
+  because a night's sleep is recorded against the morning it ends and the day already covered can
+  still gain a value. A first sync backfills thirty days, the month the dot grid shows, and no
+  further, because Health keeps the data regardless and a longer backfill can be added the day
+  something needs it. A last-sync stamp from the future is treated as a clock change and syncs
+  today alone.
+</p>
+
+<p>
+  Then <code>HealthConnectionViewModel.startWatching()</code> runs an <code>HKObserverQuery</code>
+  per metric for as long as the app is in front. Each change re-runs the sync, then sleeps fifteen
+  seconds; the stream buffers one event, so a day's steps arriving in dozens of batches becomes one
+  re-read per quarter minute rather than one per batch. The observers are torn down when the app
+  leaves the foreground, so a phone in a pocket is not running ten queries a quarter minute. The
+  sync writes through <code>MetricsStore</code>, the save reloads the hub, and the numeral moves.
+  Nothing in the watcher knows about a screen.
+</p>
+
+<h3 id="s6-7"><span class="num">6.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Bounded fetches.</strong> The hub reads 400 days; the metric page reads only its
+    range; the month screen reads one month plus a week either side; the agenda reads one day and
+    the next seven. Nothing reads the whole table.</li>
+  <li><strong>Evaluate once, look up many times.</strong> Status and rows are keyed by day in two
+    dictionaries with reserved capacity; the grid, the streak and the four week series are all
+    lookups against them.</li>
+  <li><strong>Bucket in memory, not in the store.</strong> The year view is one fetch and a
+    dictionary, not twelve round trips.</li>
+  <li><strong>Reload only what is on screen.</strong> <code>reloadAll()</code> reloads the metric
+    page only while it is pushed, and the money detail only while it is open.</li>
+  <li><strong>Event-driven, never polled.</strong> The single <code>didSave</code> subscription in
+    <code>RootView</code> is the whole refresh mechanism; the Health observer stream is throttled to
+    one re-read per fifteen seconds and stopped in the background.</li>
+  <li><strong>One assignment, one render.</strong> The snapshot is built whole and assigned once;
+    no intermediate state is published mid-load.</li>
+  <li><strong>The chart maths is pure and static.</strong> <code>RoundedBarChart.fraction</code>
+    and <code>MonthGridLayout.cells</code> take values and return values, so they are tested from
+    the terminal and never recomputed inside a body.</li>
+  <li><strong>The cache means the calendar works on a plane.</strong> Reads never touch EventKit
+    directly; a sync that fails leaves the previous rows in place.</li>
+  <li><strong>Nothing leaves the device.</strong> Calendar contents and the day sheet stay local.
+    What an escalated assistant turn sends is described in <a href="#ch15">Chapter 15</a> and
+    <a href="#ch24">Chapter 24</a>.</li>
+</ul>
+
+<h3 id="s6-8"><span class="num">6.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Month boundaries</td><td>Leading blanks from <code>firstWeekday</code>, padded to whole rows; only padding cells lack a date</td></tr>
+<tr><td>Future days in the current month</td><td>Rendered <code>.future</code> by position, never evaluated against goals</td></tr>
+<tr><td>Today with partial data</td><td>Rendered <code>.today</code> by position, so a half-logged day never shows as a miss</td></tr>
+<tr><td>No data for a day</td><td>Faint dot; skipped by the streak; leading no-data days do not break it</td></tr>
+<tr><td>Goal changed in Settings</td><td>Next <code>load()</code> re-evaluates all history; dots change</td></tr>
+<tr><td>No health source connected and no data</td><td>The tiles show dashes and a "Connect Apple Health" card appears; a connected strap that has not synced suppresses the card</td></tr>
+<tr><td>Metric with no reading in the week</td><td>Tile shows the figure or a dash and holds the chart's height blank</td></tr>
+<tr><td>Weight week that is flat</td><td>Half-height bars: every reading is both the high and the low, and half reads as steady</td></tr>
+<tr><td>Latest sleep or recovery is yesterday's</td><td>The detail headline shows the latest actual reading and its date, never today's blank</td></tr>
+<tr><td>Calendar never asked</td><td>Agenda offers "Connect calendar"; the prompt fires on that tap only</td></tr>
+<tr><td>Calendar denied</td><td>Agenda offers "Open Settings"</td></tr>
+<tr><td>Calendar granted on the device, but for another account</td><td>Not authorised for this account until it opts in; the prompt is not shown again, the flag is</td></tr>
+<tr><td>Event deleted in the Calendar app</td><td>Gone from the cache on the next sync, because EventKit was authoritative for its window</td></tr>
+<tr><td>A source throws during sync</td><td>Its previously synced rows are kept; it is not treated as having reported zero</td></tr>
+<tr><td>Same event in EventKit and Google</td><td>One row, the EventKit copy</td></tr>
+<tr><td>Recurring occurrence tapped</td><td>Read-only sheet pointing at the calendar app</td></tr>
+<tr><td>End dragged before start</td><td>Clamped on save: 15 minutes for a timed event, start itself for all-day</td></tr>
+<tr><td>Multi-day or overnight event</td><td>Appears on every overlapping day in the month grid, excluding a midnight end, across daylight-saving changes</td></tr>
+<tr><td>Habit tick on a past day</td><td>Impossible: past days render without controls, and <code>toggleHabit</code> guards on <code>isToday</code> as the second lock</td></tr>
+<tr><td>Last Health sync stamp in the future</td><td>Read as a clock change; today alone is re-read</td></tr>
+<tr><td>Read failure in any view model</td><td>Previous snapshot kept; assertion in debug</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>GoalEvaluationTests</code> and <code>StreakTests</code>: three of four is on target,
+    two is a miss, exactly at goal counts, partial data is judged not excused, no-data days are
+    skipped without breaking the streak.</li>
+  <li><code>MonthGridLayoutTests</code> (eleven tests): August 2026 starts with five blanks, a
+    Sunday-first month takes six, today overrides its status, days after today are future, stepping
+    keeps the day number, clamps to a short month, reaches a leap 29th, and crosses a year
+    boundary backwards.</li>
+  <li><code>TrendSeriesTests</code> and <code>RoundedBarChartTests</code>: the average ignores gaps,
+    the latest reading is not the last slot, a lone reading has no delta, points keep their gaps,
+    the window minimum baseline spreads a metric that never nears zero, a flat week draws half bars.</li>
+  <li><code>CalendarStoreTests</code>: applying the same fetch twice does not duplicate, an existing
+    row keeps its local id, in-window rows absent from a fetch are deleted, out-of-window rows
+    survive, pruning only touches authoritative sources.</li>
+  <li><code>CalendarSyncTests</code>: a throwing source does not block the others and keeps its
+    previously synced events, an unauthorised source is skipped, create dispatches to the first
+    authorised source and resyncs, update routes to the owner.</li>
+  <li><code>CalendarMergeTests</code>, <code>CalendarFreeSlotTests</code>, <code>CalendarDayIndexTests</code>:
+    the dedup rule, gap subtraction with all-day events not blocking time, and overnight and
+    daylight-saving spans.</li>
+  <li><code>HealthSyncWindowTests</code> (eight tests): a first sync backfills a month, today is
+    always included, a recent sync only re-reads today, a gap is backfilled including the day
+    before it, a future stamp still syncs today.</li>
+</ul>
+
+<div class="note good"><b>The one test that matters most</b>
+For every screen, an empty store must produce a snapshot whose readings are all nil. The hub, the
+metric page and the day sheet all obey it by construction: each optional is filled from a row that
+may not exist, and there is no default of zero anywhere in the path.</div>
+
+<h3 id="s6-9"><span class="num">6.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Features/Today/ViewModel/TodayViewModel.swift</code>: <code>load()</code> top to bottom.</li>
+  <li><code>LifeOSKit/Sources/DesignSystem/MonthGridLayout.swift</code>: the padding and the today/future rule.</li>
+  <li><code>Features/Today/Model/TodayMetric.swift</code>: why one enum describes both the tile and the page.</li>
+  <li><code>Features/Today/ViewModel/MetricDetailViewModel.swift</code>: the bucketing.</li>
+  <li><code>LifeOSKit/Sources/Persistence/CalendarStore.swift</code>: <code>apply()</code> and <code>freeSlots()</code>.</li>
+  <li><code>LifeOSKit/Sources/Integrations/CalendarSync.swift</code> and <code>EventKitSource.swift</code>: the recurring-id qualification.</li>
+  <li><code>LifeOSKit/Sources/Integrations/HealthSyncWindow.swift</code>, then <code>HealthConnectionViewModel.startWatching()</code>.</li>
+  <li><code>Features/Today/View/AgendaCard.swift</code>: <code>DayPart</code> and the row caps.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why is the status map built before the grid closure and not inside it?</strong> The closure runs once per cell; building the map inside it would evaluate every row about thirty times per load.</li>
+  <li><strong>Why do the week series reuse the 400-day rows?</strong> The rows are already in hand for the streak, so the week costs a dictionary and seven lookups rather than a second query.</li>
+  <li><strong>What happens to a cached event whose source threw during sync?</strong> Nothing. Pruning only applies to sources that answered this pass, so the row survives.</li>
+  <li><strong>Why is a recurring event's source id qualified with its start?</strong> EventKit shares one identifier across a series; qualifying it makes each occurrence a distinct cache row and makes accidental writes fail loudly.</li>
+  <li><strong>Why does the metric page have its own view model?</strong> Because the hub reloads on every save in the app, and a year of bucketing must not ride along for a screen nobody is looking at.</li>
+  <li><strong>Why does a Health sync re-read the day of the last sync as well as today?</strong> Sleep is attributed to the morning it ends, so a day already read can gain a value afterwards.</li>
+</ul>
 </section>

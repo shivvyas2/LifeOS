@@ -1,10 +1,632 @@
-<section class="chapter" id="ch18" data-hue="notes">
-<p class="chapter-kicker">Chapter 18</p>
-<h2><span class="num">18</span><span>Stub ch18</span></h2>
-<p class="lede">Stub lede for ch18 &amp; friends.</p>
+<section class="chapter" id="ch18" data-hue="session">
+<p class="chapter-kicker">Chapter eighteen</p>
+<h2><span class="num">18</span><span>Widgets, Live Activities and notifications</span></h2>
+<p class="lede">
+  Three surfaces outside the app: a Home and Lock Screen widget with a Watch complication behind
+  it, a Live Activity and Dynamic Island for a running session, and a push channel that lets LIFO
+  speak first. All three share one rule: the surface is handed a small, credential-free value and
+  never a store, and every value is owned by exactly one account.
+</p>
+
 <h3 id="s18-1"><span class="num">18.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch18a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch18a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s18-2"><span class="num">18.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Put "Your day" on the Home Screen and it shows steps against the goal, sleep and movement,
+  refreshed after Almanac syncs and blanked after six hours or at midnight, whichever comes first.
+  Add the circular complication to a watch face and the step gauge is there. Begin an activity and
+  the Lock Screen carries a blue card with the timer, heart rate zone, estimated effort, calories
+  and battery; the Dynamic Island shows the heart rate and the timer, and the zone number when
+  minimal. Once a day, at eight in the morning your time, LIFO may send one sentence about your
+  sleep, your steps or a streak; tap it and the conversation opens on that sentence. A notification
+  inbox in the profile keeps the last hundred.
+</p>
+<p class="faq-q">What does a widget actually get?</p>
+<p class="faq-a">
+  A <code>SurfaceSnapshot</code>: an owner id, when it was generated, when it expires, and four
+  numbers. No token, no store, no rows. It is written as one encoded value into the App Group, so a
+  reader can never join fields from two accounts.
+</p>
+<p class="faq-q">Why does it expire?</p>
+<p class="faq-a">
+  Because a widget that shows yesterday's steps as today's is worse than one that says "Open
+  Almanac to sync". Six hours is long enough to be useful between launches and short enough that a
+  stale number does not survive a night. The timeline carries an explicit expiry entry so the
+  blanking happens even when WidgetKit delays a refresh.
+</p>
+<p class="faq-q">Why is the Live Activity throttled?</p>
+<p class="faq-a">
+  The heart-rate sensor streams every second and ActivityKit has an update budget. The lock screen
+  does not need a new frame per beat; it needs one when something meaningful changed. A pure
+  <code>LiveActivityThrottle</code> decides, and the timer ticks itself through
+  <code>Text(timerInterval:)</code> without any update at all.
+</p>
+<p class="faq-q">Who decides whether to send a nudge?</p>
+<p class="faq-a">
+  The server, as a pure function with tests. The device's whole job is to be reachable, to say
+  which time zone eight in the morning is in, and to open on what arrived. The numbers are not in
+  the payload: a phone that has been offline for days re-evaluates locally rather than opening on
+  figures two days stale.
+</p>
+</div>
+
+<h3 id="s18-2"><span class="num">18.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">AlmanacWidgets/                          iOS widget extension (WidgetKit)
+├── AlmanacWidgets.swift                 the bundle: HealthWidget, BeginActivityWidget, WorkoutLiveActivity
+├── HealthWidget.swift                   timeline, every family, the empty state
+└── WorkoutLiveActivity.swift            lock screen card, Dynamic Island regions
+AlmanacWatchWidgets/
+└── AlmanacWatchWidgets.swift            the same HealthWidget, watchOS families only
+
+LifeOSKit/Sources/AppSurfaces/           depends on nothing; both extensions and the watch import it
+├── SurfaceSnapshot.swift                the App Group value; SurfaceRoute (almanac://)
+├── LiveSessionReadout.swift             PushState, the readout, LiveActivityThrottle
+├── LiveSessionReadout+Text.swift        the one place a reading becomes text
+├── WorkoutActivityAttributes.swift      ActivityAttributes; ContentState is the readout
+├── InboxEntry.swift                     one notification, deduplicated by day and trigger
+├── SessionRingMath.swift                ring fills for the HUD (Chapter 8)
+├── HUDPlacement.swift                   where a dragged HUD settles (Chapter 10)
+└── WatchWire.swift                      packets and commands (Chapter 9)
+
+LIfeOS/App/Surfaces/
+├── SurfaceCoordinator.swift             publishes the snapshot; WCSession to the watch
+├── WorkoutLiveActivityController.swift  request, update, end; owns the throttle state
+├── SurfaceSettingsScreen.swift          the Widgets &amp; Watch page
+├── SurfaceNativeChecks.swift            nine DEBUG checks over accounts and the snapshot
+├── SurfaceDesignPreview.swift           a gallery of every family, behind a build flag
+└── WatchSessionBridge.swift             mirroring (Chapter 9)
+LIfeOS/App/PushService.swift             registration, the inbox, PushDelegate
+LIfeOS/Features/Notifications/NotificationInboxScreen.swift
+
+LifeOSKit/Sources/Integrations/PushTokenClient.swift   PushRegistration, NudgePayload, device_tokens
+supabase/functions/lifo-nudge/              the hourly job (Chapter 20)
+supabase/functions/_shared/apns.ts          provider token, payload, headers</pre>
+
+<p>
+  <code>AppSurfaces</code> is its own package target with no dependencies because three processes
+  import it: the app, the widget extension and the watch app. It holds value types and pure
+  functions only, so nothing about a store, a keychain or a network client can leak into an
+  extension that must stay small and must launch cold in a few milliseconds.
+</p>
+
+<h3 id="s18-3"><span class="num">18.3</span><span>Model</span></h3>
+
+<h4>The snapshot the widget reads</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/SurfaceSnapshot.swift
+public struct SurfaceSnapshot: Codable, Equatable, Sendable {
+    public static let appGroup = "group.com.shivvyas.lifeos"
+    public static let storageKey = "surface.snapshot.v1"
+    public var ownerID: String?
+    public var generatedAt: Date
+    public var expiresAt: Date
+    public var measuredAt: Date?
+    public var steps: Int?
+    public var stepGoal: Int
+    public var sleepMinutes: Int?
+    public var exerciseMinutes: Int?
+
+    public init(ownerID: String? = nil, generatedAt: Date = .now, measuredAt: Date? = nil,
+                steps: Int? = nil, stepGoal: Int = 8000, sleepMinutes: Int? = nil,
+                exerciseMinutes: Int? = nil, calendar: Calendar = .current) {
+        ...
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: generatedAt))!
+        expiresAt = min(midnight, generatedAt.addingTimeInterval(6 * 3600))
+        self.steps = steps.flatMap { $0 >= 0 ? $0 : nil }
+        self.stepGoal = max(1, stepGoal)
+        ...
+    }
+
+    public func isAvailable(at date: Date = .now) -> Bool {
+        ownerID != nil &amp;&amp; date >= generatedAt.addingTimeInterval(-60) &amp;&amp; date &lt; expiresAt
+    }
+    public func supersedes(_ previous: Self?) -> Bool {
+        previous.map { generatedAt > $0.generatedAt } ?? true
+    }
+}</code></pre>
+
+<p>
+  The initialiser is where the rules live. A negative reading becomes nil rather than a lie, a goal
+  of zero becomes one so progress can never divide by nothing, and the expiry is the earlier of
+  midnight and six hours. A snapshot with no owner is a tombstone: it is what sign-out writes, and
+  it is never available. <code>supersedes</code> exists because WatchConnectivity can deliver a
+  queued older application context after a newer reply, and the watch must not replace a fresh
+  value with a stale one.
+</p>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/SurfaceSnapshot.swift
+public enum SurfaceRoute: String, CaseIterable, Sendable {
+    case today, health, activity, notifications
+    public var url: URL { URL(string: "almanac://\(rawValue)")! }
+    public init?(url: URL) {
+        guard url.scheme == "almanac", url.user == nil, url.password == nil,
+              url.port == nil, url.path.isEmpty, url.query == nil, url.fragment == nil,
+              let host = url.host, let route = Self(rawValue: host) else { return nil }
+        self = route
+    }
+}</code></pre>
+
+<p>
+  Routes are the four places a widget tap can land. The parser accepts exactly
+  <code>almanac://host</code> and nothing else: no path, no query, no credentials, no port. That is
+  deliberate, because the same scheme carries OAuth callbacks, and a widget URL must never be
+  mistaken for one.
+</p>
+
+<h4>The readout the Live Activity renders</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift
+public struct LiveSessionReadout: Codable, Hashable, Sendable {
+    public var elapsed: TimeInterval
+    public var runningSince: Date?       // nil while paused
+    public var heartRate: Int?
+    public var zone: Int?
+    public var effort: Double?           // WHOOP's 0 to 21 scale, rounded to a tenth
+    public var calories: Int?
+    public var distanceMeters: Int?
+    public var batteryPercent: Int?
+    public var capacitySource: String?   // "whoop" or "health"
+    public var ceilingMaxZone: Int?
+    public var ceilingTarget: ClosedRange&lt;Double&gt;?
+    public var reps: Int?
+    public var setIndex: Int?
+    public var push: PushState
+
+    public var timerAnchor: Date? { runningSince?.addingTimeInterval(-elapsed) }
+    public var isPaused: Bool { runningSince == nil }
+}</code></pre>
+
+<p>
+  This is the one value every live surface renders: the in-app HUD, the lock screen and the
+  Dynamic Island. Every reading is optional because a missing sensor is not a zero.
+  <code>WorkoutActivityAttributes.ContentState</code> is this very type, so the app and the
+  extension cannot disagree about its shape. <code>timerAnchor</code> is the trick that makes the
+  timer free: <code>Text(timerInterval: anchor...distantFuture)</code> lets the system tick the
+  clock itself, so an activity update is needed only when a reading changes, never per second.
+  <code>PushState</code> carries its own headline, "Easy going", "On track", "Near your limit",
+  "Over your target", so the words never drift between surfaces.
+</p>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift
+public enum LiveActivityThrottle {
+    public static let heartRateStep = 3
+    public static let floor: TimeInterval = 10
+    public static let readingInterval: TimeInterval = 3
+
+    public static func shouldPublish(previous: LiveSessionReadout?, next: LiveSessionReadout,
+                                     lastPublishedAt: Date?, now: Date) -> Bool {
+        guard let previous, let lastPublishedAt else { return true }
+        if previous == next { return false }
+        if previous.isPaused != next.isPaused { return true }
+        if previous.push != next.push { return true }
+        if previous.reps != next.reps { return true }
+        switch (previous.heartRate, next.heartRate) {
+        case let (old?, new?) where abs(old - new) >= heartRateStep:
+            return now.timeIntervalSince(lastPublishedAt) >= readingInterval
+        case (nil, .some), (.some, nil):
+            return now.timeIntervalSince(lastPublishedAt) >= readingInterval
+        default: break
+        }
+        return now.timeIntervalSince(lastPublishedAt) >= floor
+    }
+}</code></pre>
+
+<p>
+  Read it as a ranking of what deserves a frame. A pause, a push-state change or a rep always
+  publishes at once. A heart rate that moved three beats or more, or appeared or vanished,
+  publishes if three seconds have passed. Anything smaller waits ten. An identical readout never
+  publishes. Because it is a pure function it is pinned by tests instead of thumbs on a device.
+</p>
+
+<h4>The inbox entry and the nudge</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/InboxEntry.swift
+public struct InboxEntry: Codable, Equatable, Identifiable, Sendable {
+    public let id: String                 // "\(day)|\(trigger)"
+    public let ownerID: String
+    public let text: String
+    public let trigger: String
+    public let day: String
+    public let receivedAt: Date
+    public var isRead: Bool
+
+    public static func inserting(_ entry: Self, into entries: [Self], ownerID: String) -> [Self] {
+        guard entry.ownerID == ownerID else { return entries.filter { $0.ownerID == ownerID } }
+        var result = entries.filter { $0.ownerID == ownerID }
+        if !result.contains(where: { $0.id == entry.id }) { result.append(entry) }
+        return Array(result.sorted { $0.receivedAt > $1.receivedAt }.prefix(100))
+    }
+}</code></pre>
+
+<p>
+  The id is the day plus the trigger, which is exactly the uniqueness the server enforces in
+  <code>nudge_log</code>, so a notification delivered twice, once as a banner and once as a
+  tap-through, is one row. <code>inserting</code> filters to the owner, deduplicates, keeps
+  existing read state, and caps at a hundred. <code>NudgePayload</code>, in
+  <code>Integrations</code>, is the same three fields parsed out of a notification's
+  <code>userInfo</code>, and it returns nil rather than throwing for a notification that is not
+  ours: something to ignore, not something to report.
+</p>
+
+<h3 id="s18-4"><span class="num">18.4</span><span>ViewModel</span></h3>
+
+<h4>SurfaceCoordinator: one writer for the App Group</h4>
+
+<pre><code>// LIfeOS/App/Surfaces/SurfaceCoordinator.swift
+func publish() {
+    guard let ownerID, let context, sharingEnabled else { return }
+    let store = MetricsStore(context: context)
+    let now = Date.now
+    let row = try? store.metrics(from: now, to: now).first
+    let goals = try? context.fetch(FetchDescriptor&lt;UserGoals&gt;()).first
+    let next = SurfaceSnapshot(ownerID: ownerID, measuredAt: row?.updatedAt,
+        steps: row?.steps, stepGoal: goals?.stepsGoal ?? 8000,
+        sleepMinutes: row?.sleepMinutes, exerciseMinutes: row?.exerciseMinutes)
+    // Coalesce saves unrelated to health. Still renew the Watch lease hourly.
+    if let previous = snapshot, previous.ownerID == next.ownerID,
+       previous.steps == next.steps, previous.sleepMinutes == next.sleepMinutes,
+       previous.exerciseMinutes == next.exerciseMinutes, previous.stepGoal == next.stepGoal,
+       previous.measuredAt == next.measuredAt,
+       next.generatedAt.timeIntervalSince(previous.generatedAt) &lt; 3600 { return }
+    write(next)
+}</code></pre>
+
+<p>
+  <code>publish()</code> is called from <code>RootView.reloadAll()</code>, which means on every
+  save in the app. Most saves are notes, money or a habit tick, and none of those change the four
+  numbers, so the coalescing guard is what stops a widget reload and a watch transfer per keystroke.
+  The hour limit is the exception: even with nothing changed, the snapshot is rewritten hourly so
+  its expiry keeps moving and the watch's copy stays fresh. <code>write</code> stores the value,
+  asks WidgetKit to reload every timeline, and sends the same bytes to the watch as an application
+  context (queued, survives the watch being asleep) and, if it is reachable, as a message.
+</p>
+
+<p>
+  <code>adopt(ownerID:context:)</code> is called by <code>AccountSession</code> whenever a store is
+  opened. If the snapshot on disk belongs to a different owner, or there is no owner, or sharing is
+  off, a tombstone is written before anything else, so the next account starts with missing readings
+  and never with the previous account's values. <code>sharingEnabled</code> is the toggle on the
+  Widgets &amp; Watch page; turning it off writes the tombstone at once.
+</p>
+
+<h4>WorkoutLiveActivityController</h4>
+
+<pre><code>// LIfeOS/App/Surfaces/WorkoutLiveActivityController.swift
+func sync(_ readout: LiveSessionReadout, timer: ActivitySessionState, icon: String) {
+    guard timer.phase != .finished else { end(); return }
+    if current == nil {
+        current = Activity&lt;WorkoutActivityAttributes&gt;.activities.first { $0.attributes.sessionID == timer.id }
+    }
+    let now = Date.now
+    guard current == nil || LiveActivityThrottle.shouldPublish(previous: lastState, next: readout,
+                                                               lastPublishedAt: lastPublishedAt, now: now) else { return }
+    lastState = readout; lastPublishedAt = now
+    let content = ActivityContent(state: readout, staleDate: now.addingTimeInterval(8 * 3600))
+    if let current {
+        let preceding = updates
+        updates = Task { await preceding?.value; await current.update(content) }
+    } else if ActivityAuthorizationInfo().areActivitiesEnabled {
+        current = try? Activity.request(attributes: WorkoutActivityAttributes(sessionID: timer.id,
+            name: timer.activity, icon: icon), content: content, pushType: nil)
+    }
+}</code></pre>
+
+<p>
+  The recorder calls <code>sync</code> on every state change and every reading; the controller
+  decides whether that becomes an ActivityKit call. Three details carry weight. The activity is
+  keyed on the session id, so a relaunch, or a session the watch started whose card was requested
+  before the phone's timer existed, adopts the activity already on screen rather than orphaning it.
+  Updates are chained through a single <code>Task</code> so they land in order. And the stale date
+  is eight hours out, which means a phone that dies mid-run leaves a card that the system will
+  eventually grey rather than one that claims a heart rate forever. <code>endAll()</code> is called
+  on every account change and sign-out so no session card outlives its owner.
+</p>
+
+<h4>PushService: registration and the inbox in one object</h4>
+
+<p>
+  One object rather than two because the two halves share the state that matters: the device
+  token. It arrives asynchronously from the system long after the sign-in that asked for it, and it
+  is needed again at sign-out to delete the row. The service keeps the token in
+  <code>UserDefaults.standard</code> (it belongs to the phone), and everything else per account.
+</p>
+
+<ul>
+  <li><strong>Asks late, on purpose.</strong> <code>requestAuthorization()</code> is called from
+    the inbox screen's button, never at launch. A permission prompt on first run, before the app has
+    shown anyone anything worth being interrupted about, is the fastest way to a permanent no. A
+    denied status short-circuits: registering anyway would silently succeed and produce a token
+    that can never deliver anything.</li>
+  <li><strong>Registers on every foreground.</strong> <code>syncRegistration()</code> upserts the
+    token, the account id and the current time zone. The zone is what the send hour is read in, so
+    somebody who has flown somewhere would otherwise keep being nudged at eight in the morning
+    where they used to live. The row is keyed on the token, so a second account on the same device
+    replaces the first account's row in one upsert.</li>
+  <li><strong>Deregisters before the session goes.</strong> <code>AppShell</code>'s sign-out
+    captures the outgoing access token by value and deletes the row with it, because the delete
+    needs the token of the account whose row it is, and the keychain is cleared a line later. Left
+    behind, that row would push one person's sleep onto a phone showing somebody else's name.</li>
+  <li><strong>Attaches per account.</strong> <code>attach(ownerID:)</code> re-reads the inbox from
+    that account's defaults suite and clears any pending route if the owner changed.
+    <code>receive</code> refuses an entry whose owner is not the attached account, and refuses an
+    id the person has already cleared, so a delayed duplicate cannot resurrect a dismissed check-in.</li>
+  <li><strong>Reads back what the system already delivered.</strong> <code>refreshInbox()</code>
+    walks <code>deliveredNotifications()</code>, so a notification that arrived while the app was
+    dead, and was never tapped, still lands in the inbox on the next open.</li>
+</ul>
+
+<h3 id="s18-5"><span class="num">18.5</span><span>View</span></h3>
+
+<h4>The widget, in every family</h4>
+
+<p>
+  <code>HealthTimeline</code> produces two entries: the snapshot now, and, if it has not already
+  expired, a nil entry at its expiry. The policy asks for a refresh after thirty minutes. The view
+  switches on the family. The inline accessory is a label of steps and sleep. The circular
+  accessory is a <code>Gauge</code> of step progress. The rectangular accessory is the wordmark,
+  the two figures and "Updated 7:41". The small home widget is the step numeral at 34 points
+  against the goal with a progress bar; medium adds sleep and a movement line; large and extra
+  large add a movement tile and a "Begin activity" link that deep-links to
+  <code>almanac://activity</code>. Every figure is <code>privacySensitive()</code>, so a locked
+  phone redacts it. The empty state is one sentence per family and never a zero.
+  <code>BeginActivityWidget</code> is a second, accessory-only widget whose whole job is the
+  deep link. The watch bundle ships the same <code>HealthWidget</code> with only the accessory
+  families, and the watch canvas is plain black.
+</p>
+
+<h4>The Live Activity</h4>
+
+<p>
+  Widget extensions cannot render materials, so the "glass" tiles on the lock screen card are
+  translucent white at 18 percent over the live gradient with a half-point hairline. The card is
+  the activity's icon and name, the push headline in the push tint, the timer at title size, then
+  four tiles: heart rate with the zone as eyebrow, effort with "of 18" as unit once there is a
+  reading, calories or, in a strength session, the set and reps, and battery with a tiny ring.
+  The Dynamic Island's expanded view puts the name leading, the timer trailing, and four
+  readings across the bottom with an "Open activity" link. Compact shows a heart and the beats per
+  minute leading and either the timer or the reps trailing. Minimal is the zone number in a circle
+  of the push tint, or a pause glyph. <code>keylineTint</code> follows the push state, so the
+  island's outline goes green, amber or red with the person's effort. Every text field is
+  <code>privacySensitive()</code>.
+</p>
+
+<h4>The inbox and the settings page</h4>
+
+<p>
+  <code>NotificationInboxScreen</code> is reached from the bell on the profile and from Settings.
+  It shows the permission card first ("Enable notifications" when never asked, "Notification
+  settings" otherwise), then either "You're all caught up" or the unread count, a "Read all"
+  button, one panel per entry, and "Clear read notifications". Tapping an entry marks it read and
+  opens a full-screen <code>LifoCoachScreen</code> seeded with the sentence, so the notification is
+  an opening line rather than a reminder (<a href="#ch14">Chapter 14</a>). The screen refreshes
+  from delivered notifications on appear and on every return to the foreground.
+  <code>SurfaceSettingsScreen</code> is the Widgets &amp; Watch page: the sharing toggle and four
+  short guides for adding the widgets, the complication and the activity timer.
+</p>
+
+<h3 id="s18-6"><span class="num">18.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 360" role="img" aria-label="Three paths. The store saves, RootView.reloadAll calls SurfaceCoordinator.publish, which writes one SurfaceSnapshot into the App Group, reloads WidgetKit timelines and sends the same bytes to the watch over WCSession. The ActivityRecorder builds a LiveSessionReadout per reading and hands it to WorkoutLiveActivityController, which throttles and calls ActivityKit. The lifo-nudge job sends through APNs; PushDelegate receives, PushService stores an InboxEntry per account and opens LIFO on tap.">
+  <defs>
+    <marker id="ch18a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch18b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">SOURCE</text>
+  <text class="lbl-sm" x="290" y="24">THE ONE VALUE</text>
+  <text class="lbl-sm" x="600" y="24">SURFACE</text>
+
+  <rect class="box" x="20" y="40" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="65" text-anchor="middle">RootView.reloadAll()</text>
+  <rect class="box-hot" x="290" y="40" width="200" height="56" rx="10"/>
+  <text class="lbl" x="390" y="62" text-anchor="middle">SurfaceSnapshot</text>
+  <text class="lbl-hot" x="390" y="82" text-anchor="middle">App Group, one key, coalesced</text>
+  <path class="flow-hot" d="M190 60 L284 60" marker-end="url(#ch18b)"/>
+  <text class="lbl-sm" x="196" y="52">publish()</text>
+  <rect class="box" x="600" y="34" width="110" height="34" rx="8"/>
+  <text class="lbl" x="655" y="56" text-anchor="middle">HealthWidget</text>
+  <rect class="box" x="730" y="34" width="110" height="34" rx="8"/>
+  <text class="lbl" x="785" y="56" text-anchor="middle">Watch face</text>
+  <rect class="box" x="600" y="78" width="240" height="34" rx="8"/>
+  <text class="lbl" x="720" y="100" text-anchor="middle">Watch app (WCSession context + message)</text>
+  <path class="flow" d="M490 56 L594 51" marker-end="url(#ch18a)"/>
+  <path class="flow" d="M490 66 L594 92" marker-end="url(#ch18a)"/>
+  <text class="lbl-sm" x="500" y="46">reloadAllTimelines</text>
+
+  <rect class="box" x="20" y="150" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="175" text-anchor="middle">ActivityRecorder</text>
+  <rect class="box-hot" x="290" y="142" width="200" height="56" rx="10"/>
+  <text class="lbl" x="390" y="164" text-anchor="middle">LiveSessionReadout</text>
+  <text class="lbl-hot" x="390" y="184" text-anchor="middle">every reading, every state change</text>
+  <path class="flow-hot" d="M190 170 L284 170" marker-end="url(#ch18b)"/>
+  <rect class="box" x="600" y="142" width="240" height="56" rx="8"/>
+  <text class="lbl" x="720" y="164" text-anchor="middle">WorkoutLiveActivityController</text>
+  <text class="lbl-sm" x="720" y="184" text-anchor="middle">throttle, then ActivityKit, then lock screen and island</text>
+  <path class="flow" d="M490 170 L594 170" marker-end="url(#ch18a)"/>
+
+  <rect class="box-alt" x="20" y="250" width="170" height="40" rx="8"/>
+  <text class="lbl" x="105" y="275" text-anchor="middle">lifo-nudge (server)</text>
+  <rect class="box" x="290" y="250" width="200" height="40" rx="8"/>
+  <text class="lbl" x="390" y="275" text-anchor="middle">APNs: sentence, trigger, day</text>
+  <path class="flow-dash" d="M190 270 L284 270" marker-end="url(#ch18a)"/>
+  <line class="wall" x1="240" y1="230" x2="240" y2="310"/>
+  <text class="lbl-sm" x="196" y="322">network boundary</text>
+  <rect class="box-hot" x="600" y="236" width="240" height="66" rx="10"/>
+  <text class="lbl" x="720" y="258" text-anchor="middle">PushService</text>
+  <text class="lbl-hot" x="720" y="276" text-anchor="middle">InboxEntry per account · badge</text>
+  <text class="lbl-hot" x="720" y="292" text-anchor="middle">tap then coach.seed(text)</text>
+  <path class="flow-hot" d="M490 270 L594 270" marker-end="url(#ch18b)"/>
+  <rect class="box" x="290" y="310" width="200" height="34" rx="8"/>
+  <text class="lbl" x="390" y="332" text-anchor="middle">device_tokens (token, tz)</text>
+  <path class="flow-dash" d="M600 290 L490 327" marker-end="url(#ch18a)"/>
+  <text class="lbl-sm" x="500" y="348">upsert on every foreground</text>
+</svg>
+<figcaption>
+  Each surface is fed one value type from <code>AppSurfaces</code>, and each value is produced by
+  exactly one object in the app. Nothing outside the process ever holds a token, a store or a row.
+</figcaption>
+</figure>
+
+<h4>The widget path</h4>
+<ol>
+  <li>A save anywhere fires <code>ModelContext.didSave</code>; <code>RootView.reloadAll()</code>
+    calls <code>SurfaceCoordinator.shared.publish()</code> first.</li>
+  <li><code>publish()</code> reads today's row and the goals, builds a snapshot, and returns early
+    unless one of the four numbers, the goal, or the measured time changed, or an hour has passed.</li>
+  <li><code>write()</code> encodes the snapshot into the App Group defaults under one key, reloads
+    every WidgetKit timeline, and sends the bytes to the watch.</li>
+  <li>The widget's timeline provider decodes it on the next reload, renders it if
+    <code>isAvailable</code>, and schedules its own blank entry at <code>expiresAt</code>.</li>
+  <li>The watch app decodes the context or message, keeps it only if it <code>supersedes</code>
+    the copy it holds, writes it to its own App Group and reloads its complication. Its dashboard
+    redraws on a sixty-second <code>TimelineView</code>, so the expiry takes effect without a
+    message.</li>
+</ol>
+
+<h4>The Live Activity path</h4>
+<ol>
+  <li>The recorder rebuilds its readout on every state change (<code>persist()</code>) and every
+    sensor reading (<code>persistReading(at:)</code>), then calls <code>syncLiveActivity()</code>.
+    The draft is written at most every ten seconds; the readout is refreshed every time.</li>
+  <li>The controller either finds the activity for this session id, or asks
+    <code>LiveActivityThrottle</code> whether the change deserves an update, or requests a new
+    activity if the person has them enabled.</li>
+  <li>On finish, discard, account change or sign-out the activity is ended immediately.
+    <code>endStrayLiveActivities()</code> removes any card that belongs to a different session id,
+    because only one activity belongs on screen.</li>
+</ol>
+
+<h4>The nudge path</h4>
+<ol>
+  <li>Once an hour, <code>pg_cron</code> calls <code>lifo-nudge</code>. The job selects the rows in
+    <code>device_tokens</code> whose local hour is eight, evaluates the triggers over the account's
+    rows, claims the day in <code>nudge_log</code>, phrases one sentence, and sends it through APNs
+    with a collapse id so a phone that was off for three days gets today's nudge rather than three,
+    and a twelve-hour expiry so a morning observation never turns up stale (<a href="#ch20">Chapter
+    20</a>).</li>
+  <li><code>PushDelegate.willPresent</code> hands the notification to
+    <code>PushService.receive</code>. A nudge that arrives while the app is open is still shown as a
+    banner, because suppressing it would drop the message entirely; nothing else surfaces it.</li>
+  <li><code>PushDelegate.didReceive</code> is the tap. The entry is marked read and
+    <code>pending</code> is set to the payload.</li>
+  <li><code>RootView</code> watches <code>pending</code> and, on the launch task and every
+    foreground, checks it directly too, because a notification tapped from a cold launch lands
+    before the view exists and <code>onChange</code> never fires for it. <code>openNudge</code>
+    clears it, seeds the coach with the sentence, and presents LIFO, deferring behind any open
+    profile or inbox cover.</li>
+</ol>
+
+<h3 id="s18-7"><span class="num">18.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>A widget launch reads one defaults key.</strong> No store is opened in the
+    extension; <code>AppSurfaces</code> has no dependencies, so the extension links almost nothing.</li>
+  <li><strong>Publishes are coalesced.</strong> Saves unrelated to health cost no widget reload
+    and no watch transfer; only a changed number or the hourly lease renewal does.</li>
+  <li><strong>Timelines refresh themselves.</strong> Two entries and a thirty-minute policy; the
+    blanking at expiry costs no process wake at all.</li>
+  <li><strong>The timer is free.</strong> <code>Text(timerInterval:)</code> ticks in the widget
+    process; an ActivityKit update is spent only on a meaningful change, and the throttle's floor
+    of ten seconds keeps a jittery sensor from burning the budget.</li>
+  <li><strong>The watch gets bytes, not rows.</strong> An application context is a few hundred
+    bytes and is delivered whenever the watch next wakes.</li>
+  <li><strong>APNs costs nothing per send, and the job sends at most once a day per person.</strong>
+    The unique key on <code>nudge_log</code> is claimed before any model call, so an overlapping cron
+    run cannot double-spend the phrasing.</li>
+  <li><strong>Silence is the common path.</strong> Most hourly runs evaluate triggers and send
+    nothing, which costs a query and no inference.</li>
+  <li><strong>Dead tokens are pruned.</strong> An "unregistered" answer from Apple deletes the row,
+    so the job does not push at a wiped phone forever.</li>
+  <li><strong>The inbox is capped at a hundred, and cleared ids at two hundred.</strong></li>
+</ul>
+
+<h3 id="s18-8"><span class="num">18.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Widget refresh delayed past expiry</td><td>The timeline's own nil entry blanks it at <code>expiresAt</code></td></tr>
+<tr><td>Sign out</td><td>A tombstone with no owner replaces the shared value; every widget shows the empty state; the watch adopts it because it supersedes</td></tr>
+<tr><td>Account switch</td><td>Tombstone first, then the new account's snapshot; the next account starts with missing readings, never the previous values</td></tr>
+<tr><td>Sharing turned off</td><td>Tombstone written at once; turning it back on republishes</td></tr>
+<tr><td>Watch receives an old context after a new message</td><td>Rejected by <code>supersedes</code></td></tr>
+<tr><td>Watch away from the phone</td><td>Shows its last copy until it expires, then "Open Almanac on your iPhone to sync"</td></tr>
+<tr><td>Negative or absurd reading</td><td>Stored as nil; a goal of zero becomes one</td></tr>
+<tr><td>Live Activities disabled by the person</td><td><code>Activity.request</code> is never called; the HUD in the app still runs</td></tr>
+<tr><td>Session card from a previous session still on screen</td><td>Ended as a stray the moment a new timer exists</td></tr>
+<tr><td>Phone dies mid-session</td><td>The card's stale date of eight hours lets the system grey it</td></tr>
+<tr><td>Heart rate jitters by one or two beats</td><td>No update until ten seconds have passed</td></tr>
+<tr><td>Notification for another account arrives</td><td>Refused by <code>receive</code>; no banner, no inbox row</td></tr>
+<tr><td>Same nudge delivered twice</td><td>One inbox row; read state preserved</td></tr>
+<tr><td>Cleared check-in redelivered late</td><td>Refused; the dismissed id is remembered</td></tr>
+<tr><td>Notification tapped from a cold launch</td><td>Picked up from <code>pending</code> in the launch task, not from <code>onChange</code></td></tr>
+<tr><td>Tap arrives while the profile is open</td><td>Deferred; the cover closes first, then LIFO opens</td></tr>
+<tr><td>Permission denied</td><td>No registration; the inbox card offers the system settings</td></tr>
+<tr><td>Registration fails</td><td>Logged, not retried; the next foreground calls it again</td></tr>
+<tr><td>Time zone changes</td><td>Re-registered on the next foreground, so the send hour follows the person</td></tr>
+<tr><td>Development build against production APNs</td><td>400 BadDeviceToken on every send; <code>aps-environment</code> must match the signing and <code>APNS_SANDBOX</code> picks the host</td></tr>
+<tr><td>Simulator</td><td>APNs registration fails routinely and is logged at info level</td></tr>
+<tr><td>Widget URL carrying a path or a query</td><td>Not a route; falls through to the OAuth handlers</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>AppSurfacesTests</code> (seven tests): the snapshot is bounded and missing is not zero,
+    it expires at midnight, invalid metrics are rejected and the goal clamped, a tombstone replaces
+    every field and an old watch delivery is rejected, routes accept only exact internal
+    destinations, the inbox deduplicates, preserves read state, rejects another account, and keeps
+    only the hundred most recent.</li>
+  <li><code>LiveSessionReadoutTests</code> (nine tests): the readout round-trips and keeps absence,
+    a paused readout has no anchor, the push headlines are words, the throttle publishes first and
+    on meaningful change, spaces heart-rate updates, floors small changes at ten seconds, and
+    publishes on a rep.</li>
+  <li><code>PushTokenTests</code>: a registration carries the account and the zone, defaults to
+    this device's zone, a nudge parses into its sentence and what it was about, and a foreign
+    notification is ignored rather than reported.</li>
+  <li><code>apns_test.ts</code> (nine tests): the JWT header and claims, base64url, a PEM key that
+    survives a dashboard paste, the payload carries the sentence and never the numbers, the headers
+    collapse the channel and let a stale nudge expire, a dead token is recognised from both answers
+    Apple gives, a provider token is signed once and reused inside its window.</li>
+  <li><code>nudge_test.ts</code>: every trigger, the cooldown, the send hour read in the person's
+    zone, and the rule that the positive wins (<a href="#ch20">Chapter 20</a>).</li>
+  <li><code>SurfaceNativeChecks</code> (nine checks, run in the simulator through the design
+    preview): current-account notification accepted, repeat delivery deduplicated, a switch clears
+    the visible inbox and pending route, a delayed notification from the previous account is
+    rejected, the account inbox and read status are restored, a cleared check-in cannot be restored
+    by a duplicate, the widget exports today's data and not a historical day, sign-out replaces the
+    shared cache with an empty snapshot, and the next account starts with missing readings.</li>
+</ul>
+
+<div class="note caution"><b>Still pending on hardware</b>
+The QA note of 14 September records that real simulator Home widget reads and a paired
+WatchConnectivity transfer were verified with synthetic values, and that physical-device behaviour,
+App Group provisioning across every target, and a fresh iPad surface pass remain to be done. The
+push path has been proved end to end with the forced-send route on the nudge function, but only
+against a development build.</div>
+
+<h3 id="s18-9"><span class="num">18.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/AppSurfaces/SurfaceSnapshot.swift</code>: the initialiser's rules and <code>SurfaceRoute</code>.</li>
+  <li><code>App/Surfaces/SurfaceCoordinator.swift</code>: <code>adopt</code>, <code>publish</code>, <code>write</code>.</li>
+  <li><code>AlmanacWidgets/HealthWidget.swift</code>: the timeline's two entries.</li>
+  <li><code>LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift</code>: the throttle.</li>
+  <li><code>App/Surfaces/WorkoutLiveActivityController.swift</code>, then <code>ActivityRecorder.syncLiveActivity</code> and <code>endStrayLiveActivities</code>.</li>
+  <li><code>AlmanacWidgets/WorkoutLiveActivity.swift</code>: which region shows what.</li>
+  <li><code>App/PushService.swift</code>: <code>attach</code>, <code>receive</code>, <code>syncRegistration</code>, then <code>PushDelegate</code>.</li>
+  <li><code>App/RootView.swift</code>: <code>openNudge</code> and the three places it is called.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why is the snapshot one encoded value under one key rather than four keys?</strong> So a reader can never join fields from two accounts; a tombstone replaces everything at once.</li>
+  <li><strong>What does <code>publish()</code> do on a notes save?</strong> Builds a snapshot, sees nothing changed within the hour, and returns without writing, reloading or sending.</li>
+  <li><strong>Why does the Live Activity need no update per second?</strong> The readout carries <code>timerAnchor</code>, and <code>Text(timerInterval:)</code> ticks in the widget process.</li>
+  <li><strong>What always publishes regardless of timing?</strong> A pause or resume, a push-state change, and a rep.</li>
+  <li><strong>Why are the nudge's numbers absent from the payload?</strong> A phone offline for days would open on stale figures; the tap-through re-evaluates locally.</li>
+  <li><strong>Why is the push row deleted before the keychain is cleared at sign-out?</strong> The delete needs the outgoing account's token; afterwards there is nothing to authenticate it with.</li>
+</ul>
 </section>

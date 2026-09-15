@@ -1,4 +1,4 @@
-# Shipping Life OS to TestFlight
+# Shipping Almanac to TestFlight
 
 Everything the repo can settle is already settled. This covers the parts that
 need your Apple ID, and the two things that will bite you if you forget them.
@@ -7,7 +7,7 @@ need your Apple ID, and the two things that will bite you if you forget them.
 
 | Setting | Value | Where |
 | --- | --- | --- |
-| Display name | `Life OS` | `INFOPLIST_KEY_CFBundleDisplayName` |
+| Display name | `Almanac` | `INFOPLIST_KEY_CFBundleDisplayName` |
 | Bundle ID | `com.shivvyas.lifeos` | `PRODUCT_BUNDLE_IDENTIFIER` |
 | Team | `Z42YU5W6WY` | `DEVELOPMENT_TEAM` |
 | Minimum iOS | `26.0` | `IPHONEOS_DEPLOYMENT_TARGET` + `LifeOSKit/Package.swift` |
@@ -17,7 +17,7 @@ need your Apple ID, and the two things that will bite you if you forget them.
 The Xcode target is still named `LIfeOS` with the capital `I`. That is
 deliberate: renaming the target churns the project file for no user-visible
 gain, and nobody outside this repo ever sees it. `CFBundleDisplayName` is what
-appears under the home screen icon, and that reads `Life OS`.
+appears under the home screen icon, and that reads `Almanac`.
 
 ## One time, before the first upload
 
@@ -28,13 +28,13 @@ developer.apple.com.
 What is left is the App Store Connect record:
 
 1. App Store Connect → **Apps** → **+** → **New App**
-2. Platform iOS, Name `Life OS`, Primary Language, Bundle ID
+2. Platform iOS, Name `Almanac`, Primary Language, Bundle ID
    `com.shivvyas.lifeos`, SKU anything stable (`lifeos-ios` works)
 3. Create
 
-If the name `Life OS` is taken, App Store Connect rejects it here. That blocks
+If the name `Almanac` is taken, App Store Connect rejects it here. That blocks
 only the public listing, never TestFlight: pick any unique placeholder name to
-create the record, and the home screen still reads `Life OS` because that comes
+create the record, and the home screen still reads `Almanac` because that comes
 from the bundle, not the listing.
 
 ## Every upload
