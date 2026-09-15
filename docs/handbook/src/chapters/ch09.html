@@ -1,10 +1,613 @@
-<section class="chapter" id="ch09" data-hue="notes">
-<p class="chapter-kicker">Chapter 9</p>
-<h2><span class="num">9</span><span>Stub ch09</span></h2>
-<p class="lede">Stub lede for ch09 &amp; friends.</p>
+<section class="chapter" id="ch9" data-hue="watch">
+<p class="chapter-kicker">Chapter nine</p>
+<h2><span class="num">9</span><span>The Watch companion</span></h2>
+
+<p class="lede">
+  When an Apple Watch is paired, the watch owns the workout and the phone shows it. Heart rate,
+  energy, reps and sets cross the mirrored HealthKit session once a second; pause, resume, end and
+  the rep buttons cross back. A pure rep counter on wrist acceleration fills the slot the HUD
+  reserved, labelled "auto" because its accuracy on real movement is still unmeasured.
+</p>
+
 <h3 id="s9-1"><span class="num">9.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch09a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch09a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s9-2"><span class="num">9.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<p>
+  Before this slice the watch app was a read-only dashboard: steps, sleep and movement mirrored
+  from the phone, with no way to start, see or end a workout. A person wearing a watch and no strap
+  saw a timer on the phone and no beats, because the phone only ever received heart rate from a
+  Bluetooth strap. And strength sessions showed a "reps" slot that never filled.
+</p>
+
+<div class="prfaq">
+  <p class="prfaq-kicker">Working backwards</p>
+  <p class="release">
+    Tap Begin on the phone with a watch on your wrist and the phone says "Asking your Apple Watch…".
+    Within a few seconds Almanac opens on the watch with the workout running, and the phone's rings
+    show the watch's heart rate. Or start from the watch: choose Strength, and the phone's lock
+    screen shows the session before you have touched the phone. Curl, and the rep count on your
+    wrist climbs on its own; tap +1 if it missed one, tap −1 if it counted an extra. Pause on either
+    device and both pause. End on either and exactly one workout lands in Health, saved by the
+    watch.
+  </p>
+  <p class="faq-q">Who owns the session?</p>
+  <p class="faq-a">
+    Whichever device created the <code>HKWorkoutSession</code>. When a watch is paired, installed
+    and Health saving is on, the watch does, and it alone writes the workout to Health. The phone
+    never creates a session of its own for a watch-owned workout, so nothing is saved twice. When no
+    watch answers within ten seconds, the phone path from <a href="#ch8">Chapter 8</a> runs
+    unchanged.
+  </p>
+  <p class="faq-q">Why is the rep count labelled "auto" on the watch and not on the phone?</p>
+  <p class="faq-a">
+    Only a watch session counts reps by itself. On a phone-only strength session every rep is a tap,
+    and calling that "auto" would invert the honesty label.
+  </p>
+  <p class="faq-q">What has actually been verified on a real watch?</p>
+  <p class="faq-a">
+    Nothing yet. The rep counter is pinned by tests on synthetic signals, the wire format and the
+    recorder's watch path are pinned by tests and simulator checks, and both targets build. The
+    watch simulator cannot run a real workout session, so the watch screen is verified by
+    compilation only. Five hardware checks and two recovery-behaviour checks are recorded as
+    pending in the QA report, to be run by the author on his own phone and watch.
+  </p>
+</div>
+
+<h3 id="s9-2"><span class="num">9.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">AlmanacWatch/                                the watchOS target, added to the pbxproj by hand
+├── AlmanacWatchApp.swift                    the scene: dashboard or workout; WatchBridge for the snapshot
+├── WatchAppDelegate.swift                   handle(configuration) and handleActiveWorkoutRecovery()
+├── WatchWorkoutController.swift             the session, the builder, the counter, the packets
+└── WatchWorkoutScreen.swift                 timer, heart rate with zone chip, reps, pause, end
+
+LIfeOS/App/Surfaces/
+└── WatchSessionBridge.swift                 one per app: the mirrored session and its delegate
+
+LIfeOS/Features/Activity/ViewModel/
+└── ActivityRecorder+Watch.swift             hand-off, adopt, packets, commands
+
+LifeOSKit/Sources/Motion/                    Foundation only; links on watchOS
+└── RepCounter.swift                         samples in, a count out
+
+LifeOSKit/Sources/AppSurfaces/
+└── WatchWire.swift                          WatchPacket, PhoneCommand, the version gate
+
+LifeOSKit/Tests/
+├── MotionTests/RepCounterTests.swift        six calibration cases on synthetic sine waves
+└── AppSurfacesTests/WatchWireTests.swift    round trips, unknown version, kind gate</pre>
+
+<div class="rail">
+  <h4>Why Motion is its own package target</h4>
+  <p>
+    The watch target links two package products, <code>AppSurfaces</code> and <code>Motion</code>,
+    and neither depends on anything. CoreMotion stays in the watch target: the controller feeds
+    <code>CMDeviceMotion.userAcceleration</code> samples at 50 Hz into the pure counter. That is
+    what lets the algorithm be tuned against synthetic signals on macOS, and later against a
+    recording from hardware, without a watch in the loop.
+  </p>
+</div>
+
+<h3 id="s9-3"><span class="num">9.3</span><span>Model</span></h3>
+
+<h4>The wire format</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/WatchWire.swift
+/// What the watch sends the phone over the mirrored session's data channel.
+/// Every reading is optional: a packet without heart rate says "no reading",
+/// never zero. `completedSets` holds reps per finished set, oldest first.
+public struct WatchPacket: Codable, Equatable, Sendable {
+    public var kind: String = WatchWire.packetKind
+    public var v: Int = WatchWire.version
+    public var sentAt: Date
+    public var heartRate: Int?
+    public var heartRateAt: Date?
+    public var energyKcal: Double?
+    public var reps: Int?
+    public var setIndex: Int?
+    public var completedSets: [Int]?
+}
+
+public enum PhoneCommand: String, Codable, Sendable {
+    case configure, pause, resume, end, nextSet, addRep, removeRep, discard
+}
+
+public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
+    public var kind: String = WatchWire.commandKind
+    public var v: Int = WatchWire.version
+    public var command: PhoneCommand
+    public var sentAt: Date
+    public var maxHeartRate: Int?      // sent once with .configure
+}</code></pre>
+
+<p>
+  Both shapes carry a version, currently 2, and a <code>kind</code>. The version gate is strict: a
+  packet with an unknown <code>v</code> is ignored, never guessed at. The <code>kind</code> field
+  exists because the two shapes otherwise share every required key (<code>v</code> and
+  <code>sentAt</code>), and a command would decode as an empty packet. A test pins that a command
+  is never read as a packet.
+</p>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/WatchWire.swift
+public static func packet(from data: Data) -&gt; WatchPacket? {
+    guard let packet = try? decoder.decode(WatchPacket.self, from: data),
+          packet.kind == packetKind, packet.v == version else { return nil }
+    return packet
+}</code></pre>
+
+<p>
+  Dates are encoded as seconds since 1970. <code>heartRateAt</code> is when the reading was
+  measured, not when the packet was sent, so effort accrual on the phone credits the right seconds.
+</p>
+
+<h4>The two commands that end a session</h4>
+
+<p>
+  <code>end</code> finishes the workout and saves it to Health on the wrist. <code>discard</code>
+  throws it away. The distinction is the fix for a critical finding in the final review: the phone
+  originally sent <code>end</code> when it refused a mirrored session or the person discarded, which
+  would have written a stub workout into Health for a session the person had thrown away.
+</p>
+
+<h4>The rep counter</h4>
+
+<pre><code>// LifeOSKit/Sources/Motion/RepCounter.swift
+public struct RepCounter: Sendable {
+    public struct Sample: Sendable { public var t: TimeInterval; public var x, y, z: Double }
+    public let settleSeconds: Double      // 1.0
+    public let minPeriod: Double          // 0.6
+    public let maxPeriod: Double          // 4.0
+    public let threshold: Double          // 0.15
+    public private(set) var reps: Int = 0
+    private let fastTau = 0.15
+    private let slowTau = 2.0
+    private var axis: Vec?
+    private var riseT: TimeInterval?
+    private var refractoryUntil: TimeInterval = -.infinity
+
+    /// Feed one sample; returns true when this sample completed a rep.
+    public mutating func add(_ sample: Sample) -&gt; Bool
+    public mutating func reset()
+}</code></pre>
+
+<p>The algorithm, as it stands after two corrections during implementation:</p>
+<ol>
+  <li>Each axis is smoothed twice with exponential moving averages: a fast one (0.15 s) follows the movement, a slow one (2 s) follows posture and gravity drift. Their difference is a vector <code>d</code>.</li>
+  <li>The first lift whose magnitude passes the threshold, <em>and is still growing</em>, fixes the axis for the set. The rising condition is the second fix: settling can end mid-fall, and locking the axis onto a fading swing spent the first cycle on a half swing and undercounted by exactly one in two of six tests.</li>
+  <li>The signal <code>s</code> is <code>d</code> projected onto that axis. It is signed: a rep is a swing, not a rectified bump. The first version rectified the signal with <code>sqrt(x²+y²+z²)</code>, and a fall crossing could then structurally never follow a rise.</li>
+  <li>A rep is a rise of <code>s</code> above <code>+threshold</code> followed by a fall below <code>−threshold</code>, with the half cycle between them lasting between 0.3 and 2.0 seconds.</li>
+  <li>Nothing counts during the first second after <code>reset()</code>, the person picking up the weight, and each counted rep starts a 0.3-second refractory window.</li>
+</ol>
+
+<div class="note caution">
+  <b>Calibration is synthetic</b>
+  Every constant is pinned by tests on 50 Hz sine waves with white noise. Ten cycles at 1 Hz and
+  0.4 g count ten; 0.08 g counts nothing; 3 Hz jitter counts nothing; one ten-second push counts
+  nothing; nine cycles whose first second is swallowed by settling count eight. Real-world accuracy
+  is unknown until hardware. The "auto" label and the +1 and −1 buttons are the honesty.
+</div>
+
+<h3 id="s9-4"><span class="num">9.4</span><span>ViewModel</span></h3>
+
+<h4>On the wrist</h4>
+
+<pre><code>// AlmanacWatch/WatchWorkoutController.swift
+@MainActor @Observable
+final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
+    enum State { case idle, starting, running, paused, ending }
+    private(set) var state: State = .idle
+    private(set) var accumulated: TimeInterval = 0
+    private(set) var runningSince: Date?
+    private(set) var heartRate: Int?
+    private(set) var energyKcal: Double?
+    private(set) var reps: Int?
+    private(set) var setIndex: Int?
+    private(set) var completedSets: [Int] = []
+    private(set) var maxHeartRate: Int?
+    private(set) var mirroringFailed = false
+    private var counter = RepCounter()
+    /// Taps on "+1", kept apart from the counter so the next automatic rep
+    /// adds to them instead of overwriting them.
+    private var manualReps = 0
+    private var lastPacketAt: Date = .distantPast</code></pre>
+
+<p>
+  <code>start(_:)</code> flips <code>state</code> to <code>.starting</code> synchronously before its
+  first await, so a second Start tap during the authorisation prompt cannot open a second session.
+  It requests Health sharing for workouts, heart rate and energy, creates the session and builder,
+  begins collection, then calls <code>startMirroringToCompanionDevice()</code>. A mirroring failure
+  is recorded, not fatal: the watch still records and saves; the phone simply does not see it. For
+  strength it starts device motion at 50 Hz.
+</p>
+
+<pre><code>// AlmanacWatch/WatchWorkoutController.swift
+motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+    guard let self, let data else { return }
+    MainActor.assumeIsolated {
+        guard self.state == .running else { return }
+        let acceleration = data.userAcceleration
+        if self.counter.add(RepCounter.Sample(t: data.timestamp, x: acceleration.x, y: acceleration.y, z: acceleration.z)) {
+            self.reps = self.counter.reps + self.manualReps
+            self.sendPacket(force: true)
+        }
+    }
+}</code></pre>
+
+<p>
+  <code>.main</code> is the main-thread queue, so the handler is already on the main actor;
+  <code>assumeIsolated</code> keeps every sample in order rather than scattering fifty hops a second
+  through <code>Task</code>. The manual tally is separate from the counter's so that an automatic
+  rep adds to the taps instead of overwriting them, which was the critical bug the review found.
+  <code>removeRep()</code> spends the manual tally first and then offsets the automatic one, never
+  below zero, and does nothing while the count is unknown, because a dash must not become a zero.
+</p>
+
+<p>
+  The clock is kept the way <code>ActivitySessionState</code> keeps it on the phone: a pause banks
+  <code>accumulated</code>, a resume starts <code>runningSince</code>. The screen's timer is
+  anchored at <code>runningSince - accumulated</code>, so it reads the workout's elapsed time
+  rather than the time since this run began.
+</p>
+
+<p>
+  Ending has two paths, and they must never be confused. <code>end()</code> stops the activity; the
+  <code>.stopped</code> delegate callback then ends collection, calls <code>finishWorkout()</code>,
+  and the <code>.ended</code> callback resets. <code>discard()</code> detaches the delegates first,
+  so no late <code>.ended</code> re-enters the teardown, then discards the builder and ends the
+  session without finishing it. <code>recover()</code>, wired from
+  <code>handleActiveWorkoutRecovery()</code>, adopts a session still active in HealthKit after
+  watchOS relaunched the app; a session already stopped is settled at once, and a recovered
+  strength session restarts motion with an unknown rep count rather than a zero.
+</p>
+
+<h4>On the phone: the bridge</h4>
+
+<pre><code>// LIfeOS/App/Surfaces/WatchSessionBridge.swift
+/// Owns the workout session mirrored from the watch. One per app: HealthKit
+/// hands the session to whichever handler is installed at launch, so the
+/// bridge is installed by the app delegate and the recorder subscribes.
+@MainActor
+final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
+    static let shared = WatchSessionBridge()
+    private(set) var session: HKWorkoutSession?
+    private(set) var placeholderSessionID: UUID?
+    private var dropping = false
+    var onSession: ((HKWorkoutSession) -&gt; Void)?
+    var onPacket: ((Data) -&gt; Void)?
+    var onStateChange: ((HKWorkoutSessionState, Date) -&gt; Void)?
+    var hasSession: Bool { session != nil &amp;&amp; !dropping }
+
+    static func installMirroringHandler() {
+        healthStore.workoutSessionMirroringStartHandler = { session in
+            Task { @MainActor in
+                let bridge = WatchSessionBridge.shared
+                let unattended = bridge.onSession == nil
+                bridge.adopt(session)
+                if unattended { bridge.requestPlaceholderActivity(for: session) }
+            }
+        }
+    }</code></pre>
+
+<p>
+  The handler is installed from <code>PushService</code>'s app delegate at launch, before any
+  session can arrive. The placeholder matters for a workout started on the wrist: HealthKit launches
+  the phone app in the background with no scene and so no recorder. The Live Activity has to be
+  requested inside that launch, so the bridge asks for it itself, keeps the id, and the recorder's
+  timer adopts that id when a screen finally attaches, so the card already on screen is updated
+  rather than duplicated.
+</p>
+
+<pre><code>// LIfeOS/App/Surfaces/WatchSessionBridge.swift
+/// Whether a watch could take the session right now.
+static var watchAvailable: Bool {
+    guard WCSession.isSupported() else { return false }
+    let wc = WCSession.default
+    // Not `isReachable`: on iOS that is true only while the watch app is
+    // already in the foreground, which is never the case for a person
+    // tapping Begin on the phone.
+    return wc.activationState == .activated &amp;&amp; wc.isPaired &amp;&amp; wc.isWatchAppInstalled
+}
+
+/// Sends a last command and drops the session only once it has left, in
+/// the send's completion handler: releasing the session in the same
+/// run-loop turn can cancel the send before the watch ever hears it.
+func end(after command: PhoneCommand) {
+    guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now)) else {
+        end(); return
+    }
+    dropping = true
+    session.sendToRemoteWorkoutSession(data: data) { _, _ in
+        Task { @MainActor in self.end() }
+    }
+}</code></pre>
+
+<p>
+  <code>dropping</code> exists because <code>hasSession</code> stays true through that window, and
+  without it the next Start would refuse the hand-off against a session already on its way out.
+</p>
+
+<h4>On the phone: the recorder's watch half</h4>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder+Watch.swift
+func handOffToWatch() async -&gt; Bool {
+    guard saveToHealth, watchAvailable(), let watch, !watch.hasSession else { return false }
+    // Ask on the phone first. Authorization is shared with the paired
+    // watch, so without this the first prompt a person ever sees is on the
+    // wrist, while the phone is already counting down its ten seconds.
+    guard await healthAuthorizationForHandoff() else { return false }
+    let configuration = HKWorkoutConfiguration()
+    configuration.activityType = selection.healthType
+    source = .watch
+    notice = Self.waitingForWatch
+    try? await WatchSessionBridge.startWatchApp(configuration)
+    let deadline = Date.now.addingTimeInterval(watchHandoffTimeout)
+    while Date.now &lt; deadline, watch.session == nil, active {
+        try? await Task.sleep(for: .milliseconds(100))
+    }
+    guard active else { return true }
+    if let mirrored = watch.session {
+        if timer == nil { adoptMirroredSession(mirrored) }
+        if notice == Self.waitingForWatch { notice = nil }
+        return true
+    }
+    source = .phone
+    notice = "Apple Watch did not answer. Recording on iPhone."
+    return false
+}</code></pre>
+
+<p>
+  The hand-off is offered only when the workout is meant for Health, since the watch writes it
+  there; a person who turned Health saving off keeps the phone. No timer starts until the watch
+  answers, so nothing counts a session the watch may never take, and <code>busy</code> keeps the
+  button reading "Starting…".
+</p>
+
+<p>
+  <code>adoptMirroredSession</code> handles both arrivals: the answer to a hand-off, and a session
+  the person started on the wrist. If the phone is already recording its own session it refuses
+  with a notice and sends <code>discard</code>. Otherwise it builds a fresh timer starting where the
+  watch started, adopting the bridge's placeholder id if there is one, ends any stray Live Activity,
+  stops the strap (the watch streams its own heart rate; two feeds would double every reading into
+  the effort accrual), sets <code>recordingHealth</code> false so the draft never claims a Health
+  session of the phone's own, and sends <code>configure</code> with the person's max heart rate so
+  the watch can show a zone chip.
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder+Watch.swift
+func receiveWatchPacket(_ data: Data) {
+    guard active, hasSession, source == .watch, let packet = WatchWire.packet(from: data) else { return }
+    // The counts are applied before that reading, so the one refresh carries
+    // this packet's reps rather than the previous packet's.
+    let refreshes = packet.heartRate != nil &amp;&amp; packet.heartRateAt != nil &amp;&amp; isRunning
+    if let energy = packet.energyKcal { self.energy = energy }
+    if selection == .strength {
+        if let value = packet.reps { reps = value }
+        if let value = packet.setIndex { setIndex = value }
+        if let value = packet.completedSets { completedSets = value }
+    }
+    if let bpm = packet.heartRate, let at = packet.heartRateAt { receiveHeartRate(bpm, at: at) }
+    if !refreshes { persistReading(at: packet.sentAt) }
+}</code></pre>
+
+<p>
+  Heart rate goes through the same <code>receiveHeartRate</code> as a strap reading, so effort
+  accrual, throttling and the Live Activity stay one path. The ordering comment records a bug the
+  checks found: a packet carrying both a heart rate and a rep change once published the previous
+  rep count, because the single readout refresh ran inside <code>receiveHeartRate</code> before the
+  counts were applied.
+</p>
+
+<p>
+  <code>addRep</code>, <code>removeRep</code> and <code>nextSet</code> each have two paths: on a
+  watch session they send the command and wait for the echo packet; on a phone session they count
+  locally. Pause, resume and finish likewise send commands for <code>.watch</code> and let the
+  mirrored session's state change drive the timer, exactly as the phone's own session delegate
+  does.
+</p>
+
+<h3 id="s9-5"><span class="num">9.5</span><span>View</span></h3>
+
+<p>
+  <code>AlmanacWatchApp</code> shows <code>WatchWorkoutScreen</code> whenever the controller is not
+  idle and the dashboard otherwise. The dashboard gained a Start workout button that presents a
+  <code>List</code> of six activities in a sheet, because watchOS has no <code>Menu</code>. The
+  scene's <code>.task</code> wires both delegate handlers and then drains any configuration or
+  recovery that arrived before the task ran, so either order reaches the controller.
+</p>
+
+<pre><code>// AlmanacWatch/WatchWorkoutScreen.swift
+if let runningSince = workout.runningSince, workout.state == .running {
+    Text(timerInterval: runningSince.addingTimeInterval(-workout.accumulated)...Date.distantFuture, countsDown: false)
+        .font(.system(size: 34, weight: .semibold, design: .rounded)).monospacedDigit()
+} else if workout.state == .paused {
+    Text(Duration.seconds(workout.accumulated).formatted(.time(pattern: .minuteSecond)))
+}
+HStack(spacing: 6) {
+    Image(systemName: "heart.fill").foregroundStyle(.red)
+    Text(workout.heartRate.map(String.init) ?? "\u{2014}").font(.title2.monospacedDigit())
+    if let max = workout.maxHeartRate, let bpm = workout.heartRate {
+        Text("Z\(zone(bpm: bpm, max: max))").font(.caption2).foregroundStyle(.secondary)
+    }
+}</code></pre>
+
+<p>
+  The screen is minimal on purpose: the activity name, the timer, heart rate with a zone chip once
+  the phone has sent <code>configure</code>, and for strength the rep count over "reps · auto", the
+  set number, and three buttons on two rows (−1 and +1, then Next set full width) because three
+  bordered buttons split a 41 mm screen three ways and "Next set" wraps at about 48 points. Pause
+  or Resume and End sit at the bottom. It uses the system font and the app's orange; the watch
+  target does not link the design system. The zone bands are duplicated here in five lines because
+  the watch cannot see <code>HeartRateZones</code> in <code>Integrations</code>.
+</p>
+
+<p>
+  On the phone, the surfaces from Chapter 8 grew a rep slot: the rings show the count and "auto" or
+  "reps"; the tiles gain a Reps tile captioned "Counted from your wrist · auto" or "Tap +1 for each
+  rep" and, after a set, "Earlier sets: 2 reps"; the Dynamic Island's compact trailing shows reps
+  instead of the timer for strength; the lock screen's third tile shows the set and reps instead of
+  calories. The connections panel says "Apple Watch is recording this session", "Apple Watch
+  ready", or "Apple Watch not nearby".
+</p>
+
+<h3 id="s9-6"><span class="num">9.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 380" role="img" aria-label="The phone asks HealthKit to start the watch app; the watch creates the session and mirrors it; the mirroring handler hands it to the bridge; packets flow watch to phone and commands phone to watch; the watch saves to Health, the phone writes the local record.">
+  <defs>
+    <marker id="ch9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch9b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">PHONE</text>
+  <text class="lbl-sm" x="600" y="24">WATCH</text>
+
+  <rect class="box" x="20" y="44" width="220" height="44" rx="8"/>
+  <text class="lbl" x="130" y="71" text-anchor="middle">ActivityRecorder.start()</text>
+  <rect class="box-alt" x="20" y="112" width="220" height="44" rx="8"/>
+  <text class="lbl" x="130" y="139" text-anchor="middle">handOffToWatch · 10 s wait</text>
+  <rect class="box-hot" x="20" y="200" width="220" height="60" rx="10"/>
+  <text class="lbl" x="130" y="225" text-anchor="middle">WatchSessionBridge</text>
+  <text class="lbl-hot" x="130" y="245" text-anchor="middle">mirroring handler · delegate</text>
+  <rect class="box" x="20" y="290" width="220" height="44" rx="8"/>
+  <text class="lbl" x="130" y="317" text-anchor="middle">receiveWatchPacket · readout</text>
+
+  <rect class="box" x="600" y="44" width="240" height="44" rx="8"/>
+  <text class="lbl" x="720" y="71" text-anchor="middle">WatchAppDelegate.handle()</text>
+  <rect class="box-hot" x="600" y="112" width="240" height="60" rx="10"/>
+  <text class="lbl" x="720" y="137" text-anchor="middle">WatchWorkoutController</text>
+  <text class="lbl-hot" x="720" y="157" text-anchor="middle">HKWorkoutSession · owner</text>
+  <rect class="box-alt" x="600" y="200" width="240" height="44" rx="8"/>
+  <text class="lbl" x="720" y="227" text-anchor="middle">RepCounter · 50 Hz motion</text>
+  <rect class="box" x="600" y="290" width="240" height="44" rx="8"/>
+  <text class="lbl" x="720" y="317" text-anchor="middle">finishWorkout, then Health</text>
+
+  <path class="flow" d="M130 88 L 130 106" marker-end="url(#ch9a)"/>
+  <path class="flow" d="M240 134 L 594 66" marker-end="url(#ch9a)"/>
+  <text class="lbl-sm" x="300" y="92">startWatchApp(toHandle:)</text>
+  <path class="flow" d="M720 88 L 720 106" marker-end="url(#ch9a)"/>
+  <path class="flow-hot" d="M600 150 L 246 226" marker-end="url(#ch9b)"/>
+  <text class="lbl-sm" x="330" y="180">startMirroringToCompanionDevice</text>
+  <path class="flow" d="M720 172 L 720 194" marker-end="url(#ch9a)"/>
+  <path class="flow" d="M600 222 L 246 300" marker-end="url(#ch9a)"/>
+  <text class="lbl-sm" x="330" y="258">WatchPacket · 1 Hz and on every rep</text>
+  <path class="flow-dash" d="M240 244 L 594 130" marker-end="url(#ch9a)"/>
+  <text class="lbl-sm" x="330" y="120">PhoneCommand · configure, pause, end</text>
+  <path class="flow" d="M720 244 L 720 284" marker-end="url(#ch9a)"/>
+  <path class="flow" d="M130 260 L 130 284" marker-end="url(#ch9a)"/>
+  <text class="lbl-sm" x="20" y="360">phone writes WorkoutRecord only · never HKWorkout</text>
+  <text class="lbl-sm" x="600" y="360">watch writes HKWorkout only</text>
+</svg>
+<figcaption>
+  The session has one owner. Readings flow one way, commands the other, and each device writes
+  exactly one record: the watch to Health, the phone to its local store.
+</figcaption>
+</figure>
+
+<h4>Step by step: started on the phone</h4>
+<ol>
+  <li>Begin, with Health saving on and a paired watch. The phone asks for its own Health authorisation first, because authorisation is shared with the paired watch and the first prompt should be on the phone.</li>
+  <li><code>HKHealthStore.startWatchApp(toHandle:)</code> launches Almanac on the watch with the configuration. The phone says "Asking your Apple Watch…" and polls the bridge every 100 ms for up to ten seconds.</li>
+  <li>The watch delegate's <code>handle(_:)</code> passes the configuration to the controller (or parks it in <code>pendingConfiguration</code> if the scene's task has not run yet). The controller starts the session and begins mirroring.</li>
+  <li>HealthKit calls the phone's <code>workoutSessionMirroringStartHandler</code>. The bridge adopts the session and calls <code>onSession</code>; the recorder's <code>adoptMirroredSession</code> builds the timer from the watch's start date and sends <code>configure</code>.</li>
+  <li>Packets arrive once a second and on every rep. Heart rate accrues effort; reps and sets update the readout; the rings, tiles and Live Activity refresh through the Chapter 8 paths.</li>
+  <li>Pause on the phone sends <code>pause</code>; the watch pauses its session; the mirrored state change comes back through the bridge and pauses the phone's timer. Pause on the watch takes the same last two steps.</li>
+  <li>Finish on the phone sends <code>end</code> through <code>end(after:)</code> and calls <code>saveFinished()</code>, which writes the local record with the sets and never touches a builder. The watch ends collection, finishes the workout into Health, and resets.</li>
+</ol>
+
+<h4>Started on the wrist</h4>
+<p>
+  Steps 4 to 7 are the same. The difference is step 3: there is no phone scene yet. HealthKit
+  launches the phone app in the background, the bridge adopts the session unattended and requests
+  the placeholder Live Activity, and when the person opens the phone the recorder attaches, finds
+  <code>watch.session</code> already held, adopts it, and takes over the card by its id.
+</p>
+
+<h4>Ownership rules, stated once</h4>
+<ul>
+  <li>The watch is offered the session only when <code>saveToHealth</code> is on.</li>
+  <li>The phone never creates a Health session for a <code>.watch</code> workout, and never writes an <code>HKWorkout</code> for one.</li>
+  <li>If the phone is already recording when a mirrored session arrives, it keeps its own and discards the mirrored one. It never merges, and it never ends it, since ending means saving.</li>
+  <li>A finished, saved timer is the resting Done screen; a workout started on the wrist then is a new one, not a continuation.</li>
+  <li>A <code>.watch</code> draft restores with Health saving on, asks <code>recoverActiveWorkoutSession</code>, hands anything returned to the bridge, and otherwise keeps the timer and waits for the next packet.</li>
+</ul>
+
+<h3 id="s9-7"><span class="num">9.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Packets are rate-limited on the watch.</strong> <code>sendPacket(force: false)</code> sends at most once a second from the builder's statistics callback; a rep forces one immediately because a rep is what the person is watching.</li>
+  <li><strong>No strap and watch at once.</strong> Adopting a mirrored session stops the Bluetooth stream, so two feeds cannot double the effort accrual, and the radio is not held open for nothing.</li>
+  <li><strong>Motion samples never leave the main actor.</strong> <code>assumeIsolated</code> on the <code>.main</code> queue keeps 50 samples a second in order without 50 task hops.</li>
+  <li><strong>The counter is O(1) per sample.</strong> Two EMAs, one projection, a few comparisons. It keeps no history.</li>
+  <li><strong>Motion stops on every end.</strong> <code>end</code>, <code>discard</code>, a failed start and the delegate's failure path all call <code>stopMotion()</code>, so the accelerometer is not left running after a session.</li>
+  <li><strong>One placeholder at a time.</strong> A second session arriving before the recorder adopts the first cannot leave two cards on screen.</li>
+  <li><strong>The hand-off costs nothing when there is no watch.</strong> <code>watchAvailable</code> is three synchronous reads of <code>WCSession</code>; a person with no watch never waits.</li>
+  <li><strong>Nothing leaves either device.</strong> The mirrored session's data channel is HealthKit's own, device to device. No server, no push.</li>
+</ul>
+
+<h3 id="s9-8"><span class="num">9.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Watch paired but does not answer in 10 s</td><td>"Apple Watch did not answer. Recording on iPhone." and the phone path runs</td></tr>
+<tr><td>Health saving off</td><td>No hand-off; the phone records; no notice</td></tr>
+<tr><td>Phone refuses Health authorisation before the hand-off</td><td>Hand-off skipped; the phone path runs and shows its own error</td></tr>
+<tr><td>Phone already recording when a watch session arrives</td><td>Watch session discarded with a notice; the phone session continues</td></tr>
+<tr><td>Packet with an unknown version</td><td>Ignored; nothing changes</td></tr>
+<tr><td>Packet without a heart rate</td><td>Energy and counts apply; heart rate stays as it was; one refresh</td></tr>
+<tr><td>Packet with heart rate and a rep change</td><td>Counts applied first, then the reading, so the one publish carries the new count</td></tr>
+<tr><td>Watch packet reaches a phone session</td><td>Dropped by the <code>source == .watch</code> guard</td></tr>
+<tr><td>Automatic rep after a manual +1</td><td>Summed, not overwritten</td></tr>
+<tr><td>−1 with an unknown count</td><td>No change; a dash must not become a zero</td></tr>
+<tr><td>−1 at zero</td><td>Stays at zero</td></tr>
+<tr><td>Mirroring fails on the watch</td><td>Watch records and saves alone; screen says "Not connected to iPhone"</td></tr>
+<tr><td>A throw after <code>startActivity</code> on the watch</td><td>Delegates detached, session ended, builder discarded, state back to idle; no late callback can revive it</td></tr>
+<tr><td>Watch app relaunched over an active session</td><td><code>recover()</code> adopts it; a stopped one is settled immediately; a paused one shows elapsed time, not zero</td></tr>
+<tr><td>Phone relaunched during a watch session</td><td>Draft restores as <code>.watch</code>; recovery is attempted; otherwise the timer waits for the next packet</td></tr>
+<tr><td>Person discards on the phone</td><td><code>discard</code> is sent, not <code>end</code>; nothing reaches Health</td></tr>
+<tr><td>Session ends while the bridge is dropping</td><td><code>dropping</code> keeps <code>hasSession</code> false so the next start can hand off</td></tr>
+<tr><td>Watch started while no phone scene exists</td><td>Placeholder Live Activity from the bridge; the timer adopts its id later</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>RepCounterTests</code> (6): the five calibration cases plus reset.</li>
+  <li><code>WatchWireTests</code> (5): packet round trip keeps absence; unknown version ignored; command round trip; removeRep round trip; a command is never read as a packet.</li>
+  <li><code>LiveSessionReadoutTests</code>: reps round trip and format; the throttle publishes on a reps change. <code>LiveEffortTests.builderCarriesRepsAndSet</code>. <code>WorkoutSetsTests</code>: sets round trip through <code>setsData</code>. <code>ActivitySessionStateTests.aTimerCanAdoptAnExistingIdentity</code>.</li>
+  <li><code>ActivityRecorderChecks</code>, the watch cases: a phone strength session starts at set 1 with zero reps; remove rep never goes below zero; manual reps and sets count; a watch packet never reaches a phone session; finishing writes the sets; the wait says so; a watch that does not answer falls back; a seeded <code>.watch</code> draft restores as a watch session with Health saving on; an unknown-version packet changes nothing; a current-version packet carries reps and heart rate through; finishing a watch session writes the local record and never claims a Health save.</li>
+</ul>
+
+<div class="note blocked">
+  <b>Pending on hardware</b>
+  Recorded in <code>docs/design/watch-companion/report.md</code> as unverified: (1) start from the
+  phone and see the watch launch and the HUD show watch heart rate within 10 seconds; (2) start from
+  the watch and see the phone's Live Activity appear; (3) ten slow bicep curls against the auto
+  count; (4) pause on the watch and see the phone pause; (5) finish and find exactly one workout in
+  Health. Plus two from the draft port: the −1 correction landing on the number the other device
+  shows, and whether watchOS actually calls <code>handleActiveWorkoutRecovery()</code> and the
+  adopted session mirrors and saves. The package test count after this slice was 1247 in 163
+  suites; the checks page passed 29 of 29.
+</div>
+
+<h3 id="s9-9"><span class="num">9.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/AppSurfaces/WatchWire.swift</code>, the two shapes and the gate.</li>
+  <li><code>LifeOSKit/Sources/Motion/RepCounter.swift</code> with its tests open beside it.</li>
+  <li><code>AlmanacWatch/WatchWorkoutController.swift</code>: <code>start</code>, <code>startMotion</code>, <code>addRep</code>, <code>removeRep</code>, <code>end</code>, <code>discard</code>, <code>recover</code>.</li>
+  <li><code>LIfeOS/App/Surfaces/WatchSessionBridge.swift</code>, particularly <code>watchAvailable</code>, <code>end(after:)</code> and the placeholder.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorder+Watch.swift</code>, top to bottom.</li>
+  <li>The <code>source == .watch</code> branch of <code>ActivityRecorder.attach</code>.</li>
+  <li><code>AlmanacWatch/AlmanacWatchApp.swift</code> and <code>WatchAppDelegate.swift</code> for the before-or-after wiring.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does <code>watchAvailable</code> not read <code>isReachable</code>?</strong> On iOS it is true only while the watch app is in the foreground, which is never so when the person taps Begin on the phone; <code>startWatchApp</code> exists to launch it.</li>
+  <li><strong>Why is the session dropped inside the send's completion handler?</strong> Releasing it in the same run-loop turn can cancel the send before the watch hears it.</li>
+  <li><strong>Why does the phone ask for Health authorisation before offering the watch?</strong> Authorisation is shared; without it the first prompt lands on the wrist while the phone is counting down.</li>
+  <li><strong>What does <code>kind</code> prevent?</strong> A command decoding as an empty packet, since the two shapes share every required key.</li>
+  <li><strong>Why are manual and automatic reps tracked separately?</strong> So an automatic rep adds to the taps instead of overwriting them.</li>
+  <li><strong>Why is <code>discard</code> a separate command from <code>end</code>?</strong> On the wrist <code>end</code> means finish and save; sending it for a refused session would write a stub into Health.</li>
+</ul>
+
 </section>

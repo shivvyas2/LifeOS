@@ -1,10 +1,596 @@
-<section class="chapter" id="ch17" data-hue="notes">
-<p class="chapter-kicker">Chapter 17</p>
-<h2><span class="num">17</span><span>Stub ch17</span></h2>
-<p class="lede">Stub lede for ch17 &amp; friends.</p>
+<section class="chapter" id="ch17" data-hue="today">
+<p class="chapter-kicker">Chapter seventeen</p>
+<h2><span class="num">17</span><span>Profile and settings</span></h2>
+<p class="lede">
+  A face in the corner of Today opens everything that used to be behind a gear: who you are, what
+  your tracking adds up to, your friends, every connection with its own live state, the goals that
+  decide a good day, and the account switcher. Settings is a page inside the profile, not a tab.
+</p>
+
 <h3 id="s17-1"><span class="num">17.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch17a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch17a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s17-2"><span class="num">17.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Tap your photo on Today and the screen fills with it, fading into a gradient sampled from the
+  picture itself. Under your name sit three figures that describe who you have been: day streak,
+  days tracked, workouts. Then today's living numbers, then all-time totals, then three doors:
+  Together, Connections, Settings. Edit the profile from a glass sheet that saves locally first and
+  publishes after. Settings holds appearance, the five daily goals, the accounts signed in on this
+  device, which engine the coach uses, whether it speaks, and a summary of every connection with a
+  green dot for on and a hollow one for off.
+</p>
+<p class="faq-q">Why a face instead of a gear?</p>
+<p class="faq-a">
+  A gear says "settings"; a face says "you", and everything that was behind the gear is about you.
+  The button falls back to a person glyph rather than initials, because a single letter in a
+  circle reads as an avatar that failed to load.
+</p>
+<p class="faq-q">Why is the profile on the server now?</p>
+<p class="faq-a">
+  Because signing in on a second phone, or as a second account on this one, used to produce a
+  profile with no name and no picture: both lived only on the device that typed them. The
+  <code>profiles</code> row and the <code>avatars</code> bucket are the source of truth; the device
+  keeps a per-account cache so the screen draws instantly and draws offline.
+</p>
+<p class="faq-q">What does Settings do when Health access was denied?</p>
+<p class="faq-a">
+  It cannot know. HealthKit read authorisation is opaque by design, so the row says "No data yet.
+  Check Almanac in Health &gt; Sharing" rather than asserting a state it cannot verify.
+</p>
+<p class="faq-q">Why can I edit the goals?</p>
+<p class="faq-a">
+  Because the dot grid is the app's central claim, and a claim you cannot calibrate is one you stop
+  believing. Defaults are 8,000 steps, 7h sleep, 30 min exercise, 2,500 ml water, 3 of 4 required.
+</p>
+</div>
+
+<h3 id="s17-2"><span class="num">17.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Settings/
+├── Model/
+│   ├── AppConfig.swift                  build configuration read from the bundle; what is public and why
+│   └── GoalsDraft.swift                 the editable copy of the goals row
+├── ViewModel/
+│   ├── SettingsViewModel.swift          load and save the goals
+│   ├── HealthConnectionViewModel.swift  permission, sync, cycle default, the foreground watch
+│   ├── WhoopConnectionViewModel.swift   PKCE in Safari, manual code, stalled sign-in, sync
+│   ├── FitbitConnectionViewModel.swift  ASWebAuthenticationSession; the server holds the tokens
+│   └── PlaidConnectionViewModel.swift   Link, exchange, cursor sync, disconnect
+└── View/
+    ├── ProfileScreen.swift              navigation: edit sheet, four destinations; ProfileStat
+    ├── ProfileOverview.swift            the photo-led page, phone and wide layouts
+    ├── ProfilePhotoBackdrop.swift       the gradient sampled from the photo
+    ├── ProfileEditSheet.swift           local first, publish after, stays open on failure
+    ├── SettingsScreen.swift             appearance, goals, accounts, coach tier, voice, at a glance, connections
+    ├── ConnectionsSettingsScreen.swift  one card per source, one chip vocabulary
+    ├── PlaidLinkPresenter.swift         the only file that imports LinkKit
+    ├── AccountPanel.swift               AccountPanel, AccountPageHeading
+    └── ProfileDesignPreview.swift       DEBUG fixture
+
+Components/View/ProfileAvatar.swift              the toolbar button
+Components/Model/ProfilePhotoDownsizing.swift    512pt, scale 1, JPEG under the bucket limit
+Features/Onboarding/Model/ProfilePhotoStore.swift   per-account caches and ProfileSync (shared with signup)
+App/AccountSession.swift                          switch, sign out, the store per account
+App/Surfaces/SurfaceSettingsScreen.swift          the Widgets &amp; Watch page (Chapter 18)
+
+LifeOSKit/Sources/Integrations/ProfileClient.swift   RemoteProfile, AvatarStamp, the bucket calls
+LifeOSKit/Sources/DesignSystem/ActionFan.swift       QuickAction, the row and the fan
+LifeOSKit/Sources/DesignSystem/QuickActionsToolbar.swift   the environment value and the modifier</pre>
+
+<h3 id="s17-3"><span class="num">17.3</span><span>Model</span></h3>
+
+<h4>Three shapes of a profile</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/ProfileClient.swift
+public struct RemoteProfile: Codable, Sendable, Equatable {
+    public var firstName: String
+    public var lastName: String
+    public var country: String
+    public var birthDate: Date?
+    public var heightCM: Double?
+    public var gender: String?        // nil is "prefer not to say"
+    public var avatarPath: String?    // a path in the bucket, never a URL
+
+    public var displayName: String { fullName.isEmpty ? "Someone" : fullName }
+
+    public func payload(userID: String) -> [String: Any] {
+        var row: [String: Any] = [ "user_id": userID, "display_name": displayName, ... ]
+        row["birth_date"] = birthDate.map { SupabaseREST.day($0) } ?? NSNull()
+        row["height_cm"] = heightCM ?? NSNull()
+        row["gender"] = gender ?? NSNull()
+        row["avatar_path"] = avatarPath ?? NSNull()
+        return row
+    }
+}</code></pre>
+
+<p>
+  <code>RemoteProfile</code> is the row as the server holds it. Two decisions are written into it.
+  The avatar is stored as a path, <code>{user_id}/avatar.jpg</code>, never a URL, because a URL
+  bakes in the project host and the signing scheme, both of which outlive their correctness. And
+  cleared fields are sent as explicit nulls rather than omitted, because the save is an upsert of
+  the whole row: an omitted key would leave the old value standing and make deleting a birthday
+  impossible. <code>displayName</code> is never empty because the column is not nullable and a
+  profile with no name is still a profile that friend search has to match.
+</p>
+
+<p>
+  <code>LocalProfile</code>, in <code>ProfilePhotoStore.swift</code>, is the per-account display
+  cache, and <code>ProfileStore.save(_ remote:)</code> only ever writes it from what the server
+  confirmed, so the two cannot drift. The profile used to live in <code>auth.users.user_metadata</code>
+  with a copy in a single <code>UserDefaults</code> key. That payload rides inside the JWT on every
+  authenticated request, which is the wrong place for anything that grows, and the copy was not
+  keyed by account, so with two accounts on one device the second saw the first's name.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/ProfileClient.swift
+public enum AvatarStamp: Sendable, Equatable {
+    case missing           // no such object in the bucket
+    case unknown           // the object exists, but the listing did not say when it changed
+    case at(String)        // the object exists and last changed at this stamp
+}</code></pre>
+
+<p>
+  Three cases rather than an optional string, because "there is no object" and "the object is
+  there but undated" want opposite answers. Collapsed into a single nil, the safe reading of nil is
+  "do not download", and then a device with nothing cached downloads nothing, ever, and shows an
+  empty circle for a profile that has a picture.
+</p>
+
+<h4>The goals draft and the stats</h4>
+
+<pre><code>// LIfeOS/Features/Settings/Model/GoalsDraft.swift
+struct GoalsDraft: Equatable {
+    var steps: Int = 8000
+    var sleepMinutes: Int = 420
+    var exerciseMinutes: Int = 30
+    var waterML: Double = 2500
+    var requiredCount: Int = 3
+}
+
+// LIfeOS/Features/Settings/View/ProfileScreen.swift
+struct ProfileStat: Identifiable, Equatable {
+    let id: String
+    let value: String
+    let label: String
+}</code></pre>
+
+<p>
+  The draft is a separate type from <code>UserGoals</code> on purpose. Editing writes to the draft;
+  committing validates it into the row. Binding steppers straight to the persisted model would
+  write to the database on every increment and re-evaluate a month of history mid-drag.
+  <code>ProfileStat</code> is a label and a pre-formatted string: the profile shows facts and never
+  computes one.
+</p>
+
+<h4>AppConfig: what is public and why</h4>
+
+<p>
+  <code>AppConfig</code> reads the bundle's Info.plist for the Supabase URL and anon key, the WHOOP,
+  Fitbit and Plaid redirect URIs, the ElevenLabs key, and the function endpoints derived from the
+  project URL. Everything here is public by design except the ElevenLabs key, which is gitignored
+  but still extractable from a shipped <code>.ipa</code> and therefore never logged. Client secrets
+  for WHOOP, Fitbit and Plaid are deliberately absent: they live only in Edge Function
+  environments (<a href="#ch23">Chapter 23</a>). An unresolved build setting comes through as a
+  literal <code>$(…)</code>, so <code>string(_:)</code> treats that prefix as absent. The app
+  answers to two URL schemes, <code>almanac</code> and the older <code>lifeos</code>, so the WHOOP
+  redirect bridge can point at either without the app and the server having to ship together.
+</p>
+
+<h3 id="s17-4"><span class="num">17.4</span><span>ViewModel</span></h3>
+
+<h4>SettingsViewModel</h4>
+
+<p>
+  <code>draft</code> is the one mutable published property on this view model, and it is mutable
+  because SwiftUI's <code>@Bindable</code> needs it to be. <code>load()</code> copies the goals
+  row into it; <code>save()</code> writes the row back in one <code>context.save()</code>, which is
+  what makes the dot grid re-evaluate. The rule is the user's, not hard-coded.
+  <code>SettingsScreen</code> calls <code>save()</code> from <code>onChange(of: model.draft)</code>,
+  so each stepper commits once per change rather than once per dismissal.
+</p>
+
+<h4>Four connections, four shapes</h4>
+
+<p>
+  Each provider has its own view model because each has a different relationship with credentials,
+  and the differences are the point.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Provider</th><th>Where the token lives</th><th>Sign-in surface</th><th>What the view model owns</th></tr></thead>
+<tbody>
+<tr><td>Apple Health</td><td>Nowhere; it is a permission</td><td>The system sheet, once</td><td>Whether it was asked, the sync cursor, the cycle switch, the foreground watch</td></tr>
+<tr><td>WHOOP</td><td>Keychain on the device, plus a server copy for restore</td><td>Safari, by <code>UIApplication.open</code></td><td>PKCE attempts, the manual desktop code, stalled sign-ins, sync with a staleness policy</td></tr>
+<tr><td>Fitbit</td><td>A row on the server only</td><td><code>ASWebAuthenticationSession</code> in-app</td><td>PKCE attempts and a "connected" flag per account; the server is the authority</td></tr>
+<tr><td>Bank accounts (Plaid)</td><td>Access tokens on the server behind service-role RLS; item ids and cursors on the device</td><td>Plaid Link, sometimes via a bank's OAuth in Safari</td><td>Link presentation, exchange, paged sync, reconnect state, disconnect with or without history</td></tr>
+</tbody></table></div>
+
+<p>
+  <strong>Health</strong> is deliberately the thinnest, because it has no OAuth, no tokens and no
+  server, and the one thing it does have is a permission model that refuses to tell us anything.
+  <code>connect()</code> asks once, records that it asked, decides the cycle-tracking default, syncs,
+  and starts the watch. After that "Connect" becomes "Sync", because iOS shows the sheet exactly
+  once and offering to connect again would be a button that visibly does nothing. The
+  cycle-tracking switch is offered to everyone and defaulted from Health's own sex characteristic,
+  not from the gender asked at signup: that field says how someone wants to be addressed, and using
+  it here would get the answer wrong in both directions and strand everyone who chose "Prefer not
+  to say". Turning the switch on asks for the extra permission there and then, so the prompt
+  arrives with the tap that caused it.
+</p>
+
+<p>
+  <strong>WHOOP</strong> opens sign-in in Safari rather than an in-app web session because WHOOP's
+  login sits behind a Cloudflare bot challenge that never clears inside
+  <code>ASWebAuthenticationSession</code>. That decision creates two problems the view model then
+  has to solve. Leaving for Safari looks identical whether or not the person comes back, so
+  <code>resolveStalledConnect()</code> waits two seconds after the app becomes active and, if the
+  card is still connecting with no token, returns it to disconnected. Two seconds is the whole
+  subtlety: the redirect usually lands a moment after activation, so resolving immediately would
+  cancel sign-ins about to succeed. And a challenge behind a VPN or Private Relay can hang forever,
+  so <code>beginManual()</code> offers a desktop URL and a code field; the PKCE verifier never left
+  this phone, so a transcribed code alone is not enough to impersonate it. Pending attempts are
+  persisted, not held in memory, because iOS may terminate the app while Safari is up, and the
+  callback is matched to the attempt whose <code>state</code> it carries because tapping Connect
+  twice starts two valid authorisations.
+</p>
+
+<p>
+  <strong>Fitbit</strong> is thinner than WHOOP, and the missing half is the point. Fitbit rotates
+  its refresh token on every use, so exactly one writer may hold it, and that writer is a row in
+  the database. The view model hands a code to the <code>fitbit-token</code> function and asks
+  <code>fitbit-sync</code> what the state is. A "connected" flag per account is remembered only so
+  the card does not flash "Not connected" on every launch while the server is asked.
+</p>
+
+<p>
+  <strong>Plaid</strong> keeps LinkKit behind one seam. <code>PlaidLinkPresenter</code> is the only
+  file that imports it, which is what lets the connection view model be tested against the
+  <code>PlaidClient</code> alone. The presenter holds the live handler itself, because a bank
+  using OAuth sends the person out to Safari and a handler released while they are away has nothing
+  to hand the redirect back to. It also keeps the link token in the account's defaults, because
+  the case that matters is the process not surviving: <code>resume(from:)</code> rebuilds a handler
+  on the original token and calls <code>resumeAfterTermination</code>. The completion closure died
+  with the old process, so <code>PlaidConnectionViewModel.attach</code> re-registers
+  <code>onResumedConnect</code> every time. Sync runs the cursor loop up to twenty pages per pass
+  and sets <code>isFetchingHistory</code> between connecting and the first transaction arriving,
+  because Plaid fetches history asynchronously and an empty first sync must not render as "you
+  spent nothing this month" (<a href="#ch11">Chapter 11</a>).
+</p>
+
+<p>
+  All four share three habits. A launch and a foreground arriving together coalesce into one sync
+  through a held <code>Task</code> or an <code>isSyncing</code> flag. <code>isConnected</code> is
+  false while connecting, so the summary dot never claims success while Safari is still open. And
+  every failure is a sentence: "Whoop needs new permissions. Disconnect, then connect again" is a
+  different problem from "Whoop sign-in expired", and collapsing them once sent people around the
+  reconnect loop with no idea why it kept failing.
+</p>
+
+<h3 id="s17-5"><span class="num">17.5</span><span>View</span></h3>
+
+<h4>The profile page</h4>
+
+<p>
+  <code>ProfileScreen</code> is presented as a <code>fullScreenCover</code> from the avatar on
+  Today. It owns a <code>NavigationStack</code>, the local profile and photo as state, the edit
+  sheet, and a single <code>destination</code> enum for its four pushes: notifications, friends,
+  connections, settings. Every push is a value, so the destination is a function of it.
+  <code>ProfileOverview</code> is the presentation, shared with the DEBUG fixture, and is forced
+  into the dark colour scheme with a hidden navigation bar because it is drawn over the photo.
+</p>
+
+<pre><code>// LIfeOS/Features/Settings/View/ProfilePhotoBackdrop.swift
+static func extract(from data: Data?) -> Self {
+    guard let data, let image = UIImage(data: data) else { return fallback }
+    let thumbnail = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48), format: format)
+        .image { _ in image.draw(in: CGRect(x: 0, y: 0, width: 48, height: 48)) }
+    guard let source = CIImage(image: thumbnail) else { return fallback }
+    func average(_ y: CGFloat) -> Color {
+        let bounds = CGRect(x: 0, y: y, width: 48, height: 16)
+        let result = source.applyingFilter("CIAreaAverage",
+            parameters: [kCIInputExtentKey: CIVector(cgRect: bounds)])
+        ...
+    }
+    return Self(top: average(32), middle: average(16), bottom: average(0))
+}</code></pre>
+
+<p>
+  The gradient behind the profile is sampled from the photo: a 48 pixel thumbnail, three
+  <code>CIAreaAverage</code> passes over its top, middle and bottom thirds, and the three colours
+  become a diagonal gradient. It is recomputed only when the photo changes, through
+  <code>.task(id: photo)</code>. Over that sit a blurred copy of the whole photo at 35 percent, the
+  portrait cropped 1.3 to 1 from the top and masked to fade out, and a dark wash that keeps white
+  text readable. With no photo the backdrop is the fallback palette and a soft orange ellipse.
+</p>
+
+<p>
+  On a phone the portrait sits at the top and the page scrolls. At 760 points or wider the layout
+  becomes a 340 point identity column beside a 540 point details column, the portrait becomes a
+  rounded card, and the backdrop drops the portrait layer. Under the name are up to three parts of
+  a subtitle: country, height, age. Then, in order, "Your rhythm" (three cumulative figures), "Today"
+  (only the readings that exist), "Over time" (only totals above zero), and the three doors, all
+  on clear Liquid Glass panels. An empty profile at accessibility sizes collapses every grid to one
+  column.
+</p>
+
+<h4>The edit sheet</h4>
+
+<p>
+  <code>ProfileEditSheet</code> is the same fields as signup, reachable at any time, because signup
+  asks once and never again, which is fine for a name and wrong for a photo. It saves locally first
+  and publishes after: the local copy is what the app displays, so writing it first means the change
+  is visible immediately and survives a failed request. Dismissal, though, waits for the publish.
+  The row is what friend search reads, so a save that only ever reached the device would leave
+  someone invisible to everyone looking for them while their own screen said it worked. On failure
+  the sheet stays open with the reason, Save becomes "Try again", and Cancel becomes "Close anyway",
+  because the local copy is already written and trapping someone in a sheet they cannot satisfy is
+  worse than letting them out informed. Removing a photo is a delete on the bucket rather than a
+  null in the row; leaving the object behind would keep serving a face the person took down.
+</p>
+
+<h4>Settings and Connections</h4>
+
+<p>
+  <code>SettingsScreen</code> is a page pushed from the profile with no inner stack and no Done:
+  the back chevron is the way out, which is what makes it feel like a place rather than an overlay.
+  Its cards, top to bottom: appearance (system, light, dark), the five goal steppers, the accounts
+  signed in on this device with a radio to switch, the coach tier (automatic, cloud, on-device), the
+  voice toggle and its three voices, "At a glance" with Notifications and Widgets &amp; Watch, the
+  connections summary, and Log out. Switching accounts does not sign anybody out: each account
+  keeps its own store, cursors and connections, so moving between them is opening a different file
+  rather than tearing one down (<a href="#ch4">Chapter 4</a>).
+</p>
+
+<p>
+  The connections summary used to be one row with a chain-link icon reading "Whoop, Health, banks"
+  over WHOOP's status line, which said nothing about the other two. It now shows every source, one
+  line each, with a green dot for on and a hollow one for off. Never red: not being connected is a
+  choice someone is allowed to make, and an alarm dot next to WHOOP would nag every user who does
+  not own one. While a sync runs the dot is replaced by a spinner, because the honest answer to
+  "is it on" is "ask me in a second". <code>ConnectionsSettingsScreen</code> is the page it opens,
+  one card per source with a chip whose colour is its meaning: orange asks for a tap, green reports
+  one that already happened. The Fitbit card's "Sync" calls the forced refresh rather than reopening
+  OAuth, and the Health card's "Sync" replaces "Connect" once the sheet has been shown.
+</p>
+
+<h4>Where the actions live</h4>
+
+<p>
+  The calendar assistant, LIFO and Begin Activity are the app's three free-floating actions. They
+  used to be laid flat on home and collapsed into a bottom-corner fan on every other tab, which put
+  the control people reach for most in a different place depending on where they were and hid it
+  behind a trigger on four of the five. They are now a <code>[QuickAction]</code> defined once in
+  <code>RootView</code>, injected through the <code>quickActions</code> environment value, and drawn
+  by <code>.quickActionsToolbar()</code> across the top of every tab as an <code>ActionFan</code>
+  in its row arrangement: 34 point bare glyphs sized for a 44 point bar. The environment value is
+  the mechanism because Notes and Life own their own <code>NavigationStack</code>s several levels
+  below the root, and a toolbar has to be attached inside the stack it belongs to. The fan
+  arrangement still exists in <code>ActionFan</code>, with its arc from 90 to 170 degrees and its
+  106 point radius chosen so three 52 point circles never overlap, but nothing in the app uses it
+  today. The plus becomes a timer glyph labelled "Current activity" while a session is running.
+</p>
+
+<h3 id="s17-6"><span class="num">17.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 320" role="img" aria-label="ProfileSync.pull on every launch: load the profiles row, save the local cache, list the account's folder in the avatars bucket for a stamp, compare it with the recorded stamp and the presence of a local copy, download only when needed, record the stamp. Edits go local first then upload the avatar and upsert the row.">
+  <defs>
+    <marker id="ch17a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch17b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">DEVICE, PER ACCOUNT</text>
+  <text class="lbl-sm" x="560" y="24">SUPABASE</text>
+
+  <rect class="box-hot" x="20" y="40" width="200" height="40" rx="8"/>
+  <text class="lbl" x="120" y="65" text-anchor="middle">ProfileSync.pull()</text>
+  <text class="lbl-sm" x="20" y="98">every launch with a session</text>
+
+  <rect class="box" x="560" y="40" width="130" height="40" rx="8"/>
+  <text class="lbl" x="625" y="65" text-anchor="middle">profiles row</text>
+  <path class="flow-dash" d="M220 60 L554 60" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="330" y="52">1 load(userID)</text>
+
+  <rect class="box" x="20" y="120" width="200" height="40" rx="8"/>
+  <text class="lbl" x="120" y="145" text-anchor="middle">ProfileStore (defaults)</text>
+  <path class="flow" d="M120 80 L120 114" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="130" y="102">2 save what the server confirmed</text>
+
+  <rect class="box" x="560" y="120" width="280" height="40" rx="8"/>
+  <text class="lbl" x="700" y="145" text-anchor="middle">avatars bucket: {user_id}/avatar.jpg</text>
+  <path class="flow-dash" d="M220 190 L554 150" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="300" y="176">3 list the folder: AvatarStamp</text>
+
+  <rect class="box-hot" x="20" y="180" width="200" height="60" rx="8"/>
+  <text class="lbl" x="120" y="203" text-anchor="middle">shouldDownloadAvatar</text>
+  <text class="lbl-hot" x="120" y="222" text-anchor="middle">stamp · recorded · hasLocalCopy</text>
+
+  <rect class="box" x="20" y="270" width="200" height="40" rx="8"/>
+  <text class="lbl" x="120" y="295" text-anchor="middle">avatar.jpg + stamp</text>
+  <path class="flow-hot" d="M120 240 L120 264" marker-end="url(#ch17b)"/>
+  <text class="lbl-sm" x="130" y="256">4 download only if needed</text>
+  <path class="flow-dash" d="M560 160 L230 290" marker-end="url(#ch17a)"/>
+
+  <rect class="box" x="300" y="230" width="200" height="40" rx="8"/>
+  <text class="lbl" x="400" y="255" text-anchor="middle">ProfileEditSheet.save()</text>
+  <path class="flow" d="M300 250 L226 288" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="238" y="240">local first</text>
+  <path class="flow-dash" d="M500 250 L560 160" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="520" y="214">then upload (x-upsert)</text>
+  <path class="flow-dash" d="M500 240 L560 80" marker-end="url(#ch17a)"/>
+  <text class="lbl-sm" x="548" y="100">then upsert the row</text>
+</svg>
+<figcaption>
+  The remote path never changes, so "have I got a copy" is the wrong question; the bucket listing's
+  <code>updated_at</code> is the only thing that tells two devices apart. A failed lookup reads as
+  unknown, so a flaky network costs at most a stale face and never a blank one.
+</figcaption>
+</figure>
+
+<h4>The avatar stamp, step by step</h4>
+<ol>
+  <li><code>AppShell</code>'s launch task restores the session and, if the person is signed in with
+    a store open, calls <code>ProfileSync.pull()</code>.</li>
+  <li>The profiles row is loaded and mirrored into the per-account defaults. If the row says there
+    is no picture, the local file is deleted, so a photo removed on one phone does not survive on
+    another forever.</li>
+  <li>The account's folder in the bucket is listed (one object, never the whole bucket) and the
+    object's <code>updated_at</code> becomes an <code>AvatarStamp</code>.</li>
+  <li><code>shouldDownloadAvatar</code> decides: missing never downloads, unknown downloads only when
+    there is no local copy, a dated stamp downloads when there is no copy or the stamp differs from
+    the recorded one.</li>
+  <li>After a download the stamp is recorded, and only when the listing gave one. Saving a photo
+    clears the stamp first, because the stamp describes the bytes on disk; a photo taken on this
+    device has no server stamp yet, and keeping the old one would make the next sync believe the
+    copy it holds is the one already up there.</li>
+</ol>
+<p>
+  Every step re-checks that the signed-in account is still the one the pull started for, so an
+  account switch mid-pull cannot write one person's face into another person's folder.
+</p>
+
+<h4>The photo maths</h4>
+
+<pre><code>// LIfeOS/Components/Model/ProfilePhotoDownsizing.swift
+static let side: CGFloat = 512
+static let sizeLimit = 5_242_880          // the bucket's file_size_limit, kept in step by hand
+
+static func jpeg(from image: UIImage) -> Data? {
+    let ratio = min(side / image.size.width, side / image.size.height, 1)
+    let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+    let format = UIGraphicsImageRendererFormat.default()
+    format.scale = 1
+    let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+        image.draw(in: CGRect(origin: .zero, size: size))
+    }
+    var quality: CGFloat = 0.8
+    var data = resized.jpegData(compressionQuality: quality)
+    while let current = data, current.count > sizeLimit, quality > 0.3 {
+        quality -= 0.1
+        data = resized.jpegData(compressionQuality: quality)
+    }
+    return data
+}</code></pre>
+
+<p>
+  Scale 1 is the line that matters. The renderer otherwise draws at the device's scale, so a 512
+  point box becomes a 1536 pixel bitmap on a 3x phone: nine times the pixels asked for, which undoes
+  most of the downsizing. The quality loop is a backstop against a pathological image, not the
+  primary way the output is kept small. The limit is deliberately the bucket's real ceiling rather
+  than something tighter, because a client-side constant below the server's would start rejecting
+  uploads from installs running older code with nothing on screen to explain it.
+</p>
+
+<h4>The stats under the name</h4>
+
+<p>
+  <code>RootView</code> computes the three panels from the store at the moment the profile opens.
+  "Your rhythm" is the streak from Today's snapshot plus two <code>fetchCount</code> calls, which
+  never materialise a row. "Today" lists only the readings that exist: a missing one is left out
+  rather than dashed, so the panel always reads as facts, and money is deliberately absent because
+  a sample-data default would put invented dollars on a person's face. "Over time" sums steps and
+  sleep from one fetch of the daily rows, a few hundred small objects at most, and counts habit
+  ticks, calendar events and scored sectors with <code>fetchCount</code>; zero-valued figures are
+  left out.
+</p>
+
+<h3 id="s17-7"><span class="num">17.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Two small requests per launch, and the third only when needed.</strong> The profile
+    pull is a row and a one-object listing; the picture downloads only on a changed stamp.</li>
+  <li><strong>Reads are signed-in-only, not signed-URL-per-face.</strong> The bucket is private,
+    but any signed-in user may read any avatar, which is what keeps a friend list from needing a
+    signed URL per face on every refresh (<a href="#ch16">Chapter 16</a>).</li>
+  <li><strong>Uploads replace in place.</strong> <code>x-upsert: true</code> rather than a delete
+    and an insert, so a person changing their picture is never briefly without one.</li>
+  <li><strong>The gradient is three 48-pixel averages, recomputed only when the photo changes.</strong>
+    The <code>CIContext</code> is shared and built with intermediate caching off.</li>
+  <li><strong>Goals commit once per change, not once per frame.</strong> The draft absorbs the
+    stepper; the row is written on <code>onChange</code>.</li>
+  <li><strong>Syncs coalesce.</strong> Every connection view model folds a launch and a foreground
+    into one pass, and WHOOP, Fitbit and Plaid consult <code>SyncStalenessPolicy</code> before
+    spending a request.</li>
+  <li><strong>Provider secrets never reach the device.</strong> Fitbit tokens never even pass
+    through it; Plaid access tokens sit behind service-role-only RLS.</li>
+  <li><strong>Per-account defaults, per-account files.</strong> Cursors, "was Health asked",
+    the cycle switch, the avatar and the profile cache all live in the account's own suite or
+    directory, so an account switch is a lookup change, not a purge.</li>
+</ul>
+
+<h3 id="s17-8"><span class="num">17.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Goal set out of range</td><td>Unreachable: the steppers bound each value (sleep 240 to 660 in 15s, steps 1,000 to 30,000 in 500s, exercise 5 to 180, water 500 to 6,000 in 250s, required 1 to 4)</td></tr>
+<tr><td>Health denied</td><td>Undetectable. The row reads "No data yet" and points at Health &gt; Sharing; "Connect" becomes "Sync"</td></tr>
+<tr><td>Health on an iPad</td><td><code>.unavailable</code>; the row says so and its button is disabled</td></tr>
+<tr><td>WHOOP sign-in abandoned in Safari</td><td>Card returns to disconnected two seconds after the app becomes active, unless a manual code is pending</td></tr>
+<tr><td>WHOOP code expired or reused</td><td>"Code expired or already used. Get a fresh one" (a 400), distinct from "Server not configured" (a 500)</td></tr>
+<tr><td>WHOOP token lacks a scope</td><td>"Whoop needs new permissions. Disconnect, then connect again"; not "expired"</td></tr>
+<tr><td>WHOOP linked on another device</td><td>Restored from the server copy on the first <code>syncIfStale</code>; a 404 means never linked</td></tr>
+<tr><td>Fitbit refresh token refused</td><td><code>.needsReauth</code>; the chip reads "Reconnect", an action rather than an error</td></tr>
+<tr><td>Fitbit sign-in cancelled</td><td>Not a failure: the card reads as it did before</td></tr>
+<tr><td>Bank OAuth outlives the process</td><td>Link resumed on relaunch from the stored token; the completion is re-registered on attach</td></tr>
+<tr><td>Bank already connected</td><td>"That bank is already connected"</td></tr>
+<tr><td>Bank login invalidated</td><td><code>.needsReconnect(name)</code>; the summary dot is hollow because a stale login is not working</td></tr>
+<tr><td>Disconnect a bank</td><td>History kept unless asked; revoking a credential is not a request to erase the past</td></tr>
+<tr><td>Profile publish fails</td><td>Local copy saved; sheet stays open with the reason and offers Try again or Close anyway</td></tr>
+<tr><td>Offline when editing the profile</td><td>Same, with a sentence that says the profile is saved on this device but not published yet</td></tr>
+<tr><td>Photo removed on another device</td><td>The next launch's pull deletes the local copy</td></tr>
+<tr><td>Bucket listing fails</td><td>Read as <code>.unknown</code>: a device with a copy keeps it, a device without one downloads</td></tr>
+<tr><td>Account switched mid-pull</td><td>Every write step re-checks the signed-in id and bails</td></tr>
+<tr><td>Sign out</td><td>Push row deleted with the outgoing token first, then connections deactivated, pending OAuth cleared, calendar and Health opt-ins removed, the account removed from the roster, the store closed</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>RemoteProfileTests</code>: a profile survives the round trip, a birthday comes back on
+    the same calendar day, cleared fields are sent as nulls, the display name is never empty, the
+    avatar path is the account's own folder.</li>
+  <li><code>AvatarTransferTests</code> (nine tests): the authenticated download route with a bearer
+    token, a listing with and without the object, unknown versus missing, and every branch of
+    <code>shouldDownloadAvatar</code> including the one that gets forgotten: an unknown stamp with
+    nothing cached still downloads.</li>
+  <li><code>AccountStoreTests</code> and <code>UserScopeTests</code>: two accounts get different
+    store files, an id cannot climb out of the accounts directory, rows do not cross between
+    accounts, removing an account leaves its store on disk.</li>
+  <li><code>PlaidClientTests</code>, <code>PlaidItemStoreTests</code>, <code>PlaidSyncTests</code>:
+    the four functions, the per-item cursor, and the paged sync (<a href="#ch11">Chapter 11</a>).</li>
+  <li><code>FitbitOAuthTests</code>, <code>FitbitSyncTests</code>, <code>WhoopTokenTests</code>,
+    <code>WhoopArbitrationTests</code>: the PKCE URLs, the state check, the sync outcomes.</li>
+  <li><code>SyncStalenessPolicyTests</code>: the rule every automatic sync consults.</li>
+</ul>
+
+<p>
+  The screens are verified by build and by capture: the profile QA of 14 September 2026 checked
+  the phone and iPad layouts, the glass editor, and the empty profile at accessibility text size,
+  using a generated teal illustration to exercise the photo-colour path. Remote saving and photo
+  library selection were not run against a live account in that pass.
+</p>
+
+<h3 id="s17-9"><span class="num">17.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Integrations/ProfileClient.swift</code>: <code>AvatarStamp</code> and <code>shouldDownloadAvatar</code>.</li>
+  <li><code>Features/Onboarding/Model/ProfilePhotoStore.swift</code>: <code>ProfileSync.pull()</code>, then the stamp accessors.</li>
+  <li><code>Features/Settings/View/ProfileEditSheet.swift</code>: <code>save()</code>.</li>
+  <li><code>Features/Settings/ViewModel/HealthConnectionViewModel.swift</code>: <code>connect</code>, <code>decideCycleDefault</code>, <code>startWatching</code>.</li>
+  <li><code>Features/Settings/ViewModel/WhoopConnectionViewModel.swift</code>: <code>resolveStalledConnect</code> and <code>finish(callbackURL:)</code>.</li>
+  <li><code>Features/Settings/View/PlaidLinkPresenter.swift</code>: <code>resume(from:)</code>.</li>
+  <li><code>App/RootView.swift</code>: <code>quickActions</code>, <code>profileStats</code>, <code>profileAllTime</code>.</li>
+  <li><code>LifeOSKit/Sources/DesignSystem/ActionFan.swift</code>: why the row and the fan are one component.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does <code>AvatarStamp</code> have three cases and not two?</strong> "Missing" must never download and "unknown" must download when nothing is cached; one nil cannot say both.</li>
+  <li><strong>Why is the avatar stored as a path and not a URL?</strong> A URL bakes in the host and the signing scheme; both can change while the object stays where it is.</li>
+  <li><strong>Why does <code>ProfileEditSheet</code> save locally first but wait for the publish before dismissing?</strong> Local first makes the change visible and durable; waiting makes a publish failure visible, because an unpublished profile is one nobody can find.</li>
+  <li><strong>Why does the WHOOP stall check wait two seconds?</strong> The redirect usually lands just after the app activates; resolving at once would cancel sign-ins about to succeed.</li>
+  <li><strong>Why is the cycle-tracking default read from Health rather than from the gender field?</strong> The gender field is a form of address, its own comment says so, and using it would be wrong both ways and strand the default answer.</li>
+  <li><strong>Why is <code>sizeLimit</code> exactly the bucket's ceiling?</strong> A tighter client constant would reject uploads from older installs one release early, silently.</li>
+</ul>
 </section>

@@ -1,10 +1,738 @@
-<section class="chapter" id="ch08" data-hue="notes">
-<p class="chapter-kicker">Chapter 8</p>
-<h2><span class="num">8</span><span>Stub ch08</span></h2>
-<p class="lede">Stub lede for ch08 &amp; friends.</p>
+<section class="chapter" id="ch8" data-hue="session">
+<p class="chapter-kicker">Chapter eight</p>
+<h2><span class="num">8</span><span>Live sessions</span></h2>
+
+<p class="lede">
+  Press Begin and a workout is recorded on the phone: a wall-clock timer that survives relaunch, a
+  heart-rate strap over Bluetooth, an effort estimate against today's battery, and one readout
+  struct that every surface renders, from the glass rings on the screen to the lock screen and the
+  Dynamic Island.
+</p>
+
 <h3 id="s8-1"><span class="num">8.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch08a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch08a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s8-2"><span class="num">8.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<p>
+  Until 14 September a person starting a workout saw a timer, and if they scanned and tapped for a
+  sensor, a heart rate. They could not see how hard they were working, how much they had left, or
+  whether they should push. Everything needed to answer those questions already reached the app:
+  Whoop recovery and sleep performance sit in <code>DailyMetrics</code>, the profile carries a birth
+  date, the workout builder collects energy, and a strap delivers beats every second. Nothing joined
+  them. This slice is the join.
+</p>
+
+<div class="prfaq">
+  <p class="prfaq-kicker">Working backwards</p>
+  <p class="release">
+    Tap the plus, choose Run, tap Begin. The screen turns blue. A big rounded clock counts up, and
+    beneath it three glass rings: your heart rate against today's ceiling zone, your estimated
+    effort against today's target band, and your battery, what you have left to spend. The last
+    sensor you used reconnects on its own. Lock the phone and the same numbers sit on the lock
+    screen over the same blue gradient, and in the Dynamic Island as a heart, a number, and the
+    clock. Pause and everything freezes. Finish and the session is saved to Almanac, and to Apple
+    Health if you asked.
+  </p>
+  <p class="faq-q">Is the effort number Whoop's strain?</p>
+  <p class="faq-a">
+    No, and the screen always says "estimated" next to it. It is a model on the same 0 to 21 scale,
+    calibrated so a steady hour in zone 3 reads about 12 and a hard ninety minutes about 18. Whoop's
+    real strain for the workout arrives later on its own record through the existing sync, and
+    nothing here overwrites it.
+  </p>
+  <p class="faq-q">What if I have not entered a birth date?</p>
+  <p class="faq-a">
+    Then there are no zones, no effort and no battery, and the screen says so with one line: "Add
+    your birth date in Profile for zones, effort and battery." A zone built on an assumed age would
+    be a reading the person never gave, and this app refuses those. Heart rate and calories still
+    show.
+  </p>
+  <p class="faq-q">Does the timer keep going if the app is killed?</p>
+  <p class="faq-a">
+    Yes. The timer is wall-clock based and written to a per-account draft at most every ten
+    seconds, so a relaunch restores it exactly. If Health was recording, the recorder asks HealthKit
+    to recover the active session; if it cannot, the timer is kept and the person is told the Health
+    session is gone.
+  </p>
+</div>
+
+<h4>Out of scope here</h4>
+<p>
+  Apple Watch heart rate and rep counting are <a href="#ch9">Chapter 9</a>. Following a video with
+  the rings over it is <a href="#ch10">Chapter 10</a>. There are no server changes; this chapter is
+  entirely on the device.
+</p>
+
+<h3 id="s8-2"><span class="num">8.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Activity/
+├── Model/
+│   └── ActivitySnapshot.swift              the Fitness half's day (Chapter 7); not the live session
+├── View/
+│   ├── BeginActivityScreen.swift           the sheet: picker, timer card, live hero, tiles, sensors
+│   ├── ActivityControls.swift              begin · pause · finish · discard · done
+│   └── SessionRings.swift                  the glass HUD: rings, bar, rep controls
+└── ViewModel/
+    ├── ActivityRecorder.swift              the session: HealthKit, draft, readout, save
+    ├── ActivityRecorder+Watch.swift        the watch half (Chapter 9)
+    ├── ActivityRecorderChecks.swift        34 in-simulator checks, DEBUG only
+    └── LiveHeartRateSensor.swift           CoreBluetooth: scan, pair, remember, reconnect
+
+App/Surfaces/
+└── WorkoutLiveActivityController.swift     requests, throttles and ends the Live Activity
+
+AlmanacWidgets/
+└── WorkoutLiveActivity.swift               lock screen and Dynamic Island views
+
+LifeOSKit/Sources/Integrations/
+├── LiveEffort.swift                        zones, effort, capacity, ceiling, battery, push, builder
+├── CapacityInputs.swift                    nine days of rows into CapacityMath
+├── ActivitySessionState.swift              the wall-clock timer, SessionSource, the BLE frame decoder
+└── WhoopAutoPair.swift                     "exactly one WHOOP nearby"
+
+LifeOSKit/Sources/AppSurfaces/               Foundation only, so the widget can link it
+├── LiveSessionReadout.swift                the one struct every surface renders; the throttle
+├── LiveSessionReadout+Text.swift           the one place a reading becomes text
+├── SessionRingMath.swift                   ring fills as fractions of today's ceiling
+└── WorkoutActivityAttributes.swift         ContentState = LiveSessionReadout</pre>
+
+<div class="rail">
+  <h4>Why the maths is in two packages</h4>
+  <p>
+    <code>LiveSessionReadout</code> and <code>PushState</code> live in <code>AppSurfaces</code>,
+    which depends on nothing, so the widget extension can decode them without linking HealthKit or
+    SwiftData. The effort model lives in <code>Integrations</code>, which added
+    <code>AppSurfaces</code> as a dependency. Nothing cycles, and <code>swift test</code> runs the
+    whole model on macOS without a simulator.
+  </p>
+</div>
+
+<h3 id="s8-3"><span class="num">8.3</span><span>Model</span></h3>
+
+<h4>The timer</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/ActivitySessionState.swift
+/// Wall-clock based: backgrounding never stops the timer and pauses never count.
+public struct ActivitySessionState: Codable, Equatable, Sendable {
+    public enum Phase: String, Codable, Sendable { case running, paused, finished }
+    public let id: UUID
+    public let startedAt: Date
+    public let activity: String
+    public private(set) var phase: Phase
+    public private(set) var accumulated: TimeInterval
+    public private(set) var runningSince: Date?
+    public private(set) var endedAt: Date?
+
+    public func elapsed(at date: Date = .now) -&gt; TimeInterval {
+        accumulated + (runningSince.map { max(0, date.timeIntervalSince($0)) } ?? 0)
+    }
+    public mutating func pause(at date: Date = .now) {
+        guard phase == .running else { return }
+        accumulated = elapsed(at: date); runningSince = nil; phase = .paused
+    }
+}</code></pre>
+
+<p>
+  A pause banks the time so far into <code>accumulated</code> and clears <code>runningSince</code>;
+  a resume starts a new run. There is no tick. Every surface derives the elapsed time from two
+  fields and the clock, which is what lets the lock screen use <code>Text(timerInterval:)</code> and
+  count on its own without an update per second. The <code>id</code> is the Live Activity's key.
+</p>
+
+<h4>Zones, effort, capacity</h4>
+
+<p>All of this is value types and pure functions in one file. Nothing touches HealthKit, Bluetooth, SwiftData or the clock; callers pass values in.</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/LiveEffort.swift
+public struct HeartRateZones: Equatable, Sendable {
+    public let maxHeartRate: Int
+    public init?(birthDate: Date?, on date: Date = .now, calendar: Calendar = .current) {
+        guard let birthDate,
+              let age = calendar.dateComponents([.year], from: birthDate, to: date).year,
+              (10...120).contains(age) else { return nil }
+        maxHeartRate = Int((208.0 - 0.7 * Double(age)).rounded())   // Tanaka
+    }
+    /// 0 below half of maximum, then one zone per ten percent up to 5.
+    public func zone(for bpm: Int) -&gt; Int { ... }
+}
+
+public struct EffortAccumulator: Equatable, Sendable {
+    public static let weights: [Double] = [0, 0.15, 0.28, 0.35, 0.45, 0.63]
+    public static let scale = 1500.0
+    public static let maxCredit: TimeInterval = 5
+    public private(set) var load: Double
+    public mutating func add(zone: Int, seconds: TimeInterval) {
+        guard seconds &gt; 0, Self.weights.indices.contains(zone) else { return }
+        load += Self.weights[zone] * seconds
+    }
+    public var effort: Double { 21 * (1 - exp(-load / Self.scale)) }
+}</code></pre>
+
+<p>
+  Max heart rate is Tanaka's estimate, and the zone bands follow Whoop's (zone 1 starts at 50
+  percent of max, then 60, 70, 80, 90) so the number on the HUD agrees with the number in the app
+  the person already trusts. Each second in a zone adds that zone's weight to a running load; the
+  load maps through a saturating curve so a very long session approaches 21 without reaching it.
+  The six weights and the 1500 are the values that make three calibration points hold at once, and
+  they are pinned by tests: retuning is a deliberate change with a diff, not a drift.
+</p>
+
+<p>
+  <code>maxCredit</code> matters more than it looks. A reading credits at most five seconds. A gap in
+  the stream, a strap that dropped for forty seconds, is not effort that was measured, and crediting
+  the whole gap at the zone of the next reading would invent it.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/LiveEffort.swift
+public struct EffortCeiling: Codable, Equatable, Sendable {
+    public let maxZone: Int
+    public let targetEffort: ClosedRange&lt;Double&gt;
+    public static let green  = EffortCeiling(maxZone: 5, targetEffort: 14...18)
+    public static let yellow = EffortCeiling(maxZone: 4, targetEffort: 10...14)
+    public static let red    = EffortCeiling(maxZone: 3, targetEffort: 4...10)
+    public static let conservative = yellow
+    public static func forCapacity(_ percent: Int) -&gt; EffortCeiling {
+        percent &gt;= 67 ? .green : percent &gt;= 34 ? .yellow : .red
+    }
+}
+
+public struct Capacity: Codable, Equatable, Sendable {
+    public enum Source: String, Codable, Sendable { case whoop, health }
+    public let percent: Int
+    public let source: Source
+    public let measuredOn: Date
+    public var ceiling: EffortCeiling { .forCapacity(percent) }
+}</code></pre>
+
+<p>
+  Capacity is today's battery: what the person has to spend and where the number came from. It is
+  computed once at session start and kept in the draft. <code>CapacityMath.capacity(days:now:)</code>
+  looks at today's row and yesterday's (yesterday stands in while today has not synced; anything
+  older is stale) and resolves in order:
+</p>
+<ol>
+  <li><strong>Whoop.</strong> Recovery percent present and not calibrating. Blended with sleep performance when present: <code>0.8 * recovery + 0.2 * sleepPerformance</code>, else plain recovery.</li>
+  <li><strong>Apple Health.</strong> HRV present, with at least three of the previous seven days carrying HRV for a baseline. The ratio to baseline maps piecewise: 0.7 to 1.0 onto 20 to 65 percent, 1.0 to 1.2 onto 65 to 90, clamped. Sleep minutes then adjust by up to plus or minus 10 against a 450-minute reference.</li>
+  <li><strong>Nothing.</strong> Nil. The UI says "Battery unknown" and the recorder uses the yellow ceiling, cautious without claiming a capacity it does not have.</li>
+</ol>
+
+<p>
+  The ceiling follows Whoop's recovery bands. Battery remaining drains as effort approaches the
+  target's top: <code>capacity * (1 - effort / target.upperBound)</code>, floored at zero. Zero is a
+  real event, the budget spent, not a missing value. Push state is a four-way word:
+  <code>overLimit</code> when the zone exceeds the ceiling's max zone or effort exceeds the target's
+  top, <code>nearLimit</code> when the zone is at the max or effort is within 1.5 of the top,
+  <code>easy</code> when effort is below the band and the zone is at most 2, <code>onTrack</code>
+  otherwise.
+</p>
+
+<h4>The readout</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift
+public struct LiveSessionReadout: Codable, Hashable, Sendable {
+    public var elapsed: TimeInterval
+    public var runningSince: Date?
+    public var heartRate: Int?
+    public var zone: Int?
+    public var effort: Double?          // rounded to a tenth before publishing
+    public var calories: Int?
+    public var distanceMeters: Int?
+    public var batteryPercent: Int?
+    public var capacitySource: String?  // "whoop" or "health"
+    public var ceilingMaxZone: Int?
+    public var ceilingTarget: ClosedRange&lt;Double&gt;?
+    public var reps: Int?
+    public var setIndex: Int?
+    public var push: PushState
+
+    /// Anchor for `Text(timerInterval:)`, so the system ticks the timer
+    /// without an update per second.
+    public var timerAnchor: Date? { runningSince?.addingTimeInterval(-elapsed) }
+    public var isPaused: Bool { runningSince == nil }
+}</code></pre>
+
+<p>
+  This is the one value every live surface renders. Every reading is optional because a missing
+  sensor is not a zero. <code>WorkoutActivityAttributes.ContentState</code> is a typealias to it, so
+  the widget and the app can never disagree about what a session looks like.
+  <code>LiveSessionReadout+Text</code> is the one place a reading becomes a string, so the HUD, the
+  tiles and the lock screen agree on rounding and on the dash that means no reading.
+</p>
+
+<h3 id="s8-4"><span class="num">8.4</span><span>ViewModel</span></h3>
+
+<p>
+  <code>ActivityRecorder</code> is the largest view model in the app, and it is an
+  <code>NSObject</code> because it is the <code>HKWorkoutSessionDelegate</code> and
+  <code>HKLiveWorkoutBuilderDelegate</code>. It owns the timer, the sensor, the zones, the effort
+  accumulator, the capacity, the draft, the Live Activity controller and the readout.
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift
+@MainActor @Observable
+final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
+    var selection: RecordedActivity = .walk
+    var saveToHealth = HKHealthStore.isHealthDataAvailable()
+    var timer: ActivitySessionState?
+    private(set) var busy = false
+    var saved = false
+    var healthSaved = false
+    var energy: Double?
+    var distance: Double?
+    var heartRate: Double?
+    var capacity: Capacity?
+    private(set) var readout: LiveSessionReadout?
+    var source: SessionSource = .phone
+    var zones: HeartRateZones?
+    var effort = EffortAccumulator()
+    var lastReadingAt: Date?
+    let sensor: LiveHeartRateSensor
+    /// Injected so previews and checks can fix an age without a profile.
+    var birthDate: () -&gt; Date? = { ProfileStore.load().birthDate }
+    var whoopConnected: () -&gt; Bool = { false }
+    private let liveActivity = WorkoutLiveActivityController()
+    private static let draftKey = "activeWorkoutDraft"</code></pre>
+
+<p>
+  Three things about its shape. Its dependencies on the world (the birth date, whether Whoop is
+  connected, whether a watch is nearby, Health authorisation) are closures, so the checks harness
+  can fix them without a profile, a strap or a permission sheet. Its defaults are the
+  <code>UserDefaults.currentAccount</code> suite, so a draft belongs to one account and an account
+  switch clears it. And it has <code>active</code>, flipped off by <code>deactivate()</code>, which
+  every async continuation checks before touching state, so a session that finishes after sign-out
+  writes nothing.
+</p>
+
+<h4>Start</h4>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift
+func start(backdatedTo backdatedStart: Date? = nil,
+           following video: (id: String, split: String, title: String, channel: String)? = nil) async {
+    guard active, !busy, !hasSession else { return }
+    busy = true; error = nil; saved = false; healthSaved = false; timer = nil
+    zones = HeartRateZones(birthDate: birthDate())
+    capacity = loadCapacity()
+    effort = EffortAccumulator(); lastReadingAt = nil
+    source = .phone
+    recordingHealth = saveToHealth
+    defer { busy = false }
+    if await handOffToWatch() { return }                 // Chapter 9
+    sensor.prepareForSession(whoopConnected: whoopConnected())
+    do {
+        if saveToHealth &amp;&amp; source == .phone {
+            try await healthStore.requestAuthorization(toShare: Self.workoutTypes, read: Self.workoutTypes)
+            guard healthStore.authorizationStatus(for: HKObjectType.workoutType()) == .sharingAuthorized else {
+                error = "Allow workout saving in Health, or turn off Save to Apple Health to use the timer."
+                return
+            }
+            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            let builder = session.associatedWorkoutBuilder()
+            builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+            let started = backdatedStart ?? .now
+            if timer == nil { timer = ActivitySessionState(activity: selection.rawValue, at: started) }
+            session.startActivity(with: started)
+            try await builder.beginCollection(at: started)
+        } else if timer == nil {
+            timer = ActivitySessionState(activity: selection.rawValue, at: backdatedStart ?? .now)
+        }
+        persist()
+    } catch { ... }
+}</code></pre>
+
+<p>
+  The clock is read after Health answers, not before. A permission sheet can sit open for a minute,
+  and a timer started before it would count that minute as exercise. Zones and capacity are
+  computed once here; the capacity is nine days of rows read through <code>CapacityInputs</code>,
+  the same helper the workout planner uses, so the battery on the HUD and the battery on the
+  library's Today card are plainly the same number.
+</p>
+
+<h4>A reading arrives</h4>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift
+func receiveHeartRate(_ bpm: Int, at date: Date) {
+    guard active, isRunning else { return }
+    heartRate = Double(bpm); heartRateDate = date
+    if let zones {
+        effort.add(zone: zones.zone(for: bpm),
+                   seconds: EffortAccumulator.credit(previous: lastReadingAt, at: date))
+    }
+    lastReadingAt = date
+    persistReading(at: date)
+    guard let builder, healthStore.authorizationStatus(for: .quantityType(forIdentifier: .heartRate)!) == .sharingAuthorized else { return }
+    let sample = HKQuantitySample(type: .quantityType(forIdentifier: .heartRate)!,
+        quantity: HKQuantity(unit: HKUnit.count().unitDivided(by: .minute()), doubleValue: Double(bpm)), start: date, end: date)
+    builder.add([sample]) { _, _ in }
+}</code></pre>
+
+<p>
+  Paused readings accrue nothing because the guard on <code>isRunning</code> drops them. The first
+  reading after a resume credits nothing because <code>togglePause</code> cleared
+  <code>lastReadingAt</code>, so the credit function has no previous date and returns zero. Both
+  are pinned by checks. The strap's beats are also written into the Health builder, so a workout
+  saved to Health carries the heart-rate series the strap measured.
+</p>
+
+<h4>Two persist paths</h4>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift
+/// State changes: always write the draft and sync.
+func persist() {
+    refreshReadout()
+    writeDraft()
+    syncLiveActivity()
+}
+/// Readings arrive every second: always refresh and sync (the controller
+/// throttles the publish), but write the draft at most every ten seconds.
+func persistReading(at date: Date) {
+    refreshReadout()
+    if lastDraftWriteAt.map({ date.timeIntervalSince($0) &gt;= 10 }) ?? true { writeDraft(at: date) }
+    syncLiveActivity()
+}</code></pre>
+
+<p>
+  <code>refreshReadout()</code> calls <code>LiveReadoutBuilder.readout(...)</code>, the pure join
+  of timer, heart rate, zones, effort, capacity, energy, distance, reps and set into one struct.
+  The draft is a <code>Codable</code> private struct with every field optional after the first
+  slice, so a draft written before reps or videos existed still decodes.
+</p>
+
+<h4>Finish and save</h4>
+
+<p>
+  <code>finish()</code> marks the timer finished and, for a Health-backed session, calls
+  <code>session.stopActivity</code> and returns; the delegate's <code>.stopped</code> callback is
+  what calls <code>saveFinished()</code>, because collection completes only after HealthKit reaches
+  that state. <code>saveFinished()</code> ends collection, finishes the workout, then writes the
+  local <code>WorkoutRecord</code> with a stable id:
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift
+let id = "almanac:\(timer.id.uuidString)"
+var fetch = FetchDescriptor&lt;WorkoutRecord&gt;(predicate: #Predicate { $0.externalID == id })
+fetch.fetchLimit = 1
+if try context.fetch(fetch).isEmpty {
+    let row = WorkoutRecord(externalID: id, start: timer.startedAt,
+        durationMinutes: Int(timer.elapsed() / 60), activityName: timer.activity, energyKcal: energy)
+    row.distanceMeters = distance
+    row.videoID = pendingVideoID; row.split = pendingSplit
+    if selection == .strength { row.sets = completedSets + [reps ?? 0] }
+    context.insert(row)
+}
+try context.save()
+liveActivity.end()
+saved = true; defaults.removeObject(forKey: Self.draftKey)
+sensor.stopStreaming()
+onSaved?()</code></pre>
+
+<p>
+  The stable id is why "Repeated save creates one workout" passes: tapping Finish twice, or a
+  restore after a save that half-completed, finds the row and does not insert a second. A Health
+  failure mid-save keeps the timer and says "Your activity is kept here. Saving failed. Try Save
+  again."
+</p>
+
+<h4>The sensor</h4>
+
+<p>
+  <code>LiveHeartRateSensor</code> speaks the Bluetooth SIG heart-rate service (0x180D, measurement
+  0x2A37). It handles 8-bit and 16-bit frames, treats a no-contact flag as no reading, and rejects
+  values outside 20 to 250. Scans stop after 30 seconds. What the live-session slice added is
+  memory: the last connected peripheral's identifier is written to the per-account defaults under
+  <code>lastHeartRateSensorID</code> on every successful connection and cleared on an explicit
+  disconnect.
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/ViewModel/LiveHeartRateSensor.swift
+/// Called by the recorder at session start. Reconnects the last sensor,
+/// or looks for a lone WHOOP when the account is connected to WHOOP and
+/// nothing was ever paired here.
+func prepareForSession(whoopConnected: Bool) {
+    if rememberedPeripheralID != nil { reconnectIfRemembered() }
+    else if whoopConnected { autoPairWhoop() }
+}</code></pre>
+
+<p>
+  <code>reconnectIfRemembered</code> uses <code>retrievePeripherals(withIdentifiers:)</code> and
+  connects directly; if nothing connects in 20 seconds it falls back to a scan and connects the
+  discovered peripheral whose identifier matches. <code>autoPairWhoop</code> scans and connects only
+  when <code>WhoopAutoPair.choice(among:)</code> finds exactly one name containing "WHOOP". Several
+  stop the scan with "More than one WHOOP nearby. Choose one under Manage." Nothing auto-pairs a
+  device that is not a WHOOP, because another person's chest strap in a gym is not a reading this
+  person owns.
+</p>
+
+<h3 id="s8-5"><span class="num">8.5</span><span>View</span></h3>
+
+<p>
+  <code>BeginActivityScreen</code> is a sheet with two states. Before a session: a heading ("Make
+  time to move."), the timer card on an activity pastel, a "Follow a video" link into the library,
+  the six-activity picker (Walk, Run, Cycle, Strength, Yoga, Other), the controls, the connections
+  panel, and a quick-log shortcut. During a session: the whole background becomes a blue-to-canvas
+  gradient 380 points tall, the navigation bar goes dark, and the hero replaces the card.
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/View/BeginActivityScreen.swift
+private func liveHero(_ readout: LiveSessionReadout) -&gt; some View {
+    VStack(alignment: .leading, spacing: 8) {
+        HStack {
+            Label(model.selection.rawValue, systemImage: model.selection.icon).font(LifeOSType.rowTitle)
+            Spacer()
+            Text(readout.isPaused ? "Paused" : readout.push.headline).font(LifeOSType.label)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.white.opacity(0.22), in: Capsule())
+        }
+        if let following = model.following {
+            Text("Following: \(following.title) · \(following.channel)")
+        }
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
+                .font(.system(size: 72, weight: .medium, design: .rounded)).monospacedDigit()
+        }
+        Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
+        SessionRings(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
+                     countsAutomatically: model.source == .watch,
+                     onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                     onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
+    }
+    .foregroundStyle(.white)
+}</code></pre>
+
+<p>
+  The clock lives on its own line at 72 points rather than inside the rings, because a timer plus
+  five readings does not fit in one capsule, and the reading that truncated when it was tried was
+  the battery percentage, the one number that must never be half a number.
+</p>
+
+<h4>The rings</h4>
+
+<p>
+  <code>SessionRings</code> is a <code>GlassEffectContainer</code> with two shapes. Expanded, a
+  rounded rectangle holding three rings (heart, effort, battery) and, for strength, a rep count,
+  with the rep buttons on a second row inside the same glass. Collapsed, a capsule with the clock,
+  a pulsing heart, the bpm and, for strength, the reps. Tapping the top row toggles between them.
+  It always draws white on glass over a dark wash (<code>.black.opacity(0.30)</code>) so the text
+  reads over a bright frame of video or the pale foot of the gradient alike, and the glass is tinted
+  by the push state.
+</p>
+
+<pre><code>// LIfeOS/Features/Activity/View/SessionRings.swift
+/// One beat per beat: a scale wave at the live tempo, still when there
+/// is no reading to keep time to.
+private var pulsingHeart: some View {
+    TimelineView(.animation(paused: SessionRingMath.beatPeriod(bpm: readout.heartRate) == nil || readout.isPaused)) { timeline in
+        let period = SessionRingMath.beatPeriod(bpm: readout.heartRate) ?? 1
+        let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+        let beat = max(0, sin(phase * .pi * 2))
+        Image(systemName: "heart.fill").scaleEffect(1 + 0.35 * beat)
+    }
+}</code></pre>
+
+<p>
+  The ring fills come from <code>SessionRingMath</code>, pure and tested: the heart ring is the zone
+  over today's ceiling zone, the effort ring is effort over the top of the target band, the battery
+  ring is the percent. A missing reading is an empty ring, never a full one; nothing has been earned
+  yet. The effort ring turns red only past the band, not at its top. The animation timeline is
+  paused when there is no reading or the session is paused, so a still heart costs no frames.
+</p>
+
+<h4>The tiles</h4>
+
+<p>
+  Under the hero, glass tiles in an adaptive grid: heart rate with the zone in its label and a
+  freshness rule (a reading older than 15 seconds shows a dash and the sensor's status as its
+  caption); effort with "of 14" as its unit and the battery and its source as caption; reps for
+  strength; calories; distance for walk, run and cycle only. Yoga hides the effort tile: a zone
+  ceiling has no meaning on a mat.
+</p>
+
+<h4>Controls</h4>
+
+<p>
+  <code>ActivityControls</code> was extracted from the screen so the video player offers exactly
+  the same buttons in the same order. Two screens that both stop a workout should not disagree
+  about what stopping looks like, and the confirm-discard dialog travels with the button that
+  raises it.
+</p>
+
+<h3 id="s8-6"><span class="num">8.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 400" role="img" aria-label="A strap reading enters the recorder, accrues effort, is joined by the builder into a readout, and fans out to the rings, the draft at most every ten seconds, and the Live Activity through a throttle.">
+  <defs>
+    <marker id="ch8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch8b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">INPUTS</text>
+  <text class="lbl-sm" x="290" y="24">RECORDER</text>
+  <text class="lbl-sm" x="600" y="24">SURFACES</text>
+
+  <rect class="box" x="20" y="44" width="180" height="40" rx="8"/>
+  <text class="lbl" x="110" y="69" text-anchor="middle">Bluetooth strap · 1 Hz</text>
+  <rect class="box" x="20" y="104" width="180" height="40" rx="8"/>
+  <text class="lbl" x="110" y="129" text-anchor="middle">HKLiveWorkoutBuilder</text>
+  <rect class="box" x="20" y="164" width="180" height="40" rx="8"/>
+  <text class="lbl" x="110" y="189" text-anchor="middle">DailyMetrics · 9 days</text>
+  <rect class="box" x="20" y="224" width="180" height="40" rx="8"/>
+  <text class="lbl" x="110" y="249" text-anchor="middle">Profile birth date</text>
+
+  <rect class="box" x="290" y="44" width="200" height="40" rx="8"/>
+  <text class="lbl" x="390" y="69" text-anchor="middle">receiveHeartRate</text>
+  <rect class="box-alt" x="290" y="104" width="200" height="40" rx="8"/>
+  <text class="lbl" x="390" y="129" text-anchor="middle">EffortAccumulator · 5 s max credit</text>
+  <rect class="box-alt" x="290" y="164" width="200" height="40" rx="8"/>
+  <text class="lbl" x="390" y="189" text-anchor="middle">CapacityMath · once at start</text>
+  <rect class="box-alt" x="290" y="224" width="200" height="40" rx="8"/>
+  <text class="lbl" x="390" y="249" text-anchor="middle">HeartRateZones · once at start</text>
+  <rect class="box-hot" x="290" y="300" width="200" height="60" rx="10"/>
+  <text class="lbl" x="390" y="325" text-anchor="middle">LiveReadoutBuilder</text>
+  <text class="lbl-hot" x="390" y="345" text-anchor="middle">LiveSessionReadout</text>
+
+  <rect class="box" x="600" y="44" width="240" height="40" rx="8"/>
+  <text class="lbl" x="720" y="69" text-anchor="middle">SessionRings and tiles</text>
+  <rect class="box" x="600" y="124" width="240" height="56" rx="8"/>
+  <text class="lbl" x="720" y="147" text-anchor="middle">Draft in UserDefaults</text>
+  <text class="lbl-sm" x="720" y="167" text-anchor="middle">at most every 10 s</text>
+  <rect class="box" x="600" y="220" width="240" height="56" rx="8"/>
+  <text class="lbl" x="720" y="243" text-anchor="middle">LiveActivityThrottle</text>
+  <text class="lbl-sm" x="720" y="263" text-anchor="middle">3 bpm · 3 s · 10 s floor</text>
+  <rect class="box" x="600" y="316" width="240" height="56" rx="8"/>
+  <text class="lbl" x="720" y="339" text-anchor="middle">Lock screen · Dynamic Island</text>
+  <text class="lbl-sm" x="720" y="359" text-anchor="middle">ActivityKit update</text>
+
+  <path class="flow" d="M200 64 L 284 64" marker-end="url(#ch8a)"/>
+  <path class="flow" d="M200 124 L 284 124" marker-end="url(#ch8a)"/>
+  <path class="flow" d="M200 184 L 284 184" marker-end="url(#ch8a)"/>
+  <path class="flow" d="M200 244 L 284 244" marker-end="url(#ch8a)"/>
+  <path class="flow" d="M390 84 L 390 98" marker-end="url(#ch8a)"/>
+  <path class="flow-hot" d="M390 144 L 390 294" marker-end="url(#ch8b)"/>
+  <path class="flow-hot" d="M490 330 L 560 330 L 560 64 L 594 64" marker-end="url(#ch8b)"/>
+  <path class="flow-hot" d="M560 152 L 594 152" marker-end="url(#ch8b)"/>
+  <path class="flow-hot" d="M560 248 L 594 248" marker-end="url(#ch8b)"/>
+  <path class="flow" d="M720 276 L 720 310" marker-end="url(#ch8a)"/>
+</svg>
+<figcaption>
+  One reading a second becomes one readout a second. The screen redraws every time; the draft is
+  written every ten seconds; the lock screen is updated only when the throttle says the change is
+  worth it.
+</figcaption>
+</figure>
+
+<h4>Step by step: a run with a strap</h4>
+<ol>
+  <li>Begin. <code>start()</code> builds zones from the birth date and capacity from nine days of rows, asks Health, creates the session and builder, starts the timer at the moment Health answered, and persists. <code>sensor.prepareForSession</code> reconnects the remembered strap.</li>
+  <li>A frame arrives on characteristic 0x2A37. <code>HeartRateMeasurement.beatsPerMinute</code> decodes it; the sensor calls <code>onReading</code>.</li>
+  <li><code>receiveHeartRate</code> credits at most five seconds of the reading's zone to the accumulator, records the time, and calls <code>persistReading</code>.</li>
+  <li><code>refreshReadout</code> rebuilds the readout: zone from the bpm, effort rounded to a tenth, battery from capacity and effort, push state from zone and effort against the ceiling.</li>
+  <li>The rings and tiles observe <code>readout</code> and redraw. The draft is written if ten seconds have passed. The Live Activity controller is asked to sync.</li>
+  <li><code>LiveActivityThrottle.shouldPublish</code> decides. First state always; a pause, a push-state change or a reps change always; a heart-rate move of 3 bpm or more only if 3 seconds have passed since the last publish; anything else only after a 10-second floor; an identical readout never.</li>
+  <li>The builder's own statistics callback delivers energy and distance sums, and the watch's heart rate when there is no strap. It updates the same fields and calls <code>persist()</code>.</li>
+  <li>Pause: the timer banks, the Health session pauses, <code>lastReadingAt</code> clears. Readings still arrive and are dropped.</li>
+  <li>Finish: stop the Health activity, wait for <code>.stopped</code>, end collection, finish the workout, write the record, end the Live Activity, clear the draft, stop the strap.</li>
+</ol>
+
+<h4>The Live Activity</h4>
+
+<p>
+  Widget extensions cannot render materials, so the lock screen's "glass" tiles are white at 18
+  percent over a linear gradient from <code>LifeOSTokens.liveGradientTop</code> (the recovery hue)
+  to <code>liveGradientBottom</code>, with a radial white highlight and a half-point white stroke.
+  Row one: the activity icon in a circle, the name, the push headline (or "Paused"), and the timer
+  as <code>Text(timerInterval:)</code>. Row two: four tiles, heart with the zone as eyebrow, effort
+  with "EST" and "of 14", calories (or reps and set for strength), and battery with a small ring.
+  A tile with no value shows the dash in the same weight, never a zero.
+</p>
+
+<p>
+  The Dynamic Island's compact leading is a heart and the bpm tinted by push state; compact trailing
+  is the timer, or reps for strength; minimal is the zone number in a tinted circle. The keyline
+  tint follows push state. Every surface deep-links to <code>SurfaceRoute.activity.url</code>.
+</p>
+
+<h3 id="s8-7"><span class="num">8.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>No tick.</strong> The timer is two fields and the clock. The lock screen counts on its own through <code>Text(timerInterval:)</code>; the in-app clock is a one-second <code>TimelineView</code>, which SwiftUI runs only while the view is on screen.</li>
+  <li><strong>Draft writes are rate-limited.</strong> A reading a second would be a <code>UserDefaults</code> write a second. <code>persistReading</code> writes at most every ten seconds; state changes (pause, resume, finish) always write.</li>
+  <li><strong>ActivityKit updates are throttled by a pure function.</strong> The sensor streams every second; the lock screen does not need to. The 3-second minimum on heart-rate-driven updates and the 10-second floor on everything else keep the activity inside ActivityKit's budget, and the rule is tested rather than tuned by eye. Updates are chained through a <code>Task</code> so they land in order.</li>
+  <li><strong>Effort is O(1) per reading.</strong> One multiply-add into a load; the curve is evaluated on read. Nothing keeps a series.</li>
+  <li><strong>Capacity is computed once.</strong> Nine rows at session start, then kept in the draft. A restored session does not re-read the store.</li>
+  <li><strong>The pulse is free when still.</strong> The heart's <code>TimelineView(.animation)</code> is paused whenever there is no bpm or the session is paused.</li>
+  <li><strong>Scans end.</strong> Thirty seconds, then stop, so a sheet left open is not draining the radio. The reconnect fallback times out at twenty.</li>
+  <li><strong>Nothing leaves the device.</strong> A workout is a local <code>WorkoutRecord</code> and, optionally, an <code>HKWorkout</code>. The Live Activity uses <code>pushType: nil</code>. There is no server in this chapter.</li>
+  <li><strong>Every continuation checks <code>active</code>.</strong> A delegate callback, a recovered session, a finish that lands after sign-out: all guard on it, so a stale session cannot write into the next account's store.</li>
+</ul>
+
+<div class="note caution">
+  <b>Open on hardware</b>
+  The spec flags one background-execution question: whether iOS 26 keeps the app running during a
+  phone-side <code>HKWorkoutSession</code> or whether <code>workout-processing</code> must join
+  <code>UIBackgroundModes</code>. The plist today carries <code>remote-notification</code> and
+  <code>bluetooth-central</code>. The wall-clock timer means the elapsed time is right either way;
+  what a suspended app would lose is effort accrual for the suspended minutes.
+</div>
+
+<h3 id="s8-8"><span class="num">8.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>No birth date</td><td>No zones, effort or battery; heart rate and calories only; one hint line under the tiles</td></tr>
+<tr><td>Age outside 10 to 120</td><td>Treated as no birth date</td></tr>
+<tr><td>Whoop recovery is calibrating</td><td>Falls through to the Health path; a calibration score does not support a target</td></tr>
+<tr><td>Today has not synced</td><td>Yesterday's recovery stands in; two days ago does not</td></tr>
+<tr><td>Fewer than 3 baseline HRV days</td><td>No Health capacity; "Battery unknown", yellow ceiling</td></tr>
+<tr><td>Strap drops for 40 seconds</td><td>The next reading credits 5 seconds, not 40</td></tr>
+<tr><td>Readings arrive while paused</td><td>Dropped; effort and heart rate unchanged</td></tr>
+<tr><td>First reading after resume</td><td>Credits nothing; the second accrues</td></tr>
+<tr><td>Reading older than 15 seconds</td><td>The tile shows a dash and the sensor status, not a stale number</td></tr>
+<tr><td>Health permission refused</td><td>Error line; the toggle can be turned off to use the timer alone</td></tr>
+<tr><td>Relaunch mid-session, Health recording</td><td>Draft restores the timer; <code>recoverActiveWorkoutSession</code> re-attaches the session and builder, or the notice says the Health session is gone</td></tr>
+<tr><td>Relaunch mid-session, timer only</td><td>Draft restores without touching Health at all</td></tr>
+<tr><td>Health session fails mid-workout</td><td>Timer pauses; "Health recording stopped. Your timer is kept."</td></tr>
+<tr><td>Finish tapped twice</td><td>One <code>WorkoutRecord</code>, found by its stable id</td></tr>
+<tr><td>Save fails</td><td>Timer kept, draft kept, "Try Save again"</td></tr>
+<tr><td>Two WHOOPs nearby</td><td>Scan stops; "Choose one under Manage"</td></tr>
+<tr><td>Bluetooth off or unauthorised</td><td>Status text per state; no loop, no retry storm</td></tr>
+<tr><td>Account switches mid-session</td><td><code>deactivate()</code> discards; late starts are rejected; the other account never sees the draft</td></tr>
+<tr><td>Yoga selected</td><td>No effort tile or ring; a zone ceiling has no meaning on a mat</td></tr>
+<tr><td>A card left on screen by another session</td><td><code>endStrayLiveActivities</code> ends every activity whose id is not this timer's</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>LiveEffortTests</code> (18 tests): a 30-year-old has max 187; 94 bpm is zone 1, 131 is zone 3, 169 is zone 5; no birth date yields nil; the calibration points (an hour in zone 3 is about 12, thirty minutes in zone 2 about 6, ninety hard minutes about 18) within 1.0; effort is bounded below 21 and never decreases; credit caps gaps at 5 and starts at 0; Whoop 80 with sleep 90 gives 82 and green; yesterday stands in; calibrating falls through; Health capacity needs a baseline and moves with sleep; battery drains against the target top; push state follows zone and effort; the builder keeps absence and uses the conservative ceiling without capacity; auto-pair picks exactly one WHOOP; <code>todayCapacity</code> reads the store.</li>
+  <li><code>LiveSessionReadoutTests</code> (9): round trip keeps absence; a paused readout has no anchor; headlines are words; the throttle publishes first and on meaningful change, spaces heart-rate updates, floors small changes at ten seconds, publishes on a reps change; text formatters keep absence and rounding.</li>
+  <li><code>SessionRingMathTests</code> (5) and <code>ActivitySessionStateTests</code> (4): fills, over-band, beat period; background time and pauses; identity survives a draft round trip; BLE frames decode.</li>
+  <li><code>ActivityRecorderChecks</code>, 34 checks run in the simulator against an in-memory store and disposable defaults suites, launched with <code>--design-preview --page=checks</code>. They cover what Swift Testing cannot reach: the timer starting without Health, capacity at start, readings yielding zone and effort, pause and resume accrual, draft restore with and without Health, cross-account isolation, idempotent save, the remembered sensor, and the video stamping cases of Chapter 10.</li>
+</ul>
+
+<p>
+  The design QA report records 1231 package tests passing after this slice, the in-session screen
+  captured on iPhone and iPad in both schemes, and the lock screen and Dynamic Island captured from
+  the simulator with a fixture that requests a real Live Activity behind the
+  <code>--live-activity</code> argument.
+</p>
+
+<h3 id="s8-9"><span class="num">8.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Integrations/ActivitySessionState.swift</code>, the timer with no tick.</li>
+  <li><code>LifeOSKit/Sources/Integrations/LiveEffort.swift</code>, top to bottom: zones, accumulator, ceiling, capacity, the maths, the builder.</li>
+  <li><code>LifeOSKit/Sources/AppSurfaces/LiveSessionReadout.swift</code>, the struct and the throttle.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorder.swift</code>: <code>start</code>, <code>receiveHeartRate</code>, the two persist paths, <code>saveFinished</code>.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/LiveHeartRateSensor.swift</code>, the remember-and-reconnect path.</li>
+  <li><code>LIfeOS/App/Surfaces/WorkoutLiveActivityController.swift</code> and <code>AlmanacWidgets/WorkoutLiveActivity.swift</code>.</li>
+  <li><code>LIfeOS/Features/Activity/View/SessionRings.swift</code>, then <code>ActivityRecorderChecks.swift</code> as the executable spec.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why is the timer started after Health answers rather than before?</strong> A permission sheet can sit open for a minute, and a timer started first would count it as exercise.</li>
+  <li><strong>Why does one reading credit at most five seconds?</strong> A gap in the stream is not effort that was measured; crediting the gap would invent it.</li>
+  <li><strong>What makes "Repeated save creates one workout" true?</strong> The record's external id is derived from the timer's UUID and looked up before insert.</li>
+  <li><strong>Why does the lock screen not need an update every second?</strong> It renders <code>Text(timerInterval:)</code> from an anchor date; only readings, not time, need an update, and the throttle spaces those.</li>
+  <li><strong>Why do zones live in Integrations but the readout in AppSurfaces?</strong> The widget must decode the readout without linking HealthKit or SwiftData; AppSurfaces depends on nothing.</li>
+  <li><strong>When does the effort ring turn red?</strong> Only past the top of the target band, not at it.</li>
+</ul>
+
 </section>

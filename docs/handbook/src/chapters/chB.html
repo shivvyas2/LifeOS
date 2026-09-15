@@ -1,10 +1,258 @@
-<section class="chapter" id="chB" data-hue="notes">
-<p class="chapter-kicker">Chapter B</p>
-<h2><span class="num">B</span><span>Stub chB</span></h2>
-<p class="lede">Stub lede for chB &amp; friends.</p>
-<h3 id="sB-1"><span class="num">B.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="chBa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#chBa)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="sB-2"><span class="num">B.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="chB">
+<p class="chapter-kicker">Appendix B</p>
+<h2><span class="num">B</span><span>Decision log</span></h2>
+<p class="lede">Every decision that shaped the app, with the choice made and the reason it was made. Rows from Revision D are kept where they still hold and corrected where they no longer do; the rest were collected from the specs, the commit history and the chapters of this edition.</p>
+<p>The log is grouped by area. A row belongs here when a reasonable engineer could have chosen otherwise, so that the next person, usually the author, does not rediscover the reason as a mystery bug. Where a row reverses an earlier one, the earlier one is gone rather than struck through; git has the history.</p>
+<h3 id="sB-1"><span class="num">B.1</span><span>Product and scope</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Audience</td><td>One person at first; accounts and friends since 27 August</td><td>The single-user constraint shaped the architecture; what survives it is that every person&#x27;s data stays on their own phone</td></tr>
+<tr><td>App name</td><td>Almanac, from 26 August; package LifeOSKit and bundle id unchanged</td><td>Renaming targets and identifiers churns the project and the keychain for no user-visible gain</td></tr>
+<tr><td>Tab bar</td><td>Five tabs: Today, Health, Money, Notes, Life</td><td>Health absorbs activity, weight, recovery and wellness; the bar is the scarcest surface in the app</td></tr>
+<tr><td>Settings placement</td><td>Behind the avatar on Today, as a full profile page with settings inside it</td><td>Spends no tab slot on a screen opened once a month; the profile is what a person taps first</td></tr>
+<tr><td>Quick actions</td><td>Three actions (assistant, LIFO, begin activity) drawn flat in every tab&#x27;s bar</td><td>The bottom-corner fan hid the most-used control on four of five tabs</td></tr>
+<tr><td>Guest mode</td><td>Removed</td><td>A store belongs to an account; signed-out data would become the next sign-in&#x27;s</td></tr>
+<tr><td>Screen time</td><td>Cut</td><td>Apple&#x27;s API forbids reading the values into the app</td></tr>
+<tr><td>Food logging</td><td>Photo to AI estimate, decided; not built</td><td>Lowest friction if it is ever built; the vision role in the router has no task behind it</td></tr>
+<tr><td>Every metric optional</td><td>Yes</td><td>A false zero is worse than a blank in a health app</td></tr>
+<tr><td>Missing-value rendering</td><td>Tiles take a nil String and render the dash</td><td>A rule implemented in nine places is broken in one of them</td></tr>
+<tr><td>Dot grid rule</td><td>3 of 4, configurable</td><td>A vague rule makes the whole grid meaningless</td></tr>
+<tr><td>No-data days</td><td>Excluded from streaks</td><td>Punishing a charging night teaches distrust of the streak</td></tr>
+<tr><td>Cost ceiling</td><td>About two dollars per user per month</td><td>The app ships free, so unit economics cap architecture and model choice</td></tr>
+</tbody></table></div>
+<h3 id="sB-2"><span class="num">B.2</span><span>Architecture and data</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>UI architecture</td><td>MVVM, one folder per screen</td><td>Derivation becomes testable without a simulator; a file&#x27;s path names its layer</td></tr>
+<tr><td>Views and the database</td><td>No @Query in a view</td><td>Keeps persistence types out of layout code and derivation out of body</td></tr>
+<tr><td>Store surface</td><td>Protocols returning value types</td><td>Stubbable in tests, and nothing above the store can mutate the database</td></tr>
+<tr><td>Shared UI</td><td>Components/, split Model, ViewModel, View</td><td>A shared piece that owns state has an obvious home</td></tr>
+<tr><td>View model injection</td><td>attach(context), not protocol init</td><td>Pragmatic; it is also why the feature layer has no unit tests and leans on native checks</td></tr>
+<tr><td>Reload trigger</td><td>ModelContext.didSave plus foregrounding</td><td>A save is the only thing that can change what a screen shows</td></tr>
+<tr><td>Data topology</td><td>Local first; Supabase holds what must be shared or must survive a reinstall</td><td>A health app that waits on the network is one you stop opening</td></tr>
+<tr><td>Conflict resolution</td><td>Field-level last write wins</td><td>Row-level would let a nightly job discard a manual entry</td></tr>
+<tr><td>Merge rule across sources</td><td>Rank per metric via MetricArbiter; same rank may overwrite</td><td>A boolean fillGapsOnly could not tell a Whoop value from a typed one once a second strap existed; equal rank lets a source correct itself</td></tr>
+<tr><td>Unattributed typed metrics</td><td>Read as manual, rank 4</td><td>Otherwise the first Health sync after upgrade replaces a weight the person typed</td></tr>
+<tr><td>Provenance storage</td><td>String bag on DailyMetrics, not a typed enum</td><td>Persistence sits below Integrations in the package graph and cannot import MetricSource</td></tr>
+<tr><td>Long-tail Health metrics</td><td>JSON extras bag keyed by HealthMetric.rawValue</td><td>Forty-seven metrics would mean a schema change each; a missing key stays distinct from zero</td></tr>
+<tr><td>Enum storage</td><td>Raw strings with typed accessors</td><td>A new case is a code change rather than a migration</td></tr>
+<tr><td>New @Model fields</td><td>Optional or defaulted, guarded by SchemaMigrationTests</td><td>A mandatory array with no default stopped installed stores opening and hung the app on the spinner</td></tr>
+<tr><td>Account isolation</td><td>One SQLite file per account under Accounts/uid, plus a defaults suite per account</td><td>A userID column needs a predicate on every read of twenty models; a file cannot leak rows it does not hold</td></tr>
+<tr><td>Legacy store on upgrade</td><td>Moved into the first account once, with -wal and -shm</td><td>Scoping without moving would look like the app deleting a year of notes</td></tr>
+<tr><td>Re-root per account</td><td>.id(scope.id) on AppShell</td><td>A stale snapshot on screen after a switch is the same class of leak as a stale row</td></tr>
+<tr><td>Two locks before RootView</td><td>A session and an open store</td><td>Mounting the tab tree with no container reaches the first fetch and CoreData throws an uncatchable exception</td></tr>
+<tr><td>Width class</td><td>Package enum LayoutWidth, mapped once in RootView</td><td>UserInterfaceSizeClass is UIKit-only and the package builds for macOS so tests run without a simulator</td></tr>
+<tr><td>Privacy boundary</td><td>Engines take a digest, never a row; audience decides the render</td><td>DailyMetrics is not Sendable, so the compiler stops a raw row crossing; the off-device render never carries raw physiology</td></tr>
+</tbody></table></div>
+<h3 id="sB-3"><span class="num">B.3</span><span>Accounts and sign-in</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Sign-in</td><td>One-time code, no password</td><td>No secret at rest and no reset flow to build</td></tr>
+<tr><td>Email as default channel</td><td>Email first; phone via a Twilio Verify Edge Function, US and India only</td><td>Free through Resend with none of the SMS failure modes; bounded regions stop SMS pumping</td></tr>
+<tr><td>Email code</td><td>Six digits, same as phone, custom SMTP pushed to the project</td><td>The stock magic link cannot be typed into the app</td></tr>
+<tr><td>Returning-user routing</td><td>AuthSession.hasProfile from user_metadata, decoded by hand with a false default</td><td>With OTP sign-in and signup are the same steps; only the account, checked after verify, tells them apart; a synthesised decoder would throw on old keychain sessions</td></tr>
+<tr><td>Resend countdown</td><td>60 seconds</td><td>GoTrue&#x27;s email max_frequency is 60 s; the phone guard is 45 s; the countdown must clear the stricter</td></tr>
+<tr><td>Auth client</td><td>Hand-written REST, no SDK</td><td>Three calls; a dependency pulls in far more surface than that</td></tr>
+<tr><td>Session refusal</td><td>Only 400, 401, 403 and 422 sign a person out</td><td>429, 5xx and transport errors are failures to answer, not refusals; signing out is destructive</td></tr>
+<tr><td>Session keep-alive</td><td>Renew 45 s before expiry with a 5 s floor</td><td>Launch and foreground refreshes miss a person who keeps the app open past the hour</td></tr>
+<tr><td>Concurrent refresh</td><td>Coalesced onto one task</td><td>Supabase rotates the refresh token on use; a second concurrent refresh presents a retired token</td></tr>
+<tr><td>Refresh URL</td><td>Query string kept via URLComponents</td><td>appendingPathComponent encoded the question mark and every session died after an hour</td></tr>
+<tr><td>Account roster</td><td>Ids and labels in defaults, one keychain item per user</td><td>The roster is not a secret; refresh tokens are; enumerating accounts must not need a keychain read each</td></tr>
+<tr><td>Profile of record</td><td>A profiles row plus a private avatars bucket, cached per account on the device</td><td>user_metadata rides in the JWT; the old device cache was not keyed by account</td></tr>
+<tr><td>Avatar freshness</td><td>Bucket listing updated_at stamp, three-case AvatarStamp</td><td>The path never changes, so a copy on disk cannot tell a replaced photo from an unchanged one</td></tr>
+<tr><td>Avatar storage</td><td>Private bucket, JPEG only, name pinned to uid/avatar.jpg, 512 pt at renderer scale 1</td><td>A public bucket was reversed the same day; a tighter client limit would reject older installs silently</td></tr>
+<tr><td>Height storage</td><td>Always centimetres; imperial fields translate only</td><td>Storing the typed unit goes wrong after a locale change</td></tr>
+<tr><td>First-run tour</td><td>Overlay, not fullScreenCover, keyed on a per-account flag</td><td>iOS can restore a presented cover at launch and two covers contending for one window drops one</td></tr>
+<tr><td>Push permission</td><td>Never at launch; asked from the notification inbox</td><td>A prompt before the app has shown anything worth interrupting for is the fastest way to a permanent no</td></tr>
+<tr><td>Push registration</td><td>The token is the primary key, keyed to the active account; deregister before the keychain clears</td><td>A token left under a signed-out account pushes one person&#x27;s data onto another&#x27;s phone</td></tr>
+</tbody></table></div>
+<h3 id="sB-4"><span class="num">B.4</span><span>Design system and layout</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Type scale</td><td>Nine text steps, three numeral steps, the masthead as its own step; enforced by check-typography.sh</td><td>376 hand-written font calls across 28 sizes; a scale that cannot express the biggest thing in the app is missing a step</td></tr>
+<tr><td>Numerals</td><td>Rounded face for digits only, never words</td><td>Rounded digits read faster at a glance; a rounded label beside a sans label is drift</td></tr>
+<tr><td>Colours</td><td>AdaptiveColor light and dark pairs resolved by the view</td><td>UIKit dynamic colours are iOS-only; explicit pairs let terminal tests compare both halves</td></tr>
+<tr><td>Liquid Glass</td><td>Real .glassEffect in GlassPanel, one place</td><td>The system renders true refraction; every panel gets it from one primitive</td></tr>
+<tr><td>iPad rail</td><td>An overlay that withdraws on drag and keyboard and returns after 1400 ms or on tab change</td><td>Overlays claim no layout room; the delay stops flicker between flicks of a fast scroll</td></tr>
+<tr><td>railInset</td><td>112 points applied by screens, not a safe area</td><td>Safe areas do not survive NavigationStack into a background-ignoring ScrollView</td></tr>
+<tr><td>Orientation</td><td>Portrait on the phone by default; only the video player asks for landscape and releases it</td><td>Nothing else is laid out for landscape; release also requests portrait so the next screen is not stuck sideways</td></tr>
+<tr><td>Code field</td><td>One hidden text field behind six boxes; digit logic as a free function</td><td>Keyboard, autofill and paste keep working; a test never touches a View type</td></tr>
+<tr><td>Intro mascot</td><td>A SceneKit character with a shader for ink lines, 30 fps, paused when inactive or under Reduce Motion</td><td>Lit 3D beats an image sequence and costs little</td></tr>
+<tr><td>Deck palette</td><td>Nine feature-local tones with one shared ink</td><td>ModuleHue has six cases; overlapping neighbours need distinct colours</td></tr>
+<tr><td>Money charts</td><td>One ink at stepped opacity, no y-axis</td><td>The six pastels fail as a categorical palette; the figure is the number, the marks are the shape</td></tr>
+<tr><td>Close banner</td><td>Dashed outline, not AlertBanner</td><td>The alarm styling is the anomaly surface; admin must not spend it</td></tr>
+<tr><td>Harness</td><td>--design-preview --page= launch argument in DEBUG builds</td><td>Repeatable state without an account; a flag cannot be tripped by a stray argument</td></tr>
+<tr><td>Native checks</td><td>In-process PASS/FAIL checks over real view models and defaults suites</td><td>The feature layer has no unit tests; checks are the substitute and QA reports paste their output</td></tr>
+</tbody></table></div>
+<h3 id="sB-5"><span class="num">B.5</span><span>Health and wearables</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Weight source</td><td>HealthKit via Renpho&#x27;s own sync</td><td>No Renpho integration needed at all</td></tr>
+<tr><td>Health tab shape</td><td>Two halves, Health and Fitness, over one week strip</td><td>Both halves read the same day, so a comparison across dates can never be drawn by accident</td></tr>
+<tr><td>Health freshness</td><td>HKObserverQuery per metric, 15 s throttle, foreground only; no background delivery</td><td>Timers are either wasteful or not live; background delivery needs an entitlement to write rows nobody is looking at</td></tr>
+<tr><td>Health sync window</td><td>Today plus the day of the last sync and since; 30-day backfill cap</td><td>Sleep lands on the morning it ends; the grid shows a month</td></tr>
+<tr><td>Health denial</td><td>Never claimed; the no-data copy points at Health, Sharing</td><td>HealthKit hides read-grant status by design</td></tr>
+<tr><td>Cycle data</td><td>A second permission prompt, only when cycle tracking is on; the default from Health&#x27;s own characteristic</td><td>A sheet asking everyone for menstrual data misreads most people; the signup gender is a form of address, not a biological field</td></tr>
+<tr><td>Whoop</td><td>Direct API</td><td>Recovery and strain exist nowhere else</td></tr>
+<tr><td>Whoop client secret</td><td>Edge Function only</td><td>Would otherwise be extractable from the binary</td></tr>
+<tr><td>Whoop redirect</td><td>An https Edge Function bridging to lifeos://, not almanac://</td><td>Whoop requires https; every installed build knows lifeos; pointing at almanac stranded builds predating the rename</td></tr>
+<tr><td>Whoop sign-in browser</td><td>Safari via UIApplication.open</td><td>Cloudflare&#x27;s bot challenge never clears inside ASWebAuthenticationSession</td></tr>
+<tr><td>Whoop ingestion order</td><td>Archive raw, then derive</td><td>A derivation bug six months out must be fixable without re-fetching against a rate limit</td></tr>
+<tr><td>Whoop scopes</td><td>Colocated with endpoint paths in WhoopCollection</td><td>Listing them separately drifted once and 401&#x27;d freshly issued tokens</td></tr>
+<tr><td>Whoop collection 401</td><td>Keep tokens, tell the person to reconnect</td><td>Clearing them once made connect then sync an unbreakable loop</td></tr>
+<tr><td>Whoop sync window</td><td>Rolling 14 days, full re-fetch, no cursor</td><td>Upserts make re-syncing idempotent, so which records are new never needs answering</td></tr>
+<tr><td>Whoop connection</td><td>Held server-side too; restored on a fresh install; refreshed under a UUID lock</td><td>A reinstall should not need a new authorization; concurrent refreshes would invalidate each other</td></tr>
+<tr><td>Sleep attribution</td><td>The day the sleep ends</td><td>A night belongs to the morning you woke up</td></tr>
+<tr><td>Whoop profile scope</td><td>Not requested</td><td>Name and email are identity, not signal</td></tr>
+<tr><td>Fitbit tokens</td><td>Server row only, never on the device; one writer under a 30-second lease</td><td>The refresh token is single use</td></tr>
+<tr><td>Fitbit scopes</td><td>One space-separated parameter, pinned on both sides</td><td>Repeating the parameter narrows the grant silently and surfaces as a 403 much later</td></tr>
+<tr><td>Sync staleness</td><td>One shared SyncStalenessPolicy</td><td>Every connection row answers &#x27;stale since when&#x27; the same way</td></tr>
+</tbody></table></div>
+<h3 id="sB-6"><span class="num">B.6</span><span>Live sessions and the watch</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Session timer</td><td>Wall-clock ActivitySessionState, no tick</td><td>Backgrounding never stops it; Text(timerInterval:) lets the lock screen count on its own</td></tr>
+<tr><td>Effort model</td><td>Tanaka max heart rate, Whoop zone bands, weighted seconds through a saturating curve pinned by calibration tests</td><td>Agrees with the app the person already trusts; retuning is a diff, not a drift</td></tr>
+<tr><td>Effort credit cap</td><td>5 seconds per reading</td><td>A gap in the stream is not effort that was measured</td></tr>
+<tr><td>No birth date</td><td>No zones, effort or battery; a hint line instead</td><td>A zone on an assumed age is a reading the person never gave</td></tr>
+<tr><td>Capacity resolution</td><td>Whoop first, then Health HRV against a 7-day baseline, then nil with the yellow ceiling</td><td>Cautious guidance without claiming a capacity that was not measured</td></tr>
+<tr><td>Readout placement</td><td>LiveSessionReadout and PushState in AppSurfaces; the effort model in Integrations</td><td>The widget must decode the readout without HealthKit or SwiftData</td></tr>
+<tr><td>Live Activity publishing</td><td>A pure LiveActivityThrottle: 3 bpm step, 3 s spacing, 10 s floor, immediate on pause, push and reps</td><td>Stay inside ActivityKit&#x27;s budget while a strap streams every second, and test the rule</td></tr>
+<tr><td>Draft writes</td><td>At most every 10 s on readings, always on state changes</td><td>One UserDefaults write per second is waste</td></tr>
+<tr><td>Save identity</td><td>WorkoutRecord.externalID is &#x27;almanac:&#x27; plus the timer&#x27;s UUID, looked up before insert</td><td>Finish twice, or a half-completed save, yields one workout</td></tr>
+<tr><td>Sensor auto-pair</td><td>Remember the last peripheral; auto-pair only when exactly one WHOOP is nearby</td><td>Another person&#x27;s strap in a gym is not a reading this person owns</td></tr>
+<tr><td>Session ownership</td><td>The watch owns the HKWorkoutSession when paired and Health saving is on; the phone never saves a Health workout for it</td><td>Exactly one workout in Health</td></tr>
+<tr><td>Watch availability</td><td>activated and isPaired and isWatchAppInstalled, not isReachable</td><td>isReachable is true only while the watch app is already in the foreground</td></tr>
+<tr><td>Hand-off authorisation</td><td>The phone asks Health before startWatchApp</td><td>Authorisation is shared; the first prompt should not land on the wrist during the phone&#x27;s countdown</td></tr>
+<tr><td>Wire format</td><td>Versioned, with a kind field; unknown versions ignored</td><td>Packet and command otherwise share every required key</td></tr>
+<tr><td>discard versus end</td><td>Separate commands</td><td>On the wrist end means save; a refused session must not write a stub</td></tr>
+<tr><td>Bridge teardown</td><td>Drop the session in the send&#x27;s completion handler</td><td>Releasing in the same run-loop turn can cancel the send</td></tr>
+<tr><td>Rep counting</td><td>A pure RepCounter in its own Motion target; manual and automatic tallies kept separate; labelled auto only on the watch</td><td>Testable on macOS; an automatic rep must add to taps, not overwrite them</td></tr>
+<tr><td>Rep axis lock</td><td>Only on a swing that is still rising</td><td>Settling can end mid-fall and lock the axis backwards</td></tr>
+<tr><td>Widget data</td><td>One SurfaceSnapshot in the App Group, expiring at the earlier of midnight and six hours, tombstoned on sign-out</td><td>A reader can never join two accounts&#x27; fields; stale steps are worse than a blank</td></tr>
+</tbody></table></div>
+<h3 id="sB-7"><span class="num">B.7</span><span>Workout library</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Catalog</td><td>A read-only Supabase table; revoke all then grant select; seed generated by an oEmbed-verified script with a trailing delete</td><td>Zero per-user API cost; default grants are revoked; a seed run is a full sync</td></tr>
+<tr><td>Empty catalog response</td><td>Never replaces a non-empty cache</td><td>An unseeded table or a broken policy looks like an empty list</td></tr>
+<tr><td>Planner</td><td>A pure function with four rules; push, pull, legs rotation from the last seven days of WorkoutRecord.split</td><td>Free, deterministic, every rule a test, and the reason string is the rule in words</td></tr>
+<tr><td>Filter widening</td><td>Length, then split if no chip was tapped; intensity cap, equipment and query never widen</td><td>A tapped chip is an instruction; a battery ceiling and a kit list are facts</td></tr>
+<tr><td>Saved list</td><td>The saved rows themselves, newest first, narrowed only by search</td><td>A heart is a decision already made; intersecting with the plan hid saves</td></tr>
+<tr><td>YouTube embed</td><td>An iframe in the app&#x27;s own page, based at youtube-nocookie.com with a matching origin; fs=0; ids validated</td><td>Errors 153 and 152 otherwise; YouTube&#x27;s own full screen leaves no place for the HUD</td></tr>
+<tr><td>Player web view</td><td>One WKWebView held in screen state across portrait, full screen and landscape</td><td>A branch change gives a new view identity and restarts the video</td></tr>
+<tr><td>HUD position</td><td>An anchor as a fraction of free travel per placement, settled off the control strip on release</td><td>Survives size changes; keeps the terms&#x27; clearance wherever the rings end up</td></tr>
+</tbody></table></div>
+<h3 id="sB-8"><span class="num">B.8</span><span>Money</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Money sign</td><td>Positive is money in, opposite to Plaid</td><td>Written into the type, because a silent flip makes every rollup lie</td></tr>
+<tr><td>Savings rate with no income</td><td>nil, not zero</td><td>Undefined is not zero; the sharpest case of the app&#x27;s central rule</td></tr>
+<tr><td>Plaid calls</td><td>Edge Functions only, never the app</td><td>Every endpoint needs the client id and secret; an .ipa is a zip file</td></tr>
+<tr><td>Where transactions rest</td><td>The device only; Postgres holds one row per bank with the token</td><td>A database compromise exposes a credential, not a ledger</td></tr>
+<tr><td>Plaid cursor owner</td><td>The device, per Item, in the account&#x27;s defaults</td><td>A server-advanced cursor loses a page to an app that crashed mid-ingest</td></tr>
+<tr><td>Sync ordering</td><td>Ingest, remove, upsert accounts, then set the cursor</td><td>A cursor advanced before a successful ingest is a page Plaid never resends</td></tr>
+<tr><td>Plaid exchange cleanup</td><td>Remove the Item at Plaid if the row insert fails</td><td>A stranded Item bills monthly with nothing left to find it by</td></tr>
+<tr><td>Transfers and card payments</td><td>Excluded from income and spending by underscore-prefixed category code</td><td>They inflate both sides; the savings rate is computed from those two</td></tr>
+<tr><td>Budgets</td><td>Buckets that claim raw category codes, one holder per key</td><td>Raw strings and merchant rules both fail silently when Plaid renames</td></tr>
+<tr><td>Money cents</td><td>MoneyParts rounds to total cents first, then splits</td><td>19.995 must never render as 19.100</td></tr>
+<tr><td>Sample money data</td><td>Removed entirely</td><td>Real rows only; an empty month shows the empty state</td></tr>
+<tr><td>Merchant logos</td><td>Plaid&#x27;s logo_url stored, shown in a paper-white circle, with a one-time cursor replay</td><td>Already in paid responses; reverses the inference-layer spec&#x27;s no-logo decision</td></tr>
+<tr><td>Money detail</td><td>Its own view model</td><td>Six months of rows must not reload on every save in the app</td></tr>
+<tr><td>Money tab layout</td><td>Six sections behind a rail on the phone and chips on the iPad, bands on pure white</td><td>One long scroll made every question a scroll past the other five; two vertical rails on an iPad compete</td></tr>
+</tbody></table></div>
+<h3 id="sB-9"><span class="num">B.9</span><span>Notes and the plan</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Notes hierarchy</td><td>PARA as an enum, not user folders</td><td>Sorting by actionability is the method; four renameable folders lose it</td></tr>
+<tr><td>Note body</td><td>Blocks as JSON in the page, not SwiftData rows</td><td>Only ever read as a document; a relationship adds a migration hazard per field for no query</td></tr>
+<tr><td>Cross-note queries</td><td>Derived NoteTask and NoteLink rows rewritten on every save, never pushed</td><td>Rebuildable from documents, so an indexer bug can only show a stale list</td></tr>
+<tr><td>Inbox</td><td>One nullable filedAt, stamped by filing, never by editing</td><td>A bucket cannot say whether anyone decided</td></tr>
+<tr><td>Index rebuild</td><td>The title index built once per rebuildAll and passed down</td><td>Per-page building made a rebuild quadratic on the main actor</td></tr>
+<tr><td>Note sync order</td><td>Folders first, documents in batches of 25, push before pull</td><td>A page before its folder lands at the root; a pull first could flatten an unsent edit</td></tr>
+<tr><td>Oversized ink</td><td>Kept local above 1.5 MB; the page still syncs its text</td><td>One runaway drawing must not stall every other page</td></tr>
+<tr><td>Plan entries</td><td>One model, five kinds</td><td>A block renderer can lay out any entry; a new kind is an enum case, not a table</td></tr>
+<tr><td>Habits</td><td>Stay as PlanEntry and HabitTick, not pages</td><td>Today ticks them live; a document version would break Today or duplicate the habit</td></tr>
+<tr><td>Plan migration</td><td>Idempotent through originPlanEntryID; old rows left in place</td><td>A defaults flag is the wrong question once a second device syncs the pages; closed months keep their evidence</td></tr>
+</tbody></table></div>
+<h3 id="sB-10"><span class="num">B.10</span><span>The Life sectors</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Sector scoring</td><td>The app proposes, the person decides; both numbers kept</td><td>Romance and Soul have no honest data source; the gap between the two columns is the signal</td></tr>
+<tr><td>Sector rule</td><td>One weighted mean, weights in code, nil with no evidence</td><td>One path to test and explain; editable weights are a dial; zero in month one is demoralising</td></tr>
+<tr><td>Sector prose</td><td>Rules score; the on-device model explains one sentence from the rows only</td><td>A model-judged score differs run to run and cannot be explained</td></tr>
+<tr><td>Sector evidence</td><td>Archived at close, never recomputed</td><td>A goal changed in March must not rewrite February&#x27;s reasoning</td></tr>
+<tr><td>Sector screens</td><td>All nine open the same history screen; Body, Money and Mission add an Open row</td><td>The tabs do not show score history</td></tr>
+<tr><td>Observations</td><td>Deterministic rules needing three calendar-adjacent months</td><td>A single unusual month must never fire one; free and instant</td></tr>
+<tr><td>In-flight scoring</td><td>Projected MonthInputs through the same SectorEvidenceFactory, no new maths</td><td>A band that disagrees with the close is worse than no band</td></tr>
+<tr><td>Coasting</td><td>Continue at month-to-date pace, not an empty tail</td><td>An empty tail puts Money&#x27;s floor above its ceiling</td></tr>
+<tr><td>Ceiling</td><td>Remaining days at GoalTargets, max against the running average</td><td>Reachable by definition; never asks for less than is already done</td></tr>
+<tr><td>Money in flight</td><td>No ceiling without buckets</td><td>Zero spend is fantasy; any other figure is invented</td></tr>
+<tr><td>Close scheduling</td><td>The oldest gap within twelve months, else the previous month</td><td>Rows only exist after a close, so a pure row query can never start the first one</td></tr>
+<tr><td>Free-text answers</td><td>Debounced 600 ms, flushed on Skip, Next and dismiss; choices saved immediately</td><td>Every save reloads nine view models</td></tr>
+</tbody></table></div>
+<h3 id="sB-11"><span class="num">B.11</span><span>LIFO and the assistant</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Coach tiers</td><td>Cloud first, the device as fallback; the person can pin either</td><td>The on-device model answered worse on the questions this app gets; the daily cap makes the cloud affordable; someone who chose the phone is owed that literally</td></tr>
+<tr><td>Model selection</td><td>The app names a task; the function maps task to model</td><td>Changing a model is a function deploy, not an App Store release</td></tr>
+<tr><td>Provider abstraction</td><td>Use Apple&#x27;s session and tool types on the device; a thin wire format to the cloud</td><td>No provider SDK on the device; the server re-emits deltas in its own shape</td></tr>
+<tr><td>Refusals across tiers</td><td>Never re-asked of the other model</td><td>A second model is not a second opinion on a refusal, it is a way around one</td></tr>
+<tr><td>Prompt render per audience</td><td>onDevice may carry raw Whoop physiology; offDevice never does</td><td>HRV, SpO2, skin temperature and respiratory rate stay on the phone</td></tr>
+<tr><td>Context on the wire</td><td>A context field, never a client system message</td><td>The server places it behind SCOPE; a client system message would land after the guardrail and outweigh it</td></tr>
+<tr><td>Guardrail location</td><td>SCOPE lives in the Edge Function</td><td>A client cannot strip what it never carries</td></tr>
+<tr><td>Two conversation prompts</td><td>Verbatim copies pinned by a Swift test and a Deno test</td><td>Two prompts meant to agree do not stay agreeing unless something checks</td></tr>
+<tr><td>Streaming</td><td>Only tool-less turns stream, with usage in the last chunk</td><td>Tool calls arrive as fragmented JSON; an unmetered stream is a free path through the cap</td></tr>
+<tr><td>Metering</td><td>Debit what the provider billed on every path, including refusals</td><td>An unmetered path is a free one</td></tr>
+<tr><td>Budget kinds</td><td>lifo_usage keyed on user, day and kind; the nudge has its own 4,000-token cap</td><td>A heavy chat evening must not eat the next morning&#x27;s nudge</td></tr>
+<tr><td>Reasoning effort</td><td>Low, with one retry without tuning on a 400</td><td>The thinking already happened on the device when the digest was built</td></tr>
+<tr><td>Spoken line</td><td>One SAY: line asked for first, split on the phone</td><td>One call, one debit; the voice starts before the last table row exists</td></tr>
+<tr><td>Held cards</td><td>The answer held until playback starts, two-second ceiling</td><td>What is said comes first; silence is acceptable, a blank screen is not</td></tr>
+<tr><td>Endpointing</td><td>A room-learned noise floor, two thresholds, an audio-time clock</td><td>A fixed level fails in either a bedroom or a cafe; a busy thread must not end a turn on top of the speaker</td></tr>
+<tr><td>Two transcribers</td><td>Scribe owns the sentence; Apple only draws it</td><td>Letting both emit a final sends the answer to whichever finished first</td></tr>
+<tr><td>Voice default</td><td>Off; three stock voices</td><td>A coach that starts talking in an unknown room is worse than silence; forty voices is a settings screen nobody finishes</td></tr>
+<tr><td>Spoken reply cap</td><td>1,200 characters, cut on a sentence boundary</td><td>Billed per character; a voice stopping mid-number sounds like a fault</td></tr>
+<tr><td>Nudges</td><td>Rules decide, the model phrases; a fallback sentence per trigger</td><td>Letting a model decide bills every user every night and calibrates toward yes</td></tr>
+<tr><td>One nudge per day</td><td>Primary key on nudge_log, inserted before phrasing</td><td>Two overlapping cron runs conflict and stop without any locking logic</td></tr>
+<tr><td>Nudge payload</td><td>Sentence, trigger, day; never the figures</td><td>A phone off for days would open on stale numbers; the tap re-evaluates locally</td></tr>
+<tr><td>Confirmation gate</td><td>A continuation inside ToolInvoker</td><td>Nothing the model emits can resume a gated call; structural, not a prompt request</td></tr>
+<tr><td>Confirmed write on cloud failure</td><td>No device retry</td><td>The write already happened; a fresh invoker would raise a second card for the same create</td></tr>
+<tr><td>Cards from tools, not prose</td><td>CalendarEventCollector carries values beside the text</td><td>Parsing a reply back into events trusts the model to restate a date correctly</td></tr>
+<tr><td>Reply memory</td><td>Event ids on ChatMessage, re-resolved on open</td><td>Events move and die after the sentence; a stale card is worse than none</td></tr>
+<tr><td>Free time</td><td>All-day events do not block</td><td>An anniversary is context, not a meeting</td></tr>
+<tr><td>Recurring events</td><td>Read-only in the app; ids qualified with the occurrence start</td><td>Occurrences share one EKEvent id; a qualified id fails writes loudly instead of editing the wrong occurrence</td></tr>
+<tr><td>Calendar cache</td><td>A SwiftData window of 30 days back and 90 forward; writes go to the provider and re-sync</td><td>Providers normalise all-day and time zones; trusting the local draft drifts</td></tr>
+<tr><td>Calendar permission</td><td>The system grant and a per-account flag</td><td>A grant for one Almanac account must not authorise another</td></tr>
+</tbody></table></div>
+<h3 id="sB-12"><span class="num">B.12</span><span>Social</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Social authorisation</td><td>RLS and security definer RPCs; client filters for display only</td><td>The client cannot be trusted to filter for privacy</td></tr>
+<tr><td>Chat transport</td><td>PostgREST over URLSession, polling while open</td><td>No SDK, no realtime channel, nothing per user to pay for</td></tr>
+<tr><td>Friendship update</td><td>A column grant restricts update to status</td><td>Postgres enforces column grants before policies; accept can never smuggle another field</td></tr>
+<tr><td>Shared figures</td><td>A separate profile_stats table, not columns on profiles</td><td>profiles is world-readable for search; its own table can name friendship in the policy</td></tr>
+<tr><td>Sharing off</td><td>Push explicit nulls</td><td>An upsert leaves omitted columns standing</td></tr>
+<tr><td>Optimistic sends</td><td>Provisional rows kept in a separate pending array</td><td>A poll may only ever assign messages, so it cannot erase a send in flight</td></tr>
+<tr><td>Group writes</td><td>Every write is an RPC with row locks</td><td>Invitee-must-be-friend, the 50 cap and owner succession need atomicity a bare insert cannot give</td></tr>
+<tr><td>Group message retry</td><td>A client-generated idempotency key, unique per sender</td><td>A timed-out send that landed cannot post twice</td></tr>
+<tr><td>Leaderboard scores</td><td>Effort, Recharge and Rest computed on the device; only scores, sources and day published</td><td>Raw HRV, heart rate and sleep never reach the endpoint</td></tr>
+<tr><td>Recharge baseline</td><td>The same provider, seven distinct earlier days within 28, today excluded</td><td>Mixed providers and duplicate days would fake a baseline</td></tr>
+<tr><td>Wellness leaderboards</td><td>A separate consent flag; score and source checked together; at most two days</td><td>Activity sharing must not imply health-score sharing</td></tr>
+</tbody></table></div>
+<h3 id="sB-13"><span class="num">B.13</span><span>Backend and operations</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Decision</th><th>Choice</th><th>Reason</th></tr></thead><tbody>
+<tr><td>Server logic</td><td>Supabase Edge Functions, not a Cloud Run API</td><td>Every job that arrived fit in a function; the backbone in Revision D&#x27;s roadmap was never needed</td></tr>
+<tr><td>The function door</td><td>resolveUser: the caller id from their own JWT, never from the body</td><td>A function that trusts a user id in the body is a proxy for anyone</td></tr>
+<tr><td>lifo-agent bounds</td><td>64 messages, 16 tools, 32,000 context characters</td><td>Without them the function is a general proxy on the project key</td></tr>
+<tr><td>Cron schedule</td><td>schedule.sql run once, keys in Vault, not a migration</td><td>It needs the per-environment URL and the service-role key</td></tr>
+<tr><td>OTP privacy</td><td>Numbers hashed with a pepper in otp_events; pumping-prefix limits</td><td>The abuse guard must not become a table of phone numbers</td></tr>
+<tr><td>Secrets</td><td>What must never leak lives server-side; nothing in the xcconfig is a secret except the ElevenLabs key</td><td>A signed bundle is extractable</td></tr>
+<tr><td>Build number</td><td>Tracked in git, bumped and committed before every upload</td><td>App Store Connect rejects a pair it has seen, after the upload finishes</td></tr>
+<tr><td>Tests</td><td>Logic in the package, test-first, run from the terminal on macOS; view models covered by native checks</td><td>Anything that needs a simulator is slow to run and slower to trust</td></tr>
+<tr><td>Parallel work</td><td>Each session in its own worktree under .claude/worktrees</td><td>Peers move HEAD on the shared checkout</td></tr>
+<tr><td>Commits</td><td>A branch per change, conventional commits, never on main</td><td>History that reads as a list of decisions</td></tr>
+</tbody></table></div>
+<h3 id="sB-14"><span class="num">B.14</span><span>Study notes</span></h3>
+<div class="study">
+<h4>How to use this appendix</h4>
+<ol>
+  <li>Before changing a rule, search this table for the noun; if a row exists, the reason column is the thing to argue with, not the code.</li>
+  <li>When a row turns out wrong, replace it rather than adding a second; the log records the current decision, git records the old one.</li>
+  <li>Every spec under <code>docs/superpowers/specs/</code> has a decisions or alternatives section; a decision that lands in code lands here in the same change.</li>
+</ol>
+<p class="q">Which single decision do the most other rows depend on?</p>
+<p class="a">One table keyed by day that every source writes into; the arbiter, the digest, the sectors and the widgets all read from it.</p>
+<p class="q">Which Revision D rows were reversed rather than kept?</p>
+<p class="a">Four tabs, settings behind a gear, on-device first for the coach, and the personal-only audience.</p>
+<p class="q">What do the Money, Social and LIFO areas have in common in their reasons?</p>
+<p class="a">Each keeps a rule in a place the client cannot reach: a definer function, a server-side prompt, a device-only ledger.</p>
+</div>
 </section>

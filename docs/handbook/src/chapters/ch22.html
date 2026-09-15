@@ -1,10 +1,259 @@
-<section class="chapter" id="ch22" data-hue="notes">
-<p class="chapter-kicker">Chapter 22</p>
-<h2><span class="num">22</span><span>Stub ch22</span></h2>
-<p class="lede">Stub lede for ch22 &amp; friends.</p>
-<h3 id="s22-1"><span class="num">22.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch22a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch22a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s22-2"><span class="num">22.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="ch22">
+<p class="chapter-kicker">Chapter twenty-two</p>
+<h2><span class="num">22</span><span>Production edge cases</span></h2>
+<p class="lede">The register below is the difference between a demo and something you can rely on. Each row is a condition that will occur in normal use, not a theoretical one, and each names where in the code or the test suite the behaviour is pinned. The feature chapters cross-reference the rows that apply to them.</p>
+
+<h3 id="s22-1"><span class="num">22.1</span><span>How to read this register</span></h3>
+<p>Three columns. <strong>Condition</strong> is what happens in the world. <strong>Behaviour</strong> is what the app does about it, in the present tense, because every row here describes code on disk today. <strong>Pinned by</strong> names the test, native check or pure function that holds the behaviour in place, so that a future edit which changes it fails somewhere visible. A row marked <em>by design</em> has no test because the behaviour is structural: a type that cannot cross a boundary, a table with no policies. A row marked <em>hardware</em> is unverified in the simulator and waits on a physical device; those are listed again in <a href="#chA">Appendix A</a>.</p>
+<p>Two themes recur. The first is the rule from <a href="#s21-1">21.1</a>: absence is never zero, and a screen with no data shows its designed empty state rather than a number nobody earned. The second is that destructive outcomes, signing someone out, moving a sync cursor, replacing a cache, happen only on a definitive answer from the server and never on a transport failure, a rate limit or an empty response that is more likely a bug than a fact.</p>
+
+<h3 id="s22-2"><span class="num">22.2</span><span>Time and calendars</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Sleep spans midnight</td><td>Attributed to the morning you woke, through <code>SleepRecord.attributedDate</code>. A nap is stored with <code>isNap</code> and excluded from night-by-night views</td><td><code>WhoopTests</code>, <code>WhoopSleepMath</code></td></tr>
+<tr><td>A Whoop cycle boundary is not a calendar day</td><td>Cycles are attributed to the day the cycle starts, sleep to the day it ends. Documented so the mismatch is not read as a bug</td><td><code>WhoopDerivation</code></td></tr>
+<tr><td>Travel across time zones</td><td>"Today" follows the device's current zone; a day can be shortened or lengthened. The nudge job counts windows back from the user's local day, not UTC midnight, and a device token without a usable zone never sends</td><td><code>nudge_test.ts</code>; <code>device_tokens.timezone not null</code></td></tr>
+<tr><td>DST transition</td><td><code>Calendar.startOfDay</code> handles the 23 or 25 hour day; nothing computes days by adding 86,400 seconds</td><td>by design</td></tr>
+<tr><td>Month boundaries on the grid</td><td>Leading blanks computed from <code>firstWeekday</code>; padded to whole rows</td><td><code>MonthGridLayoutTests</code></td></tr>
+<tr><td>A month is scored on the third of the next month</td><td>Filed under the first of the month scored, through <code>Date.startOfMonth</code>, which is enforced on <code>SectorScore.month</code> as <code>private(set)</code></td><td><code>SectorScoreTests</code>, <code>SectorStoreTests</code></td></tr>
+<tr><td>The planner names a weekday in its reason</td><td>Weekday symbols are read through an <code>en_US_POSIX</code> copy of the calendar, because a host calendar with an empty locale returns abbreviations</td><td><code>WorkoutPlannerTests</code></td></tr>
+<tr><td>The clock moves backwards</td><td>A future last-sync is treated as stale and the sync runs; a session keep-alive delay never drops below five seconds, so a jumped clock cannot spin against the auth endpoint</td><td><code>SyncStalenessPolicyTests</code>, <code>SessionKeepAliveTests</code></td></tr>
+<tr><td>First open of the morning, last sync at 23:50</td><td>The day boundary triggers a sync regardless of staleness, because the night's sleep is new information a minutes-old sync knows nothing about</td><td><code>SyncStalenessPolicyTests</code></td></tr>
+<tr><td>Device clock skew against the server</td><td>Can let a stale local write win a field-level merge. Accepted and documented; the server's touch trigger stops a client advancing <code>updated_at</code> past the server's clock on synced tables</td><td>known limitation; <code>touch_updated_at()</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-3"><span class="num">22.3</span><span>Apple Health</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Read access denied</td><td>Undetectable by design: HealthKit reports only whether it asked, since revealing a refusal would leak that the user has no data of that type. The reader queries anyway, an empty result renders the empty state, and the settings row links out to Health rather than claiming a connection state</td><td><code>HealthKitReader</code> doc; <code>HealthKitError.authorisationRefused</code> is only for the write request</td></tr>
+<tr><td>iPhone and Watch both count steps</td><td>De-duplicated by <code>HKStatisticsCollectionQuery</code>. Raw samples are never summed</td><td>by design</td></tr>
+<tr><td>Health corrects a sample after it was read</td><td>Observer queries fire on change rather than a timer polling; the sync window always re-reads today and the day of the last sync, because a night's sleep lands on the morning it ends</td><td><code>HealthSyncWindowTests</code></td></tr>
+<tr><td>Thirty-one days of history missing</td><td>The window never goes further back than thirty days, the month the dot grid shows. Health keeps the data, so a longer backfill can be added when something needs it</td><td><code>HealthSyncWindow.maximumDays</code></td></tr>
+<tr><td>Health and Whoop write the same day</td><td><code>MetricsStore.upsert</code> merges; each source touches its own columns and <code>MetricArbiter</code> decides contested ones by rank</td><td><code>MetricArbiterTests</code>, <code>HealthApplyTests</code></td></tr>
+<tr><td>Health sends a value for a metric a person typed</td><td>Manual rank 4 beats every automatic source; a value with no recorded source for weight or water is read as typed, so the upgrade to provenance cannot let a sync replace a hand-entered figure</td><td><code>MetricArbiterTests</code>, <code>MetricSource.legacy(for:)</code></td></tr>
+<tr><td>Same source syncs again with a corrected value</td><td>Equal rank wins, because greater-or-equal is the comparison; a source may correct itself</td><td><code>MetricArbiterTests</code></td></tr>
+<tr><td>Weight recorded in pounds</td><td>Read through <code>HKUnit</code> conversion, stored in kilograms</td><td>by design</td></tr>
+<tr><td>Cycle tracking</td><td>Asked as a second, separate prompt, defaulted from Health's own sex characteristic, offered either way</td><td><code>HealthKitReader.requestCycleAuthorization</code></td></tr>
+<tr><td>Simulator has no health data</td><td>Expected. The design preview fixtures and the checks harness drive every screen without Health</td><td><code>HealthActivityDesignPreview</code></td></tr>
+<tr><td>Seeded sample history on an old install</td><td><code>SampleMetricsPurge</code> deletes every daily row once; workouts, sleep and Whoop records rebuild them on resync. Typed water and weight from before the purge are lost, and this is stated in the type's doc comment rather than hidden</td><td><code>SampleMetricsPurge</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-4"><span class="num">22.4</span><span>Whoop</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Access token expired</td><td>Refreshed before each sync through the <code>whoop-token</code> function; the account-owned credential row is claimed under a 30 second lock so two devices cannot rotate the same refresh token</td><td><code>WhoopTokenTests</code>; <code>claim_whoop_refresh</code></td></tr>
+<tr><td>Refresh refused (400 <code>invalid_grant</code> or 401)</td><td>Tokens cleared, "Whoop sign-in expired" in Settings. Any other refresh error keeps the tokens</td><td><code>WhoopSyncError.reauthenticationRequired</code></td></tr>
+<tr><td>A collection endpoint answers 401 with a live token</td><td>Tokens are kept and the user is told to disconnect and reconnect to grant newer scopes. Clearing them here once made connect-then-sync an unbreakable loop</td><td><code>WhoopSyncError.accessDenied</code>, <code>WhoopTests</code></td></tr>
+<tr><td>Rate limited (429)</td><td>Surfaced immediately; no retry loop</td><td><code>WhoopTests</code></td></tr>
+<tr><td>Record not yet scored</td><td><code>PENDING_SCORE</code> and <code>UNSCORABLE</code> records are archived but not derived; a later sync's re-derive picks them up</td><td><code>WhoopTests</code></td></tr>
+<tr><td>Strap not worn</td><td>No recovery record; fields stay nil; the screen shows its empty state and charts show a gap</td><td>by design</td></tr>
+<tr><td>Recovery still calibrating</td><td><code>whoopRecoveryIsCalibrating</code> is stored and rendered with a marker in the digest; it is never compared unqualified</td><td><code>WhoopArchiveTests</code>, <code>MetricsDigestTests</code></td></tr>
+<tr><td>Empty <code>zone_durations</code> object</td><td>Treated as no reading, not six zeros</td><td><code>WhoopWireFormatTests</code></td></tr>
+<tr><td>Payload shape differs from the docs</td><td>Raw payloads are retained; <code>WhoopDerivation.rederive()</code> rebuilds everything with zero API calls. The custom date decoder exists because fractional seconds once broke stock ISO 8601 parsing on every record</td><td><code>WhoopArchiveTests</code>, <code>WhoopWireFormatTests</code></td></tr>
+<tr><td>Both straps report the same metric</td><td>The primary wearable ranks 3, the other 2, for metrics a wearable claims; Health ranks 3 only for metrics it is authoritative on</td><td><code>WhoopArbitrationTests</code>, <code>MetricSourceTests</code></td></tr>
+<tr><td>Several WHOOP straps broadcasting in a gym</td><td>Auto-pair only when exactly one WHOOP is discovered. Another person's strap is not a reading this person owns</td><td><code>WhoopAutoPair</code></td></tr>
+<tr><td>Auto-reconnect at the start of a new session</td><td>Expected to read "Reconnecting to WHOOP" then "Live · WHOOP" with no tap</td><td>hardware, pending</td></tr>
+</tbody></table></div>
+
+<h3 id="s22-5"><span class="num">22.5</span><span>Fitbit</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Two devices refresh at once</td><td>Fitbit rotates the refresh token on every use and the old one dies, so the credential lives in one server row and the refresh runs under a lease held in a column, not a transaction lock, because the exclusion must outlive an HTTP round trip. The loser sees <code>busy</code> and retries later</td><td><code>fitbit_lock.sql</code>; <code>fitbit_test.ts</code></td></tr>
+<tr><td>Refresh refused outright</td><td><code>needs_reauth</code>; the app shows the reconnect row</td><td><code>FitbitSyncError.reauthenticationRequired</code></td></tr>
+<tr><td>Quota running low (150 requests an hour)</td><td>The function reads <code>Fitbit-Rate-Limit-Remaining</code> on every response and stops while it still holds headroom, returning a resume cursor. A 30 day backfill costs about 40 requests</td><td><code>fitbit-sync/index.ts</code>; <code>FitbitSyncTests</code></td></tr>
+<tr><td>Some collections land and some do not</td><td>The days that arrived are written; <code>partial(failed:)</code> names what is missing and the last-synced stamp is not written clean</td><td><code>FitbitSyncTests</code></td></tr>
+<tr><td>A range request exceeds Fitbit's per-collection day cap</td><td>The function splits by each collection's own cap, because exceeding it is a 400 that names nothing useful</td><td><code>fitbit-sync/index.ts</code></td></tr>
+<tr><td>Raw JSON needs re-deriving</td><td>Stored in <code>WhoopArchive</code> under <code>fitbit-</code> kinds keyed by day window, so a re-sync replaces rather than duplicates</td><td><code>FitbitDerivationTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-6"><span class="num">22.6</span><span>Banks and Plaid</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Ingest throws mid-page</td><td>The cursor does not move. Store the data, then move the cursor: a cursor advanced before a successful ingest is a page Plaid will never send again</td><td><code>PlaidSyncTests</code>, assertions written so they cannot pass on an empty store</td></tr>
+<tr><td>App reinstalled</td><td>The cursor lives in <code>UserDefaults</code> rather than the Keychain on purpose: the Keychain survives a reinstall and the database does not, and a cursor that outlived its database would replay nothing into an empty app</td><td><code>PlaidItemStore</code> doc</td></tr>
+<tr><td>Bank invalidates the stored login</td><td><code>item_login_required</code> puts the institution in <code>needsReconnect</code>; nothing about it is retried</td><td><code>PlaidSyncTests</code>, <code>PlaidClientError.itemLoginRequired</code></td></tr>
+<tr><td>A bank is still sending its history</td><td>The item is remembered before anything else, so a connected bank still fetching is not mistaken for one never connected, and the screen says the history is on its way</td><td><code>PlaidSync.run</code></td></tr>
+<tr><td>Same institution connected twice, concurrently</td><td>The function's check-then-insert is backstopped by a unique constraint on <code>(user_id, institution_id)</code></td><td><code>plaid_items.sql</code></td></tr>
+<tr><td>A link removed on another device</td><td>Items absent from the sync response are removed from the local cache</td><td><code>PlaidSyncTests</code></td></tr>
+<tr><td>Plaid amount sign</td><td>Negated on the way in; positive is money in everywhere inside the app</td><td><code>PlaidMappingTests</code></td></tr>
+<tr><td>Plaid date string</td><td>Parsed in the same calendar <code>MoneyStore</code> normalises with, so a transaction cannot land on the adjacent day</td><td><code>PlaidMappingTests</code></td></tr>
+<tr><td>Transfers and card payments</td><td>Excluded from income and spending by the underscore-delimited prefix rule</td><td><code>MoneyTests</code>, <code>PlaidCategoryTests</code></td></tr>
+<tr><td>Old rows have no merchant logo</td><td>Every item's cursor is cleared once, so the next sync replays history through the same keyed upsert. Not billed, because Plaid charges per connected item, not per sync call</td><td><code>PlaidItemStore.resetCursors</code></td></tr>
+<tr><td>A bank's OAuth login redirects to a browser</td><td>The universal link <code>almanac.shivvyas.com/plaid-oauth</code> lands back in the app; the static site exists only to serve the association file with the right content type</td><td><code>web/README.md</code>; device only</td></tr>
+<tr><td>Storage fails after the exchange</td><td>The live credential is never stranded: the function fails the exchange rather than leaving a token nobody can find</td><td><code>plaid-exchange</code>, commit 1dcafaf</td></tr>
+<tr><td>An amount like 19.995</td><td>Rounded to the cent before splitting into whole and cents, never after</td><td><code>MoneyPartsTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-7"><span class="num">22.7</span><span>Calendar and EventKit</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>A recurring series</td><td>Each occurrence is keyed by identifier plus occurrence start, because EventKit reuses one identifier across the series. Gated writes refuse recurring rows</td><td><code>EventKitSourceIDTests</code>, <code>CalendarToolsTests</code></td></tr>
+<tr><td>A source throws during a sync pass</td><td>Only sources actually fetched are authoritative; rows for a source that threw are left untouched rather than treated as zero events</td><td><code>CalendarStoreTests</code>, <code>CalendarSyncTests</code></td></tr>
+<tr><td>An event deleted in another app</td><td>Absent from the fetch inside the window, so deleted from the cache; rows outside the window are never touched</td><td><code>CalendarStoreTests</code></td></tr>
+<tr><td>An event moves into the window from outside it</td><td>Matched by key across the whole cache, not only the window, so it updates in place and keeps its local id</td><td><code>CalendarStoreTests</code></td></tr>
+<tr><td>An all-day event</td><td>Does not block free time and is never clamped to a minimum length</td><td><code>CalendarFreeSlotTests</code></td></tr>
+<tr><td>Calendar permission granted on the device but not for this account</td><td><code>AccountDeviceAccess.allowsCalendar</code> requires both</td><td><code>AccountDeviceAccessTests</code></td></tr>
+<tr><td>A write lands</td><td>The provider is re-synced afterwards, because providers normalise all-day handling and timezones and trusting the local draft would drift</td><td><code>CalendarSyncTests</code></td></tr>
+<tr><td>No writable source</td><td><code>CalendarSyncError.noWritableSource</code>, surfaced, not retried</td><td><code>CalendarSyncTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-8"><span class="num">22.8</span><span>Sessions and accounts</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Access token expired at launch</td><td><code>SessionRefresher</code> refreshes. A refusal (400, 401, 403, 422) clears the store and returns to sign-in; a transport error, 429 or 5xx keeps the session and the app keeps working</td><td><code>SessionRefreshTests</code></td></tr>
+<tr><td>App kept open past the hour</td><td><code>SessionKeepAlive</code> schedules a renewal 45 seconds before expiry, inside the refresher's own minute of slack, so friends, the cloud coach and notes sync do not all start failing with <code>JWT expired</code> at once</td><td><code>SessionKeepAliveTests</code></td></tr>
+<tr><td>Refresh response is sparse</td><td>The new session carries forward the previous refresh token, user id, phone, email and <code>hasProfile</code></td><td><code>AuthSessionProfileTests</code></td></tr>
+<tr><td>Refresh returns a different user id</td><td>Cleared and rejected</td><td><code>SessionRefreshTests</code></td></tr>
+<tr><td>Sign out</td><td>Stays signed out: the keychain slot is cleared, the device token row is deleted, and a stale refresh in flight cannot resurrect the session because the refresher checks the store still holds the token it started with</td><td><code>SessionRefreshTests</code>; commit 1ebc667</td></tr>
+<tr><td>Two people on one device</td><td>Each account has its own store file and defaults suite; switching closes one and opens the other. A push token registered under B replaces A's row because the token is the primary key</td><td><code>UserScopeTests</code>, <code>AccountStoreTests</code>; <code>device_tokens</code></td></tr>
+<tr><td>Upgrade from the single-store build</td><td>The session in the old keychain slot is adopted into the roster and the legacy store is moved, once, into the first account that signs in</td><td><code>AccountStoreTests</code>, <code>LifeOSContainer.adoptLegacyStore</code></td></tr>
+<tr><td>SMS provider fails</td><td>Twilio codes 21608, 21610, 30034 and 60410 map to sentences a person can act on; email is the default channel and any phone failure offers "Use email instead"</td><td><code>otp_twilio_test.ts</code>, <code>AuthErrorMappingTests</code></td></tr>
+<tr><td>Wrong door taken (sign in versus sign up)</td><td>Harmless: the branch after verify routes on <code>AuthSession.hasProfile</code>, not on the door</td><td><code>AuthSessionProfileTests</code></td></tr>
+<tr><td>OTP abuse</td><td>Hashed phone, prefix and IP events in <code>otp_events</code>; a blocked attempt is logged and refused before Twilio is called</td><td><code>otp_session_test.ts</code></td></tr>
+<tr><td>A schema field with no default</td><td>The container never opens and the shell waits on a store that never arrives. See <a href="#s21-13">21.13</a></td><td><code>SchemaMigrationTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-9"><span class="num">22.9</span><span>Notes sync</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>An edit made while a push is in flight</td><td>Push before pull, always; the synced mark never touches <code>updatedAt</code>, so the edit stays dirty and goes out on the next pass</td><td><code>NotesStoreTests</code>, <code>NoteSyncIndexTests</code></td></tr>
+<tr><td>Same row changed on two devices</td><td><code>updatedAt</code> decides and a tie goes to the local row, because ties come from the same device writing both</td><td><code>NoteSync</code> doc, <code>NoteWireFormatTests</code></td></tr>
+<tr><td>A page deleted on one device</td><td>A tombstone, not a delete, so the other device can pull the fact rather than fail to observe an absence</td><td><code>notes.sql</code>, <code>NotesStoreTests</code></td></tr>
+<tr><td>A child folder reaches the server before its parent</td><td>Allowed: <code>parent_id</code> is deliberately not a foreign key, because rows arrive in whatever order the client batches them</td><td><code>notes.sql</code></td></tr>
+<tr><td>Several triggers fire on a cold start</td><td>Coalesced into one pass; a second caller joins the pass already running</td><td><code>NoteSync</code></td></tr>
+<tr><td>Signed out</td><td>Notes work fully offline; a guest simply never pushes. Nil token is not an error</td><td>by design</td></tr>
+<tr><td>Fresh install pulls a library</td><td>Pulled pages are indexed on arrival and stay out of the Inbox; the index migration marker is only spent when there was history to interpret</td><td><code>NoteIndexMigrationTests</code>, <code>NoteSyncIndexTests</code></td></tr>
+<tr><td>A page's JSON cannot be decoded</td><td>The editor gets a blank document and the original bytes stay on disk until saved over</td><td><code>NoteDocument.blocks</code></td></tr>
+<tr><td>A link points at a renamed or deleted page</td><td><code>targetID</code> may dangle until the next launch's <code>rebuildAll</code>; consumers treat a miss as survivable</td><td><code>NoteIndexerTests</code></td></tr>
+<tr><td>Search typed quickly</td><td>One shelf per query, not one per keystroke</td><td>commit 2218d36</td></tr>
+<tr><td>Access token captured at attach</td><td>Never: the token is read from the keychain per pass, because the shell refreshes it on launch and foreground and a captured one is stale within the hour</td><td><code>RootView.attachAll</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-10"><span class="num">22.10</span><span>Live sessions and sensors</span></h3>
+<p>These are pinned by the native checks harness rather than by <code>swift test</code>, because the recorder needs <code>HKWorkoutSession</code>, Bluetooth and ActivityKit. Launch with <code>--design-preview --page=checks</code> on a simulator; 34 of 34 pass as of 15 September 2026. The pure parts, zones, effort, capacity and the readout, are in <code>LiveEffortTests</code> and <code>LiveSessionReadoutTests</code>.</p>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Health access refused at start</td><td>The timer starts anyway; the session saves locally without claiming a Health save</td><td>checks: "Timer starts without Health access", "Finish saves locally without claiming a Health save"</td></tr>
+<tr><td>Paused</td><td>Readings accrue nothing and the elapsed time holds; the first reading after resume credits nothing and the second accrues</td><td>checks: "Paused readings accrue nothing", "First reading after resume credits nothing"</td></tr>
+<tr><td>App relaunched mid-session</td><td>The draft restores the timer, capacity, effort and the video being followed; a timer-only draft restores without Health recovery</td><td>checks: "Draft restores capacity and effort", "A restored draft keeps its video"</td></tr>
+<tr><td>Save tapped twice</td><td>One workout record</td><td>check: "Repeated save creates one workout"</td></tr>
+<tr><td>Account switched mid-session</td><td>Recording stops and late starts are rejected; another account cannot see the draft or the remembered sensor</td><td>checks: "Account transition stops recording", "Other account cannot see the draft"</td></tr>
+<tr><td>No recovery reading today</td><td>Capacity falls back to Apple Health HRV against a week of baseline rows, then to a neutral default; the tile says which</td><td><code>LiveEffortTests</code>, <code>CapacityInputs</code></td></tr>
+<tr><td>Readings arrive every second</td><td>The readout is recomputed every second, but the draft is written at most every ten seconds and the Live Activity publish is throttled to a three second minimum interval</td><td><code>ActivityRecorder</code> doc; <code>LiveSessionReadoutTests</code></td></tr>
+<tr><td>A stale Live Activity card from a session nobody adopted</td><td>Ended; only one activity belongs on screen</td><td><code>ActivityRecorder</code>, <code>WatchSessionBridge.endPlaceholder</code></td></tr>
+<tr><td>A freeform walk after a cancelled video start</td><td>Not stamped with the video: <code>following</code> belongs to the start that sets it, and every other start clears it</td><td>check: "A failed start does not stamp the next session"</td></tr>
+<tr><td>Rep removed below zero</td><td>Floors at zero; an unknown count stays unknown rather than becoming 0</td><td>check: "Remove rep never goes below zero"</td></tr>
+<tr><td>Lock-screen BPM updates while the phone stays locked for two minutes</td><td>Expected to keep updating; if it stops, add <code>workout-processing</code> to <code>UIBackgroundModes</code></td><td>hardware, pending</td></tr>
+<tr><td>Dynamic Island expanded presentation</td><td>Unverified; only the compact state was captured</td><td>pending capture</td></tr>
+</tbody></table></div>
+
+<h3 id="s22-11"><span class="num">22.11</span><span>The watch hand-off</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Watch never answers</td><td>Ten seconds, shown as "Asking your Apple Watch…", then the phone runs the session itself</td><td>check: "A watch that does not answer falls back to the phone"</td></tr>
+<tr><td>Health saving turned off</td><td>The watch is never offered the session, because the watch writes to Health</td><td>check: "Health saving off keeps the session on the phone"</td></tr>
+<tr><td>Health refused on the phone</td><td>Falls through to the phone path; the first permission prompt is on the phone, never the wrist. A refused session sends <code>discard</code> so nothing reaches Health</td><td>watch report, C1</td></tr>
+<tr><td>A packet with an unknown version</td><td>Dropped without changing state</td><td>check: "A packet with an unknown version changes nothing"; <code>WatchWireTests</code></td></tr>
+<tr><td>A packet arrives for a phone-owned session</td><td>Never reaches it</td><td>check: "A watch packet never reaches a phone session"</td></tr>
+<tr><td>Person starts on both devices</td><td>The recorder keeps the phone session and discards the mirrored one with a notice; it never merges and never ends the wrist session, since ending means saving there</td><td>spec 9; <code>ActivityRecorder+Watch</code></td></tr>
+<tr><td>Automatic rep arrives after a manual +1</td><td>Manual and automatic reps are tracked separately and summed, so the tap is never overwritten</td><td>watch report, task 5</td></tr>
+<tr><td>Mirrored session arrives with no recorder listening</td><td>The bridge requests the Live Activity itself and the recorder's timer adopts that id instead of asking for a second card</td><td>watch report, I3</td></tr>
+<tr><td>Last command sent</td><td>The session is dropped in the send's completion handler, not the same run-loop turn, or the command is cancelled before the watch hears it</td><td><code>WatchSessionBridge.end(after:)</code></td></tr>
+<tr><td>Watch app not in the foreground</td><td><code>watchAvailable</code> is paired, activated and installed, never <code>isReachable</code>, which is true only while the watch app is already open</td><td>watch report, I1</td></tr>
+<tr><td>Phone relaunched during a mirrored session</td><td>Packet-driven re-attach; whether <code>recoverActiveWorkoutSession</code> also returns it is unverified</td><td>hardware, pending</td></tr>
+<tr><td>Rep accuracy on real movement</td><td>Unmeasured; constants are pinned by six synthetic tests and tuned from a hardware session</td><td><code>RepCounterTests</code>; hardware, pending</td></tr>
+</tbody></table></div>
+
+<h3 id="s22-12"><span class="num">22.12</span><span>Video and the catalog</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Embed loaded straight into the web view</td><td>Error 153 on every video. The iframe is wrapped in a page of the app's own with an <code>origin</code> matching its <code>baseURL</code>, both on <code>youtube-nocookie.com</code>; six of six seed ids then render</td><td>library report, embed spot-check</td></tr>
+<tr><td>Owner has disabled embedding</td><td>YouTube's own card carries a "Watch on YouTube" button; the player also shows "Open in YouTube" when the page fails to load</td><td><code>YouTubePlayerView</code></td></tr>
+<tr><td>A row's id is not a YouTube id</td><td>Validated against <code>^[A-Za-z0-9_-]{11}$</code> before anything is interpolated; the row says it will not play here</td><td><code>YouTubePlayerView</code>, <code>verify_lib_test.ts</code></td></tr>
+<tr><td>Phone rotates or full screen is toggled</td><td>The web view is owned by the screen, not the layout branch, so the video never restarts</td><td><code>YouTubePlayerView</code> doc</td></tr>
+<tr><td>Catalog refresh comes back empty</td><td>The cache is kept and the screen says the last downloaded one is showing. An empty answer is far more often an unseeded table or a policy that stopped matching than a library that emptied</td><td><code>CatalogRefreshTests</code></td></tr>
+<tr><td>First open with no connection</td><td>Empty state with <code>wifi.slash</code>: the library needs a connection the first time</td><td>library report</td></tr>
+<tr><td>A video deleted or privated upstream</td><td>Stays in the cache until the next refresh removes rows absent from the server</td><td><code>CatalogStore.upsert</code></td></tr>
+<tr><td>Duplicate id in a response</td><td>Last row wins; no trap</td><td><code>CatalogStore.upsert</code></td></tr>
+<tr><td>Catalog edited by hand</td><td>The verify script refuses an empty catalog, checks every id against oEmbed for title, channel and duration, and every seed ends with a delete naming every verified id, so a seed run is a full sync</td><td><code>verify_lib_test.ts</code> (7 tests)</td></tr>
+<tr><td>Explicit split chip chosen</td><td>Never widened away by the planner's fallback</td><td><code>WorkoutLibraryFilterTests</code></td></tr>
+<tr><td>Saved chip</td><td>Shows saved rows regardless of today's plan, filtered only by the query</td><td><code>WorkoutLibraryFilterTests.savedListIgnoresThePlanButNotTheQuery</code></td></tr>
+<tr><td>Landscape overlay on iPhone</td><td>Unreachable today: the iPhone app is portrait-only; the overlay sits behind <code>VideoWorkoutLayout.landscapeOverlay</code></td><td>spec 5.3; pending</td></tr>
+</tbody></table></div>
+
+<h3 id="s22-13"><span class="num">22.13</span><span>LIFO and the cloud tier</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Daily token cap reached (150,000 tokens)</td><td>The function answers 429 <code>exhausted</code> before any call; the router falls back to the on-device model and the reply is marked <code>degraded</code>, never mentioning the allowance</td><td><code>lifo_test.ts</code>, <code>RemoteEngineTests</code>, <code>CoachRouterTests</code></td></tr>
+<tr><td>Model refuses</td><td>403 <code>refused</code> with the model's words; surfaced plainly, never retried with a reworded prompt. A refusal still consumed tokens and is still debited</td><td><code>lifo_test.ts</code>, <code>RemoteEngineTests</code></td></tr>
+<tr><td>Reply does not parse against the task's schema</td><td>502 <code>upstream_failure</code>, debited, surfaced as unavailable with retry</td><td><code>lifo_test.ts</code> (<code>parseOutput</code>)</td></tr>
+<tr><td>Provider rejects the tuned body (400)</td><td>Retried once without <code>reasoning_effort</code> and <code>verbosity</code>; a 400 is the only status a smaller body can fix</td><td><code>lifo_test.ts</code> (<code>withoutTuning</code>)</td></tr>
+<tr><td>DNS, timeout, connection reset</td><td>No billable call happened, nothing debited, 502; the client shows retry</td><td><code>lifo-agent/index.ts</code></td></tr>
+<tr><td>Stream abandoned half way</td><td><code>flush</code> still runs when the body is cancelled, so a walked-away-from answer is still paid for</td><td><code>streamToClient</code></td></tr>
+<tr><td>Provider omits usage</td><td>Zero tokens are never debited, but the path is logged; an unmetered path is a free one</td><td><code>lifo-agent/index.ts</code></td></tr>
+<tr><td>Prompt too large for the on-device window</td><td>The digest drops whole days, oldest first, until the render fits an 8,000 character budget; if it still does not fit, <code>tooLarge</code> is surfaced as our fault, not the device's</td><td><code>ContextBundleTests</code>, <code>MetricsDigestTests</code>, <code>CoachRouterTests</code></td></tr>
+<tr><td>On-device model unavailable</td><td>Three reasons distinguished: not eligible (resolved once), Apple Intelligence off (re-checked on foreground), model not ready (re-checked per request)</td><td><code>ModelAvailabilityTests</code></td></tr>
+<tr><td>On-device error</td><td><code>EscalationPolicy</code> maps each case: context window exceeded escalates, assets unavailable and rate limited retry locally, decoding failure retries then escalates, refusal surfaces, unsupported guide is a programmer error</td><td><code>EscalationPolicyTests</code></td></tr>
+<tr><td>Guest (no session)</td><td><code>notSignedIn</code>; the cloud tier is never called and the screen offers a sign-in door</td><td><code>RemoteEngineTests</code></td></tr>
+<tr><td>A thread that writes its own system message</td><td>Refused by the server before the model sees it</td><td><code>lifo_test.ts</code> (<code>parseRequest</code>)</td></tr>
+<tr><td>A tool the model asks to run twice</td><td>Tool execution is capped per turn and gated writes suspend until the card is answered; nothing the model emits can reach the call itself</td><td><code>ToolInvokerTests</code>, <code>ToolGate</code></td></tr>
+<tr><td>Cloud write confirmed, then the device retried</td><td>Never: once a write has been confirmed the turn does not fall back to the device</td><td>commit 759fd65, <code>RemoteChatEngineTests</code></td></tr>
+<tr><td>Brief regenerating on every open</td><td>One brief per calendar day through <code>BriefCache</code>, with an in-flight map so two callers for the same day share one generation</td><td><code>BriefCacheTests</code></td></tr>
+<tr><td>The two conversational prompts drift apart</td><td>A Deno test and a Swift test each pin the same prohibitions and permissions in <code>ResponseStyle.conversation</code> and the server's <code>CONVERSATION</code></td><td><code>ResponseStyleTests</code>, <code>lifo_test.ts</code></td></tr>
+<tr><td>Microphone opened in a loud room</td><td>The endpointer learns the noise floor from non-voice frames, climbs slowly and drops at once; a backstop ends the turn when every frame reads as voice, and an opened mic with nothing said closes itself</td><td><code>SpeechEndpointerTests</code></td></tr>
+<tr><td>Speech reply over 1,200 characters</td><td>Clipped before it is sent, because speech is billed per character</td><td><code>ElevenLabsVoiceClient.maxCharacters</code>, <code>SpokenReplyTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-14"><span class="num">22.14</span><span>Nudges and push</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Two cron runs overlap</td><td>The job inserts into <code>nudge_log</code> before it sends; the primary key <code>(user_id, day)</code> makes the second run conflict and stop</td><td><code>proactive_nudges.sql</code></td></tr>
+<tr><td>Same trigger fires again on Thursday</td><td>Seven day per-trigger cooldown</td><td><code>nudge_test.ts</code></td></tr>
+<tr><td>8am in Auckland, midnight in Los Angeles</td><td>Hourly schedule; each run selects only users whose local clock has just reached the send hour, and nothing sends outside 7 to 21 local</td><td><code>nudge_test.ts</code>, <code>schedule.sql</code></td></tr>
+<tr><td>OpenAI unreachable</td><td>The fired trigger's own fallback sentence is delivered; an outage never swallows an observation</td><td><code>nudge_test.ts</code></td></tr>
+<tr><td>Nudge budget spent (4,000 tokens)</td><td>Fallback sentence; a heavy chat evening cannot eat the next morning's nudge because chat and nudges are separate ledger rows</td><td><code>lifo_debit(uuid, bigint, text)</code></td></tr>
+<tr><td>Phone off for three days</td><td>One collapse id for the channel and a 12 hour expiry, so it gets today's nudge or none, never three</td><td><code>apns_test.ts</code></td></tr>
+<tr><td>APNs provider token minted too often</td><td>One ES256 token reused for fifty minutes; Apple throttles a sender that mints more than once every twenty minutes</td><td><code>apns_test.ts</code></td></tr>
+<tr><td>Wrong APNs host for the build</td><td>400 <code>BadDeviceToken</code> on every send, which is why <code>APNS_SANDBOX</code> is configuration rather than a guess</td><td><code>apns.ts</code></td></tr>
+<tr><td>APNs not configured</td><td>The job returns <code>apns_not_configured</code> and sends nothing</td><td><code>lifo-nudge/index.ts</code></td></tr>
+<tr><td>Permission prompt timing</td><td>Never at launch; asked after the app has shown something worth being interrupted about</td><td><code>PushService</code> doc</td></tr>
+<tr><td>Token arrives after the sign-in that asked for it</td><td>Kept in defaults as well as memory so sign-out can delete the row after a relaunch</td><td><code>PushTokenTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-15"><span class="num">22.15</span><span>Social</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>A slow search answers after a newer one</td><td>The newer search can never lose to it</td><td><code>FriendsViewModel</code>, commit 8e2d616</td></tr>
+<tr><td>A send fails</td><td>The row is never lost; <code>client_id</code> is unique per sender so a retry cannot duplicate it</td><td><code>social_groups.sql</code>, <code>SocialAPITests</code></td></tr>
+<tr><td>PostgREST refuses a request</td><td>The server's sentence is carried through, because an expired token, a missing grant and a malformed filter are otherwise the same refusal</td><td><code>SocialAPITests</code>, <code>SharedStatsClientTests</code></td></tr>
+<tr><td>Stats sharing off</td><td>Nulls, not zeros, in <code>profile_stats</code>; the screen omits what it does not know</td><td><code>shared_stats.sql</code></td></tr>
+<tr><td>A group invitation</td><td>Grants nothing until accepted; chat and leaderboards need <code>accepted</code></td><td><code>social_groups.test.sql</code></td></tr>
+<tr><td>Wellness scores</td><td>Need their own consent flag; streak sharing does not silently expand to HRV-derived scores, and a score without a source is unrepresentable</td><td><code>group_wellness.test.sql</code></td></tr>
+<tr><td>Avatar replaced on another device</td><td>Three-case lookup of the object's timestamp; "no object" and "no timestamp" want opposite answers, so they are not collapsed into one nil</td><td><code>ProfileClientTests</code></td></tr>
+<tr><td>Profile never reached the server</td><td>Not lost; retried on the next foreground</td><td>commit b2bc7cc</td></tr>
+</tbody></table></div>
+
+<h3 id="s22-16"><span class="num">22.16</span><span>UI and data display</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th><th>Pinned by</th></tr></thead><tbody>
+<tr><td>Metric missing</td><td>A dash, never 0, rendered by the tile from a <code>String?</code></td><td><code>MetricTile</code></td></tr>
+<tr><td>Goal changed retroactively</td><td>All history re-evaluates on the next load; the grid measures against your current standard</td><td><code>GoalEvaluationTests</code></td></tr>
+<tr><td>Streak across a no-data gap</td><td>The gap is transparent</td><td><code>StreakTests</code></td></tr>
+<tr><td>Weight delta with fewer than seven days</td><td>Suppressed rather than computed from a short window</td><td><code>TrendSeriesTests</code></td></tr>
+<tr><td>A font declared outside the scale</td><td><code>scripts/check-typography.sh</code> fails the run; the app once carried 376 hand-written font calls across 28 sizes</td><td>script</td></tr>
+<tr><td>Dark mode</td><td>Every hue has a dark variant; no colour is defined only inside a scheme branch</td><td><code>TokensTests</code></td></tr>
+<tr><td>A metric with no readings</td><td>Averages are nil rather than zero when nothing contributed</td><td><code>MetricsDigestTests</code></td></tr>
+<tr><td>Cents in a money row</td><td>Whole and cents split in the kit, two digits always</td><td><code>MoneyPartsTests</code></td></tr>
+<tr><td>Donut categories</td><td>Top five plus Other, one ink at stepped opacity; identity is never colour alone</td><td><code>SpendSeriesTests</code></td></tr>
+<tr><td>iPad rail overlapping the pane</td><td>The rail's real width is reserved; it withdraws while the pane is worked with and returns when that stops</td><td><code>LayoutMetricsTests</code></td></tr>
+<tr><td>Sector with no evidence</td><td>No band and no score; the board's "decided" mean is over sectors with a band only, so silence never reads as certainty</td><td><code>BoardSummaryTests</code>, <code>SectorBandTests</code></td></tr>
+<tr><td>Coast projection for Money</td><td>Continuing at the current pace, not an empty tail, because spending nothing is the best case and an empty tail would put the floor above the ceiling</td><td><code>ProjectedInputsTests</code></td></tr>
+</tbody></table></div>
+
+<h3 id="s22-17"><span class="num">22.17</span><span>Study notes</span></h3>
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Integrations/SessionRefresh.swift</code>, the clearest statement of "destroy only on a definitive refusal".</li>
+  <li><code>SyncStalenessPolicy.swift</code> and <code>SessionKeepAlive.swift</code>, two pure clocks.</li>
+  <li><code>MetricArbiter.swift</code> and <code>MetricSource.swift</code>, then the tests beside them.</li>
+  <li><code>PlaidSync.swift</code>, for store-then-move-cursor.</li>
+  <li><code>supabase/functions/lifo-agent/index.ts</code>, for every failure path a cloud call has.</li>
+  <li><code>supabase/functions/_shared/nudge.ts</code> and <code>apns.ts</code>, for the fallback and collapse rules.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorderChecks.swift</code>, the native checks that stand in for tests.</li>
+  <li><code>docs/design/watch-companion/report.md</code>, for what is still unverified.</li>
+</ol>
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Which HTTP statuses sign a person out, and why not 429?</strong> 400, 401, 403 and 422 are the server refusing the credential; 429 and 5xx are the server failing to answer.</li>
+  <li><strong>Why does the Plaid cursor live in UserDefaults and not the Keychain?</strong> The Keychain survives a reinstall and the database does not; a surviving cursor would replay nothing into an empty app.</li>
+  <li><strong>What happens to an empty catalog response?</strong> The cache is kept; an empty answer is believed only when there was nothing to lose.</li>
+  <li><strong>Why is a refused model reply still debited?</strong> It consumed real tokens; an unmetered path would let off-topic questions burn budget for free.</li>
+  <li><strong>How can two cron runs not double-send?</strong> The log insert precedes the send and the primary key makes the second insert conflict.</li>
+  <li><strong>What does a watch hand-off do when Health saving is off?</strong> It is never offered; the watch writes to Health, so the phone keeps the session.</li>
+</ul>
 </section>
