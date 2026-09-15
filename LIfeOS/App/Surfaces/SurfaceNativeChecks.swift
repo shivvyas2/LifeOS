@@ -34,21 +34,34 @@ enum SurfaceNativeChecks {
         push.attach(ownerID: a)
         check(!push.receive(first) && push.entries.isEmpty, "Cleared check-in cannot be restored by duplicate delivery")
         do {
-            let container = try ModelContainer(for: DailyMetrics.self, UserGoals.self,
+            let container = try ModelContainer(for: DailyMetrics.self, UserGoals.self, CalendarEvent.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true))
             let now = Date.now
             let store = MetricsStore(context: container.mainContext)
             try store.upsert(date: now) { $0.steps = 6400; $0.sleepMinutes = 450 }
             try store.upsert(date: now.addingTimeInterval(-86400)) { $0.steps = 99999 }
+            let agendaWindow = AgendaSnapshot.window(around: now)
+            let inWeek = CalendarEventSnapshot(id: UUID(), source: .eventKit, sourceID: "check-week", calendarTitle: "Work",
+                title: "Weekly Team Sync", startDate: now.addingTimeInterval(3600), endDate: now.addingTimeInterval(7200),
+                isAllDay: false, isRecurring: false, location: nil, notes: nil)
+            let farAway = CalendarEventSnapshot(id: UUID(), source: .eventKit, sourceID: "check-far", calendarTitle: "Work",
+                title: "Next Month", startDate: agendaWindow.end.addingTimeInterval(86400 * 10),
+                endDate: agendaWindow.end.addingTimeInterval(86400 * 10 + 3600),
+                isAllDay: false, isRecurring: false, location: nil, notes: nil)
+            try CalendarStore(context: container.mainContext).apply([inWeek, farAway],
+                window: DateInterval(start: agendaWindow.start, end: farAway.endDate.addingTimeInterval(86400)))
             let coordinator = SurfaceCoordinator.shared
             coordinator.adopt(ownerID: a, context: container.mainContext)
             check(SurfaceSnapshot.read()?.steps == 6400, "Widget exports today's data, not a historical day")
+            check(AgendaSnapshot.read()?.events.map(\.title) == ["Weekly Team Sync"], "Agenda widget exports this fortnight's events only")
             coordinator.clear()
             check(SurfaceSnapshot.read()?.ownerID == nil && SurfaceSnapshot.read()?.steps == nil, "Sign-out replaces shared health cache with an empty snapshot")
-            let empty = try ModelContainer(for: DailyMetrics.self, UserGoals.self,
+            check(AgendaSnapshot.read()?.ownerID == nil && AgendaSnapshot.read()?.events.isEmpty == true, "Sign-out replaces shared agenda cache with an empty snapshot")
+            let empty = try ModelContainer(for: DailyMetrics.self, UserGoals.self, CalendarEvent.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true))
             coordinator.adopt(ownerID: b, context: empty.mainContext)
             check(SurfaceSnapshot.read()?.ownerID == b && SurfaceSnapshot.read()?.steps == nil, "Next account starts with missing readings, never previous values")
+            check(AgendaSnapshot.read()?.ownerID == b && AgendaSnapshot.read()?.events.isEmpty == true, "Next account starts with an empty agenda, never previous events")
         } catch { check(false, "Native snapshot checks: \(error.localizedDescription)") }
         return checks
     }

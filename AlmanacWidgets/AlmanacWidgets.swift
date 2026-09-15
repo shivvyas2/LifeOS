@@ -5,6 +5,7 @@ import WidgetKit
 struct AlmanacWidgets: WidgetBundle {
     var body: some Widget {
         HealthWidget()
+        AgendaWidget()
         BeginActivityWidget()
         WorkoutLiveActivity()
     }

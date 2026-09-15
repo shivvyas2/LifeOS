@@ -5,5 +5,8 @@ PASS Delayed notification from previous account rejected
 PASS Account inbox and read status restored
 PASS Cleared check-in cannot be restored by duplicate delivery
 PASS Widget exports today's data, not a historical day
+PASS Agenda widget exports this fortnight's events only
 PASS Sign-out replaces shared health cache with an empty snapshot
+PASS Sign-out replaces shared agenda cache with an empty snapshot
 PASS Next account starts with missing readings, never previous values
+PASS Next account starts with an empty agenda, never previous events

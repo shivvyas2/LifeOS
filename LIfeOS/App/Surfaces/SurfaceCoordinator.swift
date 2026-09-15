@@ -10,6 +10,7 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     static let shared = SurfaceCoordinator()
     var pendingRoute: SurfaceRoute?
     private(set) var snapshot: SurfaceSnapshot?
+    private(set) var agenda: AgendaSnapshot?
     private var ownerID: String?
     private var context: ModelContext?
     private var watchSession: WCSession?
@@ -17,12 +18,12 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
         get { UserDefaults.currentAccount.object(forKey: "surface.sharing") as? Bool ?? true }
         set {
             UserDefaults.currentAccount.set(newValue, forKey: "surface.sharing")
-            if newValue { publish() } else { write(SurfaceSnapshot()) }
+            if newValue { publish() } else { writeTombstones() }
         }
     }
     func adopt(ownerID: String?, context: ModelContext?) {
         self.ownerID = ownerID; self.context = context
-        if SurfaceSnapshot.read()?.ownerID != ownerID || ownerID == nil || !sharingEnabled { write(SurfaceSnapshot()) }
+        if SurfaceSnapshot.read()?.ownerID != ownerID || ownerID == nil || !sharingEnabled { writeTombstones() }
         if WCSession.isSupported(), watchSession == nil {
             watchSession = WCSession.default
             watchSession?.delegate = self
@@ -32,10 +33,11 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     }
     func clear() {
         ownerID = nil; context = nil; pendingRoute = nil
-        write(SurfaceSnapshot())
+        writeTombstones()
     }
     func publish() {
         guard let ownerID, let context, sharingEnabled else { return }
+        publishAgenda(ownerID: ownerID, context: context)
         let store = MetricsStore(context: context)
         let now = Date.now
         let row = try? store.metrics(from: now, to: now).first
@@ -50,6 +52,32 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
            previous.measuredAt == next.measuredAt,
            next.generatedAt.timeIntervalSince(previous.generatedAt) < 3600 { return }
         write(next)
+    }
+    /// Two weeks of events from the start of this calendar week, for the
+    /// agenda widget. Coalesced on content so unrelated saves do not rewrite
+    /// the file; the week start is part of the key so midnight on Sunday
+    /// still publishes.
+    private func publishAgenda(ownerID: String, context: ModelContext) {
+        let window = AgendaSnapshot.window(around: .now)
+        let rows = (try? CalendarStore(context: context).events(from: window.start, to: window.end)) ?? []
+        let next = AgendaSnapshot(ownerID: ownerID, events: rows.map {
+            AgendaSnapshot.Event(id: $0.id, title: $0.title, calendarTitle: $0.calendarTitle,
+                                 startDate: $0.startDate, endDate: $0.endDate, isAllDay: $0.isAllDay)
+        })
+        if let previous = agenda, previous.ownerID == next.ownerID, previous.events == next.events,
+           previous.weekStart == next.weekStart,
+           next.generatedAt.timeIntervalSince(previous.generatedAt) < 3600 { return }
+        writeAgenda(next)
+    }
+    private func writeAgenda(_ next: AgendaSnapshot) {
+        agenda = next
+        next.write()
+        WidgetCenter.shared.reloadTimelines(ofKind: AgendaSnapshot.widgetKind)
+    }
+    /// Sign-out, account switch, and sharing off replace every shared envelope.
+    private func writeTombstones() {
+        write(SurfaceSnapshot())
+        writeAgenda(AgendaSnapshot())
     }
     private func write(_ next: SurfaceSnapshot) {
         snapshot = next
