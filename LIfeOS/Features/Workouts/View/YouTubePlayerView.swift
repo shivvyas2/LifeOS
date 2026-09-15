@@ -48,14 +48,14 @@ struct YouTubePlayerView: UIViewRepresentable {
             guard loaded != videoID, let url = VideoWorkoutLayout.embedURL(youtubeID: videoID) else { return }
             loaded = videoID
             // Loading the embed URL straight into the web view answers with
-            // "Video player configuration error, Error 153": the embed wants
-            // an embedding page it can read a referrer from. So the iframe is
-            // wrapped in a page of our own, based at youtube.com, which is
-            // what the player asks for and what every embed on the web is.
-            view.loadSimulatedRequest(URLRequest(url: Self.base), responseHTML: Self.page(embedding: url))
+            // "Video player configuration error, Error 153": the embed needs a
+            // page with an origin to sit in. So the iframe is wrapped in a
+            // page of our own, based at the host the embed's `origin` names,
+            // which is what youtube-ios-player-helper does too.
+            view.loadHTMLString(Self.page(embedding: url), baseURL: Self.base)
         }
 
-        static let base = URL(string: "https://www.youtube.com/")!
+        static let base = URL(string: VideoWorkoutLayout.embedOrigin)
 
         static func page(embedding url: URL) -> String {
             """

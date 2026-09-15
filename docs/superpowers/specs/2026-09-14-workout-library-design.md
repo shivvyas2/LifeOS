@@ -204,6 +204,9 @@ what the terms name. Risk recorded: if YouTube flags the overlay, the
 fallback is a side rail, which the layout keeps as a code path behind one
 flag (`VideoWorkoutLayout.landscapeOverlay`).
 
+The app is portrait-only today; this layout is reachable only once the app
+allows rotation, which is a separate product decision.
+
 ### 5.4 Fitness segment and Begin Activity
 
 - The training card gains a tappable row "Plan today's workout ›" with the

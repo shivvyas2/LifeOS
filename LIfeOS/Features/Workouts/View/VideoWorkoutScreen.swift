@@ -61,6 +61,7 @@ struct VideoWorkoutScreen: View {
                         .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    openInYouTube
                     details
                     if model.hasSession || model.saved {
                         if let readout = model.readout {
@@ -78,7 +79,6 @@ struct VideoWorkoutScreen: View {
                             .font(LifeOSType.secondary)
                             .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
                     }
-                    if playerFailed { openInYouTube }
                 }
                 .frame(maxWidth: 620).frame(maxWidth: .infinity)
                 .padding(20)
@@ -138,11 +138,17 @@ struct VideoWorkoutScreen: View {
         .disabled(model.busy)
     }
 
+    /// Always on the page, not only after a failure. A video the owner has
+    /// barred from embedding says so inside the player, where nothing this
+    /// screen can see reaches, and someone who simply prefers YouTube's own
+    /// app should not have to hit an error first to get there.
     private var openInYouTube: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("This video will not play here.")
-                .font(LifeOSType.secondary)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+        VStack(alignment: .leading, spacing: 2) {
+            if playerFailed {
+                Text("This video will not play here.")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            }
             Button("Open in YouTube", systemImage: "arrow.up.forward.app") {
                 if let watchURL { openURL(watchURL) }
             }
@@ -233,7 +239,7 @@ struct VideoWorkoutScreen: View {
                         .font(LifeOSType.caption)
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     ActivityControls(model: model, onDone: { showControls = false; dismiss() })
-                    if playerFailed { openInYouTube }
+                    openInYouTube
                 }
                 .frame(maxWidth: 620).frame(maxWidth: .infinity)
                 .padding(20)

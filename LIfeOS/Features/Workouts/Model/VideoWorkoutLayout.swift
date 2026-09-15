@@ -16,7 +16,16 @@ enum VideoWorkoutLayout {
     /// The player's aspect ratio in portrait.
     static let playerAspectRatio: CGFloat = 16.0 / 9.0
 
+    /// `origin` and `enablejsapi` are what the embed checks before it will
+    /// play: with no origin at all it answers "Video player configuration
+    /// error", and with `youtube.com` as the origin, "This video is
+    /// unavailable". The privacy-enhanced host is the one it accepts, and it
+    /// is also the host `YouTubePlayerView` bases its wrapper page at, so the
+    /// page and the iframe agree about where this embed is.
+    static let embedOrigin = "https://www.youtube-nocookie.com"
+
     static func embedURL(youtubeID: String) -> URL? {
-        URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)?playsinline=1&rel=0&modestbranding=1")
+        URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)"
+            + "?origin=\(embedOrigin)&enablejsapi=1&playsinline=1&rel=0&modestbranding=1")
     }
 }
