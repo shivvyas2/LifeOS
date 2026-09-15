@@ -47,19 +47,11 @@ struct AgendaWidget: Widget {
     }
 }
 
-/// Six pastels keyed by calendar name. The first three match the Health
-/// widget's metric cards so the two widgets read as one set.
+/// Chip tint keyed by calendar name, from the shared widget palette so the
+/// Health cards and the agenda chips read as one set.
 enum ChipColors {
-    static let all: [Color] = [
-        Color(red: 1.00, green: 0.80, blue: 0.66),
-        Color(red: 0.84, green: 0.81, blue: 0.97),
-        Color(red: 0.82, green: 0.90, blue: 0.70),
-        Color(red: 0.78, green: 0.88, blue: 0.98),
-        Color(red: 0.98, green: 0.80, blue: 0.86),
-        Color(red: 0.99, green: 0.91, blue: 0.70),
-    ]
     static func color(for event: AgendaSnapshot.Event) -> Color {
-        all[ChipPalette.index(for: event.calendarTitle) % all.count]
+        WidgetPalette.tints[ChipPalette.index(for: event.calendarTitle) % WidgetPalette.tints.count]
     }
 }
 
@@ -68,14 +60,15 @@ struct AgendaWidgetView: View {
     var previewFamily: WidgetFamily? = nil
     @Environment(\.widgetFamily) private var environmentFamily
     private var family: WidgetFamily { previewFamily ?? environmentFamily }
-    private let ink = Color(white: 0.12)
-    private let orange = Color(red: 0.91, green: 0.36, blue: 0.16)
+    private var onField: Bool { family == .systemMedium || family == .systemLarge }
 
-    var body: some View {
-        Group {
-            if entry.available, let snapshot = entry.snapshot { content(snapshot) }
-            else { empty }
-        }
+    @ViewBuilder var body: some View {
+        // Accessory families are system-tinted, so only the field gets white.
+        if onField { base.foregroundStyle(.white) } else { base }
+    }
+    @ViewBuilder private var base: some View {
+        if entry.available, let snapshot = entry.snapshot { content(snapshot) }
+        else { empty }
     }
 
     @ViewBuilder private func content(_ agenda: AgendaSnapshot) -> some View {
@@ -98,13 +91,12 @@ struct AgendaWidgetView: View {
         case .systemLarge:
             VStack(alignment: .leading, spacing: 10) {
                 strip(agenda)
-                Divider()
                 let today = agenda.events(on: entry.date)
                 if today.isEmpty {
-                    Text("Nothing scheduled today").font(.caption).foregroundStyle(.secondary)
+                    Text("Nothing scheduled today").font(.caption).foregroundStyle(WidgetPalette.secondary)
                 } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(today.prefix(6)) { event in row(event, compact: false) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(today.prefix(5)) { event in row(event, compact: false) }
                     }
                 }
                 Spacer(minLength: 0)
@@ -114,28 +106,34 @@ struct AgendaWidgetView: View {
         }
     }
 
-    /// Seven equal columns: weekday and day number over up to three chips.
+    /// Seven equal columns: weekday and day number over up to four chips.
+    /// Today's column sits on a pale highlight with ink text, as the day
+    /// headers in the reference do.
     private func strip(_ agenda: AgendaSnapshot) -> some View {
         let calendar = Calendar.current
+        let cap = 4
         return HStack(alignment: .top, spacing: 3) {
             ForEach(agenda.weekDays(calendar: calendar), id: \.self) { day in
                 let isToday = calendar.isDate(day, inSameDayAs: entry.date)
                 let events = agenda.events(on: day, calendar: calendar)
                 VStack(spacing: 3) {
                     Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                        .font(.system(size: 9, weight: isToday ? .bold : .medium)).foregroundStyle(.secondary)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(isToday ? WidgetPalette.ink : WidgetPalette.secondary)
                     Text(day.formatted(.dateTime.day()))
-                        .font(.system(size: 13, weight: isToday ? .bold : .semibold, design: .rounded)).monospacedDigit()
-                    ForEach(events.prefix(3)) { event in chip(event) }
-                    if events.count > 3 {
-                        Text("+\(events.count - 3)").font(.system(size: 8, weight: .semibold)).foregroundStyle(.secondary)
+                        .font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(isToday ? WidgetPalette.ink : .white)
+                        .padding(.bottom, 2)
+                    ForEach(events.prefix(cap)) { event in chip(event) }
+                    if events.count > cap {
+                        Text("+\(events.count - cap)").font(.system(size: 8, weight: .semibold)).foregroundStyle(WidgetPalette.secondary)
                     }
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.vertical, 4)
                 .background {
-                    if isToday { RoundedRectangle(cornerRadius: 8).fill(orange.opacity(0.14)) }
+                    if isToday { RoundedRectangle(cornerRadius: 8).fill(WidgetPalette.highlight) }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(day.formatted(.dateTime.weekday(.wide).day())), \(events.count) events")
@@ -145,29 +143,30 @@ struct AgendaWidgetView: View {
 
     private func chip(_ event: AgendaSnapshot.Event) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(event.isAllDay ? "All day" : event.startDate.formatted(Self.clock))
-                .font(.system(size: 7.5, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(event.isAllDay ? "All day" : rangeText(event))
+                .font(.system(size: 7, weight: .semibold, design: .rounded)).monospacedDigit()
             Text(event.title).font(.system(size: 8, weight: .medium)).privacySensitive()
         }
-        .lineLimit(1).minimumScaleFactor(0.9)
+        .lineLimit(1).minimumScaleFactor(0.7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 3).padding(.vertical, 2)
-        .foregroundStyle(ink)
-        .background(ChipColors.color(for: event), in: RoundedRectangle(cornerRadius: 4))
+        .foregroundStyle(WidgetPalette.ink)
+        .background(ChipColors.color(for: event).opacity(WidgetPalette.chipOpacity), in: RoundedRectangle(cornerRadius: 4))
     }
 
     private func row(_ event: AgendaSnapshot.Event, compact: Bool) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(compact ? AnyShapeStyle(.primary) : AnyShapeStyle(ChipColors.color(for: event)))
-                .frame(width: 3, height: compact ? 14 : 22)
+                .fill(compact ? AnyShapeStyle(.primary) : AnyShapeStyle(.white))
+                .frame(width: 3, height: compact ? 14 : 24)
             if compact {
                 Text(timeText(event)).font(.system(.caption2, design: .rounded, weight: .semibold)).monospacedDigit()
                 Text(event.title).font(.system(.caption, weight: .semibold)).lineLimit(1).privacySensitive()
             } else {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(event.title).font(.system(.subheadline, weight: .semibold)).lineLimit(1).privacySensitive()
-                    Text(event.isAllDay ? "All day" : rangeText(event)).font(.caption2).foregroundStyle(.secondary)
+                    Label(event.isAllDay ? "All day" : rangeText(event), systemImage: "clock")
+                        .font(.caption2).monospacedDigit().foregroundStyle(WidgetPalette.secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -183,7 +182,7 @@ struct AgendaWidgetView: View {
         return "\(event.startDate.formatted(.dateTime.weekday(.abbreviated))) \(time)"
     }
     private func rangeText(_ event: AgendaSnapshot.Event) -> String {
-        "\(event.startDate.formatted(Self.clock))-\(event.endDate.formatted(Self.clock))"
+        "\(event.startDate.formatted(Self.clock)) - \(event.endDate.formatted(Self.clock))"
     }
 
     @ViewBuilder private var empty: some View {
@@ -196,10 +195,10 @@ struct AgendaWidgetView: View {
             }
         default:
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "calendar").foregroundStyle(orange).widgetAccentable()
+                Image(systemName: "calendar").widgetAccentable()
                 Text("Your week, at a glance.").font(.headline)
                 Text("Open Almanac to sign in or connect a calendar.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(WidgetPalette.secondary)
             }
         }
     }
