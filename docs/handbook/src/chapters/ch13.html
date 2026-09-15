@@ -1,0 +1,716 @@
+<section class="chapter" id="ch13" data-hue="life">
+<p class="chapter-kicker">Chapter thirteen</p>
+<h2><span class="num">13</span><span>The Life board and the nine sectors</span></h2>
+
+<p class="lede">
+  Nine sectors of a life, scored once a month by a rule that shows its evidence and a person who has
+  the last word. The same arithmetic that closes a month also projects the month still being lived,
+  so the board can say where a sector will land and which lever moves it most.
+</p>
+
+<h3 id="s13-1"><span class="num">13.1</span><span>Intent</span></h3>
+
+<p>
+  Shiv had been scoring himself by hand every month across nine sectors: Family, Romance, Soul,
+  Friends, Growth, Money, Mission, Body, Mind. The practice worked. What it lacked was evidence and
+  memory: a feeling recorded on a page, nothing underneath it, and no way to see a year at a glance.
+  The app already held much of the evidence and had no concept of a sector at all. The Life tab is
+  that concept.
+</p>
+
+<p>Five decisions settled the shape, and the reasoning is what a future reader needs.</p>
+
+<ul>
+  <li><strong>The app proposes, the user decides.</strong> Every month a rule proposes a score per
+    sector with the rows behind it; the person confirms or overrides, and the person's number is what
+    gets stored. Full automation was rejected because Romance and Soul have no honest data source, and
+    one invented number costs trust in all nine.</li>
+  <li><strong>Monthly close, as a ritual.</strong> Scores change once a month. Between closes the board
+    holds steady, and Today remains the daily surface. A continuously drifting score duplicates Today's
+    job and invites gaming the number.</li>
+  <li><strong>Rules score, the model explains.</strong> A deterministic rule computes the number; the
+    on-device model turns the evidence rows into one sentence. A model-judged score could differ on two
+    runs with no way to see why, and a score you cannot explain is a score you stop trusting.</li>
+  <li><strong>The close-time check-in fills the cold start.</strong> A sector with no tracked data asks
+    two or three short questions during the close. The answers become its evidence, stored and
+    comparable next month, so every sector is scorable in month one.</li>
+  <li><strong>No overall life score.</strong> An average of nine sectors sits near the middle forever
+    and moves by fractions, which reads as nothing happening in a month where one sector collapsed and
+    another soared. The header carries the two facts that prompt action instead: the lowest sector and
+    the biggest mover.</li>
+</ul>
+
+<p>
+  Two later projects extended the spine. The sector screens project gave every sector the same
+  history screen and amended the original "board as hub" decision: Body, Money and Mission now open a
+  history like the other six, with an extra row through to their full tab. The dry run project added
+  the in-flight mode, where a sector shows a range it can still close in rather than a number, and a
+  ranking of what still moves it.
+</p>
+
+<h3 id="s13-2"><span class="num">13.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Life/
+├── ViewModel/
+│   ├── LifeBoardViewModel.swift       cards, header summary, close banner, board mode
+│   ├── MonthlyCloseViewModel.swift    one pass through the nine sectors
+│   ├── InFlightSectorViewModel.swift  band, levers, early answers for one sector
+│   └── SectorDetailViewModel.swift    fetch, map to records, one pure call
+└── View/
+    ├── LifeBoardScreen.swift          banner, mode picker, header, the deck
+    ├── SectorStack.swift              the nine cards as an overlapping wallet deck
+    ├── CloseBanner.swift              the dashed "Close August" prompt
+    ├── MonthlyCloseScreen.swift       one sector per screen, Skip and Next
+    ├── SectorDetailScreen.swift       history in four bands
+    ├── InFlightSectorScreen.swift     range, levers, questions, both evidences
+    ├── CheckInQuestionView.swift      one question, shared by close and in-flight
+    └── SectorPalette.swift            hue, icon and nine deck tones per sector
+
+LifeOSKit/Sources/Persistence/
+├── LifeSector.swift                   the nine cases and their board order
+├── SectorScore.swift                  SectorScore and CheckInAnswer, keyed by month start
+├── SectorStore.swift                  record, commit, history, scoredCounts, answers
+└── Evidence.swift                     EvidenceRow, Evidence, the one scoring rule
+
+LifeOSKit/Sources/Sectors/
+├── SectorScorer.swift                 the protocol: values in, Evidence out
+├── BodyScorer.swift                   days on target, sleep and exercise vs goal
+├── MoneyScorer.swift                  budgets kept, kept of what came in, spend vs last month
+├── MissionScorer.swift                goals moved, habits kept; progressFraction
+├── GrowthScorer.swift                 targets met, goals completed
+├── JournalScorer.swift                days written, vs last month (Mind and Soul)
+├── CheckInScorer.swift                answers to a 0...1 scale
+├── CheckInQuestion.swift              the question set per sector, ids append-only
+├── SectorEvidenceFactory.swift        which scorer serves which sector; Soul and Mind merge
+├── MonthWindow.swift                  the instants one month spans
+├── MonthProgress.swift                elapsed and remaining days as of now
+├── MonthInputs.swift                  everything the scorers need, already fetched
+├── MonthInputsLoader.swift            the store reads, in the package so they are tested
+├── ProjectedInputs.swift              coasting, perfect, one lever perfected
+├── Lever.swift                        the seven dimensions a projection can perfect
+├── Leverage.swift                     which lever moves a sector most
+├── SectorBand.swift                   floor, ceiling, decided, rangeText
+├── ChosenScore.swift                  seeding the stepper without overwriting a choice
+├── CloseSchedule.swift                which month the banner offers
+├── CloseProgress.swift                which sector is next
+├── AnswerPersistence.swift            immediate for a choice, debounced for text
+├── NoteRequest.swift                  when to ask for a sentence, when to apply one
+├── SectorHistory.swift                months, question tracks, notes, as plain records
+├── SectorObservations.swift           two rules, three consecutive months each
+├── BoardSummary.swift                 lowest and biggest mover
+├── BudgetPeriod.swift                 budget assessment (shared with Money)
+└── LifeSectorTab.swift                which three sectors own a tab
+
+LifeOSKit/Sources/Insights/Tasks/
+└── SectorNote.swift                   the on-device one-sentence task</pre>
+
+<p>
+  The view models are deliberately thin. There is no test target for the app, so nothing put in a view
+  model can be unit tested; every decision about a score, a band, a schedule or a history lives in the
+  <code>Sectors</code> package, where 222 tests in <code>SectorsTests</code> and another 34 in
+  <code>PersistenceTests</code> cover it.
+</p>
+
+<h3 id="s13-3"><span class="num">13.3</span><span>Model</span></h3>
+
+<h4>The nine sectors</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/LifeSector.swift
+public enum LifeSector: String, Codable, Sendable, CaseIterable {
+    case family, romance, soul, friends, growth, money, mission, body, mind
+
+    /// Reading order on the board. Kept separate from `allCases` so that
+    /// adding a sector later cannot silently reshuffle the grid.
+    public static let boardOrder: [LifeSector] = [
+        .family, .romance, .soul,
+        .friends, .growth, .money,
+        .mission, .body, .mind,
+    ]
+}</code></pre>
+
+<p>
+  Raw values are written to the store, so a case may be added but never renamed: a rename orphans every
+  score already recorded against it. The same append-only rule applies to check-in question ids.
+</p>
+
+<h4>A scored month</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/SectorScore.swift
+@Model
+public final class SectorScore {
+    public var sectorRaw: String
+    public private(set) var month: Date       // always the first day of the month
+    public var proposedScore: Int?            // what the rule said, nil with no evidence
+    public var userScore: Int?                // what the person said, nil until decided
+    public var closedAt: Date?
+    public var evidenceData: Data?            // the rows, frozen at close time
+    ...
+    public var isScored: Bool { userScore != nil }
+}</code></pre>
+
+<p>
+  <code>proposedScore</code> and <code>userScore</code> are both kept, permanently. The distance between
+  what the rule computed and what the person felt is the most interesting number in the system, and
+  averaging them would erase it. The evidence is archived rather than recomputed: change a goal in March
+  and February's reasoning must still read the way it did in February. Every row is keyed by
+  <code>Date.startOfMonth</code>, so closing August on 3 September files the score under 1 August.
+</p>
+
+<h4>The one scoring rule</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/Evidence.swift
+public struct EvidenceRow: Codable, Sendable, Equatable {
+    public let label: String
+    public let value: String          // already formatted, rendered verbatim
+    public let normalised: Double     // clamped into 0...1 on the way in
+    public let weight: Double         // never negative; zero means shown, not counted
+}
+
+public struct Evidence: Codable, Sendable, Equatable {
+    public let rows: [EvidenceRow]
+
+    public var proposedValue: Double? {
+        guard !rows.isEmpty else { return nil }
+        let totalWeight = rows.reduce(0) { $0 + $1.weight }
+        guard totalWeight > 0 else { return nil }
+        let weighted = rows.reduce(0) { $0 + $1.normalised * $1.weight }
+        return (weighted / totalWeight) * 10
+    }
+
+    public var proposedScore: Int? { proposedValue.map { Int($0.rounded()) } }
+}</code></pre>
+
+<p>
+  Identical for all nine sectors: each row normalises to 0...1, rows are weighted, the weighted mean
+  scales to 0...10 and rounds. One arithmetic path means one thing to test and one thing to explain. A
+  sector with no evidence proposes nothing, not zero: zero out of ten for Romance in month one is both
+  wrong and demoralising. Weights live in code, not in settings, because user-editable weights turn every
+  score into a dial to twist until the number is agreeable. A zero-weight row is how a scorer shows a
+  figure (earned, spent, unclaimed) without letting it argue.
+</p>
+
+<h4>The scorers</h4>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Sector</th><th>Scorer</th><th>Rows (weight)</th><th>Proposes nothing when</th></tr></thead>
+<tbody>
+<tr><td>Body</td><td><code>BodyScorer</code></td><td>days on target (2), sleep vs goal (1), exercise vs goal (1)</td><td>no day carries any data</td></tr>
+<tr><td>Money</td><td><code>MoneyScorer</code></td><td>earned (0), spent (0), budgets kept (3, when buckets exist), kept of what came in (2 with buckets, 3 without), spend vs last month (1), unclaimed (0)</td><td>no transactions</td></tr>
+<tr><td>Mission</td><td><code>MissionScorer</code></td><td>goals moved (2), habits kept (1)</td><td>no plan entries moved, or only blocked ones</td></tr>
+<tr><td>Growth</td><td><code>GrowthScorer</code></td><td>targets met (2), goals completed (1)</td><td>no targets tracked and no goals</td></tr>
+<tr><td>Mind</td><td><code>JournalScorer</code> + <code>CheckInScorer</code></td><td>days written (2), vs last month (1), how clear was your head (2)</td><td>nothing written and nothing answered</td></tr>
+<tr><td>Soul</td><td><code>JournalScorer</code> + <code>CheckInScorer</code></td><td>days written (2), vs last month (1), how settled (2), a note (0)</td><td>nothing written and nothing answered</td></tr>
+<tr><td>Family, Romance, Friends</td><td><code>CheckInScorer</code></td><td>two scored questions (2 each) and one free-text note (0)</td><td>no answers</td></tr>
+</tbody></table></div>
+
+<p>
+  Every scorer is built from values already fetched, never from a store, which is why
+  <code>evidence()</code> neither throws nor awaits and why every scoring test runs without a container.
+  Two details recur. Days with no data are excluded rather than scored as misses, so a charging night
+  does not argue against the person. And "blocked" plan work returns nil from
+  <code>progressFraction</code> rather than zero: waiting on someone else is not a failure of the person
+  being scored.
+</p>
+
+<p>
+  Money's rule changed when budgets arrived. With buckets, adherence takes the top weight and the saving
+  rate steps down, because a budget is a plan the person set and beating it measures what they decided
+  mattered, where a saving rate measures what happened to be left over. Without buckets the evidence is
+  exactly what it was before budgets existed, which
+  <code>withNoBucketsTheEvidenceIsUnchangedFromToday</code> pins.
+</p>
+
+<h4>Check-in questions</h4>
+
+<pre><code>// LifeOSKit/Sources/Sectors/CheckInQuestion.swift
+case .friends:
+    [
+        CheckInQuestion(id: "friends.seen", prompt: "How often did you see friends?", options: scale, weight: 2),
+        CheckInQuestion(id: "friends.depth", prompt: "Did any of it go beyond small talk?", options: [
+            CheckInOption("no", 0.0), CheckInOption("once", 0.5), CheckInOption("more than once", 1.0),
+        ], weight: 2),
+        CheckInQuestion(id: "friends.note", prompt: "Who is worth calling next month?", options: []),
+    ]</code></pre>
+
+<p>
+  Each option carries its own place on the shared scale. A question with no options is free text:
+  recorded as context, shown on the close, never scored. An answer that matches no option is stale data
+  from a question that has since changed, and it is dropped rather than guessed at.
+</p>
+
+<h3 id="s13-4"><span class="num">13.4</span><span>ViewModel</span></h3>
+
+<h4>The board</h4>
+
+<p>
+  <code>LifeBoardViewModel.load()</code> builds nine <code>Card</code>s in board order, each with a
+  six-month history for the sparkline. In closed mode a card carries last month's
+  <code>userScore</code>; in flight it carries a <code>SectorBand</code> instead. The header is
+  <code>BoardSummary</code> (lowest and biggest mover, comparing the last two closed months) or, in
+  flight, the days left and the mean share of the month that is decided. The close banner is decided by
+  <code>CloseSchedule</code>.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Sectors/CloseSchedule.swift
+let oldestGap = scoredCounts
+    .filter { month, scored in
+        scored &lt; totalSectors &amp;&amp; month >= earliestAllowed &amp;&amp; month &lt;= previousMonth
+    }
+    .keys
+    .min()
+
+if let oldestGap { return oldestGap }
+return scoredSectorsInPreviousMonth &lt; totalSectors ? previousMonth : nil</code></pre>
+
+<p>
+  The oldest month with a gap inside a twelve-month look-back is offered first, so a gap two months back
+  surfaces before a more recent one and is never buried. The fallback to the previous month exists to
+  break a deadlock in the naive version: a query over <code>SectorScore</code> rows only sees months that
+  already have a row, rows are created only by <code>record()</code>, and <code>record()</code> runs only
+  during a close. On a fresh install there are no rows, so the query returns nothing, no banner shows,
+  and no close can ever start.
+</p>
+
+<h4>The close</h4>
+
+<p>
+  <code>MonthlyCloseViewModel</code> drives one pass. <code>advance()</code> asks
+  <code>CloseProgress</code> for the first sector in board order that is neither committed in the store
+  nor skipped this session, loads that sector's stored answers, loads the month's inputs once through
+  <code>MonthInputsLoader</code>, and recomputes. <code>recompute()</code> is the single call into the
+  factory, and it runs on every answer, including one keystroke at a time into a free-text field.
+</p>
+
+<pre><code>// LIfeOS/Features/Life/ViewModel/MonthlyCloseViewModel.swift
+func recompute() {
+    guard let sector else { return }
+    evidence = SectorEvidenceFactory.evidence(
+        for: sector, inputs: monthInputs, answers: answers, calendar: calendar
+    )
+    proposed = evidence.proposedScore
+    chosenScore = ChosenScore.seeded(
+        current: chosenScore, hasChosen: hasChosenScore,
+        proposed: proposed, previousUserScore: previousUserScore
+    )
+
+    let isEmptyNow = evidence.isEmpty
+    if NoteRequest.shouldRequest(wasEmpty: evidenceWasEmpty, isEmptyNow: isEmptyNow) {
+        scheduleNoteRequest(for: sector)
+    }
+    evidenceWasEmpty = isEmptyNow
+}</code></pre>
+
+<p>Three pure policies sit behind that method, each a few lines and each tested.</p>
+
+<ul>
+  <li><strong><code>ChosenScore.seeded</code>.</strong> Before the person touches the stepper, the
+    number shown tracks the proposal, falling back to last month's score, then to 5. The moment they
+    touch it, their pick is authoritative and no later recompute may replace it, however small the change
+    that triggered the recompute.</li>
+  <li><strong><code>AnswerPersistence.isImmediate</code>.</strong> A choice button is one discrete event
+    and saves at once. Free text is a stream of keystrokes, and every <code>context.save()</code> makes
+    <code>RootView</code> reload nine view models, so text is debounced 600 milliseconds and flushed
+    synchronously before Skip or Next clears the answers.</li>
+  <li><strong><code>NoteRequest</code>.</strong> The sentence is requested only on the transition from no
+    evidence to some, after a 400 millisecond debounce, and applied only if the sector on screen is still
+    the one it was asked about. Asking on appearance would ask about nothing for a check-in sector, and a
+    request in flight when the close advances must not write its sentence over the next sector's.</li>
+</ul>
+
+<p>
+  <code>commit()</code> records the proposal and its evidence, then commits the chosen score.
+  <code>SectorStore.record</code> returns an existing decided row untouched and
+  <code>SectorStore.commit</code> refuses to overwrite a decided score, so the store does not depend on
+  the view model getting the "never re-offer a committed sector" rule right. <code>skip()</code> moves on
+  without writing anything; a skipped sector stays genuinely unscored and is offered again next time,
+  because a score nobody looked at is noise in the history.
+</p>
+
+<h4>In flight</h4>
+
+<p>
+  <code>InFlightSectorViewModel.load()</code> reads the current month's inputs and answers, builds the
+  <code>SectorBand</code> and the <code>Leverage</code> ranking, and notes whether the ceiling came from
+  <code>GoalTargets.default</code> so the screen can say whose numbers they are. Answers given here are
+  written against the current month through the same <code>saveAnswer</code> upsert the close uses, so an
+  answer given on the 12th is visible, scored, and revisable at close with no new model.
+</p>
+
+<h3 id="s13-5"><span class="num">13.5</span><span>View</span></h3>
+
+<h4>The deck</h4>
+
+<p>
+  <code>SectorStack</code> lays the nine cards out at their full height (190 points) and pulls each one up
+  over the one before it, so all that shows is a 78-point band carrying the sector and its score.
+  Tapping a card lifts it clear of the deck: its z-index jumps, the cards below slide down by the open
+  height less the peek, and the space that appears carries the trend line, a six-month
+  <code>RoundedBarChart</code>, and an Open button. Only one card is ever open, because a deck with
+  several cards open is a list with gaps in it. An open card is sized to what it has to show: 320 points
+  with a chart, 226 without, so a sector with one month does not spend space on a void.
+</p>
+
+<p>
+  Nothing renders below the band while a card is closed. A covered card has only the peek of room and
+  anything taller gets sliced by the card in front; the trend line used to show as a clipped strip of
+  letter-tops under every title. VoiceOver reads every card whole, because the visual truncation must
+  never truncate what is spoken.
+</p>
+
+<p>
+  Nine cards that physically overlap need nine distinct colours, and the app's shared
+  <code>ModuleHue</code> has six. <code>SectorPalette.tone</code> is therefore a second, feature-local
+  palette: one muted earth family in light and dark, with a single shared <code>cardInk</code> chosen so
+  it clears contrast on all nine. The six-case <code>hue</code> mapping still exists for the close and the
+  detail screen, which use shared components that take a <code>ModuleHue</code>.
+</p>
+
+<h4>The banner</h4>
+
+<p>
+  <code>CloseBanner</code> is deliberately not <code>AlertBanner</code>. That component is red on pink with
+  an ECG glyph and it is the app's anomaly surface: it means something is wrong with your body. An
+  unclosed month is a piece of admin, and borrowing the alarm styling for it spends the alarm. The
+  banner is a dashed outline, collapsed by default, because the deck is the reason anyone opens this
+  screen.
+</p>
+
+<h4>The close screen</h4>
+
+<p>
+  One sector per screen, titled "4 of 9". Questions first where the sector has them, then a
+  <code>PastelFillCard</code> with the proposal (its own dash when there is no evidence: not scored badly,
+  not scored at all), the evidence rows label left and value right, the model's sentence if one arrived,
+  "Last month you said 7", and a <code>HeroNumeral</code> with a 0...10 stepper. Skip and Next in the
+  toolbar. The sheet owns its view model, and the board reloads on dismissal rather than on completion,
+  because scoring three sectors and swiping the sheet away used to leave the deck showing dashes for
+  scores that were already saved.
+</p>
+
+<h4>The history screen</h4>
+
+<p>
+  Four bands, each omitted rather than rendered empty: the trend as bars from the window minimum (a
+  score is a rating, not a count building from nought, so a flat year of 4s and a flat year of 9s must
+  not both draw as full bars), the reasoning frozen at the latest close, every question's answers laid
+  across the last six months with a dash for a month not answered, and the free-text notes newest first.
+  Observations sit above them when there are any. Body, Money and Mission get one extra row, "Open
+  Body", and <code>LifeSector.ownsTab</code> is the one place that decides which three.
+</p>
+
+<h4>The in-flight screen</h4>
+
+<p>
+  The range at display size, the days left, then "What moves it most" as a ranked list of levers with
+  their worth in points, the check-in questions for a sector that has them, and the floor and ceiling
+  evidence under "If nothing changes" and "If you finish at your targets". Money with no buckets says so
+  in a line instead of inventing a ceiling. A ceiling built from default targets is disclosed in one line
+  and points at Health.
+</p>
+
+<h3 id="s13-6"><span class="num">13.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 340" role="img" aria-label="Stores feed MonthInputsLoader, which builds MonthInputs. The close passes real inputs to SectorEvidenceFactory; the in-flight board passes projected inputs (coasting, perfect, one lever) to the same factory. Evidence is rendered on the close and archived in SectorStore.">
+<defs>
+<marker id="ch13a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+<marker id="ch13b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+</defs>
+<text class="lbl-sm" x="20" y="24">STORES</text>
+<text class="lbl-sm" x="230" y="24">ONE MONTH</text>
+<text class="lbl-sm" x="440" y="24">PROJECTIONS</text>
+<text class="lbl-sm" x="660" y="24">THE ONE RULE</text>
+
+<rect class="box" x="20" y="44" width="150" height="34" rx="8"/>
+<text class="lbl" x="95" y="66" text-anchor="middle">MetricsStore</text>
+<rect class="box" x="20" y="88" width="150" height="34" rx="8"/>
+<text class="lbl" x="95" y="110" text-anchor="middle">MoneyStore</text>
+<rect class="box" x="20" y="132" width="150" height="34" rx="8"/>
+<text class="lbl" x="95" y="154" text-anchor="middle">PlanStore</text>
+<rect class="box" x="20" y="176" width="150" height="34" rx="8"/>
+<text class="lbl" x="95" y="198" text-anchor="middle">NoteEvidence</text>
+<rect class="box-alt" x="20" y="220" width="150" height="34" rx="8"/>
+<text class="lbl" x="95" y="242" text-anchor="middle">SectorStore answers</text>
+
+<rect class="box" x="230" y="100" width="160" height="56" rx="8"/>
+<text class="lbl" x="310" y="123" text-anchor="middle">MonthInputsLoader</text>
+<text class="lbl-sm" x="310" y="141" text-anchor="middle">MonthWindow, MonthProgress</text>
+
+<rect class="box-alt" x="230" y="184" width="160" height="40" rx="8"/>
+<text class="lbl" x="310" y="209" text-anchor="middle">MonthInputs</text>
+
+<rect class="box" x="440" y="70" width="180" height="34" rx="8"/>
+<text class="lbl" x="530" y="92" text-anchor="middle">coasting (floor)</text>
+<rect class="box" x="440" y="114" width="180" height="34" rx="8"/>
+<text class="lbl" x="530" y="136" text-anchor="middle">perfect (ceiling)</text>
+<rect class="box" x="440" y="158" width="180" height="34" rx="8"/>
+<text class="lbl" x="530" y="180" text-anchor="middle">one lever perfected</text>
+<text class="lbl-sm" x="440" y="214">ProjectedInputs</text>
+
+<rect class="box-hot" x="660" y="100" width="180" height="60" rx="10"/>
+<text class="lbl" x="750" y="124" text-anchor="middle">SectorEvidenceFactory</text>
+<text class="lbl-hot" x="750" y="144" text-anchor="middle">Evidence.proposedValue</text>
+
+<rect class="box" x="660" y="200" width="180" height="40" rx="8"/>
+<text class="lbl" x="750" y="225" text-anchor="middle">Close: record, commit</text>
+<rect class="box" x="660" y="256" width="180" height="40" rx="8"/>
+<text class="lbl" x="750" y="281" text-anchor="middle">Board: SectorBand</text>
+<rect class="box" x="660" y="296" width="180" height="34" rx="8"/>
+<text class="lbl" x="750" y="318" text-anchor="middle">Leverage.ranked</text>
+
+<path class="flow" d="M170 61 L 200 61 L 200 120 L 224 120" marker-end="url(#ch13a)"/>
+<path class="flow" d="M170 105 L 224 116" marker-end="url(#ch13a)"/>
+<path class="flow" d="M170 149 L 224 134" marker-end="url(#ch13a)"/>
+<path class="flow" d="M170 193 L 200 193 L 200 140 L 224 140" marker-end="url(#ch13a)"/>
+<path class="flow-dash" d="M170 237 L 640 237 L 640 130 L 654 130" marker-end="url(#ch13a)"/>
+<text class="lbl-sm" x="400" y="232">answers, keyed by question id</text>
+<path class="flow" d="M310 156 L 310 178" marker-end="url(#ch13a)"/>
+<path class="flow-hot" d="M390 204 L 640 204 L 640 150 L 654 150" marker-end="url(#ch13b)"/>
+<text class="lbl-hot" x="400" y="196">real inputs (the close)</text>
+<path class="flow" d="M390 190 L 420 190 L 420 87 L 434 87" marker-end="url(#ch13a)"/>
+<path class="flow" d="M420 131 L 434 131" marker-end="url(#ch13a)"/>
+<path class="flow" d="M420 175 L 434 175" marker-end="url(#ch13a)"/>
+<path class="flow-hot" d="M620 87 L 640 87 L 640 118 L 654 118" marker-end="url(#ch13b)"/>
+<path class="flow-hot" d="M620 131 L 654 128" marker-end="url(#ch13b)"/>
+<path class="flow-hot" d="M620 175 L 640 175 L 640 138 L 654 138" marker-end="url(#ch13b)"/>
+<path class="flow" d="M750 160 L 750 194" marker-end="url(#ch13a)"/>
+<path class="flow" d="M750 240 L 750 250" marker-end="url(#ch13a)"/>
+</svg>
+<figcaption>
+  There is one piece of arithmetic. The close hands the factory the real month; the in-flight board
+  hands it three projected versions of the same month. A band therefore cannot disagree with the close
+  that follows it.
+</figcaption>
+</figure>
+
+<h4>Loading a month</h4>
+
+<p>
+  <code>MonthInputsLoader.load</code> is the only place store reads happen for scoring. It builds a
+  <code>MonthWindow</code> (the exact instants a month spans, with a half-open <code>[start, end)</code> for
+  filtering and an inclusive <code>lastDay</code> for the stores whose <code>to:</code> bound is by day),
+  reads metrics, goals, transactions, buckets, plan entries, project pages and journal dates, filters the
+  undated stores by <code>updatedAt</code> or <code>createdAt</code>, and assembles one
+  <code>MonthInputs</code>. It moved out of the close view model when the in-flight board needed the same
+  thing for the current month, and the move fixed a bug the in-flight case exposed:
+  <code>PlanStore.recentTicks</code> reads a day with no tick as a miss, so running the window to the end of
+  a month still being lived scored every day still to come as a habit already broken. Habits are now
+  judged only across the days already lived.
+</p>
+
+<p>
+  Notes changed what the loader reads without changing what old months mean. Journalling and goals
+  moved to note pages, so <code>NoteEvidence</code> bridges them in, and the legacy plan entries are still
+  read and summed alongside, because a month already closed must keep scoring the way it did.
+</p>
+
+<h4>Projecting the rest of it</h4>
+
+<pre><code>// LifeOSKit/Sources/Sectors/ProjectedInputs.swift
+public static func coasting(
+    _ inputs: MonthInputs, progress: MonthProgress, calendar: Calendar = .current
+) -> MonthInputs {
+    guard progress.remainingDays > 0, progress.elapsedDays > 0 else { return inputs }
+    let remaining = Double(progress.remainingDays)
+    let elapsed = Double(progress.elapsedDays)
+    var projected = inputs
+
+    if let average = averageReading(inputs.readings) {
+        projected.readings += Array(repeating: average, count: progress.remainingDays)
+    }
+    let earned = inputs.amounts.filter { $0 > 0 }.reduce(0, +)
+    let spent = -inputs.amounts.filter { $0 &lt; 0 }.reduce(0, +)
+    if earned > 0 { projected.amounts.append(earned / elapsed * remaining) }
+    if spent > 0 { projected.amounts.append(-(spent / elapsed * remaining)) }
+    projected.budget = inputs.budget.map { scaled($0, by: (elapsed + remaining) / elapsed) }
+    ...
+    return projected
+}</code></pre>
+
+<p>
+  <strong>Coast means continuing at the current pace, not stopping.</strong> This is the subtle one. For
+  Body the two are nearly the same, since <code>BodyScorer</code> counts only days with data. For Money
+  they are opposites: spending nothing for the rest of the month is the best case, so an empty tail
+  would put the floor above the ceiling and invert the card. One definition serves every sector, and it
+  is the one that reads correctly for spend.
+</p>
+
+<p>
+  <strong>Perfect fills the remaining days at the person's own targets.</strong> Not a theoretical
+  maximum, which produces ceilings nobody reaches, and not a personal best, which is undefined in month
+  one. A ceiling built from <code>GoalTargets</code> is reachable by definition, and it makes setting a
+  target consequential for the first time. Only a tracked metric is raised, and always with
+  <code>max</code> against the running average: a person already averaging 20,000 steps against an 8,000
+  target must not be "perfected" down to 8,000. Perfecting spend spends up to each bucket's remaining
+  allowance and no further, and cannot repair a bucket already blown. Income is not a lever and keeps
+  coasting. Goal statuses are never touched, because a ceiling must never assume a goal closes.
+</p>
+
+<p>
+  <strong>One lever perfected</strong> is built on the coast and then overwrites only the dimension
+  named, so a lever's delta is never contaminated by a second lever quietly improving beside it.
+  <code>Leverage.ranked</code> runs the factory once per tracked lever, subtracts the coasting value,
+  clamps at zero (perfecting a lever cannot make a month worse, and a negative row would read as advice
+  to stop), and sorts. A sector scored only from answers has no levers.
+</p>
+
+<h4>The band</h4>
+
+<pre><code>// LifeOSKit/Sources/Sectors/SectorBand.swift
+public var decided: Double? {
+    guard let floor, let ceiling else { return nil }
+    return min(max(1 - Double(ceiling - floor) / 10, 0), 1)
+}</code></pre>
+
+<p>
+  Decided is literally the share of the score that can no longer move. The board header shows the mean
+  across only the sectors that have a band, not all nine, because a sector nobody has evidence for has
+  not been judged settled or unsettled; folding it in would let silence read as certainty. Money with no
+  buckets has no ceiling: nothing in the data says what a good remaining spend would be, zero is a
+  fantasy and any other figure is invented, so the card shows a floor and points at bucket setup. A
+  ceiling below its floor is always a projection bug, never a fact, and is clamped up.
+</p>
+
+<h4>History and observations</h4>
+
+<p>
+  <code>SectorDetailViewModel</code> fetches twelve months of scores and their answers, maps them to plain
+  records, and makes one pure call: <code>SectorHistory.build</code>. Only decided months appear.
+  Question tracks follow the order the questions are asked in and align by index to the months, so a
+  missing answer leaves a gap rather than shifting later answers left. Free text becomes a note, not a
+  track.
+</p>
+
+<p>
+  Observations are two deterministic rules, both needing three calendar-adjacent months so a single
+  unusual month never fires one: the same answer three months running, and the person scoring below the
+  proposal three months running. The second is the signal the spine kept <code>proposedScore</code> and
+  <code>userScore</code> in separate columns to preserve: the rule is measuring something the person does
+  not feel. "Consecutive" is checked on the calendar, not on array position, because a partial close can
+  leave a sector unscored in the middle month and three entries spread across a longer stretch are not
+  three months running. No model is called from this screen at all, which also keeps it free and
+  instant.
+</p>
+
+<h4>The sentence</h4>
+
+<p>
+  <code>SectorNoteTask</code> is an on-device <code>CoachTask</code> with no remote name. Its prompt is only
+  the rows the rule used, so the sentence cannot cite a figure that played no part in the number, and it
+  deliberately never carries last month's score, because the instructions forbid mentioning a score and
+  feeding the model a number on the same scale works against that. The close runs it through the
+  ordinary <code>CoachRouter</code> so availability caching and refusal handling behave as they do
+  everywhere else; an unavailable model leaves the close fully usable with rows and no sentence.
+</p>
+
+<h3 id="s13-7"><span class="num">13.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Inputs loaded once per sector, not per keystroke.</strong> The close rebuilds
+    <code>MonthInputs</code> in <code>advance()</code>; <code>recompute()</code> only re-runs the factory
+    against values already in memory. Scoring is a handful of reductions over small arrays and runs on
+    every keystroke without cost.</li>
+  <li><strong>Free text debounced, choices immediate.</strong> One <code>context.save()</code> per pause
+    rather than per character, because every save reloads nine view models. The pending value is
+    flushed synchronously on Skip, Next and screen dismissal so no keystrokes are lost.</li>
+  <li><strong>One model call per sector, at most.</strong> The sentence is requested on the transition
+    into having evidence, debounced 400 milliseconds, on device, and discarded if the sector has moved on.
+    Nothing about a sector leaves the phone.</li>
+  <li><strong>No model on the board or the history.</strong> Observations are rules. The board is nine
+    store reads and a summary.</li>
+  <li><strong>In-flight is eight factory runs per sector at most.</strong> Two for the band and one per
+    tracked lever (up to four for Body and Growth, one elsewhere). It is recomputed when the board mode
+    switches and when a screen loads, not continuously.</li>
+  <li><strong>The archive is a JSON blob per row.</strong> Evidence is encoded once at close and decoded
+    on read; nothing is recomputed against changed goals, and the history screen renders the stored
+    strings verbatim.</li>
+  <li><strong>Everything is local.</strong> Sector scores, answers and evidence are SwiftData rows in the
+    account's own store. There is no sync for them and no server table. Cost is zero.</li>
+</ul>
+
+<h3 id="s13-8"><span class="num">13.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Fresh install, no rows at all</td><td>The banner offers the previous month; without the fallback no close could ever start</td></tr>
+<tr><td>August never closed, September ends</td><td>August is offered first; the oldest gap within twelve months wins</td></tr>
+<tr><td>A month older than the look-back is partial</td><td>Never offered; one ancient partial month must not pin the banner forever</td></tr>
+<tr><td>Sector has no evidence</td><td>Proposes nothing; the card shows a dash and the stepper seeds from last month or 5</td></tr>
+<tr><td>Person adjusts the stepper, then edits a note</td><td>The recompute runs but <code>ChosenScore</code> keeps their number</td></tr>
+<tr><td>Leaving the close midway</td><td>Committed sectors stay committed; reopening resumes at the first unscored one</td></tr>
+<tr><td>Skip</td><td>Nothing is written; the sector is offered again next time</td></tr>
+<tr><td>Re-recording a decided sector</td><td>The store returns the row untouched; the archive never lies</td></tr>
+<tr><td>Committing twice</td><td>The first decision stands</td></tr>
+<tr><td>Note arrives after the close advanced</td><td>Rejected by <code>NoteRequest.shouldApply</code></td></tr>
+<tr><td>Model unavailable or refuses</td><td>Rows shown, no sentence, close fully usable</td></tr>
+<tr><td>Closing August on 3 September</td><td>Filed under 1 August by <code>startOfMonth</code>, in the store's injected calendar</td></tr>
+<tr><td>Twelve journal entries on one afternoon</td><td>One day written; distinct days are counted, not entries</td></tr>
+<tr><td>Blocked plan item</td><td>Excluded from judgement rather than scored zero</td></tr>
+<tr><td>Metric never logged this month</td><td>Absent from the Body rows and from Growth's target count, and not offered as a lever</td></tr>
+<tr><td>Money in flight without buckets</td><td>Floor only, no ceiling, no decided share; the card explains why</td></tr>
+<tr><td>Last day of the month</td><td>The band collapses to a single number; a finished month has nothing left to move</td></tr>
+<tr><td>Already exceeding a target</td><td>The ceiling keeps the running average; it never asks for less</td></tr>
+<tr><td>Bucket already blown</td><td>A perfect finish cannot unspend money; that row stays where it is</td></tr>
+<tr><td>Skipped a sector in the middle month</td><td>Three entries are not three months running; both observation rules stay silent</td></tr>
+<tr><td>December to January</td><td>Counts as consecutive across the year boundary</td></tr>
+<tr><td>Answer matches no current option</td><td>Dropped; a changed question does not score stale text</td></tr>
+<tr><td>Question last answered seven months ago</td><td>Its track is hidden rather than rendered as a prompt over dashes</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<ul>
+  <li><code>PersistenceTests/EvidenceTests</code>: the weighted mean scales to ten, no rows and zero total
+    weight propose nothing, normalised values clamp, <code>proposedScore</code> is always the rounded
+    <code>proposedValue</code>.</li>
+  <li><code>PersistenceTests/SectorStoreTests</code> and <code>SectorScoreTests</code>: idempotent record,
+    commit closes once, re-recording leaves a closed score alone, <code>scoredCounts</code> reflects a
+    genuine partial close, month normalisation under an injected calendar.</li>
+  <li><code>SectorsTests</code>, one suite per file: every scorer, the factory's routing and Soul and
+    Mind's merge without double counting, <code>CloseSchedule</code>, <code>CloseProgress</code>,
+    <code>ChosenScore</code>, <code>AnswerPersistence</code>, <code>NoteRequest</code>,
+    <code>MonthWindow</code> (leap February), <code>MonthProgress</code> (today counts as elapsed),
+    <code>MonthInputsLoader</code> against an in-memory container (habits judged only on days lived, a
+    closed month still judging every day), <code>ProjectedInputs</code> (perfect scores at least as well
+    as coasting, spend up to the allowance and no more, goals untouched),
+    <code>Leverage</code> (a lever at target is worth nothing, never less than nothing),
+    <code>SectorBand</code> (ceiling never below floor, collapses on the last day, Money without
+    buckets), <code>SectorHistory</code>, <code>SectorObservations</code>, <code>BoardSummary</code>
+    (ties go to the drop), and <code>LifeSectorTab</code>.</li>
+  <li><code>InsightsTests/SectorNoteTests</code>: the prompt carries every row, the previous score never
+    reaches it, the task runs on device.</li>
+</ul>
+
+<h3 id="s13-9"><span class="num">13.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Persistence/Evidence.swift</code>, the one rule.</li>
+  <li><code>LifeOSKit/Sources/Sectors/BodyScorer.swift</code>, then <code>MoneyScorer.swift</code>, to see two scorers shape rows.</li>
+  <li><code>LifeOSKit/Sources/Sectors/SectorEvidenceFactory.swift</code>, the routing and the merges.</li>
+  <li><code>LifeOSKit/Sources/Sectors/MonthInputsLoader.swift</code>, where the stores are read.</li>
+  <li><code>LIfeOS/Features/Life/ViewModel/MonthlyCloseViewModel.swift</code>, the close pass and its three policies.</li>
+  <li><code>LifeOSKit/Sources/Sectors/ProjectedInputs.swift</code>, coasting and perfect.</li>
+  <li><code>LifeOSKit/Sources/Sectors/SectorBand.swift</code> and <code>Leverage.swift</code>.</li>
+  <li><code>LIfeOS/Features/Life/View/SectorStack.swift</code>, the deck.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does a sector with no evidence propose nil rather than zero?</strong> It has not been
+    judged badly; it has not been judged. Zero for Romance in month one is wrong and demoralising.</li>
+  <li><strong>Why are <code>proposedScore</code> and <code>userScore</code> both stored?</strong> The gap
+    between them is the signal; the standing-gap observation is the first place it is read.</li>
+  <li><strong>Why is the evidence archived rather than recomputed?</strong> A goal changed in March must
+    not rewrite what February's reasoning said.</li>
+  <li><strong>What does coasting mean, and why not an empty tail?</strong> The rest of the month looks
+    like the part already lived; an empty tail would put Money's floor above its ceiling.</li>
+  <li><strong>Why does the in-flight board never compute a score of its own?</strong> The moment a
+    projection scores by another path, the band and the close can disagree, and a band that contradicts
+    the close is worse than none.</li>
+  <li><strong>Why does <code>CloseSchedule</code> fall back to the previous month?</strong> Rows exist only
+    after a close, so a query over rows can never start the first close.</li>
+</ul>
+
+</section>

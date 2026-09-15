@@ -1,0 +1,965 @@
+<section class="chapter" id="ch12" data-hue="notes">
+<p class="chapter-kicker">Chapter twelve</p>
+<h2><span class="num">12</span><span>Notes and the plan</span></h2>
+
+<p class="lede">
+  A block editor over a PARA library, synced to Supabase, with a derived index underneath that
+  turns a pile of pages into something you can ask questions of. Habits are the one thing from the
+  old Plan tab that did not become a page, and this chapter explains why.
+</p>
+
+<p>
+  Revision D described a Plan tab with four lists behind a segmented pill. That tab is gone. Goals,
+  content items, loose notes and journal entries all became pages on 26 August 2026, migrated once
+  and never rewritten, and the tab slot they occupied now belongs to Notes. What survived is the
+  one plan kind that is not a document: a habit, which is a daily tick with a streak behind it.
+  <a href="#s12-9">12.9</a> covers what is left of the plan; everything before it is the notes tab
+  as it is on disk today.
+</p>
+
+<h3 id="s12-1"><span class="num">12.1</span><span>Intent</span></h3>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Notes is a library with four shelves and a page you can write on. Every page is a list of blocks:
+  paragraphs, headings, to-dos, quotes, code, a sketch you draw in line with the text. Type a slash
+  to change what a line is, type two brackets to link to another page, and the page you linked to
+  lists you at the bottom. Pick up a Pencil and it writes, draws or annotates depending on where it
+  is. Everything saves on the device first and reaches the server afterwards.
+</p>
+<p class="faq-q">Why PARA rather than folders you name yourself?</p>
+<p class="faq-a">
+  Because PARA sorts by actionability, not by subject. A note about running belongs under a marathon
+  <em>project</em> while the race is ahead and under the <em>area</em> that outlives it once the race
+  is run. Encoding that as the top of the hierarchy is the method's whole point, so
+  <code>NoteBucket</code> is an enum with four cases rather than four folders a person could rename
+  into meaninglessness. The app calls the third shelf Research, because PARA's own word, Resources,
+  is vaguer than what the shelf holds.
+</p>
+<p class="faq-q">Why blocks instead of one text field with formatting?</p>
+<p class="faq-a">
+  A block editor's trick is that the document is a list of small typed pieces rather than one string
+  with ranges hung off it. Splitting, merging, reordering and turning a paragraph into a to-do
+  become list operations, and none of them can corrupt the others. The operations themselves are
+  pure functions in <code>NoteBlockEditor</code>, tested against literal arrays rather than a
+  screen.
+</p>
+<p class="faq-q">If blocks are JSON inside the page, how does the app find every open to-do?</p>
+<p class="faq-a">
+  It does not search the JSON. On every save, <code>NoteIndexer</code> mirrors the page's to-do
+  blocks and wiki links into two derived SwiftData models, <code>NoteTask</code> and
+  <code>NoteLink</code>. They are never pushed to the server, and every row can be rebuilt from the
+  documents, so the worst an indexer bug can do is show a stale list. The repair is one function.
+</p>
+<p class="faq-q">Does a note leave the device?</p>
+<p class="faq-a">
+  Only when someone is signed in, and only after the write has landed locally. <code>NoteSync</code>
+  pushes dirty rows to two Postgres tables guarded by row level security, then pulls what other
+  devices wrote. Sync can fail without anyone noticing and without losing an edit: push runs before
+  pull, the newer <code>updatedAt</code> wins, and a row is marked synced only after the server
+  confirms it.
+</p>
+</div>
+
+<p>
+  What Notes deliberately does not do, yet: collections that cut across the shelves, goals as
+  their own model, a mindmap of the link graph, voice capture, a share extension. Those are phases
+  three to six of the notes redesign spec and none of them has code. Phase one, the index layer,
+  shipped. Phase two, the phone's Inbox stream and its pinned composer, was built on 28 August and
+  then set aside in the 13 September restyle: the store still knows what an Inbox is and the screen
+  still compiles, but nothing routes to it. <a href="#s12-5">12.5</a> says exactly what the phone
+  shows instead.
+</p>
+
+<h3 id="s12-2"><span class="num">12.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Notes/
+├── Model/
+│   ├── NoteSelection.swift          what the rail points at: recent, favourites, a shelf, a folder
+│   └── NotesCommands.swift          the Notes menu and its hardware keyboard shortcuts
+├── ViewModel/
+│   ├── NotesViewModel.swift         the library: snapshot, cards, selection, filter, sort, search
+│   ├── NoteEditorViewModel.swift    one open page: blocks in memory, debounced save, links
+│   └── NoteInboxViewModel.swift     the Inbox stream and composer (built, not routed to today)
+└── View/
+    ├── NotesHubScreen.swift         the two shells: phone stack, iPad columns
+    ├── NotesSidebar.swift           the iPad rail: shelves, folders, drag targets
+    ├── NotesLibraryList.swift       the phone library: glass tiles and cards, one orange
+    ├── NoteShelfScreen.swift        one shelf or folder: header, search, filter, sort, cards
+    ├── NoteInboxScreen.swift        the Inbox stream (built, not routed to today)
+    ├── NoteCard.swift               one page in a shelf, with its move menu
+    ├── NoteEditorScreen.swift       the page: header, blocks, ink layer, backlinks
+    ├── NoteBlockRow.swift           one block: gutter mark in SwiftUI, text in UIKit
+    ├── BlockTextView.swift          the UITextView that owns Return, Backspace and link paint
+    ├── NoteAccessoryBar.swift       slash menu, link picker, formatting bar, taking turns
+    ├── SketchBlockView.swift        a drawing that takes its own space in the flow
+    ├── InkCanvasView.swift          the page-wide annotation layer and the Pencil rule
+    ├── NoteToolPicker.swift         the one PKToolPicker every canvas shares
+    ├── NoteAccentPalette.swift      colour for the eight accent names
+    └── NotesDesignPreview.swift     in-memory fixtures for captures, never an account
+
+LifeOSKit/Sources/Persistence/
+├── NoteDocument.swift               NoteKind, NoteFolder, NoteDocument (the page)
+├── NoteBlock.swift                  NoteBlockKind, NoteBlock, NoteBlockParser, NoteLinkScanner
+├── NoteBlockEditor.swift            Return, Backspace, indent, transform, links: pure functions
+├── NoteBucket.swift                 the four PARA shelves
+├── NoteAccent.swift                 eight accent names, no colour
+├── NoteStream.swift                 the chip row and what a chip resolves to
+├── NoteSnapshot.swift               NoteCardSnapshot, NoteFolderSnapshot, NotesSnapshot, NoteBacklink
+├── NoteIndex.swift                  NoteTask and NoteLink, the derived rows
+├── NoteIndexer.swift                the only writer of the derived rows
+├── NoteIndexMigration.swift         stamp an existing library as filed, once; build the index
+├── NoteEvidence.swift               what the monthly close reads off notes
+├── NotesStore.swift                 every read and every write, with the index kept current
+├── PlanEntry.swift                  PlanKind, PlanStatus, PlanEntry, HabitTick
+├── PlanStore.swift                  habit ticks and streaks
+└── PlanNoteMigration.swift          the one-time move of plan rows into pages
+
+LifeOSKit/Sources/Integrations/
+├── NoteSync.swift                   push then pull against Supabase
+└── NoteWireFormat.swift             NoteDocumentRow and NoteFolderRow, the shape a page travels in
+
+Features/Plan/
+├── Model/PlanSnapshot.swift         the four sections, still declared; only habits are shown
+├── ViewModel/PlanViewModel.swift    load, add, advance, toggle, delete
+└── View/
+    ├── PlanScreen.swift             hosts the habits list inside the notes tab
+    └── ContentCalendar.swift        the content month grid, unreachable since the migration</pre>
+
+<div class="note"><b>Where the boundaries fall</b>
+  <code>Persistence</code> owns the shape of a note and every rule about it. <code>Integrations</code>
+  owns how it travels. The app target owns how it looks and what a keystroke means for the caret.
+  <code>NoteAccentPalette</code> is the one deliberate join: accent <em>names</em> are a persistence
+  concern, colours are a design concern, and <code>DesignSystem</code> depends on nothing, so the two
+  meet in a 66-line file in the app rather than in either package.
+</div>
+
+<h3 id="s12-3"><span class="num">12.3</span><span>Model</span></h3>
+
+<h4>The page</h4>
+
+<p>
+  A page is a <code>NoteDocument</code>. Every field carries a default, because SwiftData adds a
+  property to an existing store without a migration plan only when it can fill it in, and this
+  model has grown four times since it was created.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/NoteDocument.swift
+@Model
+public final class NoteDocument {
+    public var id: UUID = UUID()
+    public var title: String = ""
+    public var icon: String = ""
+    public var kindRaw: String = NoteKind.note.rawValue     // note | journal | task
+    public var bucketRaw: String = NoteBucket.projects.rawValue
+    public var accentRaw: String = NoteAccent.sage.rawValue
+    public var folderID: UUID?                              // nil: loose on the shelf
+    public var blocksData: Data = Data()                    // the blocks, JSON encoded
+    public var drawingData: Data?                           // a PKDrawing, when inked
+    public var entryDate: Date?                             // the day a journal entry is about
+    public var dueDate: Date?
+    public var statusRaw: String = PlanStatus.todo.rawValue
+    public var isFavorite: Bool = false
+    public var openedAt: Date?                              // drives Recent; written on open
+    public var archivedAt: Date?                            // Archive is this flag, not a bucket
+    public var filedAt: Date?                               // nil means still in the Inbox
+    public var syncedAt: Date?
+    public var deletedAt: Date?                             // a tombstone, reaped after push
+    public var originPlanEntryID: UUID?                     // the plan row this came from
+}</code></pre>
+
+<p>Four of those fields carry the whole design, and each earns a sentence.</p>
+
+<ul>
+  <li><strong><code>blocksData</code></strong> is JSON, not a relationship. Blocks are only ever read
+    and written as a document, no query asks for one block, and a relationship would buy one
+    migration hazard per block field in exchange for nothing. When the JSON cannot be decoded the
+    getter hands back a blank page rather than throwing: the bytes stay on disk untouched until
+    someone saves over them, and the person at least has somewhere to type.</li>
+  <li><strong><code>archivedAt</code></strong> is a flag, not a fifth shelf. An archived page keeps
+    the bucket it was filed on, so restoring it needs no decision.</li>
+  <li><strong><code>filedAt</code></strong> is the whole Inbox concept. A bucket cannot answer "has
+    anyone decided where this goes", because every page has a bucket from the moment it is
+    created. The stamp is written by filing and never by editing, so a page you keep writing in
+    stays unfiled until you choose a home for it.</li>
+  <li><strong><code>syncedAt</code> and <code>deletedAt</code></strong> are the sync contract.
+    <code>updatedAt &gt; syncedAt</code> is the entire dirty test. A delete writes a tombstone the
+    server can pull as a fact, rather than an absence it cannot observe.</li>
+</ul>
+
+<p>
+  Three enums sit behind the raw strings. <code>NoteKind</code> decides how a page is listed, not
+  how it is edited: a <code>note</code>, a <code>journal</code> entry titled by its day, or a
+  <code>task</code> page that exists to hold to-dos. <code>NoteBucket</code> is the four shelves.
+  <code>PlanStatus</code> is reused from the old plan rather than declared again, which is what lets
+  the monthly close in <a href="#ch13">Chapter 13</a> read goal progress off notes without learning
+  a second vocabulary. Raw strings with typed accessors, for the reason Revision D gave: a new case
+  is a code change, not a migration, and an unrecognised value reads as the default instead of
+  failing the fetch.
+</p>
+
+<p>
+  A <code>NoteFolder</code> is the same shape with fewer fields: a name, an emoji or an accent dot,
+  a shelf, an optional <code>parentID</code>, and the same <code>syncedAt</code> and
+  <code>deletedAt</code> pair. Folders nest arbitrarily in the model and one level in practice.
+</p>
+
+<h4>The block</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/NoteBlock.swift
+public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
+    public var id: UUID
+    public var kind: NoteBlockKind      // paragraph, three headings, three lists, quote,
+                                        // callout, code, divider, sketch
+    public var text: String
+    public var isChecked: Bool          // kept on every block so a tick survives a transform
+    public var indent: Int              // 0 through 4, purely visual
+    public var drawing: Data?           // sketch blocks only
+    public var sketchHeight: Double?    // dragged height, so ink crops the same on every device
+    public var dueDate: Date?           // to-do blocks only; authored, so it lives here
+    public var goalID: UUID?            // to-do blocks only; authored, for the same reason
+}</code></pre>
+
+<p>
+  Two details matter. Indent is a number on a flat array, not a tree: a nested list item is still a
+  sibling, which is what keeps every editing operation a list operation. And
+  <code>dueDate</code> and <code>goalID</code> live on the authored block rather than on the derived
+  <code>NoteTask</code> row, because the row is rebuilt on every save and would lose them.
+</p>
+
+<p>
+  <code>NoteBlockParser</code> owns the Notion-style typed prefixes. <code>candidates</code> is every
+  prefix sorted longest first, and that order is the whole correctness argument: <code>- [ ] </code>
+  starts with <code>- </code>, so checking kinds in declaration order would turn every to-do typed
+  by hand into a bullet reading "[ ] whatever". <code>---</code> and the code fence are whole-line
+  markers rather than prefixes, so a line reading "--- and then some" stays a paragraph. The same
+  type renders blocks as Markdown for the share sheet and for the coach's context window, and
+  parses Markdown back into blocks for paste and for the plan migration. Round-tripping is not a
+  goal; a sketch becomes <code>_[sketch]_</code> on the way out, because saying a drawing was here
+  beats dropping it silently.
+</p>
+
+<p>
+  <code>NoteLinkScanner</code> finds <code>[[wiki links]]</code>. Case is preserved in what was
+  typed and folded at lookup, so <code>[[Marathon]]</code> and <code>[[marathon]]</code> reach the
+  same page without rewriting either.
+</p>
+
+<h4>The derived rows</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/NoteIndex.swift
+@Model
+public final class NoteTask {
+    public var id: UUID = UUID()          // the block's own id: stable across reindexes
+    public var documentID: UUID = UUID()  // scoped by page, so a pasted block cannot collide
+    public var text: String = ""
+    public var isChecked: Bool = false
+    public var indent: Int = 0
+    public var dueDate: Date?
+    public var goalID: UUID?
+    public var sortOrder: Int = 0         // position in its page
+    public var documentUpdatedAt: Date = Date.distantPast   // copied down, so a cross-page
+}                                                           // list can order pages
+
+@Model
+public final class NoteLink {
+    public var sourceID: UUID = UUID()
+    public var targetTitleFolded: String = ""   // lowercased: one edge per title
+    public var targetID: UUID?                  // nil: the page does not exist yet
+}</code></pre>
+
+<p>
+  Two rules make these safe. They are never pushed, so two devices cannot disagree about them. And
+  every row is reconstructible from the documents, so any inconsistency is repaired by
+  <code>NoteIndexer.rebuildAll</code>. A <code>NoteTask</code> keeps the block's own id so the row is
+  stable across reindexes rather than churning a new identity on every keystroke; it is scoped by
+  <code>documentID</code> because a block copied and pasted into a second page keeps its id.
+</p>
+
+<div class="note caution"><b>A resolved edge can dangle</b>
+  <code>NoteLink.targetID</code> being non-nil is not proof the page is still there.
+  <code>reindex</code> only rewrites the edges out of the document being saved, so renaming or
+  deleting a page leaves every edge that pointed at it holding an id that now names something else
+  or nothing at all. The next launch's <code>rebuildAll</code> repairs them. Until then a consumer
+  must treat the lookup as a miss it can survive, not as a page it is owed. This is written on the
+  model so it is not rediscovered as a mystery bug.
+</div>
+
+<h4>What views see</h4>
+
+<p>
+  Views never hold a <code>NoteDocument</code>. <code>NoteCardSnapshot</code> is a page flattened
+  for display: title, icon, excerpt, accent, folder name, task progress, whether it has ink, how
+  many links it carries. <code>NoteFolderSnapshot</code> is a folder row with its children already
+  attached and a count that rolls up through them. <code>NotesSnapshot</code> is everything the
+  sidebar needs in one read. <code>NoteBacklink</code> is a page that links here, with the line the
+  link appears on, so the backlinks pane shows context rather than a bare list of titles.
+</p>
+
+<h3 id="s12-4"><span class="num">12.4</span><span>ViewModel</span></h3>
+
+<p>
+  Three view models, one per concern, and the store does the deciding for all of them.
+  <code>NotesStore</code> lives in the package because the app target has no test target, so any
+  rule worth pinning (what "All" includes, when a page is filed, what order a shelf sorts in) is
+  put where <code>swift test</code> can reach it.
+</p>
+
+<h4>The library</h4>
+
+<pre><code>// LIfeOS/Features/Notes/ViewModel/NotesViewModel.swift
+@Observable @MainActor
+final class NotesViewModel {
+    private(set) var snapshot: NotesSnapshot = .empty
+    private(set) var cards: [NoteCardSnapshot] = []
+    private(set) var isSearching = false
+
+    var selection: NoteSelection = .recent { didSet { if selection != oldValue { load() } } }
+    var filter: NoteShelfFilter = .all   { didSet { if filter != oldValue { load() } } }
+    var sort: NoteSort = .recentlyEdited { didSet { if sort != oldValue { load() } } }
+    var query: String = ""               { didSet { if query != oldValue { load() } } }
+
+    func attach(_ context: ModelContext, sync: NoteSyncing? = nil)
+    func load()
+    func createNote(kind: NoteKind = .note, title: String = "") -> UUID?
+    func openTodaysJournal() -> UUID?
+    func createFolder(named:in:icon:)  func renameFolder(_:to:)  func deleteFolder(_:)
+    func toggleFavorite(_:)  func toggleArchive(_:)  func delete(_:)  func move(_:to:folderID:)
+}</code></pre>
+
+<p>
+  <code>NoteSelection</code> is one enum rather than a pair of optionals, because "a folder is
+  selected" and "a shelf is selected" are mutually exclusive and two nullable properties make a
+  fourth, meaningless state representable. <code>load()</code> reads the snapshot once, then either
+  a search or the cards for the selection. Every mutating method funnels through
+  <code>mutate(id:)</code>, which fetches the live object, applies the change through the store,
+  reloads, and fires a sync. Nothing in the UI waits on the server; the write has already landed
+  locally by the time <code>requestSync()</code> runs, and a failure there only means the next pass
+  carries the row.
+</p>
+
+<p>
+  <code>NoteSyncing</code> is a one-method protocol the view model asks for, so a preview and a
+  design capture can hand it nothing. The real <code>NoteSync</code> conforms in one line at the top
+  of <code>RootView</code>, which is the only place that knows both types.
+</p>
+
+<h4>The page</h4>
+
+<p>
+  <code>NoteEditorViewModel</code> holds the blocks in memory and writes them back on a delay.
+  Saving on every keystroke would mean a SwiftData write and a <code>didSave</code> notification per
+  character, and every screen in the app reloads on that notification.
+</p>
+
+<pre><code>// LIfeOS/Features/Notes/ViewModel/NoteEditorViewModel.swift
+private func scheduleSave() {
+    guard !isLoading else { return }
+    saveMessage = "Saving…"
+    saveTask?.cancel()
+    saveTask = Task { [weak self] in
+        try? await Task.sleep(for: .milliseconds(600))
+        guard !Task.isCancelled else { return }
+        self?.saveNow()
+    }
+}
+
+/// Called on the way out, so a page closed inside the debounce window still lands.
+func flush() {
+    saveTask?.cancel()
+    saveTask = nil
+    saveNow()
+}</code></pre>
+
+<p>
+  Ticking a checkbox is the exception: it is a decision, not a keystroke, and
+  <code>toggleCheck</code> saves at once so it survives the app being closed a second later. The
+  screen calls <code>flush()</code> on disappear and whenever the scene leaves the active phase.
+</p>
+
+<p>
+  The keystroke rules are not here. <code>splitBlock</code>, <code>backspaceAtStart</code>,
+  <code>indent</code>, <code>transform</code> and <code>completeLink</code> each call the matching
+  pure function on <code>NoteBlockEditor</code>, apply the returned blocks, move the caret to the
+  returned focus, and schedule a save. The view model also tracks the two queries the accessory bar
+  renders: <code>slashQuery</code>, the text after a leading slash, and <code>linkQuery</code>, the
+  partial title inside an unclosed <code>[[</code>. <code>linkSuggestions</code> filters a title
+  index the model refreshes after every save, and <code>resolveLink</code> creates the page when
+  nothing carries that title, the way Obsidian does.
+</p>
+
+<p>
+  <code>setDrawing</code> compares bytes before writing, because PencilKit reports a change on every
+  stroke and on every tool switch, and rewriting identical bytes would mark the page dirty for a
+  sync that carries nothing new.
+</p>
+
+<h4>The Inbox</h4>
+
+<p>
+  <code>NoteInboxViewModel</code> is 78 lines: a chip, a draft, a sticky to-do toggle, and a
+  <code>capture()</code> that hands the draft to <code>NotesStore.capture</code>, clears it on
+  success and leaves it alone on failure so a thought is never silently dropped. It is thin by the
+  same rule as <code>LifeBoardViewModel</code>: what a chip means lives in the store. It compiles,
+  its store methods are tested, and no screen constructs it today.
+</p>
+
+<h3 id="s12-5"><span class="num">12.5</span><span>View</span></h3>
+
+<h4>Two shells over one library</h4>
+
+<p>
+  <code>NotesHubScreen</code> reads <code>layout.isRegular</code> from the environment and builds
+  one of two arrangements. Both drive the same <code>NotesViewModel</code> and the same
+  <code>NoteShelfScreen</code>; only the chrome around the shelf differs.
+</p>
+
+<p>
+  <strong>The phone</strong> is a <code>NavigationStack</code> with the shelf at its root. The
+  leading toolbar button presents the library as a full-height sheet titled "Your library", and
+  choosing anything in it sets the selection, clears the path and closes the sheet in one binding,
+  so the rail and the sheet cannot drift apart about what a tap does. A page is pushed onto the
+  path. Two small pieces of state, <code>pendingNewFolder</code> and <code>pendingRename</code>,
+  exist because a sheet cannot present a second sheet: the library records what was asked for,
+  dismisses, and the hub presents the folder sheet in <code>onDismiss</code>.
+</p>
+
+<p>
+  <strong>The iPad</strong> is an <code>HStack</code> of up to three columns: the rail, the shelf,
+  and the open page. Whether the third column exists is measured, not derived from the size class.
+</p>
+
+<pre><code>// LIfeOS/Features/Notes/View/NotesHubScreen.swift
+private static let libraryWidth: CGFloat = 268
+private static let minShelfWidth: CGFloat = 340
+private static let minPageWidth: CGFloat = 520   // below this the page stops being somewhere you would write
+
+private var isThreeColumn: Bool {
+    guard layout.isRegular else { return false }
+    let spokenFor = layout.railInset + (isLibraryVisible ? Self.libraryWidth : 0)
+    return paneWidth - spokenFor &gt;= Self.minShelfWidth + Self.minPageWidth
+}</code></pre>
+
+<p>
+  A single overall threshold was wrong: at 1024 points a pane read as wide enough, but the library
+  and the tab rail take 380 of that before the shelf and the page have divided anything, leaving a
+  310-point column to write in. Subtracting what is already spoken for is what lets collapsing the
+  library buy a third column on a screen that could not otherwise hold one. Rotating an iPad or
+  resizing a Stage Manager window flips <code>isThreeColumn</code>, and the open page moves between
+  the detail column and the navigation path with it, or it would vanish. Exactly one of
+  <code>openPage</code> and a <code>.page</code> route on the path is ever non-empty, which is what
+  stops them disagreeing.
+</p>
+
+<p>
+  The detail column rebuilds its editor per page with <code>.id(openPage)</code>, so the editor
+  never shows the previous page's blocks for a frame while the new ones load.
+  <code>NoteEditorHost</code> exists because <code>@State</code> cannot be initialised from a
+  navigation destination's argument; it creates the editor view model in a <code>.task</code> keyed
+  on the document id and keeps it alive while the page is on screen.
+</p>
+
+<h4>The rail and the library</h4>
+
+<p>
+  The iPad rail, <code>NotesSidebar</code>, is text rows on the canvas rather than a
+  <code>List</code>, which brings its own background, separators and insets, all of which would
+  have to be undone. Recent and Favourites lead, Habits pushes its own screen, then the four
+  shelves, each expanded on first launch because four collapsed rows tell a new user nothing about
+  what PARA is. Every shelf and folder row is a drop destination for <code>NoteDragPayload</code>;
+  a drop on a shelf files the page loose on it, and a drop on Archive archives rather than refiles,
+  because Archive is a state, not a place. The drop highlight is a different colour from the
+  selection highlight: "this is where it will land" and "this is what you are looking at" are
+  different statements.
+</p>
+
+<p>
+  The phone library, <code>NotesLibraryList</code>, is the same inputs and callbacks in the app's
+  own card vocabulary: Recent, Favourites and Habits as a row of tiles, then each shelf as one soft
+  card with its folders under a hairline and a quiet row to add one. The whole list sits inside one
+  <code>GlassEffectContainer</code>, so neighbouring glass tiles merge and separate as they move
+  rather than each rendering its own lens. Colour is Apple's: system grays for every icon square and
+  fill, and the accent orange for exactly one thing, whatever is selected.
+</p>
+
+<h4>The shelf</h4>
+
+<p>
+  <code>NoteShelfScreen</code> is a header, a search field, a count, a kind filter (shown only when
+  a shelf or folder is selected, since Recent and Favourites already cut across kinds), a sort menu
+  with the four orders <code>NoteSort</code> allows, and a <code>LazyVStack</code> of
+  <code>NoteCard</code>. Each card carries its move targets as a menu as well as being draggable,
+  because drag and drop is a pointer gesture and the same move has to exist for a finger.
+</p>
+
+<h4>The page</h4>
+
+<p>
+  <code>NoteEditorScreen</code> caps its measure at 760 points even on an iPad, because prose at
+  1000 points across is unreadable and this is the one screen in the app that is genuinely prose.
+  Above 1040 points of editor width, and only when there are backlinks to show, the backlinks list
+  moves out from under the text into a 280-point inspector column beside it.
+</p>
+
+<p>
+  The body is a <code>ZStack</code>: a column of <code>NoteBlockRow</code> underneath, and an
+  <code>InkCanvasView</code> sized to the measured height of that column on top. A canvas sized to
+  the screen instead would clip strokes the moment the page scrolled. Under the last block sits 160
+  points of clear, tappable space that focuses the last block, because without it the bottom half
+  of a short page is dead.
+</p>
+
+<p>
+  Each block row draws its gutter mark in SwiftUI and its text in UIKit. Putting the bullet inside
+  the text view as a literal character was the alternative, and it makes the bullet deletable,
+  which means a list item can silently stop being one. <code>BlockTextView</code> wraps a
+  <code>UITextView</code> for three things SwiftUI's text field cannot do here: intercept Return so
+  it splits the block instead of inserting a newline, intercept Backspace at offset zero so it
+  merges with the block above, and paint <code>[[links]]</code> as the person types. Apple Pencil
+  Scribble arrives free with <code>UITextView</code>, which is the fourth. Every font comes from
+  <code>LifeOSType.UIKitScale</code>, so a heading in a note is the same size as the same heading
+  anywhere else in the app.
+</p>
+
+<p>
+  <code>NoteAccessoryBar</code> is one strip above the keyboard with three states that take turns: a
+  slash menu while <code>slashQuery</code> is set, a link picker while <code>linkQuery</code> is
+  set, otherwise a formatting bar with indent, ink and dismiss. Three floating panels competing for
+  the same corner of a phone screen was the alternative. Escape backs out one layer at a time:
+  the block menu, then the link picker, then the keyboard. Closing the page on the first press would
+  lose someone mid-sentence.
+</p>
+
+<h4>The Pencil rule</h4>
+
+<p>
+  There are two kinds of drawing on a page and they are deliberately different.
+  <code>SketchBlockView</code> is a block in the flow: it pushes the text below it down and moves
+  with the paragraph it belongs to, which is what a diagram between two paragraphs wants. It is
+  Pencil-only by default on iPad so a finger still scrolls past it, and finger-drawable by default
+  on a phone. <code>InkCanvasView</code> floats over the whole page for annotation.
+</p>
+
+<p>
+  The ink layer used to claim every Pencil touch, on the theory that picking up the Pencil should
+  mean drawing. The cost was hidden and larger than the benefit: a layer that swallowed the touch
+  first meant Scribble could never fire anywhere, and sketch blocks were unreachable for the same
+  reason. So the rule is stated by where the Pencil is, not by what it is. Over a text block it
+  writes. Over a sketch block it draws in that block. With ink mode on, it annotates the page, and a
+  double-tap or squeeze of the Pencil turns ink mode on without a trip to the toolbar.
+</p>
+
+<p>
+  <code>NoteToolPicker</code> is one <code>PKToolPicker</code> shared by the ink layer and every
+  sketch block. Two of them fight: whichever became visible last wins, and the loser leaves a stale
+  observer behind that keeps receiving tool changes for a canvas nobody is drawing in. It also
+  tracks which canvases already observe, because PencilKit keeps duplicate observers rather than
+  ignoring them and a view that updates twenty times would otherwise register twenty.
+</p>
+
+<h4>The hardware keyboard</h4>
+
+<p>
+  <code>NotesCommands</code> is a <code>CommandMenu</code> installed in the scene, so its shortcuts
+  work wherever focus is and appear in the overlay an iPad shows when Command is held. It reads a
+  <code>NotesCommandTarget</code> from <code>focusedSceneValue</code>: a struct of closures, one per
+  action, because opening a page means pushing on a phone and filling the detail column on an iPad
+  and the scene must not have to know which. <code>closePage</code> is optional and nil when nothing
+  is open, which is what greys out Command-W rather than letting it fire into an empty column.
+  Command-Option-0 is Recent and Command-Option-1 to 4 are the shelves, matching how editors number
+  their tabs.
+</p>
+
+<h3 id="s12-6"><span class="num">12.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="A keystroke goes to the editor view model, which after a 600 millisecond debounce writes blocks through NotesStore. The store's touch stamps updatedAt, runs NoteIndexer to rewrite the page's NoteTask and NoteLink rows in the same transaction, and saves. The view model then asks NoteSync to run, which pushes dirty folders and documents to Supabase in batches of 25 and pulls rows newer than its cursor, reindexing each pulled page.">
+  <defs>
+    <marker id="ch12a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch12b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+
+  <text class="lbl-sm" x="20" y="24">SCREEN</text>
+  <text class="lbl-sm" x="250" y="24">STORE, ONE TRANSACTION</text>
+  <text class="lbl-sm" x="620" y="24">NETWORK, AFTERWARDS</text>
+
+  <rect class="box" x="20" y="44" width="180" height="44" rx="8"/>
+  <text class="lbl" x="110" y="71" text-anchor="middle">BlockTextView</text>
+
+  <rect class="box" x="20" y="120" width="180" height="58" rx="8"/>
+  <text class="lbl" x="110" y="144" text-anchor="middle">NoteEditorViewModel</text>
+  <text class="lbl-sm" x="110" y="163" text-anchor="middle">600 ms debounce</text>
+
+  <rect class="box-hot" x="250" y="120" width="180" height="58" rx="8"/>
+  <text class="lbl" x="340" y="144" text-anchor="middle">NotesStore.touch</text>
+  <text class="lbl-hot" x="340" y="163" text-anchor="middle">updatedAt = now</text>
+
+  <rect class="box" x="250" y="210" width="180" height="58" rx="8"/>
+  <text class="lbl" x="340" y="234" text-anchor="middle">NoteIndexer.reindex</text>
+  <text class="lbl-sm" x="340" y="253" text-anchor="middle">NoteTask · NoteLink</text>
+
+  <rect class="box-alt" x="460" y="120" width="120" height="58" rx="8"/>
+  <text class="lbl" x="520" y="144" text-anchor="middle">SwiftData</text>
+  <text class="lbl-sm" x="520" y="163" text-anchor="middle">per account</text>
+
+  <rect class="box" x="620" y="120" width="220" height="58" rx="8"/>
+  <text class="lbl" x="730" y="144" text-anchor="middle">NoteSync</text>
+  <text class="lbl-sm" x="730" y="163" text-anchor="middle">push, then pull</text>
+
+  <rect class="box" x="620" y="210" width="220" height="58" rx="8"/>
+  <text class="lbl" x="730" y="234" text-anchor="middle">Supabase</text>
+  <text class="lbl-sm" x="730" y="253" text-anchor="middle">note_documents · note_folders</text>
+
+  <path class="flow" d="M110 88 L110 114" marker-end="url(#ch12a)"/>
+  <text class="lbl-sm" x="120" y="106">Return, Backspace, text</text>
+  <path class="flow-hot" d="M200 149 L244 149" marker-end="url(#ch12b)"/>
+  <path class="flow-hot" d="M340 178 L340 204" marker-end="url(#ch12b)"/>
+  <path class="flow" d="M430 149 L454 149" marker-end="url(#ch12a)"/>
+  <text class="lbl-sm" x="436" y="140">save</text>
+  <path class="flow-dash" d="M200 170 L230 190 L230 300 L640 300 L640 184" marker-end="url(#ch12a)"/>
+  <text class="lbl-sm" x="250" y="292">requestSync, fire and forget</text>
+  <path class="flow" d="M730 178 L730 204" marker-end="url(#ch12a)"/>
+  <text class="lbl-sm" x="740" y="196">batches of 25</text>
+  <path class="flow-dash" d="M700 210 L700 190" marker-end="url(#ch12a)"/>
+  <path class="flow-dash" d="M620 240 L600 240 L600 149 L580 149"/>
+  <text class="lbl-sm" x="604" y="232">pulled rows reindexed</text>
+</svg>
+<figcaption>
+  The write lands locally before anything touches the network. The index is rewritten inside the
+  same save as the page, so a page and its rows can never be half written with respect to each
+  other.
+</figcaption>
+</figure>
+
+<h4>Step by step, from a keystroke</h4>
+
+<ol>
+  <li>The <code>UITextView</code> reports text, or a Return, or a Backspace at offset zero.
+    <code>NoteBlockRow</code> forwards it as a closure call.</li>
+  <li>The editor view model applies the matching <code>NoteBlockEditor</code> function to its block
+    array, moves the caret, and schedules a save 600 milliseconds out. A second keystroke inside
+    that window cancels the first task.</li>
+  <li><code>saveNow()</code> fetches the live document and calls <code>NotesStore.update</code>,
+    which returns early if the blocks are equal and otherwise assigns them and calls
+    <code>touch</code>.</li>
+  <li><code>touch</code> stamps <code>updatedAt</code>, calls <code>NoteIndexer.reindex</code>, and
+    saves once. Every document mutation in the store funnels through this one function, which is
+    why the index is rewritten here and nowhere else.</li>
+  <li><code>reindex</code> fetches and deletes the page's existing rows, inserts one
+    <code>NoteTask</code> per to-do block, and, only if the page carries any links, builds the
+    folded title index and inserts one <code>NoteLink</code> per link.</li>
+  <li>The view model refreshes its backlinks and title index, updates the "Saved on this device"
+    label, and asks <code>NoteSync</code> to run.</li>
+</ol>
+
+<h4>The indexer's two deletes</h4>
+
+<p>
+  <code>reindex</code> and <code>rebuildAll</code> delete rows differently, on purpose, and the code
+  says not to "fix" either to match the other.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/NoteIndexer.swift
+// Inside reindex: fetch and delete each, NOT `context.delete(model:where:)`.
+// The batch form runs against the persistent store and cannot see rows
+// inserted earlier in this same unsaved transaction, so a second reindex
+// would duplicate rows instead of replacing them.
+let existing = try context.fetch(
+    FetchDescriptor&lt;NoteTask&gt;(predicate: #Predicate { $0.documentID == documentID })
+)
+for row in existing { context.delete(row) }
+
+// Inside rebuildAll: the batch form is correct HERE. This deletes everything
+// before anything is inserted, and the rows it clears are already saved.
+try context.delete(model: NoteTask.self)
+try context.delete(model: NoteLink.self)</code></pre>
+
+<p>
+  <code>rebuildAll</code> also starts from empty rather than reindexing page by page, because a
+  per-document pass never visits a page that is no longer there, and so could never clear the rows
+  a deleted page left behind.
+</p>
+
+<h4>Filing</h4>
+
+<p>Where a page lands, and when it counts as filed, is decided in the store and pinned by tests.</p>
+
+<ul>
+  <li><code>createDocument</code> stamps <code>filedAt</code> only when a folder was given. Choosing
+    a folder is choosing a home. A page created loose on a shelf is not filed, because the shelf
+    was the default, not a decision.</li>
+  <li><code>capture</code> writes one block into Areas with no title and no <code>filedAt</code>.
+    The title is left empty on purpose: <code>displayTitle</code> already falls back to the first
+    textual block, so storing the sentence twice would show it twice on the card.</li>
+  <li><code>move</code> stamps <code>filedAt</code> if it is nil. Editing never does.</li>
+  <li>Deleting a folder empties it onto its parent rather than taking the pages with it. Losing a
+    folder is an organising decision; losing what was in it is a different decision that must never
+    be made by implication. Those pages change outside <code>touch</code>, so the store reindexes
+    them by hand in the same loop.</li>
+</ul>
+
+<h4>Sync</h4>
+
+<p>
+  <code>NoteSync</code> coalesces overlapping calls into one in-flight task, reads the access token
+  fresh from the keychain on every pass rather than capturing it (the app shell refreshes the
+  session hourly, so a captured token would be stale within the hour), and returns quietly for a
+  guest. Then:
+</p>
+
+<ol>
+  <li><strong>Push folders first.</strong> A page whose folder has never been pushed would arrive
+    pointing at a row the server does not have, and a pull on another device would file it at the
+    root until the folder caught up.</li>
+  <li><strong>Push documents in batches of 25.</strong> A page carrying ink is large, and a person
+    offline for a week can have many. One oversized body is a 413 that fails every page in it,
+    including the small ones. Each batch is marked synced as soon as the server confirms it, and
+    the mark does not touch <code>updatedAt</code>, so an edit made mid-flight stays dirty.</li>
+  <li><strong>Pull rows newer than the cursor</strong>, rewound one second so a row written in the
+    same instant as the cursor is not stranded on the far side of it. For each row: a local copy
+    newer than the server's wins and stays dirty; a tombstone deletes the local row after clearing
+    its index; an update reindexes; an insert stamps <code>filedAt</code> from
+    <code>createdAt</code>, because a page from another device was filed on the device that made
+    it and is not new capture here. Ink that was too large to push comes back null, and null means
+    "not carried", not "erased", so the local drawing is kept.</li>
+  <li><strong>Advance the cursor</strong> to the newest <code>updatedAt</code> seen, in the
+    per-account defaults suite rather than the shared one, so two people on one device cannot read
+    each other's position.</li>
+</ol>
+
+<p>
+  The one trigger in the app today is a write: every mutating path in the two view models ends in
+  <code>requestSync()</code>. There is no launch or foreground pull, so on a second device the
+  first pull happens as the tail of the first push.
+</p>
+
+<h4>The one-time migrations</h4>
+
+<p>
+  <code>RootView.attachAll</code> runs three idempotent steps on every launch.
+  <code>PlanNoteMigration.seedIfEmpty</code> creates one Journal folder, and only when the tree is
+  completely empty, because pre-filling shelves with folders nobody asked for is how a fresh install
+  feels like someone else's mess. <code>PlanNoteMigration.run</code> turns goals, content, notes and
+  journal entries into pages (<a href="#s12-9">12.9</a>). <code>NoteIndexMigration.run</code> stamps
+  every page that predates the Inbox as filed, then rebuilds the index. That stamp is keyed by a
+  marker in the per-account defaults, and the marker is spent only when there was history to
+  interpret: on a fresh install the first launch runs before the first pull, and consuming the
+  one-shot on an empty store would leave every page that arrives afterwards stranded in the Inbox.
+</p>
+
+<h3 id="s12-7"><span class="num">12.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>One write per pause, not per character.</strong> The 600 millisecond debounce in the
+    editor is the single most consequential number in this chapter: without it every keystroke
+    would fire a SwiftData save and a <code>didSave</code> notification that reloads every view
+    model in the app.</li>
+  <li><strong>The title index is built once per rebuild, not once per page.</strong> Letting each
+    <code>reindex</code> build its own made <code>rebuildAll</code> quadratic in the size of the
+    library: one fetch of every document per document, decoding the blocks of each untitled page
+    every time, on the main actor before the UI was live. <code>rebuildAll</code> now builds the
+    index once and passes it down.</li>
+  <li><strong>A page with no links never fetches the library.</strong> <code>reindex</code> scans
+    for links first and returns before building a title index when there are none, which is most
+    pages. Otherwise the editor would pay a fetch of every document on every debounced keystroke.</li>
+  <li><strong>Delete and reinsert beats a diff.</strong> A page holds tens of blocks, the rewrite is
+    cheap, and a diff would need its own correctness argument for every field.</li>
+  <li><strong>The sidebar is one read.</strong> <code>NotesStore.snapshot</code> walks the folders
+    and documents once to build the tree, the per-shelf counts, the recent list and the favourites.
+    Four separate reads would each walk the same rows.</li>
+  <li><strong>Search has no index and does not need one.</strong> It is a substring match over
+    titles and block text, case and diacritic insensitive, capped at 40 results. That is fine until
+    a person has thousands of notes, and the derived rows are where an index would go when it is
+    needed.</li>
+  <li><strong>Ink stays on the device past 1.5 megabytes.</strong> A dense PencilKit page is a few
+    hundred kilobytes, a pathological one is megabytes, and base64 adds a third. One runaway page
+    must not stall every other page's sync behind it, so <code>NoteDocumentRow</code> leaves oversized
+    ink out of the payload and the page syncs its text.</li>
+  <li><strong>Opening a page does not dirty it.</strong> <code>markOpened</code> advances
+    <code>openedAt</code> without touching <code>updatedAt</code>, so reading on one device cannot
+    fabricate an edit that wins a sync conflict against a real one on another.</li>
+  <li><strong>Blocks travel as real JSON.</strong> The <code>blocks</code> column is
+    <code>jsonb</code>, so a malformed document is refused by Postgres at write time rather than
+    surfacing on another device later, and a future server-side reader can query into it.</li>
+  <li><strong>Cost is zero beyond Postgres rows.</strong> No AI, no third-party service, no
+    per-user fee. Two tables, five indexes, one policy each, all scoped to <code>auth.uid()</code>.
+    <code>user_id</code> defaults to <code>auth.uid()</code> on the server and the client never sends
+    it, so ownership is decided from the token rather than asserted by the device.</li>
+</ul>
+
+<h3 id="s12-8"><span class="num">12.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Return on an empty list item</td><td>Outdents one level if it can, otherwise the item becomes a paragraph. That is how every editor gets out of a list.</td></tr>
+<tr><td>Backspace at the start of a list item</td><td>Strips the indent first, then the kind, then merges into the block above. A plain paragraph merges its whole tail, not just the first word.</td></tr>
+<tr><td>Backspace in the first block</td><td>Not the editor's to consume; UIKit does what it would normally do.</td></tr>
+<tr><td>Backspace onto a drawn sketch</td><td>Refused. An untouched sketch is removed; one with ink is not swallowed.</td></tr>
+<tr><td>Typing <code>---</code> then more text</td><td>Stays a paragraph. Dividers and code fences fire only on their own line.</td></tr>
+<tr><td>A to-do turned into a paragraph and back</td><td>Keeps its tick, because <code>isChecked</code> is kept on every block.</td></tr>
+<tr><td>Two pages share a title</td><td>The older one wins the link, every launch, because the title index is built in <code>createdAt</code> order.</td></tr>
+<tr><td>A link to a page that does not exist</td><td>The edge is kept unresolved; following it creates the page in the current shelf.</td></tr>
+<tr><td>Same block id on two pages (copy and paste)</td><td>Two task rows, scoped by document. Neither collides.</td></tr>
+<tr><td>Page archived</td><td>Leaves every stream; its task rows stay in the index but the To-dos chip filters them by live page.</td></tr>
+<tr><td>Page deleted locally</td><td>Tombstoned, index cleared, row reaped only after the server confirms the push.</td></tr>
+<tr><td>Tombstone pulled for a page this device never had</td><td>Already satisfied; nothing is inserted.</td></tr>
+<tr><td>Local edit newer than the server's copy</td><td>Local wins and stays dirty; the next push carries it up.</td></tr>
+<tr><td>Ink larger than 1.5 MB</td><td>Text syncs, drawing stays local, and a pulled null never erases it.</td></tr>
+<tr><td>Blocks JSON cannot be decoded</td><td>The editor gets a blank page; the original bytes stay on disk until saved over.</td></tr>
+<tr><td>A row from the server with an unknown block kind</td><td>That block is dropped, not guessed at. A row with no id or timestamp is refused.</td></tr>
+<tr><td>Fresh install, empty store</td><td>The index migration does not spend its one-shot, so pulled pages are not swept into the Inbox.</td></tr>
+<tr><td>Signed out</td><td>Everything works locally; sync returns without an error. The first pass after sign-in carries it all up.</td></tr>
+<tr><td>Page closed inside the debounce window</td><td><code>flush()</code> on disappear and on leaving the active scene phase saves it anyway.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>Tests</h4>
+
+<p>
+  The notes layer is the most heavily tested feature in the package: 151 tests across eleven suites,
+  all runnable from the terminal with no simulator.
+</p>
+
+<ul>
+  <li><code>NoteBlockEditorTests</code> (35): every Return and Backspace rule above, indent bounds,
+    numbered runs restarting, slash and link query detection, sketch insertion and protection.</li>
+  <li><code>NoteBlockTests</code> (15): prefix resolution and longest-match ordering, Markdown round
+    trips, link scanning, and that a block written before <code>dueDate</code> existed still
+    decodes.</li>
+  <li><code>NotesStoreTests</code> (34): filing rules, folder deletion rehoming, tombstones, dirty
+    tracking, journal-once-per-day, backlinks, search reaching archived pages, capture, and that the
+    index is updated by every write path including emptying a folder.</li>
+  <li><code>NoteIndexerTests</code> (16): rows in and out, block identity kept, deleted pages keep no
+    rows, edges resolve or stay unresolved, rebuild is idempotent and clears orphans.</li>
+  <li><code>NoteIndexMigrationTests</code> (4): existing pages are stamped and indexed, a later
+    capture is not swept up by a second run, an empty store does not spend the one-shot.</li>
+  <li><code>NoteStreamTests</code> (8): what each chip shows, newest first, archived pages leave
+    every stream, only a page given a folder is born filed.</li>
+  <li><code>NoteWireFormatTests</code> (16): the round trip, blocks as JSON not a string, journal
+    dates on the same calendar day, oversized ink left behind, the client never claiming ownership,
+    unknown kinds dropped.</li>
+  <li><code>NoteSyncIndexTests</code> (4): a pulled page is indexed, an updated one reindexed, a
+    tombstoned one loses its rows, a pulled page is not in the Inbox. <code>apply</code> is internal
+    rather than private so these run without a network.</li>
+  <li><code>PlanNoteMigrationTests</code> (8) and <code>PlanStoreTests</code> (10): see
+    <a href="#s12-9">12.9</a>.</li>
+</ul>
+
+<h3 id="s12-9"><span class="num">12.9</span><span>The plan that remains</span></h3>
+
+<p>
+  <code>PlanEntry</code> still exists with all five kinds, and <code>PlanScreen</code> still renders
+  four sections. Only one of them is reachable. The notes tab's library offers a Habits row that
+  pushes <code>PlanScreen</code> with <code>section: .constant(.habits)</code> and
+  <code>showsSections: false</code>, and the add sheet in <code>RootView</code> sets
+  <code>plan.section = .habits</code> before it opens. Goals, notes and content are pages now.
+</p>
+
+<h4>Why habits stayed behind</h4>
+
+<p>
+  A habit is a daily tick with a streak behind it. Today toggles those ticks live from its own
+  screen, and turning a habit into a document would either break Today or leave two rows claiming
+  to be the same habit. So <code>HabitTick</code> stays a flat table keyed by <code>entryID</code>
+  and day, <code>PlanStore.tickedHabitIDs(on:)</code> answers a whole day in one fetch for Today,
+  and the streak rule from Revision D is unchanged:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/PlanStore.swift
+public func streak(for entry: PlanEntry, endingOn end: Date = .now) throws -&gt; Int {
+    let ticks = try recentTicks(for: entry, days: 365, endingOn: end)
+    var count = 0
+    for (index, done) in ticks.reversed().enumerated() {
+        if done { count += 1 }
+        else if index == 0 { continue }   // today still open
+        else { break }
+    }
+    return count
+}</code></pre>
+
+<p>
+  Walk backwards from today, counting until a gap. An unticked today is skipped rather than treated
+  as a break, because the day is not over; yesterday unticked still ends the streak.
+</p>
+
+<h4>How the rest moved</h4>
+
+<p>
+  <code>PlanNoteMigration.run</code> is idempotent through <code>originPlanEntryID</code> on each
+  page rather than through a flag in <code>UserDefaults</code>, because a flag says "this device
+  has migrated", which is the wrong question once a second device syncs the same pages down. PARA's
+  own rule decides where each kind lands:
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Plan kind</th><th>Shelf</th><th>Folder</th><th>Page kind</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>goal</td><td>Projects</td><td>Goals</td><td>task</td><td>Detail becomes blocks; status survives. Milestone targets were dropped, which the spec's Goals phase is meant to restore.</td></tr>
+<tr><td>content</td><td>Projects</td><td>Content</td><td>task</td><td>Due date carried over.</td></tr>
+<tr><td>note</td><td>Research</td><td>Notes</td><td>note</td><td></td></tr>
+<tr><td>journal</td><td>Areas</td><td>Journal</td><td>journal</td><td>The old title field was the whole text, so the day becomes the title and the text becomes the first block.</td></tr>
+<tr><td>habit</td><td>stays</td><td></td><td></td><td>Not migrated.</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>
+  Folders are made only when there is something to put in them, and the original plan rows are left
+  in place. They are what the months already closed were scored against, and rewriting history to
+  match a new filing system is the kind of thing an app should never do behind someone's back.
+  <code>NoteEvidence</code> is the bridge the monthly close uses: journal dates come off journal
+  pages by <code>entryDate</code>, and a project page's status is what its to-do blocks say when it
+  has any, because ticking the last box is a clearer statement that a thing is done than
+  remembering to flip a menu afterwards.
+</p>
+
+<h3 id="s12-10"><span class="num">12.10</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+
+<ol>
+  <li><code>LifeOSKit/Sources/Persistence/NoteBlock.swift</code>: the block, the parser, the link
+    scanner. Everything else is built on this shape.</li>
+  <li><code>LifeOSKit/Sources/Persistence/NoteBlockEditor.swift</code>: what Return and Backspace
+    mean, as pure functions. Read the tests beside it.</li>
+  <li><code>LifeOSKit/Sources/Persistence/NoteDocument.swift</code>: the page and its four
+    load-bearing nullable dates.</li>
+  <li><code>LifeOSKit/Sources/Persistence/NotesStore.swift</code>: every read and write. Notice that
+    <code>touch</code> is the only place the index is rewritten.</li>
+  <li><code>LifeOSKit/Sources/Persistence/NoteIndexer.swift</code>: the two different deletes and
+    the once-per-rebuild title index.</li>
+  <li><code>LifeOSKit/Sources/Integrations/NoteSync.swift</code>: push before pull, and the four
+    rules in its header comment.</li>
+  <li><code>LIfeOS/Features/Notes/View/NotesHubScreen.swift</code>: the measured three-column
+    rule and the page that moves between column and stack.</li>
+  <li><code>LIfeOS/Features/Notes/View/InkCanvasView.swift</code>: the Pencil rule, and why it
+    used to be wrong.</li>
+</ol>
+
+<h4>Check yourself</h4>
+
+<ul>
+  <li><strong>Why are blocks JSON inside the page rather than SwiftData rows?</strong> Blocks are
+    only ever read and written as a document; a relationship would add a migration hazard per
+    field for no query that needs it. The derived rows exist for the one query that does.</li>
+  <li><strong>What single field is the Inbox?</strong> <code>filedAt</code>. Nil means nobody has
+    chosen where the page belongs. Filing stamps it; editing never does.</li>
+  <li><strong>Why does <code>reindex</code> fetch-and-delete while <code>rebuildAll</code> uses the
+    batch delete?</strong> The batch form cannot see rows inserted earlier in the same unsaved
+    transaction, so inside <code>reindex</code> it would duplicate rows. <code>rebuildAll</code>
+    clears already-saved rows before inserting anything, so the batch form is correct there.</li>
+  <li><strong>What made a rebuild quadratic, and what fixed it?</strong> Each page's reindex built
+    its own title index by fetching every document. <code>rebuildAll</code> now builds it once and
+    passes it down; a single save still builds it on demand, and only when the page has links.</li>
+  <li><strong>Why push folders before documents, and why batches of 25?</strong> A page arriving
+    before its folder would be filed at the root on another device until the folder caught up. One
+    oversized body is a 413 that fails every page in it, including the small ones.</li>
+  <li><strong>Why did habits not become pages?</strong> Today ticks them live from
+    <code>HabitTick</code>; a document version would either break Today or duplicate the habit.</li>
+</ul>
+</section>

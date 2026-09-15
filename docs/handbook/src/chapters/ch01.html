@@ -1,0 +1,508 @@
+<section class="chapter" id="ch1">
+<p class="chapter-kicker">Chapter one</p>
+<h2><span class="num">1</span><span>Architecture</span></h2>
+
+<p class="lede">
+  Almanac is a local-first iOS app built on one bet: <strong>the value is in the join, not the
+  collection.</strong> Seven sources of data now feed it, one table keyed by calendar day still
+  receives all of the health signal, and every screen reads from the device before anything
+  touches the network.
+</p>
+
+<p>
+  This chapter describes the system as it is on 15 September 2026, not the one the first edition
+  planned. Since Revision D the package has grown from three targets to eight, the app has gained
+  a watch, a bank, a second wearable, a calendar, a notes library, a nine-sector life board and a
+  cloud tier for the coach. The architecture survived all of that because three early decisions
+  held: one row per day, a compiler-enforced module graph, and a device that never waits for a
+  server. Where the code and this handbook disagree, the code is right and this handbook is a bug.
+</p>
+
+<h3 id="s1-1"><span class="num">1.1</span><span>System context</span></h3>
+
+<p>
+  Every source reaches the app through one of four doors: Apple Health, a vendor REST API behind a
+  Supabase Edge Function, a system framework on the device itself, or a table in Supabase that the
+  app reads directly over PostgREST. The Apple Watch is now both a source, through Health, and a
+  second screen, through WatchConnectivity. Everything still converges on the local SwiftData store
+  before a single pixel is drawn.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 470" role="img" aria-label="Sources on the left (Apple Watch, iPhone, Renpho scale, Whoop strap, Fitbit, bank, calendar, YouTube catalog) feed the device store in the middle through Apple Health, Edge Functions, EventKit and PostgREST; the device store syncs a subset to Supabase on the right; the watch app mirrors a session over WatchConnectivity.">
+  <defs>
+    <marker id="ch1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">SOURCES</text>
+  <text class="lbl-sm" x="250" y="24">DOOR</text>
+  <text class="lbl-sm" x="480" y="24">DEVICE</text>
+  <text class="lbl-sm" x="700" y="24">CLOUD</text>
+
+  <rect class="box" x="20" y="40" width="150" height="34" rx="8"/><text class="lbl" x="95" y="62" text-anchor="middle">Apple Watch</text>
+  <rect class="box" x="20" y="82" width="150" height="34" rx="8"/><text class="lbl" x="95" y="104" text-anchor="middle">iPhone</text>
+  <rect class="box" x="20" y="124" width="150" height="34" rx="8"/><text class="lbl" x="95" y="146" text-anchor="middle">Renpho scale</text>
+  <rect class="box" x="20" y="180" width="150" height="34" rx="8"/><text class="lbl" x="95" y="202" text-anchor="middle">Whoop strap</text>
+  <rect class="box" x="20" y="222" width="150" height="34" rx="8"/><text class="lbl" x="95" y="244" text-anchor="middle">Fitbit</text>
+  <rect class="box" x="20" y="264" width="150" height="34" rx="8"/><text class="lbl" x="95" y="286" text-anchor="middle">Bank (Plaid)</text>
+  <rect class="box" x="20" y="320" width="150" height="34" rx="8"/><text class="lbl" x="95" y="342" text-anchor="middle">Calendars</text>
+  <rect class="box" x="20" y="362" width="150" height="34" rx="8"/><text class="lbl" x="95" y="384" text-anchor="middle">Workout catalog</text>
+  <rect class="box-alt" x="20" y="418" width="150" height="34" rx="8"/><text class="lbl" x="95" y="440" text-anchor="middle">MacBook</text>
+
+  <rect class="box" x="250" y="82" width="150" height="34" rx="8"/><text class="lbl" x="325" y="104" text-anchor="middle">Apple Health</text>
+  <rect class="box" x="250" y="201" width="150" height="34" rx="8"/><text class="lbl" x="325" y="223" text-anchor="middle">Edge Functions</text>
+  <rect class="box" x="250" y="264" width="150" height="34" rx="8"/><text class="lbl" x="325" y="286" text-anchor="middle">Plaid Link + Edge</text>
+  <rect class="box" x="250" y="320" width="150" height="34" rx="8"/><text class="lbl" x="325" y="342" text-anchor="middle">EventKit</text>
+  <rect class="box" x="250" y="362" width="150" height="34" rx="8"/><text class="lbl" x="325" y="384" text-anchor="middle">PostgREST</text>
+
+  <rect class="box-hot" x="480" y="170" width="160" height="90" rx="10"/>
+  <text class="lbl" x="560" y="200" text-anchor="middle">SwiftData</text>
+  <text class="lbl-hot" x="560" y="220" text-anchor="middle">one store per account</text>
+  <text class="lbl-sm" x="560" y="242" text-anchor="middle">20 model types</text>
+
+  <rect class="box" x="480" y="300" width="160" height="50" rx="10"/>
+  <text class="lbl" x="560" y="322" text-anchor="middle">AlmanacWatch</text>
+  <text class="lbl-sm" x="560" y="340" text-anchor="middle">runs a session on the wrist</text>
+
+  <rect class="box" x="700" y="170" width="140" height="90" rx="10"/>
+  <text class="lbl" x="770" y="200" text-anchor="middle">Supabase</text>
+  <text class="lbl-sm" x="770" y="220" text-anchor="middle">Postgres + RLS</text>
+  <text class="lbl-sm" x="770" y="240" text-anchor="middle">12 Edge Functions</text>
+
+  <path class="flow" d="M170 57 L 210 57 L 210 95 L 244 95" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 99 L 244 99" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 141 L 210 141 L 210 103 L 244 103" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 197 L 210 197 L 210 214 L 244 214" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 239 L 210 239 L 210 222 L 244 222" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 281 L 244 281" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 337 L 244 337" marker-end="url(#ch1a)"/>
+  <path class="flow" d="M170 379 L 244 379" marker-end="url(#ch1a)"/>
+
+  <path class="flow-hot" d="M400 99 L 440 99 L 440 190 L 474 190" marker-end="url(#ch1b)"/>
+  <path class="flow-hot" d="M400 218 L 474 218" marker-end="url(#ch1b)"/>
+  <path class="flow-hot" d="M400 281 L 440 281 L 440 232 L 474 232" marker-end="url(#ch1b)"/>
+  <path class="flow-hot" d="M400 337 L 440 337 L 440 246 L 474 246" marker-end="url(#ch1b)"/>
+  <path class="flow-hot" d="M400 379 L 452 379 L 452 254 L 474 254" marker-end="url(#ch1b)"/>
+
+  <path class="flow" d="M640 200 L 694 200" marker-end="url(#ch1a)"/><text class="lbl-sm" x="646" y="192">push</text>
+  <path class="flow" d="M694 230 L 640 230" marker-end="url(#ch1a)"/><text class="lbl-sm" x="646" y="246">pull</text>
+  <path class="flow-dash" d="M560 260 L 560 294" marker-end="url(#ch1a)"/><text class="lbl-sm" x="568" y="282">WatchConnectivity</text>
+
+  <line class="wall" x1="196" y1="412" x2="196" y2="460"/>
+  <text class="lbl-sm" x="206" y="432" fill="#C2412A">no API exists</text>
+  <text class="lbl-sm" x="206" y="448" fill="#C2412A">manual entry only</text>
+</svg>
+<figcaption>
+  Eight sources, four doors, one store. The MacBook still has no programmatic path at any privilege
+  level; that is a platform fact, not a missing feature. The watch is the only box that both feeds
+  the store (through Health) and reads from it (a live session mirrored over WatchConnectivity).
+</figcaption>
+</figure>
+
+<p>Each source, its door, and where its data lands:</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Source</th><th>Door</th><th>Lands in</th><th>Chapter</th></tr></thead>
+<tbody>
+<tr><td>Apple Watch, iPhone, Renpho scale</td><td><code>HealthKitReader</code> reads every <code>HealthMetric</code> Apple Health holds</td><td><code>DailyMetrics</code> named columns and the <code>extras</code> bag</td><td><a href="#ch7">7</a>, <a href="#ch19">19</a></td></tr>
+<tr><td>Whoop strap</td><td>OAuth via the <code>whoop-callback</code> bridge, direct REST from the device, tokens in the keychain</td><td><code>WhoopRawRecord</code> first, then derived into <code>DailyMetrics</code>, <code>SleepRecord</code>, <code>WorkoutRecord</code></td><td><a href="#ch19">19</a></td></tr>
+<tr><td>Fitbit</td><td>OAuth exchanged server side; <code>fitbit-sync</code> pulls under a refresh lease; the device never holds a Fitbit token</td><td><code>DailyMetrics</code> through the same arbiter</td><td><a href="#ch19">19</a></td></tr>
+<tr><td>Bank accounts</td><td>Plaid Link in the app, four Edge Functions hold the credentials</td><td><code>MoneyEntry</code>, <code>MoneyAccount</code>, cursor per item on the device</td><td><a href="#ch11">11</a></td></tr>
+<tr><td>Calendars</td><td><code>EventKitSource</code> behind a <code>CalendarSource</code> protocol</td><td><code>CalendarEvent</code> cache with windowed queries</td><td><a href="#ch6">6</a></td></tr>
+<tr><td>Workout catalog</td><td>Read-only PostgREST client, cached locally</td><td><code>CatalogVideo</code></td><td><a href="#ch10">10</a></td></tr>
+<tr><td>Live sensors</td><td>CoreBluetooth heart rate, CoreMotion on the wrist</td><td><code>WorkoutRecord</code> on save; the readout is never persisted</td><td><a href="#ch8">8</a>, <a href="#ch9">9</a></td></tr>
+<tr><td>You</td><td>Quick log, journal, notes, check-ins</td><td>Whichever model owns it, with <code>MetricSource.manual</code> where it competes with a sensor</td><td>everywhere</td></tr>
+</tbody></table></div>
+
+<h3 id="s1-2"><span class="num">1.2</span><span>Module map</span></h3>
+
+<p>
+  <code>LifeOSKit</code> is a local Swift package providing compile-time boundaries. The app target
+  contains only features and wiring, laid out per screen as described in
+  <a href="#ch2">Chapter 2</a>. The dependency rules are enforced by the compiler, not by
+  convention: a target that does not declare a dependency cannot import it, and the package
+  manifest is the whole rule book.
+</p>
+
+<pre><code>// LifeOSKit/Package.swift
+platforms: [.iOS("26.0"), .macOS("26.0"), .watchOS("26.0")],
+targets: [
+    .target(name: "AppSurfaces"),
+    .target(name: "DesignSystem"),
+    .target(name: "Persistence"),
+    .target(name: "Integrations", dependencies: ["Persistence", "AppSurfaces"]),
+    .target(name: "Insights", dependencies: ["Persistence"]),
+    .target(name: "Sectors", dependencies: ["Persistence"]),
+    .target(name: "Assistant", dependencies: ["Insights", "Persistence"]),
+    .target(name: "Motion"),
+    // plus one test target per library
+]</code></pre>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="Module dependency graph: the app target, the watch target and the widget target sit above eight package targets. The watch imports AppSurfaces and Motion, the widgets import AppSurfaces and DesignSystem. Integrations depends on Persistence and AppSurfaces; Insights and Sectors depend on Persistence; Assistant depends on Insights and Persistence; DesignSystem, AppSurfaces, Persistence and Motion depend on nothing.">
+  <defs><marker id="ch1c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs>
+  <rect class="box-hot" x="40" y="20" width="200" height="40" rx="8"/><text class="lbl" x="140" y="45" text-anchor="middle">LIfeOS app target</text>
+  <rect class="box-hot" x="330" y="20" width="200" height="40" rx="8"/><text class="lbl" x="430" y="45" text-anchor="middle">AlmanacWatch</text>
+  <rect class="box-hot" x="620" y="20" width="200" height="40" rx="8"/><text class="lbl" x="720" y="45" text-anchor="middle">AlmanacWidgets</text>
+
+  <rect class="box" x="40" y="120" width="130" height="40" rx="8"/><text class="lbl" x="105" y="145" text-anchor="middle">Assistant</text>
+  <rect class="box" x="200" y="120" width="130" height="40" rx="8"/><text class="lbl" x="265" y="145" text-anchor="middle">Integrations</text>
+  <rect class="box" x="360" y="120" width="130" height="40" rx="8"/><text class="lbl" x="425" y="145" text-anchor="middle">Sectors</text>
+  <rect class="box" x="520" y="120" width="130" height="40" rx="8"/><text class="lbl" x="585" y="145" text-anchor="middle">Insights</text>
+
+  <rect class="box-alt" x="40" y="240" width="130" height="40" rx="8"/><text class="lbl" x="105" y="265" text-anchor="middle">DesignSystem</text>
+  <rect class="box-alt" x="200" y="240" width="130" height="40" rx="8"/><text class="lbl" x="265" y="265" text-anchor="middle">AppSurfaces</text>
+  <rect class="box-alt" x="360" y="240" width="130" height="40" rx="8"/><text class="lbl" x="425" y="265" text-anchor="middle">Persistence</text>
+  <rect class="box-alt" x="520" y="240" width="130" height="40" rx="8"/><text class="lbl" x="585" y="265" text-anchor="middle">Motion</text>
+
+  <path class="flow" d="M140 60 L 140 114" marker-end="url(#ch1c)"/>
+    <path class="flow" d="M430 60 L 430 90 L 585 90 L 585 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M720 60 L 720 90 L 300 90 L 300 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M700 60 L 700 100 L 130 100 L 130 234" marker-end="url(#ch1c)"/>
+
+  <path class="flow" d="M105 160 L 105 200 L 425 200 L 425 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M150 160 L 150 180 L 560 180 L 560 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M265 160 L 265 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M290 160 L 290 210 L 400 210 L 400 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M425 160 L 425 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M585 160 L 585 200 L 470 200 L 470 234" marker-end="url(#ch1c)"/>
+  <path class="flow" d="M560 160 L 560 234" marker-end="url(#ch1c)"/>
+
+  <text class="lbl-sm" x="40" y="310">Arrows read "depends on". The bottom row depends on nothing, which is what keeps it previewable and testable from a terminal.</text>
+</svg>
+<figcaption>
+  Eight targets in two tiers. The four at the bottom have no dependencies at all; the four above
+  them may reach down but never sideways. The app target imports all of them; the watch target
+  imports <code>AppSurfaces</code> and <code>Motion</code>; the widget target imports
+  <code>AppSurfaces</code> and <code>DesignSystem</code>.
+</figcaption>
+</figure>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Target</th><th>Owns</th><th>Depends on</th><th>Why it is its own target</th></tr></thead>
+<tbody>
+<tr><td><code>Persistence</code></td><td>Every <code>@Model</code> class, the stores, pure logic over rows (streaks, goal evaluation, anomaly evaluation), <code>UserScope</code></td><td>nothing</td><td>The schema must be importable by anything without dragging a network client in with it</td></tr>
+<tr><td><code>DesignSystem</code></td><td>Tokens, the type scale, spacing, layout metrics and every stateless primitive</td><td>nothing</td><td>Components stay previewable and reusable; it also builds for macOS so tests run without a simulator</td></tr>
+<tr><td><code>AppSurfaces</code></td><td>The wire types shared with the watch and the widgets: <code>SurfaceSnapshot</code>, <code>LiveSessionReadout</code>, <code>WatchWire</code>, <code>WorkoutActivityAttributes</code>, <code>HUDPlacement</code>, <code>SessionRingMath</code></td><td>nothing</td><td>Three processes decode these bytes; a shared target is the only way they cannot drift</td></tr>
+<tr><td><code>Motion</code></td><td><code>RepCounter</code>, a pure rep counter over wrist acceleration</td><td>nothing</td><td>Runs on the watch; must not pull SwiftData or networking onto the wrist</td></tr>
+<tr><td><code>Integrations</code></td><td>Whoop, Fitbit, Apple Health, Plaid, EventKit, Supabase auth and REST, social, profiles, push tokens, notes sync, the live effort maths, the arbiter</td><td>Persistence, AppSurfaces</td><td>Every vendor is contained here; nothing above it knows a vendor exists</td></tr>
+<tr><td><code>Insights</code></td><td>The coach: tasks, engines, router, context bundle, digest, chat wire, speech endpointing, spend series</td><td>Persistence</td><td>It may read rows and nothing else, which is the privacy boundary as a dependency edge</td></tr>
+<tr><td><code>Sectors</code></td><td>The nine sectors, their scorers, the monthly close, projections, levers, the workout planner and library filter</td><td>Persistence</td><td>Pure scoring over stored rows; testable with fixture months</td></tr>
+<tr><td><code>Assistant</code></td><td>The calendar tools the on-device model calls, and the context they run in</td><td>Insights, Persistence</td><td>Tools are domain logic with a strict read-only rule; they must not reach a network client mid-conversation</td></tr>
+</tbody></table></div>
+
+<div class="note"><b>The rule that makes the graph worth having</b>
+<code>Persistence</code> sits below <code>Integrations</code> and must not import it. That is why
+<code>DailyMetrics.sourcesData</code> stores a raw <code>String</code> rather than a
+<code>MetricSource</code>: the vocabulary of "who wrote this" lives one tier up, and the row only
+carries its name. The dependency arrow decided the type.
+</div>
+
+<h3 id="s1-3"><span class="num">1.3</span><span>The DailyMetrics spine</span></h3>
+
+<p>
+  This is still the single most consequential decision in the system. <strong>One row per calendar
+  day.</strong> Every health source writes into it; every health reader reads from it. The row has
+  grown two bags since the first edition, and both exist to keep that sentence true as the number
+  of sources went from two to four.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/DailyMetrics.swift
+@Model
+public final class DailyMetrics {
+    #Unique&lt;DailyMetrics&gt;([\.date])
+
+    /// Always `Calendar.startOfDay`. Never a timestamp.
+    public var date: Date
+
+    public var weightKg: Double?
+    public var steps: Int?
+    public var sleepMinutes: Int?
+    // ... eleven named columns, all optional ...
+
+    /// Everything Apple Health can supply that does not have a column of
+    /// its own, as a JSON dictionary keyed by `HealthMetric.rawValue`.
+    public var extrasData: Data?
+
+    /// Who wrote each value, as a JSON dictionary keyed by `HealthMetric.rawValue`.
+    public var sourcesData: Data?
+
+    public var updatedAt: Date
+    public var syncedAt: Date?
+}</code></pre>
+
+<p>
+  The named columns came first and are load-bearing: the sector scorers, the Whoop merge and the
+  charts all read them by name. The <code>extras</code> bag is the long tail of Apple Health, more
+  than thirty metrics most people have no data for, stored as <code>[String: Double]</code> so that
+  adding a metric is one enum case and one mapping rather than a schema migration. The
+  <code>sources</code> bag runs parallel to it and records provenance per metric per day.
+</p>
+
+<p>
+  Both bags decode to an empty dictionary rather than throwing when the bytes are unreadable. A day
+  whose extras cannot be parsed still has its named columns, and losing the screen over the tail
+  would be the worse failure. Both also treat writing <code>nil</code> as removing the key, never as
+  storing a zero, for the reason the whole model is built on: <strong>absent and zero are different
+  things, and a false zero is worse than a blank in a health app.</strong>
+</p>
+
+<h4>What the single-table choice still buys</h4>
+<ul>
+  <li>Trends become a sort, not a multi-source asynchronous join. <code>TodayViewModel.load</code> fetches one bounded window of rows and derives the grid, the streak and today's figures in one pass.</li>
+  <li>The coach queries one table instead of orchestrating four network APIs mid-conversation, which is what makes an on-device model viable and what makes the cloud tier's context bundle small.</li>
+  <li>Offline works by default, because nothing renders from a live network call.</li>
+  <li>Adding a source means writing into the same row through the same arbiter. Fitbit shipped as a second wearable without a new pipeline; it is a loop around one function.</li>
+  <li>The widgets and the watch decode a <code>SurfaceSnapshot</code> that is a projection of one row, so the same steps figure appears on the lock screen, the wrist and the hub without three queries.</li>
+</ul>
+
+<p>
+  <code>MetricsStore</code> is the only way anything writes to the row. Its <code>upsert</code> fetches or
+  creates the day and applies a closure, and it is a merge: fields the closure does not touch are
+  preserved. <code>upsertBatch</code> exists because a save per row turned sixty days into sixty disk
+  transactions on the main actor; a sync loop now makes one.
+</p>
+
+<h3 id="s1-4"><span class="num">1.4</span><span>The arbiter: merge by rank</span></h3>
+
+<p>
+  With one wearable the merge rule was a boolean called <code>fillGapsOnly</code>: Health fills what
+  Whoop left blank. With two straps that rule cannot tell a Whoop value from a typed one, which is
+  exactly the distinction a second wearable forces. The replacement is a rank, and it is a pure
+  function so every branch can be tested without a device, a permission prompt or a store.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/MetricArbiter.swift
+public static func resolve(
+    metric: HealthMetric,
+    existing: Double?, existingSource: MetricSource?,
+    incoming: Double?, incomingSource: MetricSource,
+    ranking: SourceRanking
+) -&gt; (value: Double?, source: MetricSource?) {
+    // A source having no reading is not evidence of zero.
+    guard let incoming else { return (existing, existingSource) }
+    guard existing != nil else { return (incoming, incomingSource) }
+
+    let held = existingSource ?? MetricSource.legacy(for: metric)
+
+    // Greater than or equal, not greater than. Equal rank means the same
+    // source syncing again, which must be allowed to correct itself.
+    guard ranking.rank(incomingSource, for: metric) &gt;= ranking.rank(held, for: metric) else {
+        return (existing, held)
+    }
+    return (incoming, incomingSource)
+}</code></pre>
+
+<p>The ranks are decided per metric, because a source that is the authority on one number is a fallback on another:</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Rank</th><th>Who</th><th>When</th></tr></thead>
+<tbody>
+<tr><td class="num-cell">4</td><td><code>manual</code></td><td>Always. A figure a person typed is never overwritten by a background sync.</td></tr>
+<tr><td class="num-cell">3</td><td><code>appleHealth</code></td><td>For metrics where <code>healthIsAuthoritative</code>: not claimed by a wearable and not typed, such as steps, active energy, weight from the scale. The latest reading is simply the truth, which is what lets an afternoon sync correct the morning's step count.</td></tr>
+<tr><td class="num-cell">3</td><td>the primary wearable</td><td>For metrics <code>claimedByWearable</code>: resting HR, HRV, SpO2, respiratory rate, every sleep stage. Whoop by default; Fitbit if the person named it primary.</td></tr>
+<tr><td class="num-cell">2</td><td>the other wearable</td><td>Fills a gap the primary left, never overwrites it.</td></tr>
+<tr><td class="num-cell">1</td><td><code>appleHealth</code></td><td>For wearable-claimed metrics: the fallback when no strap has spoken.</td></tr>
+<tr><td class="num-cell">0</td><td>unattributed</td><td>A value written before provenance was recorded. The first sync after upgrade re-attributes it.</td></tr>
+</tbody></table></div>
+
+<p>
+  Rank 0 has one exception, and the exception matters. Weight and water are the two metrics a
+  person can type. A figure typed before provenance existed is unattributed too, and reading it as
+  unknown would let the next Health sync silently replace it. That is the one path that destroys
+  data a person entered by hand, so <code>MetricSource.legacy(for:)</code> reads an unattributed
+  value for a typed metric as typed. The test is named for the bug it prevents:
+  <code>anUnattributedWeightIsNotReplacedByASync</code>.
+</p>
+
+<p>
+  <code>HealthApply.write</code> is the one place the <code>HealthMetric</code> vocabulary meets
+  <code>DailyMetrics</code> columns. It loops the arbiter over a day's readings inside a single
+  <code>upsert</code>, records the winning source in the bag as a side effect, and routes named
+  metrics to their column and everything else to <code>extras</code>. The arbiter can be perfectly
+  correct and still be wired into the wrong column; <code>HealthApplyTests</code> run against a real
+  in-memory store precisely to catch that.
+</p>
+
+<h3 id="s1-5"><span class="num">1.5</span><span>Local first topology, and what syncs now</span></h3>
+
+<p>
+  SwiftData on the device is the source of truth for the UI. Supabase is identity, backup for some
+  models, the only place a secret may live, and the place to run jobs a sleeping phone cannot. The
+  first edition had one thing syncing (nothing, in practice). This edition has a precise list, and
+  the split is worth knowing because it decides what a second device sees.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Data</th><th>Where it lives</th><th>How it moves</th></tr></thead>
+<tbody>
+<tr><td>Notes: folders, documents, blocks</td><td>Device and <code>note_folders</code>, <code>note_documents</code></td><td><code>NoteSync</code> pushes and pulls under a per-account cursor on every pass; the token is read per pass, never captured</td></tr>
+<tr><td>Profile and avatar</td><td>Device cache and <code>profiles</code>, the <code>avatars</code> bucket</td><td><code>ProfileClient</code> upserts the whole row; the avatar downloads only when its stamp changed</td></tr>
+<tr><td>Friends, messages, groups, shared stats</td><td>Server only, read live</td><td><code>SocialAPI</code>, <code>GroupAPI</code>, <code>SharedStatsClient</code> over PostgREST; RLS does the guarding</td></tr>
+<tr><td>Plaid items</td><td>Credentials server side in <code>plaid_items</code>; cursor and item ids on the device</td><td>Four Edge Functions; the device never sees an access token</td></tr>
+<tr><td>Fitbit connection</td><td>Server side in <code>fitbit_connections</code></td><td><code>fitbit-sync</code> pulls under a lease; results land in <code>DailyMetrics</code></td></tr>
+<tr><td>Whoop tokens</td><td>Keychain, per account</td><td>The device calls Whoop directly; only the code exchange touches the server</td></tr>
+<tr><td>Coach usage</td><td><code>lifo_usage</code></td><td>Atomic debit per cloud turn; the ceiling in <a href="#ch24">Chapter 24</a></td></tr>
+<tr><td>Push registrations and nudges</td><td><code>device_tokens</code>, <code>nudge_log</code></td><td>Token and timezone re-pushed on every foreground</td></tr>
+<tr><td>Health rows, sleep, workouts, money entries, sector scores, calendar cache, chat</td><td><strong>Device only</strong></td><td>The <code>daily_metrics</code> tables exist in the schema from the first migration, but no client writes them today. A second device rebuilds them from the sources.</td></tr>
+</tbody></table></div>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 250" role="img" aria-label="A screen renders from SwiftData instantly; a log writes to SwiftData instantly; SwiftData pushes notes and profile to Supabase in the background and pulls them on a cursor; a dashed network boundary separates the device from the cloud, and nothing on the left of it waits on the right.">
+  <defs><marker id="ch1d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs>
+  <rect class="box" x="20" y="40" width="150" height="40" rx="8"/><text class="lbl" x="95" y="65" text-anchor="middle">Screen renders</text>
+  <rect class="box" x="20" y="150" width="150" height="40" rx="8"/><text class="lbl" x="95" y="175" text-anchor="middle">You write a note</text>
+  <rect class="box-hot" x="290" y="85" width="170" height="60" rx="10"/><text class="lbl" x="375" y="110" text-anchor="middle">SwiftData</text><text class="lbl-hot" x="375" y="130" text-anchor="middle">source of truth</text>
+  <rect class="box" x="640" y="85" width="190" height="60" rx="10"/><text class="lbl" x="735" y="110" text-anchor="middle">Supabase</text><text class="lbl-sm" x="735" y="130" text-anchor="middle">Postgres · Edge Functions</text>
+  <path class="flow" d="M290 105 L 200 105 L 200 60 L 176 60" marker-end="url(#ch1d)"/><text class="lbl-sm" x="182" y="94">instant, always</text>
+  <path class="flow" d="M170 170 L 200 170 L 200 125 L 284 125" marker-end="url(#ch1d)"/><text class="lbl-sm" x="182" y="200">never blocks</text>
+  <path class="flow-dash" d="M460 105 L 634 105" marker-end="url(#ch1d)"/><text class="lbl-sm" x="500" y="96">push, background</text>
+  <path class="flow-dash" d="M634 125 L 466 125" marker-end="url(#ch1d)"/><text class="lbl-sm" x="500" y="145">pull on a cursor</text>
+  <line class="wall" x1="550" y1="30" x2="550" y2="220"/>
+  <text class="lbl-sm" x="560" y="215" fill="#C2412A">network boundary</text>
+  <text class="lbl-sm" x="20" y="235">Everything left of the boundary works on a plane. A sync failure surfaces in Settings as a stale timestamp, never as a blocking error.</text>
+</svg>
+<figcaption>
+  Reads and writes both terminate locally. The dashed paths are the only network-dependent edges
+  in the whole app, and none of them sits on a user-facing critical path.
+</figcaption>
+</figure>
+
+<p>
+  Two mechanisms make this cheap. <code>RootView</code> reloads every snapshot on
+  <code>ModelContext.didSave</code>, so a sync that lands repaints the screen without anyone polling.
+  And <code>SyncStalenessPolicy</code> decides whether an automatic pull is due at all: data older
+  than an hour, or from before today's midnight, is worth refreshing; anything fresher is not. The
+  day boundary is the clock that matters most, because the first open of the morning must pull the
+  night's sleep, and a sync from 23:50 is only minutes old while knowing nothing about the night.
+</p>
+
+<h3 id="s1-6"><span class="num">1.6</span><span>Conflict resolution</span></h3>
+
+<p>
+  Within the health row, the arbiter above is the conflict rule: field-level, by rank, with a
+  same-rank writer allowed to correct itself. It replaces the field-level last-write-wins the
+  first edition described, and it is better for the same reason: a row-level overwrite would let
+  the 04:00 Whoop pass discard the water you logged at 23:00, and a timestamp cannot tell a strap
+  from a person.
+</p>
+
+<p>
+  Across devices, for the models that sync, the rule is simpler and per model. Notes carry an
+  origin id and an <code>updated_at</code>; the pull applies rows newer than the cursor and the push
+  sends rows changed since the last push, which is last-write-wins by row on a single-writer
+  assumption that holds because one person edits one note at a time. The profile is an upsert of
+  the whole row with explicit nulls, because an omitted key would leave the old value standing and
+  make deleting a birthday impossible. Social rows never conflict because they are never edited
+  locally; only status is updatable on a friendship, and the database says so.
+</p>
+
+<div class="note caution"><b>Known limitation</b>
+The notes cursor depends on server clocks, not device clocks, so the skew problem the first edition
+warned about is gone for notes. It remains for anything that compares <code>updatedAt</code> on the
+device with a server timestamp, and today nothing does. If a model starts syncing health rows, the
+arbiter's rank must travel with the row or the merge will regress to a timestamp race.
+</div>
+
+<h3 id="s1-7"><span class="num">1.7</span><span>One store per account</span></h3>
+
+<p>
+  The first edition assumed a single user and said so. That assumption is gone: several people can
+  sign in on one device, and the way that works is the most important structural change since
+  Revision D. <strong>Isolation is by store file, not by an owner column.</strong>
+</p>
+
+<pre><code>// LifeOSKit/Sources/Persistence/UserScope.swift
+public struct UserScope: Hashable, Sendable, Codable {
+    /// The signed-in Supabase user id.
+    public let id: String
+
+    public func storeURL(base: URL) -&gt; URL {
+        directory(base: base).appendingPathComponent("store.sqlite")
+    }
+
+    public func directory(base: URL) -&gt; URL {
+        base.appendingPathComponent("Accounts", isDirectory: true)
+            .appendingPathComponent(safeDirectoryName, isDirectory: true)
+    }
+
+    /// A defaults suite of this account's own.
+    public var defaultsSuiteName: String { "account.\(safeDirectoryName)" }
+}</code></pre>
+
+<p>
+  The reasoning in the file's own comment is the whole argument: a column means a predicate on every
+  read across twenty models, and a predicate forgotten once is a leak that looks like working
+  software. A separate file cannot leak, because the rows are not there to be read.
+  <code>LifeOSContainer.make(for:)</code> opens <code>Application Support/Accounts/&lt;uid&gt;/store.sqlite</code>,
+  and every account also gets its own <code>UserDefaults</code> suite for the things that turned out
+  to be per account rather than per device: sync cursors, connection tokens, whether the tour has
+  been seen. Appearance, the assistant's voice and which engine answers stay in <code>standard</code>
+  on purpose, because they belong to the phone.
+</p>
+
+<p>
+  Three pieces cooperate. <code>AccountStore</code> keeps the roster of accounts in defaults (ids
+  and labels are not secrets) and one keychain item per account for the session (a refresh token
+  is a credential). <code>AccountSession</code> owns which scope is open and the
+  <code>ModelContainer</code> for it, and tears down every cross-account surface, the widget
+  snapshot, the Live Activity, the watch bridge, before adopting the next one. And
+  <code>LIfeOSApp</code> re-roots the whole view tree with <code>.id(scope.id)</code> so no screen
+  carries the previous account's view models or scroll position into the next; a stale snapshot on
+  screen after a switch is the same class of leak as a stale row. <a href="#ch4">Chapter 4</a> walks
+  through the sequence.
+</p>
+
+<p>
+  The upgrade path is a file move. Every install before accounts kept one unscoped
+  <code>default.store</code>. <code>adoptLegacyStore</code> moves that file, and its
+  <code>-wal</code> and <code>-shm</code> companions, into the first account that signs in, once,
+  and refuses when the destination already has a store. Moving the write-ahead log matters: the
+  database alone would leave the most recent writes behind in a log the new file cannot find, and
+  <code>adoptionCarriesTheWriteAheadLog</code> pins it. Signing out leaves the store on disk;
+  removing an account from the device is a different, louder action that does not exist yet.
+</p>
+
+<h3 id="s1-8"><span class="num">1.8</span><span>The privacy boundary</span></h3>
+
+<p>
+  Three things leave the device, and each crosses a boundary that is a type or a dependency edge
+  rather than a code review promise.
+</p>
+
+<ul>
+  <li><strong>Derived numbers to the coach's cloud tier.</strong> <code>RemoteChatEngine</code> takes a <code>ContextBundle</code>, which is assembled on the device from digests: aggregates, deltas, sector scores, the last thirty transactions as merchant, category and amount. <code>DailyMetrics</code> is a SwiftData class that is not <code>Sendable</code>, so the compiler prevents a raw row from crossing. <a href="#ch14">Chapter 14</a> has the shape of the bundle.</li>
+  <li><strong>Content, not numbers, to the calendar assistant.</strong> Event titles cannot be aggregated without destroying their use, so this is the one deliberate exception, and it is gated behind a confirmation broker before any write. <a href="#ch15">Chapter 15</a>.</li>
+  <li><strong>Three figures to friends.</strong> Streak, days tracked and workouts, plus a wellness score, and only when the person has turned sharing on in a group. <code>publishWellnessIfShared</code> in <code>RootView</code> checks the group's flag before every publish. <a href="#ch16">Chapter 16</a>.</li>
+</ul>
+
+<p>
+  Everything with a vendor secret runs in an Edge Function: the Whoop client secret, the Fitbit
+  client secret, the Plaid client id and secret, the Twilio credentials, the OpenAI key, the APNs
+  key. The app bundle holds only what is public by OAuth design, and <code>AppConfig</code> says so
+  in its comments. <a href="#ch23">Chapter 23</a> has the three-tier table.
+</p>
+
+<h3 id="s1-9"><span class="num">1.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Package.swift</code>, for the graph. Twenty lines, and every rule in this chapter is one of its edges.</li>
+  <li><code>LifeOSKit/Sources/Persistence/DailyMetrics.swift</code>, for the row and the two bags.</li>
+  <li><code>LifeOSKit/Sources/Persistence/MetricsStore.swift</code>, for the only write path.</li>
+  <li><code>LifeOSKit/Sources/Integrations/MetricSource.swift</code> then <code>MetricArbiter.swift</code>, for the rank and the merge.</li>
+  <li><code>LifeOSKit/Sources/Integrations/HealthApply.swift</code>, for where the vocabulary meets the columns.</li>
+  <li><code>LifeOSKit/Sources/Persistence/UserScope.swift</code> and <code>LifeOSContainer.swift</code>, for one store per account.</li>
+  <li><code>LifeOSKit/Tests/IntegrationsTests/MetricArbiterTests.swift</code>, which reads as a list of the rules in plain English.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does the arbiter use greater-than-or-equal rather than greater-than?</strong> So that the same source syncing again can correct its own earlier value; an afternoon Health sync must be able to raise the morning's step count.</li>
+  <li><strong>Why is <code>sourcesData</code> a string bag rather than a typed <code>MetricSource</code>?</strong> Because <code>Persistence</code> sits below <code>Integrations</code> in the package graph and cannot import the enum.</li>
+  <li><strong>What does an unattributed weight become on the first sync after upgrade?</strong> It is read as typed, rank 4, so Health cannot overwrite it; every other unattributed metric is rank 0 and is re-attributed.</li>
+  <li><strong>Why a store file per account rather than a <code>userID</code> column?</strong> A column needs a predicate on every read of every model and one omission leaks; a file cannot leak rows it does not contain.</li>
+  <li><strong>Which health data reaches Supabase today?</strong> None of the rows. Notes, profile, social, connection credentials and coach usage sync; <code>DailyMetrics</code>, sleep, workouts, money and sectors stay on the device.</li>
+  <li><strong>What must move with a store when it is adopted, and why?</strong> The <code>-wal</code> and <code>-shm</code> files, or the most recent writes are stranded in a log the moved database cannot find.</li>
+</ul>
+</section>

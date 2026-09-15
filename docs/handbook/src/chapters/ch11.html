@@ -1,0 +1,706 @@
+<section class="chapter" id="ch11" data-hue="money">
+<p class="chapter-kicker">Chapter eleven</p>
+<h2><span class="num">11</span><span>Money</span></h2>
+
+<p class="lede">
+  Real transactions from a real bank, exact to the cent, on six pastel bands. The device holds the
+  ledger, the server holds only the credential, and every figure on the tab is derived from rows that
+  actually happened.
+</p>
+
+<h3 id="s11-1"><span class="num">11.1</span><span>Intent</span></h3>
+
+<p>
+  The Money tab answers six questions, one per side tab: what came in and went out, where it went,
+  what repeats every month, what is being saved towards, what hurts, and the ledger itself. It reads
+  from a bank connected through Plaid, or from transactions typed in by hand, and it never invents a
+  row. The sample month that used to stand in before a bank was linked is gone. An empty month shows
+  the empty state.
+</p>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Connect a bank once and Almanac keeps the last two years of transactions on the phone. The net for
+  the month is the first thing on the screen with a one-word verdict under it. Budgets are buckets
+  that claim categories, so a renamed category never silently stops counting. Tap any category, any
+  merchant, or any row to see six months of it on a page of its own.
+</p>
+<p class="faq-q">Why is the savings rate sometimes blank rather than 0%?</p>
+<p class="faq-a">
+  A savings rate against no income is undefined, not zero. Rendering 0% says you saved nothing when
+  what happened is that nothing was earned. The whole app draws that distinction and this is its
+  sharpest case.
+</p>
+<p class="faq-q">Where do my transactions live?</p>
+<p class="faq-a">
+  On the device, in SwiftData. The Edge Functions hand each sync delta straight back to the phone and
+  store nothing but the bank credential. A compromise of the database exposes a token, not a ledger of
+  where you shop.
+</p>
+<p class="faq-q">Why can Plaid never be called from the app?</p>
+<p class="faq-a">
+  Every Plaid endpoint needs a client id and a secret on the request, and an .ipa is a zip file. Any
+  secret compiled into the binary is public the moment it ships, so the four Plaid calls run in Edge
+  Functions and the app talks only to those, authenticated with its own Supabase session.
+</p>
+<p class="faq-q">What happens to a pending charge?</p>
+<p class="faq-a">
+  Stored and shown, greyed, but excluded from every rollup. Plaid re-issues a pending transaction under
+  a new id when it settles and sends the old id in <code>removed</code>, so counting it twice is the
+  default failure and the rollup refusing to see pending rows is what prevents it.
+</p>
+</div>
+
+<h3 id="s11-2"><span class="num">11.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Money/
+├── Model/
+│   ├── MoneySnapshot.swift          the month: totals, bands, rows, charts, verdict
+│   └── MoneyDetailSnapshot.swift    one category or merchant across six months
+├── ViewModel/
+│   ├── MoneyViewModel.swift         month fetch, rollup, buckets, logos, series
+│   └── MoneyDetailViewModel.swift   the drill-down page's own six-month fetch
+└── View/
+    ├── MoneyScreen.swift            the tab: rail plus one section, empty and fetching states
+    ├── MoneySectionRail.swift       six sections; a vertical rail on phone, chips on iPad
+    ├── MoneySections.swift          MoneyBand, MoneyCard, MoneyBandStack, the six panels
+    ├── MoneyCharts.swift            week bars, donut, six-month bars (Swift Charts)
+    ├── MoneyDetailScreen.swift      the drill-down page
+    ├── MerchantTile.swift           logo circle, transaction row, day cards
+    ├── BucketEditorSheet.swift      budgets list and one bucket's form
+    └── MoneyPalette.swift           paper, ink, six pastels, MoneyFigure, Pinstripes
+
+Features/Settings/
+├── ViewModel/PlaidConnectionViewModel.swift   connect, sync, replay, disconnect
+└── View/PlaidLinkPresenter.swift              the only file that imports LinkKit
+
+LifeOSKit/Sources/Persistence/
+├── MoneyEntry.swift                 MoneyEntry, MoneyAccount, MoneySummary, summarise()
+├── MoneyStore.swift                 queries, batched upsert ingest, bucket claims
+├── MoneyParts.swift                 whole and cents, rounded once
+└── SpendBucket.swift                a budget and the claim keys it holds
+
+LifeOSKit/Sources/Sectors/
+└── BudgetPeriod.swift               the pure budget assessment (shared with the close)
+
+LifeOSKit/Sources/Insights/
+├── SpendSeries.swift                week, months, fold for the donut
+└── RecurringSpend.swift             subscriptions detected from history
+
+LifeOSKit/Sources/Integrations/
+├── PlaidWireFormat.swift            the sync response, decoded
+├── PlaidMapping.swift               Plaid vocabulary to ours, including the sign flip
+├── PlaidCategory.swift              primary codes to readable labels
+├── PlaidClient.swift                the four Edge Function calls
+├── PlaidItemStore.swift             connected banks and their cursors, in UserDefaults
+└── PlaidSync.swift                  store the data, then move the cursor
+
+supabase/
+├── functions/_shared/plaid.ts       callPlaid, error classification
+├── functions/plaid-link-token       /link/token/create
+├── functions/plaid-exchange         /item/public_token/exchange, duplicate guard
+├── functions/plaid-sync             /transactions/sync, three pages a call
+├── functions/plaid-disconnect       /item/remove
+└── migrations/20260826120000_plaid_items.sql
+
+web/
+├── plaid-oauth.html                 where a bank's OAuth login lands
+└── .well-known/apple-app-site-association</pre>
+
+<p>
+  The arithmetic is in the package, not in the feature. <code>summarise</code>,
+  <code>BudgetPeriod.assess</code>, <code>SpendSeries</code>, <code>RecurringSpend</code> and
+  <code>MoneyParts</code> are all free functions or value types with no store and no context, which is
+  why the money rules are among the best-tested code in the app. The app target still has no test
+  target of its own, so anything that decides something is pushed down to where it can be tested.
+</p>
+
+<h3 id="s11-3"><span class="num">11.3</span><span>Model</span></h3>
+
+<h4>MoneyEntry, shaped for Plaid from the first line</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/MoneyEntry.swift
+@Model
+public final class MoneyEntry {
+    public var id: UUID
+    public var externalID: String?      // Plaid transaction_id, nil for manual
+    public var sourceRaw: String
+    public var date: Date               // always startOfDay
+    public var amount: Double           // positive = in, negative = out
+    public var currencyCode: String
+    public var merchant: String
+    public var category: String?        // display text, never keys arithmetic
+    public var categoryCode: String?    // Plaid personal_finance_category.detailed
+    public var merchantID: String?      // Plaid merchant_entity_id
+    public var logoURL: String?
+    public var accountID: String?
+    public var accountName: String?
+    public var pending: Bool
+    ...
+    public var isSpending: Bool {
+        amount &lt; 0 &amp;&amp; !pending &amp;&amp; !MoneyCategoryRule.isTransferLike(categoryCode)
+    }
+}</code></pre>
+
+<p>
+  Three pairs of fields look redundant and are not. <code>category</code> is what the row shows;
+  <code>categoryCode</code> is what the rollup and the buckets key on, so renaming a label can never
+  change a savings rate. <code>merchant</code> is the descriptor the bank sent; <code>merchantID</code>
+  is Plaid's stable entity, so <code>NETFLIX.COM</code> and <code>Netflix</code> are one merchant where
+  the id exists and two strings where it does not. And <code>MoneyAccount</code> keeps both
+  <code>type</code> and <code>subtype</code>, because "is this money owed" reads the first and "is this a
+  credit card" reads the second, and a mortgage is a loan with a balance and no meaningful
+  utilisation.
+</p>
+
+<p>
+  Every field added since the first edition (<code>merchantID</code>, <code>logoURL</code>,
+  <code>subtype</code>, <code>mask</code>, <code>availableBalance</code>, <code>creditLimit</code>) is
+  optional. That is what makes each one a lightweight SwiftData migration: a row written before the
+  field existed reads back nil, and the app never hangs on the launch spinner the way it does when a
+  new field lacks a default.
+</p>
+
+<div class="note caution">
+<b>Sign convention: positive is money in</b>
+Plaid's <code>amount</code> is positive when money leaves the account. This app's is the opposite.
+<code>PlaidMapping</code> negates on the way in, and the rule is written on the type, on the mapping,
+and on the scorer, because a silent flip turns a salary into the month's largest expense and nothing
+crashes.
+</div>
+
+<h4>The rollup</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/MoneyEntry.swift
+public func summarise(entries: [MoneyEntry], accounts: [MoneyAccount] = []) -> MoneySummary {
+    var income = 0.0
+    var expenses = 0.0
+    for entry in entries where !entry.pending
+        &amp;&amp; !MoneyCategoryRule.isTransferLike(entry.categoryCode) {
+        if entry.amount > 0 { income += entry.amount } else if entry.isSpending { expenses += -entry.amount }
+    }
+    return MoneySummary(
+        income: income,
+        expenses: expenses,
+        netWorth: accounts.isEmpty ? nil : accounts.reduce(0) { $0 + $1.netWorthContribution }
+    )
+}</code></pre>
+
+<p>
+  Transfers between your own accounts and credit card payments appear as a real debit and a real
+  credit. Counting them leaves net correct but overstates both income and expenses, and the savings
+  rate is computed from those two. <code>MoneyCategoryRule.isTransferLike</code> matches
+  <code>TRANSFER_IN_</code> and <code>TRANSFER_OUT_</code> as underscore-delimited prefixes plus the
+  card-payment code, and nothing else. The underscore matters: without it a code that merely starts
+  with the same letters would be excluded as if it were a transfer, which is a test
+  (<code>aCategoryThatMerelyStartsLikeATransferIsStillSpending</code>) rather than a hope.
+</p>
+
+<h4>MoneyParts, or why cents are split in the kit</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/MoneyParts.swift
+public init(_ amount: Double) {
+    // Round in the unit that has to carry: cents, as an integer.
+    let totalCents = Int((abs(amount) * 100).rounded())
+    self.isNegative = amount &lt; 0 &amp;&amp; totalCents > 0
+    self.whole = totalCents / 100
+    self.cents = totalCents % 100
+}</code></pre>
+
+<p>
+  The one rule is that rounding happens to the cent before anything is split. Splitting a
+  <code>Double</code> first and rounding each half lets 19.995 render as "$19.100", and lets the float
+  noise in 0.1 + 0.2 leak into the cents. Money that displays as the wrong number is the worst bug a
+  finance screen can have, so the split lives where it is tested against 19.995, 999.999, thirty
+  19.99s, negatives and zero, and <code>MoneyFigure</code> in the view only draws what it is handed.
+</p>
+
+<h4>SpendBucket and the claim key</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/SpendBucket.swift
+@Model
+public final class SpendBucket {
+    public var name: String
+    public var monthlyLimit: Double     // always positive; the store rejects anything else
+    public var claimedRaw: [String]     // MoneyEntry.claimKey values
+    public var sortOrder: Int
+    ...
+}
+
+extension MoneyEntry {
+    public var claimKey: String? { categoryCode ?? category }
+}</code></pre>
+
+<p>
+  A budget is a bucket that claims one or more raw categories. This survives Plaid renaming a category,
+  works for manual entries (which have no code and fall back to their free-form category), and lets one
+  budget cover what Plaid calls three different things. The rejected alternatives, raw strings and
+  merchant rules, both fail silently: a renamed category simply stops counting and the budget quietly
+  reads as under. A budget that silently stops counting is worse than no budget.
+</p>
+
+<h4>The snapshot</h4>
+
+<p>
+  <code>MoneySnapshot</code> carries everything the six sections render: the summary figures, the
+  budget and unclaimed bands, categories with a precomputed <code>share</code>, recurring charges, the
+  seven-day <code>week</code>, the donut <code>slices</code>, a <code>goal</code>, and four connection
+  flags. Two of those flags exist because a bank linked seconds ago has no transactions yet:
+  <code>hasConnectedBank</code> keeps the screen out of the empty state, and
+  <code>isFetchingHistory</code> keeps it out of "you spent nothing this month" while Plaid is still
+  assembling the history.
+</p>
+
+<h3 id="s11-4"><span class="num">11.4</span><span>ViewModel</span></h3>
+
+<p>
+  <code>MoneyViewModel.load(connection:)</code> fetches the calendar month to date plus the accounts,
+  calls <code>summarise</code>, assesses the buckets through <code>BudgetPeriod</code>, and then derives
+  every list and series from the same entries. It is called from <code>RootView.reloadAll()</code> on
+  every store save in the app, and again after the Plaid sync that <code>reloadAll</code> kicks off.
+</p>
+
+<pre><code>// LIfeOS/Features/Money/ViewModel/MoneyViewModel.swift
+let logos = Self.logoMap(from: entries)
+let rows = Self.rows(from: entries, logos: logos)
+let categories = Self.categories(from: entries, expenses: summary.expenses)
+
+snapshot = MoneySnapshot(
+    income: summary.income, expenses: summary.expenses, net: summary.net,
+    savingsRate: summary.savingsRate, netWorth: summary.netWorth,
+    recent: rows, budgets: budgetRows, unclaimed: unclaimedRows,
+    categories: categories,
+    recurring: Self.recurring(from: entries, calendar: calendar, logos: logos),
+    week: Self.week(from: entries, now: .now, calendar: calendar),
+    slices: Self.slices(from: categories),
+    spendCount: entries.filter(\.isSpending).count,
+    goal: Self.goal(saved: summary.net),
+    monthLabel: Date.now.formatted(.dateTime.month(.wide).year()),
+    isConnected: !entries.isEmpty || !accounts.isEmpty || !bankNames.isEmpty,
+    hasConnectedBank: !bankNames.isEmpty,
+    isFetchingHistory: connection?.isFetchingHistory ?? false,
+    reconnectPrompt: reconnect,
+    lastSyncedAt: connection?.lastSyncedAt
+)</code></pre>
+
+<p>Four derivations are worth reading closely.</p>
+
+<ul>
+  <li><strong>Categories</strong> are grouped from <code>isSpending</code> rows only, the same
+    predicate <code>summarise</code> uses, so the list sums to the "Spent" figure above it. Uncategorised
+    spend is kept rather than dropped, because the gap is exactly the spend nobody labelled.</li>
+  <li><strong>Logos</strong> are mapped twice, by <code>merchantID</code> where Plaid gave one and by
+    lowercased merchant name always. A row Plaid sent without a logo borrows from any sibling that has
+    one, and a manual "Netflix" picks up the mark from the Plaid rows. A borrowed logo never changes
+    grouping. It is a picture beside a name, not an identity.</li>
+  <li><strong>Slices</strong> fold the categories to the five largest plus "Other" through
+    <code>SpendSeries.fold</code>, then assign each an opacity step. Shares are of the full month, so the
+    slices still sum to one.</li>
+  <li><strong>The goal</strong> reads a target and a name from the account's <code>UserDefaults</code>
+    suite and reports this month's net as progress, clamped at zero. There is no account history to
+    total, so a lifetime figure would be invented. As of this revision nothing in the app writes those
+    two keys: the "Set a goal" button opens the bucket editor, so the goal band always shows "No goal
+    set" until a setter is built.</li>
+</ul>
+
+<p>
+  Bucket editing goes through the store. <code>saveBucket</code> creates or updates, then reconciles
+  claims by unclaiming what was dropped and claiming what was added. The store owns the single-holder
+  rule: <code>claim</code> removes the key from whichever bucket held it and returns that bucket's name
+  so the sheet can say "Held by Groceries, saving moves it here". Nothing resolves collisions at read
+  time, because by then the same transaction has already counted twice.
+</p>
+
+<p>
+  <code>MoneyDetailViewModel</code> is a second view model rather than more fields on the first. Six
+  months of rows for a page nobody is looking at, re-run on every save in the app, is the kind of work
+  that makes a tab feel slow. <code>RootView</code> reloads it only while its page is up.
+</p>
+
+<h3 id="s11-5"><span class="num">11.5</span><span>View</span></h3>
+
+<p>
+  The Money tab is the one screen in the app that is not cards on the warm canvas. It is full-bleed
+  pastel bands on pure white, because money is mostly figures and a figure wants a block of colour
+  behind it. <code>MoneyPalette</code> is therefore its own palette, not <code>LifeOSTokens</code>: paper,
+  one near-black ink, and six pastels (sage, butter, clay, mint, mist, stone) stepped a little darker
+  and more saturated than the reference screens because the paler versions washed out to grey on a real
+  phone at real brightness.
+</p>
+
+<h4>The rail, two ways</h4>
+
+<p>
+  On a phone the app's own nav bar is a floating pill along the bottom, so the side is free and
+  <code>MoneySectionRail</code> is a 62-point vertical rail with a glyph and a short word per section.
+  On iPad the nav bar stands on end against the left edge, and a second vertical rail beside it would be
+  two parallel bars of chrome doing unrelated jobs. So on a regular width the rail lies down into a row
+  of chips above the content, carrying the full titles ("Where it went" rather than "Spend") because a
+  horizontal chip has the room. One <code>matchedGeometryEffect</code> id makes the selection block slide
+  between sections instead of cross-fading.
+</p>
+
+<h4>Bands, cards and the grid</h4>
+
+<pre><code>// LIfeOS/Features/Money/View/MoneySections.swift
+struct MoneyBandStack&lt;Content: View&gt;: View {
+    @ViewBuilder let content: Content
+    @Environment(\.layout) private var layout
+
+    var body: some View {
+        if layout.isRegular {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 340, maximum: 620), spacing: Space.x1)],
+                alignment: .leading, spacing: Space.x1
+            ) { content }
+        } else {
+            VStack(spacing: 0) { content }
+        }
+    }
+}</code></pre>
+
+<p>
+  Every section is a <code>MoneyBandStack</code> of <code>MoneyBand</code>s. Stacked on a phone, the
+  section is clipped as one rounded block and the bands have square corners; in the iPad grid each band
+  is its own card with its own corners, because a single 340-point column down the middle of an iPad is
+  most of the screen saying nothing.
+</p>
+
+<p>
+  A band that holds a chart or a list is a <code>MoneyCard</code>. Its header keeps the eyebrow and the
+  figure, so a collapsed card still says its number; what folds is the chart or the list under it.
+  Nothing is dropped by collapsing, and every card starts open. The handful of chart cards with a
+  stable identity remember their state in <code>UserDefaults</code> under
+  <code>money.card.collapsed.&lt;id&gt;</code>; a day of transactions uses transient state, since a key per
+  calendar day forever is not a preference anyone set.
+</p>
+
+<h4>The six sections</h4>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Section</th><th>Bands</th><th>What it decides</th></tr></thead>
+<tbody>
+<tr><td>In and out</td><td>Net with verdict, Earned, Spent with pinstripes of income consumed, This week (card), Kept %, Net worth</td><td>Kept and Net worth are omitted, not zeroed, when undefined</td></tr>
+<tr><td>Where it went</td><td>Spent by category (donut card), one band per category with swatch, count, share bar</td><td>A category folded into "Other" keeps its band but gets no swatch</td></tr>
+<tr><td>Every month</td><td>Recurring total (card with rows), "A year of these" at twelve times the monthly sum</td><td>The annual figure is the argument for cancelling anything</td></tr>
+<tr><td>Saving for</td><td>Goal progress, Still to find with months at this month's pace, or "No goal set"</td><td>A month that kept nothing gets no arrival date</td></tr>
+<tr><td>What hurts</td><td>Total, one band per pressure point, Edit budgets</td><td>Pressure points are assembled on the snapshot, not in the view</td></tr>
+<tr><td>Recent</td><td>Count with Add, a collapsible card per day</td><td>The day header shows settled net and counts pending beside it</td></tr>
+</tbody></table></div>
+
+<p>
+  <code>pressurePoints</code> is an extension on the snapshot, because deciding what belongs on the
+  "what hurts" list is a judgement about money, not about layout. Three rules feed it: a bucket over its
+  limit, unclaimed spend (money leaving with no bucket watching it), and recurring charges when they are
+  more than a fifth of the month's spending. Below that threshold a subscription pile is a fact, and it
+  already has its own tab.
+</p>
+
+<h4>Rows that never wrap</h4>
+
+<p>
+  Every row is one line. The amount is <code>fixedSize</code> and drawn first; the name takes what is
+  left, scales to 0.8, then trails off. This replaced <code>layoutPriority(1)</code> on the name column,
+  which starved the amount into "+…00" and stacked "PENDING" letter by letter. A word cut in half reads as
+  a different category, so names scale before they truncate.
+</p>
+
+<h4>Charts</h4>
+
+<p>
+  Three charts, all Swift Charts, all one ink at stepped opacity with no y-axis and no grid. The figure
+  above each chart is the number; the marks are the shape. The week chart draws an empty track for every
+  day so a day still to come is visibly a slot and not a gap, and labels only today. The donut uses
+  <code>SectorMark</code> with a 1.5-point angular inset so two adjacent steps of the same ink read as two
+  slices rather than a gradient, and <code>chartAngleSelection</code> turns a tap into a category page.
+  The six-month chart adds a dashed <code>RuleMark</code> at the average of the completed months. The
+  money pastels were run through the dataviz validator as a categorical palette and failed every check,
+  which is the long way of saying what the one-ink rule already said.
+</p>
+
+<h4>The merchant tile</h4>
+
+<p>
+  Plaid's logos come as 100 by 100 PNGs on whatever background the merchant chose. Bare, a row of them
+  is a row of mixed squares that breaks the band. <code>MerchantTile</code> puts the mark in a paper-white
+  circle with a hairline, and gives the category-glyph fallback the same footprint, so a list with and
+  without logos lines up. <code>AsyncImage</code> loads it; a failed load shows the glyph.
+</p>
+
+<h3 id="s11-6"><span class="num">11.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="The app calls four Edge Functions with its Supabase session; the functions call Plaid with the secret; the sync delta comes back to the device, is mapped and ingested, and only then is the cursor advanced in UserDefaults.">
+<defs>
+<marker id="ch11a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+<marker id="ch11b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+</defs>
+<text class="lbl-sm" x="20" y="24">DEVICE</text>
+<text class="lbl-sm" x="400" y="24">EDGE FUNCTIONS</text>
+<text class="lbl-sm" x="700" y="24">PLAID</text>
+
+<rect class="box" x="20" y="44" width="160" height="40" rx="8"/>
+<text class="lbl" x="100" y="69" text-anchor="middle">LinkKit sheet</text>
+
+<rect class="box" x="20" y="112" width="160" height="40" rx="8"/>
+<text class="lbl" x="100" y="137" text-anchor="middle">PlaidClient</text>
+
+<rect class="box-hot" x="20" y="180" width="160" height="56" rx="8"/>
+<text class="lbl" x="100" y="203" text-anchor="middle">PlaidSync</text>
+<text class="lbl-hot" x="100" y="221" text-anchor="middle">ingest, then cursor</text>
+
+<rect class="box" x="20" y="264" width="160" height="40" rx="8"/>
+<text class="lbl" x="100" y="289" text-anchor="middle">MoneyStore</text>
+
+<rect class="box-alt" x="210" y="264" width="150" height="40" rx="8"/>
+<text class="lbl" x="285" y="289" text-anchor="middle">PlaidItemStore</text>
+
+<rect class="box" x="400" y="44" width="200" height="40" rx="8"/>
+<text class="lbl" x="500" y="69" text-anchor="middle">plaid-link-token</text>
+<rect class="box" x="400" y="98" width="200" height="40" rx="8"/>
+<text class="lbl" x="500" y="123" text-anchor="middle">plaid-exchange</text>
+<rect class="box-hot" x="400" y="152" width="200" height="40" rx="8"/>
+<text class="lbl" x="500" y="177" text-anchor="middle">plaid-sync (3 pages)</text>
+<rect class="box" x="400" y="206" width="200" height="40" rx="8"/>
+<text class="lbl" x="500" y="231" text-anchor="middle">plaid-disconnect</text>
+
+<rect class="box-alt" x="400" y="264" width="200" height="40" rx="8"/>
+<text class="lbl" x="500" y="289" text-anchor="middle">plaid_items (token only)</text>
+
+<rect class="box" x="700" y="98" width="140" height="40" rx="8"/>
+<text class="lbl" x="770" y="123" text-anchor="middle">/transactions/sync</text>
+<rect class="box" x="700" y="152" width="140" height="40" rx="8"/>
+<text class="lbl" x="770" y="177" text-anchor="middle">/accounts/balance</text>
+
+<path class="flow" d="M180 64 L 394 64" marker-end="url(#ch11a)"/>
+<text class="lbl-sm" x="230" y="56">1 link token</text>
+<path class="flow" d="M180 132 L 394 118" marker-end="url(#ch11a)"/>
+<text class="lbl-sm" x="230" y="118">2 public token</text>
+<path class="flow-hot" d="M180 200 L 394 172" marker-end="url(#ch11b)"/>
+<text class="lbl-hot" x="230" y="186">3 cursors per item</text>
+<path class="flow-hot" d="M394 186 L 180 214" marker-end="url(#ch11b)"/>
+<text class="lbl-hot" x="230" y="226">4 delta, untouched JSON</text>
+<path class="flow" d="M600 118 L 694 118" marker-end="url(#ch11a)"/>
+<path class="flow" d="M600 172 L 694 172" marker-end="url(#ch11a)"/>
+<path class="flow" d="M500 246 L 500 258" marker-end="url(#ch11a)"/>
+<path class="flow-hot" d="M100 236 L 100 258" marker-end="url(#ch11b)"/>
+<text class="lbl-hot" x="108" y="252">5 upsert</text>
+<path class="flow-dash" d="M180 284 L 204 284" marker-end="url(#ch11a)"/>
+<text class="lbl-sm" x="186" y="318">6 setCursor, last</text>
+</svg>
+<figcaption>
+  Every Plaid call is server-side. The delta comes back to the phone as Plaid's own JSON plus an
+  institution name, and the cursor for each bank moves only after that bank's rows are saved.
+</figcaption>
+</figure>
+
+<h4>Connect</h4>
+
+<ol>
+  <li><code>PlaidConnectionViewModel.connect()</code> asks <code>plaid-link-token</code> for a token.
+    The function calls <code>/link/token/create</code> with the Supabase user id as
+    <code>client_user_id</code> and returns only the link token.</li>
+  <li><code>PlaidLinkPresenter.present</code> opens Plaid's LinkKit sheet. The presenter is the only file
+    in the app that imports LinkKit, and it holds the live <code>Handler</code> statically because a bank
+    using OAuth sends the user out to Safari; a handler released while they are away has nothing to hand
+    the redirect back to, and the connection dies silently at the last step.</li>
+  <li>LinkKit returns a <code>public_token</code>. The app posts it to <code>plaid-exchange</code>, which
+    refuses a second connection to the same institution (two Items with overlapping transactions under
+    different ids cannot be deduplicated on the device), calls <code>/item/public_token/exchange</code>,
+    and writes the access token into <code>plaid_items</code>. The response carries the item id and the
+    institution name, never the token.</li>
+  <li>The view model records the item with a nil cursor, sets <code>isFetchingHistory</code>, and runs a
+    sync straight away.</li>
+</ol>
+
+<p>
+  The OAuth banks are the reason <code>web/</code> exists. Plaid sends the browser to
+  <code>almanac.shivvyas.com/plaid-oauth</code> when the bank is done. The
+  <code>apple-app-site-association</code> file claims exactly that path, so iOS hands the URL to the app
+  and the HTML page is never rendered. It renders only when the handoff fails, and its whole job is to
+  tell a stranded person to open the app without claiming the connection failed, because by then Plaid
+  has usually already succeeded. The link token that session was built with is kept in
+  <code>UserDefaults</code> rather than memory, so a process killed during the round trip can resume the
+  same Link session on relaunch, and the view model re-registers the completion closure on attach
+  because the original one died with the old process.
+</p>
+
+<h4>Sync</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/PlaidSync.swift
+let rows = try PlaidMapping.ingestRows(from: delta.added + delta.modified,
+                                       accounts: delta.accounts)
+try money.ingest(rows)
+try money.remove(externalIDs: delta.removed.map(\.transaction_id))
+try money.upsertAccounts(PlaidMapping.accountRows(from: delta.accounts))
+
+// Only now. Every throw above leaves the cursor where it was, and
+// the next run replays this page into an idempotent upsert.
+if let cursor = delta.next_cursor {
+    items.setCursor(cursor, for: delta.item_id)
+}</code></pre>
+
+<p>
+  This ordering is the whole design in three lines. A cursor advanced before a successful ingest is a
+  page of transactions Plaid will never send again. That is also why the cursor lives on the device,
+  per Item, in <code>UserDefaults</code> rather than on the server or in the Keychain: a server-advanced
+  cursor would permanently lose a page to an app that crashed mid-ingest, and a Keychain cursor would
+  survive a reinstall that the SwiftData database does not, leaving Plaid replaying nothing into an
+  empty app. The cursor must die with the data it describes.
+</p>
+
+<p>
+  The function fetches at most three pages per invocation to stay inside its wall clock and reports
+  <code>has_more</code>; the view model loops up to twenty times, so an initial pull of years of history
+  finishes across several runs rather than stopping part-way and looking complete. Balances are fetched
+  opportunistically after the transactions, and a failure there travels separately as
+  <code>balance_error</code>: <code>/transactions/sync</code> serves cached data and succeeds even with an
+  expired bank login, while <code>/accounts/balance/get</code> does a live fetch and is the call that
+  actually throws <code>ITEM_LOGIN_REQUIRED</code>. That is what raises the reconnect banner without
+  discarding the transaction pages already fetched.
+</p>
+
+<p>
+  Sync is triggered by <code>reloadAll</code> through <code>syncIfDue</code>, which applies the shared
+  <code>SyncStalenessPolicy</code>: stale after an hour, or across a day boundary, or when the recorded
+  time is in the future because the clock moved backwards. Before it checks staleness it runs
+  <code>replayHistoryOnce</code>, which clears every cursor exactly once under a versioned flag so rows
+  synced before the logo field existed gain their logo on the next pass. A replay on every launch would
+  pull years of rows daily; a replay once is free, because Plaid bills per connected Item, not per call.
+</p>
+
+<h4>Disconnect</h4>
+
+<p>
+  <code>plaid-disconnect</code> calls <code>/item/remove</code> and deletes the row. A connected Item bills
+  monthly, so this is not optional polish. The client discards the response body and succeeds on the
+  status alone, because reading a field that carries no further information only creates a way for a
+  disconnect that worked to be reported as a failure. Local history is kept by default; deleting that
+  Item's entries is a separate, explicit choice.
+</p>
+
+<h3 id="s11-7"><span class="num">11.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Batched ingest.</strong> <code>externalID</code> has no index and ingest runs on the main
+    actor. A per-row fetch inside the loop would be an unindexed table scan per row, thousands of times
+    on an initial pull. <code>MoneyStore.ingest</code> fetches every id the page touches once, builds a
+    dictionary, keeps it current as rows are inserted so a duplicate id within the page still upserts,
+    and saves once for the whole page. <code>remove</code> and <code>upsertAccounts</code> do the same.</li>
+  <li><strong>Three pages per function call, twenty calls per sync.</strong> Bounded work on both
+    sides, with <code>has_more</code> carrying the continuation.</li>
+  <li><strong>Sync only when stale.</strong> One rule, shared with Whoop and Fitbit, keeps the sync off
+    every save and every foreground.</li>
+  <li><strong>One month loaded per save; six months only while the detail page is up.</strong> The tab
+    view model is cheap because it reads the calendar month to date. The detail view model is separate
+    so its six-month fetch runs only when its page is open.</li>
+  <li><strong>No per-row lookups in the view.</strong> Category shares, logo URLs, slice opacities and
+    day groupings are computed once on the snapshot. Views divide nothing and look nothing up.</li>
+  <li><strong>Reads and writes serialised.</strong> <code>UserDefaultsPlaidItemStore</code> is
+    <code>Sendable</code> and wraps every read-modify-write in an <code>NSLock</code>, so a cursor set from
+    one task cannot lose an update from another. The test
+    <code>concurrentCursorSetsDoNotLoseUpdates</code> pins it.</li>
+  <li><strong>Private by construction.</strong> The server holds one row per bank containing the
+    access token and an institution name. Transactions, merchants, categories and logos never touch
+    Postgres. Nothing about spending is sent to a logo service either: the logo URL is Plaid's own, in
+    a response already being paid for.</li>
+  <li><strong>Cost.</strong> No new Plaid products since the first connection: Transactions and
+    Accounts only, no <code>/transactions/recurring</code> (a separately billed product that
+    <code>RecurringSpend</code> replaces for free from history). Plaid bills per connected Item per month,
+    which scales with the number of banks a person links. The app targets one user on the free tier
+    today; the pricing question is deferred, not answered, and must be answered before a second person
+    connects a bank. See <a href="#ch24">Chapter 24</a>.</li>
+  <li><strong>Offline.</strong> Every band renders from SwiftData. A sync failure leaves the previous
+    snapshot on screen with its own timestamp, which is honest, rather than replacing it with zeros. A
+    network outage never disconnects a saved bank.</li>
+</ul>
+
+<h3 id="s11-8"><span class="num">11.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>No entries, no accounts, no bank</td><td>Empty state with Connect and Add, not a screen of zeros</td></tr>
+<tr><td>Bank linked, first sync returns nothing</td><td>"Fetching your transactions" with a Check again button. Never rendered as an empty month</td></tr>
+<tr><td>Expenses but no income</td><td>Savings rate omitted; verdict reads "No income logged"</td></tr>
+<tr><td>Pending transaction</td><td>Shown at 45% opacity with a Pending label; excluded from income, expenses, net, categories, the donut and the day's settled net</td></tr>
+<tr><td>Pending charge settles under a new id</td><td>The new id upserts, the old id arrives in <code>removed</code> and is deleted; no duplicate</td></tr>
+<tr><td>Transfer between own accounts, card payment</td><td>Kept in the ledger, excluded from income and spending by category code</td></tr>
+<tr><td>Credit card with a balance</td><td>Subtracts from net worth by <code>type</code>, never by <code>subtype</code></td></tr>
+<tr><td>Bank reports no credit limit or no available balance</td><td>Stored as nil, never zero. Utilisation against a zero limit is 100% by arithmetic and unknowable in fact</td></tr>
+<tr><td>Plaid sends an unreadable date</td><td><code>PlaidMapping</code> throws, the sync fails, the last known-good snapshot stays. A silently dropped row is a wrong total with no error anywhere</td></tr>
+<tr><td>Device west of Greenwich</td><td>Dates parse in the store's own calendar, so a transaction Plaid dates the 1st is not stored as the 31st and moved into last month</td></tr>
+<tr><td>Ingest throws mid-page</td><td>Cursor stays where it was; next sync replays the page into the idempotent upsert</td></tr>
+<tr><td>One bank's login expires</td><td>That item is reported in <code>needsReconnect</code>; every other bank still syncs; the reconnect banner shows and the figures below it are labelled as from the last sync</td></tr>
+<tr><td>One bank fails for another reason</td><td>Reported in <code>failedItems</code>; the "last synced" timestamp is not stamped on a sync that partly failed</td></tr>
+<tr><td>Bank removed on another device</td><td>The sync response omits it, so the local item cache drops it too</td></tr>
+<tr><td>Same bank connected twice</td><td>Refused by <code>plaid-exchange</code> before the exchange is spent, backstopped by a unique constraint on (user, institution)</td></tr>
+<tr><td>Item store fails to decode</td><td>Item list resets to empty and self-heals from the next sync, with every cursor reset; logged so a mystery full resync has a cause</td></tr>
+<tr><td>Bucket limit of zero or less</td><td>Rejected by the store with <code>limitNotPositive</code>; the form's Save is disabled</td></tr>
+<tr><td>Key claimed by two buckets</td><td>Impossible: <code>claim</code> moves it and the sheet says where from</td></tr>
+<tr><td>Refund in a budgeted category</td><td>Nets within its bucket instead of inflating income</td></tr>
+<tr><td>Two coffees in one week</td><td>Not a subscription. Recurrence needs two distinct months at an amount within 25% of its own median; income is never a subscription</td></tr>
+<tr><td>Account switch</td><td>The view model deactivates, the presenter resets, and the next account reads its own <code>UserDefaults</code> suite and store</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<p>All in <code>LifeOSKit</code>, all passing, all without a network or a Plaid account:</p>
+
+<ul>
+  <li><code>PersistenceTests/MoneyTests</code>: the sign convention, the undefined savings rate,
+    pending exclusion, transfer and card-payment exclusion, the underscore-prefix rule, upsert on the
+    provider id, removal of a settled pending charge, merchant entity and logo round trips, and that
+    <code>isSpending</code> matches what the summary counts.</li>
+  <li><code>PersistenceTests/MoneyPartsTests</code>: the carry at 19.995 and 999.999, float noise,
+    zero-padded cents, a zero that is never negative, grouping of large balances.</li>
+  <li><code>PersistenceTests/SpendBucketTests</code>: a key moves rather than being held twice, deleting
+    a bucket frees its keys, the claim key prefers the code over the label.</li>
+  <li><code>SectorsTests/BudgetPeriodTests</code>: refunds net within a bucket, income never appears as
+    unclaimed, adherence is 1.0 at the limit and decays linearly to 0 at double it.</li>
+  <li><code>InsightsTests/SpendSeriesTests</code> and <code>RecurringSpendTests</code>: week boundaries,
+    an empty month at zero in the middle of a run, fold leaving a list at or under keep plus one alone,
+    the median resisting a single price rise.</li>
+  <li><code>IntegrationsTests/Plaid*</code>: the client's error mapping through a stub
+    <code>URLProtocol</code>, a missing session never reaching the network, disconnect succeeding on
+    status alone, the mapping's negation and time-zone behaviour, the wire format's optional fields,
+    and <code>PlaidSyncTests</code> pinning that a failed ingest leaves the cursor where it was and a
+    balance login failure raises reconnect without losing the transactions.</li>
+</ul>
+
+<h3 id="s11-9"><span class="num">11.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Persistence/MoneyEntry.swift</code>, for the sign rule and <code>summarise</code>.</li>
+  <li><code>LifeOSKit/Sources/Integrations/PlaidMapping.swift</code>, the negation and the date parsing.</li>
+  <li><code>LifeOSKit/Sources/Integrations/PlaidSync.swift</code>, the ingest-then-cursor ordering.</li>
+  <li><code>LifeOSKit/Sources/Persistence/MoneyStore.swift</code>, the batched upsert and the claim rule.</li>
+  <li><code>LifeOSKit/Sources/Sectors/BudgetPeriod.swift</code>, the pure budget assessment.</li>
+  <li><code>LIfeOS/Features/Money/ViewModel/MoneyViewModel.swift</code>, how the snapshot is derived.</li>
+  <li><code>LIfeOS/Features/Money/View/MoneySections.swift</code>, bands, cards and the grid.</li>
+  <li><code>supabase/functions/plaid-sync/index.ts</code>, the server half of a sync.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does the cursor live in UserDefaults and not the Keychain?</strong> The Keychain
+    survives a reinstall and the database does not; a cursor that outlived its data would make Plaid
+    replay nothing into an empty app.</li>
+  <li><strong>What would go wrong if the cursor advanced before <code>ingest</code>?</strong> A page that
+    failed to save would never be sent again, and the total would be silently short.</li>
+  <li><strong>Why is a card payment excluded from spending?</strong> The purchases on the card were
+    already spending; the payment is the same money moving, and counting it inflates expenses and
+    lowers the savings rate.</li>
+  <li><strong>Why does a budget claim a category code rather than a merchant or a label?</strong> A
+    label can be renamed and a merchant can be spelled three ways; a silently non-counting budget is
+    worse than none.</li>
+  <li><strong>Why is a missing credit limit stored as nil rather than zero?</strong> Zero renders as
+    100% utilised and looks like a fact; nil renders as nothing, which is the truth.</li>
+  <li><strong>Why is the donut one ink at stepped opacity?</strong> The six pastels fail as a
+    categorical palette; a sequential encoding of one hue passes, and identity is carried by the legend
+    and the matching swatches on the bands, never by colour alone.</li>
+</ul>
+
+</section>

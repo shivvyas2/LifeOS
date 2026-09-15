@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Rasterize the Kindle cover and pack Life-OS-Engineering-Handbook.epub.
+# Rasterize the Kindle cover and pack Almanac-Engineering-Handbook.epub.
 #
 # Cover source of truth is cover.svg (1600×2560). Chromium screenshots it to
-# JPEG; Python then wraps index.html + that JPEG into a Kindle-sendable EPUB.
+# JPEG; pack-epub.py then splits index.html into one XHTML file per chapter
+# and packs them with that JPEG, a navigation document and an NCX into a
+# Kindle-sendable EPUB 3 with the author and cover set.
 #
-# Usage:  ./docs/handbook/render-epub.sh
+# Usage:  ./docs/handbook/render-epub.sh      (run build.py first)
 
 set -euo pipefail
 
@@ -50,129 +52,4 @@ fi
 sips -s format jpeg -s formatOptions 90 -z 2560 1600 "$WORK/cover.png" --out "$HERE/cover.jpg" >/dev/null
 echo "Cover JPEG written: $HERE/cover.jpg ($(wc -c < "$HERE/cover.jpg" | tr -d ' ') bytes)"
 
-python3 - "$HERE" <<'PY'
-import datetime, io, re, sys, zipfile
-from pathlib import Path
-
-from bs4 import BeautifulSoup
-from bs4.dammit import EntitySubstitution
-from bs4.formatter import XMLFormatter
-
-here = Path(sys.argv[1])
-html = (here / "index.html").read_text(encoding="utf-8")
-cover_jpg = (here / "cover.jpg").read_bytes()
-
-soup = BeautifulSoup(html, "html.parser")
-if soup.html is None:
-    raise SystemExit("index.html has no <html> root")
-soup.html["data-theme"] = "light"
-soup.html["xmlns"] = "http://www.w3.org/1999/xhtml"
-soup.html["xml:lang"] = "en"
-
-chapter = soup.decode(
-    formatter=XMLFormatter(entity_substitution=EntitySubstitution.substitute_xml)
-)
-if not chapter.lstrip().startswith("<?xml"):
-    chapter = '<?xml version="1.0" encoding="UTF-8"?>\n' + chapter
-
-# XML escaping turns CSS child combinators into &gt;, which Kindle then
-# treats as literal text and drops the two-column contents layout.
-def restore_css(match: re.Match[str]) -> str:
-    css = (
-        match.group(1)
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
-    )
-    return "<style>" + css + "</style>"
-
-chapter = re.sub(r"<style>(.*?)</style>", restore_css, chapter, count=1, flags=re.S)
-
-modified = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-cover_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-<head>
-  <title>Cover</title>
-  <style type="text/css">
-    html, body { margin: 0; padding: 0; background: #EFEDE8; }
-    img { width: 100%; height: auto; }
-  </style>
-</head>
-<body>
-  <img src="cover.jpg" alt="Life OS Engineering Handbook"/>
-</body>
-</html>
-"""
-
-nav_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="en" lang="en">
-<head><title>Contents</title></head>
-<body>
-  <nav epub:type="toc" id="toc">
-    <h1>Contents</h1>
-    <ol>
-      <li><a href="cover.xhtml">Cover</a></li>
-      <li><a href="handbook.xhtml">Life OS Engineering Handbook</a></li>
-    </ol>
-  </nav>
-  <nav epub:type="landmarks">
-    <ol>
-      <li><a epub:type="cover" href="cover.xhtml">Cover</a></li>
-      <li><a epub:type="bodymatter" href="handbook.xhtml">Handbook</a></li>
-    </ol>
-  </nav>
-</body>
-</html>
-"""
-
-opf = f"""<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="3.0" xml:lang="en">
-  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="bookid">urn:uuid:6e1f0c8a-4b2d-4f91-9e3a-25a825082026</dc:identifier>
-    <dc:title>Life OS Engineering Handbook</dc:title>
-    <dc:creator>Shiv Vyas</dc:creator>
-    <dc:language>en</dc:language>
-    <dc:date>2026-08-25</dc:date>
-    <dc:publisher>Life OS</dc:publisher>
-    <meta property="dcterms:modified">{modified}</meta>
-    <meta name="cover" content="cover-image"/>
-  </metadata>
-  <manifest>
-    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-    <item id="cover-image" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>
-    <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
-    <item id="chap" href="handbook.xhtml" media-type="application/xhtml+xml"/>
-  </manifest>
-  <spine>
-    <itemref idref="cover"/>
-    <itemref idref="chap"/>
-  </spine>
-  <guide>
-    <reference type="cover" title="Cover" href="cover.xhtml"/>
-  </guide>
-</package>
-"""
-
-container = """<?xml version="1.0" encoding="UTF-8"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-  <rootfiles>
-    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-  </rootfiles>
-</container>
-"""
-
-epub_path = here / "Life-OS-Engineering-Handbook.epub"
-buf = io.BytesIO()
-with zipfile.ZipFile(buf, "w") as zf:
-    zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
-    zf.writestr("META-INF/container.xml", container, compress_type=zipfile.ZIP_DEFLATED)
-    zf.writestr("OEBPS/content.opf", opf, compress_type=zipfile.ZIP_DEFLATED)
-    zf.writestr("OEBPS/nav.xhtml", nav_xhtml, compress_type=zipfile.ZIP_DEFLATED)
-    zf.writestr("OEBPS/cover.xhtml", cover_xhtml, compress_type=zipfile.ZIP_DEFLATED)
-    zf.writestr("OEBPS/handbook.xhtml", chapter, compress_type=zipfile.ZIP_DEFLATED)
-    zf.writestr("OEBPS/cover.jpg", cover_jpg, compress_type=zipfile.ZIP_DEFLATED)
-
-epub_path.write_bytes(buf.getvalue())
-print(f"EPUB written: {epub_path} ({epub_path.stat().st_size} bytes)")
-PY
+python3 "$HERE/pack-epub.py"

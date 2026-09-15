@@ -1,0 +1,516 @@
+<section class="chapter" id="ch15" data-hue="coach">
+<p class="chapter-kicker">Chapter fifteen</p>
+<h2><span class="num">15</span><span>The calendar assistant</span></h2>
+
+<p class="lede">
+  The assistant is LIFO's sibling with hands. It reads your calendar through six tools, creates
+  events, and asks before it changes or deletes one. The gate that asks is a property of the code,
+  not a request in the prompt, and the reply is drawn as a day you can move around in rather than
+  described in a sentence.
+</p>
+
+<h3 id="s15-1"><span class="num">15.1</span><span>Intent</span></h3>
+
+<p>
+  Ask "what's on tomorrow?" and the answer needs no tool call: today and tomorrow are inlined in the
+  prompt. Ask "find me an hour on Thursday" and the model calls <code>find_free_time</code> against
+  the local event cache. Say "move the dentist to four" and it calls <code>get_events</code> to learn
+  the id, then <code>update_event</code>, which does not run until a card on screen shows the
+  event as it is now, what it would become, and whether a location is being dropped, and you tap
+  Confirm. Every reply carries an agenda card: a week strip with a dot on the days the reply touched,
+  and the whole of the selected day's agenda underneath, read live from the store rather than from
+  the model's prose.
+</p>
+
+<p>
+  The assistant is separate from the coach on purpose. The coach's context is metrics and it has no
+  tools; the assistant's context is the calendar and it has six. Neither task sees the other's data.
+  They share the engines, the router, the invoker, the confirmation gate and the chat store, which
+  is why the assistant honours the same tier preference the coach does and drifts nowhere on its
+  own.
+</p>
+
+<div class="note caution"><b>The weaker privacy guarantee, stated</b>
+  Every other cloud workload sends derived numbers. On a cloud turn the assistant sends event titles,
+  times and locations, which are content and cannot be aggregated without destroying their use.
+  The control is the tier preference in Settings: "On device" means nothing you ask ever leaves the
+  phone, for the assistant as for the coach. The design spec also asked for a one-time disclosure
+  before first use; that copy does not exist in the app today and is an open item.
+</div>
+
+<h3 id="s15-2"><span class="num">15.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Assistant/
+├── ViewModel/
+│   └── AssistantViewModel.swift     one conversation, pending cards, events per reply
+└── View/
+    ├── AssistantSheet.swift         transcript, confirmation cards, chips, composer
+    └── AssistantAgendaCard.swift    the week strip and the day's rows under a reply
+
+LifeOSKit/Sources/Assistant/         depends on Insights and Persistence only
+├── AssistantContext.swift           CalendarAssistant.tools, instructions, contextPrefix
+├── CalendarAccess.swift             CalendarReading and CalendarWriting protocols
+├── CalendarEventCollector.swift     the events a turn actually touched
+├── CalendarTools.swift              six CoachTool conformers and their argument types
+└── ToolDates.swift                  ISO-8601 in, "Tue Aug 26 09:00" out
+
+Reused from Insights (Chapter 14)
+├── CoachTool.swift                  the contract
+├── ToolGate.swift                   PendingWrite, ConfirmationBroker
+├── ToolInvoker.swift                the per-turn cap and the gate
+├── AssistantTurn.swift              cloud first, device after
+├── Chat/RemoteChatEngine.swift      the tool loop
+└── Engines/SessionTool.swift        the on-device binding
+
+Reused from Persistence and Integrations
+├── CalendarStore.swift              the cache; events(from:to:), freeSlots, events(withIDs:)
+├── CalendarSync.swift               writes go to the provider, then a re-sync
+├── EventKitSource.swift             the one authorized source today
+└── ChatMessage.swift                replies remember event ids, not events</pre>
+
+<h3 id="s15-3"><span class="num">15.3</span><span>Model</span></h3>
+
+<h4>What a tool may touch</h4>
+
+<pre><code>// LifeOSKit/Sources/Assistant/CalendarAccess.swift
+@MainActor
+public protocol CalendarReading: Sendable {
+    func events(from: Date, to: Date) throws -&gt; [CalendarEventSnapshot]
+    func snapshot(id: UUID) throws -&gt; CalendarEventSnapshot?
+    func freeSlots(from: Date, to: Date, durationMinutes: Int) throws -&gt; [DateInterval]
+}
+extension CalendarStore: CalendarReading {}
+
+public protocol CalendarWriting: Sendable {
+    func create(_ draft: CalendarEventDraft) async throws
+    func update(id: UUID, with draft: CalendarEventDraft) async throws
+    func delete(id: UUID) async throws
+}</code></pre>
+
+<p>
+  Reads come from the cache and writes go through <code>CalendarSync</code>, which the app declares
+  conformant in one line at the top of the view model. That is the whole reason a write made by
+  asking lands in the same place as a write made by tapping: the sync routes the draft to the source
+  that owns the event, then re-syncs so the cache reflects what the provider actually stored, since
+  providers normalise all-day handling and time zones and trusting the local draft would drift.
+</p>
+
+<h4>The six tools</h4>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Tool</th><th>Arguments</th><th>Needs</th><th>Gated</th></tr></thead>
+<tbody>
+<tr><td><code>get_events</code></td><td>start, end</td><td>reading</td><td>no</td></tr>
+<tr><td><code>find_free_time</code></td><td>start, end, durationMinutes</td><td>reading</td><td>no</td></tr>
+<tr><td><code>analyze_schedule</code></td><td>start, end</td><td>reading</td><td>no</td></tr>
+<tr><td><code>create_event</code></td><td>title, start, end, isAllDay, location, notes</td><td>writing</td><td>no</td></tr>
+<tr><td><code>update_event</code></td><td>id plus the full draft</td><td>reading and writing</td><td>yes</td></tr>
+<tr><td><code>delete_event</code></td><td>id</td><td>reading and writing</td><td>yes</td></tr>
+</tbody></table></div>
+
+<p>
+  Each argument set is a <code>@Generable</code> struct with <code>@Guide</code> descriptions, so
+  the same declaration yields a schema for Apple's session and, through <code>ToolSchema</code>, an
+  OpenAI function declaration with <code>additionalProperties: false</code>. Dates are ISO-8601 on
+  the way in and rendered as <code>EEE MMM d HH:mm</code> in the user's zone on the way out. A
+  garbled date throws a <code>ToolDateError</code> whose description tells the model the format to
+  use, and the invoker turns that into a result string the model can recover from rather than a
+  crash.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Assistant/CalendarTools.swift
+func eventLine(_ event: CalendarEventSnapshot, timeZone: TimeZone = .current) -&gt; String {
+    let start = ToolDates.render(event.startDate, timeZone: timeZone)
+    let end = ToolDates.render(event.endDate, timeZone: timeZone)
+    let span = event.isAllDay ? "all day" : "\(start) to \(end)"
+    return "\(event.id.uuidString) | \(span) | \(event.title)"
+}</code></pre>
+
+<p>
+  Every tool result and the inlined context render an event with its id first, and the instructions
+  say never to invent one. The model can therefore only reference ids it has actually seen, and an
+  update or delete with an unknown id returns "No event with that id" rather than touching the
+  wrong row. Creates are not gated, per the design decision; a created event is announced and
+  appears on the card, where it can be edited or deleted by hand.
+</p>
+
+<h4>What a turn touched</h4>
+
+<p>
+  Tools hand the model text, because that is what a model consumes. The same events arrive in
+  <code>CalendarEventCollector</code> as values, because that is what a card needs. The alternative
+  was parsing the reply back into events, which means trusting a model to restate a date correctly
+  in order to draw it correctly, and a card that disagrees with the sentence above it is worse than
+  no card. The collector is an actor, deduplicates by id (a turn asking about today and then this
+  week surfaces the same lunch twice) and returns chronologically whatever order the tools ran in.
+</p>
+
+<p>
+  A reply persists the touched event ids on <code>ChatMessage.eventIDsData</code> as JSON, optional
+  so an existing store migrates without a plan. Ids rather than events, because an event can be
+  moved or deleted after the sentence about it was written, and a card showing what was true last
+  Tuesday is worse than no card. They are re-resolved against the store whenever the conversation
+  is reopened, and one that has since been deleted simply stops appearing.
+</p>
+
+<h3 id="s15-4"><span class="num">15.4</span><span>ViewModel</span></h3>
+
+<p>
+  <code>AssistantViewModel</code> takes its <code>ModelContext</code> in <code>init</code>, unlike
+  every other view model in the app, because it builds a <code>ChatStore</code>, a
+  <code>CalendarStore</code>, an <code>EventKitSource</code> and a <code>CalendarSync</code> from it.
+  That is why <code>RootView</code> creates it once inside <code>attachAll()</code> rather than at
+  property declaration. Its state is the messages, the pending writes, the events per reply,
+  whether it is thinking, whether the calendar is authorized, and the draft.
+</p>
+
+<pre><code>// LIfeOS/Features/Assistant/ViewModel/AssistantViewModel.swift
+func send() async {
+    let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty, !isThinking else { return }
+    draft = ""
+    isThinking = true
+    defer { isThinking = false; pending = [] }
+
+    try? chat.append(conversationID: conversationID, role: .user, text: text)
+    reloadMessages()
+
+    let broker = ConfirmationBroker { [weak self] write in
+        Task { @MainActor in self?.pending.append(write) }
+    }
+    self.broker = broker
+    let collector = CalendarEventCollector()
+    let tools: [any CoachTool] = isAuthorized
+        ? CalendarAssistant.tools(reading: store, writing: sync, collector: collector)
+        : []
+    ...
+    let reply = try await AssistantTurn.run(
+        instructions: ChatInstructions(
+            CalendarAssistant.instructions(authorized: isAuthorized) + "\n\n" + calendarContext()
+        ),
+        thread: thread, tools: tools, broker: broker, remote: remote
+    )
+    let events = await collector.collected()
+    try? chat.append(conversationID: conversationID, role: .assistant,
+                     text: reply.text, toolSummaries: reply.toolSummaries,
+                     eventIDs: events.map(\.id))
+}</code></pre>
+
+<p>
+  Three things are per turn: the broker, the collector, and (inside <code>AssistantTurn</code>) the
+  invoker. The broker is rebuilt so a card from an old turn cannot resolve a new one; the collector
+  so the cards under a reply are the events that reply was about rather than everything the
+  conversation has ever looked at; the invoker so the six-call cap and the activity chips are turn
+  state. With no authorized calendar the tool list is empty and the instructions say so, so the model
+  explains what to connect rather than calling something that would fail.
+</p>
+
+<p>
+  The instructions are one string for both tiers, unlike the coach's two, because nothing in them
+  is device-only and the current date and time zone the context prefix carries are exactly what the
+  cloud has no other way to know; without them an update gets built against no notion of today.
+  The conversation id lives in the account's own defaults suite under its own key, distinct from the
+  coach's, because the two screens write into one store and "whichever conversation was written to
+  last" is no longer necessarily this screen's own.
+</p>
+
+<p>
+  <code>confirm(_:)</code> and <code>cancel(_:)</code> remove the card from <code>pending</code>
+  immediately and then resolve the broker. The broker prunes its own copy on resolve; without the
+  first line the view's copy lingered with live-looking buttons until the whole turn finished.
+  <code>events(on:)</code> reads one day straight from the store on every call rather than caching,
+  because a person moving across the strip is asking about seven different days in a few seconds, a
+  one-day fetch is a single indexed range query, and the alternative is a cache invalidated by every
+  write the assistant makes. <code>save(_:editing:)</code> and <code>delete(id:)</code> from the
+  card's own sheet go through the same <code>CalendarSync</code> the tools write through.
+</p>
+
+<h3 id="s15-5"><span class="num">15.5</span><span>View</span></h3>
+
+<p>
+  <code>AssistantSheet</code> is presented from the quick actions bar on every tab through the
+  <code>calendar.badge.clock</code> action (not a bare calendar glyph, because the month button in
+  Today's top bar is already that). It is a <code>NavigationStack</code> with a Schedule link to
+  <code>MonthScreen</code> on the left and Done on the right. If Apple Intelligence is unavailable
+  on the device the whole sheet is one sentence saying so. Otherwise it is the conversation, a
+  reconnect row when the calendar is not authorized but history exists (the empty state carries the
+  connect button, and a conversation with history hides that state, so someone who revoked access
+  later still needs a way back in), and the composer.
+</p>
+
+<p>
+  The conversation is a <code>LazyVStack</code> of user bubbles, assistant replies, then the pending
+  confirmation cards, then a "Thinking" row while a turn is in flight and no card is up. The list
+  scrolls to the newest message or the newest card as either count changes. An assistant reply is an
+  <code>InsightCallout</code> of the text, an <code>AssistantAgendaCard</code> when the reply touched
+  events or is the latest reply (a reply about the schedule that draws no schedule is the text-only
+  answer this screen was changed to stop producing; older replies keep a card only if they touched
+  events, so scrolling back through twenty turns is not twenty week strips), and a row of activity
+  chips ("Checked your calendar", "Created an event") from the invoker's summaries.
+</p>
+
+<p>
+  A confirmation card lists the preview lines the tool produced and two buttons. For an update the
+  lines are the event now, what it becomes, and, when the arguments carry no location and the
+  event has one, "Removes the location", because the update is a full replacement and the card must
+  surface what a glance would miss. For a delete it is the one line of the event being deleted.
+</p>
+
+<p>
+  <code>AssistantAgendaCard</code> opens on the day the reply was about, not today: a question about
+  next Tuesday that answers itself with this morning is not an answer. The header is the weekday
+  large with an accent dot, filled on today and hollow otherwise, and the date stacked small on the
+  right. The strip is the seven days of that week; days the reply touched carry a three-point dot
+  that is always laid out and only coloured when set, because hiding it would shift every other
+  column as the selection moved. The rows are the selected day's whole agenda, all-day events
+  first, each a day-part glyph, a title and a time with a dotted rule between, past events at 42
+  percent opacity so the day is still the day but what is left of it is what you are being asked
+  about. A plus under the list creates on the day being looked at. Taps go out through
+  <code>onTapEvent</code> and <code>onAddEvent</code> to the same <code>EventSheet</code> Today uses;
+  the card owns no store and no calendar, so it previews like any other view.
+</p>
+
+<h3 id="s15-6"><span class="num">15.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="A turn: the sheet sends text; the view model builds a broker, a collector and the tools, and calls AssistantTurn.run; the engine returns tool calls, which ToolInvoker runs against CalendarStore or CalendarSync; a gated call suspends at ConfirmationBroker until the card is answered; results go back to the engine until it returns prose; the collector's events become the card.">
+  <defs>
+    <marker id="ch15a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch15b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <rect class="box" x="20" y="40" width="140" height="44" rx="8"/>
+  <text class="lbl" x="90" y="66" text-anchor="middle">AssistantSheet</text>
+
+  <rect class="box" x="20" y="130" width="140" height="56" rx="8"/>
+  <text class="lbl" x="90" y="153" text-anchor="middle">AssistantViewModel</text>
+  <text class="lbl-sm" x="90" y="172" text-anchor="middle">broker · collector · tools</text>
+
+  <rect class="box-hot" x="220" y="130" width="150" height="56" rx="8"/>
+  <text class="lbl" x="295" y="153" text-anchor="middle">Engine</text>
+  <text class="lbl-sm" x="295" y="172" text-anchor="middle">cloud loop or session</text>
+
+  <rect class="box" x="430" y="130" width="130" height="56" rx="8"/>
+  <text class="lbl" x="495" y="153" text-anchor="middle">ToolInvoker</text>
+  <text class="lbl-sm" x="495" y="172" text-anchor="middle">cap 6 per turn</text>
+
+  <rect class="box-hot" x="430" y="230" width="130" height="56" rx="8"/>
+  <text class="lbl" x="495" y="253" text-anchor="middle">Confirmation</text>
+  <text class="lbl-sm" x="495" y="272" text-anchor="middle">Broker, suspends</text>
+
+  <rect class="box" x="620" y="100" width="120" height="44" rx="8"/>
+  <text class="lbl" x="680" y="126" text-anchor="middle">CalendarStore</text>
+
+  <rect class="box" x="620" y="170" width="120" height="44" rx="8"/>
+  <text class="lbl" x="680" y="196" text-anchor="middle">CalendarSync</text>
+
+  <rect class="box-alt" x="770" y="170" width="70" height="44" rx="8"/>
+  <text class="lbl" x="805" y="196" text-anchor="middle">EventKit</text>
+
+  <rect class="box" x="220" y="230" width="150" height="56" rx="8"/>
+  <text class="lbl" x="295" y="253" text-anchor="middle">Collector</text>
+  <text class="lbl-sm" x="295" y="272" text-anchor="middle">events the turn touched</text>
+
+  <path class="flow" d="M90 84 L90 124" marker-end="url(#ch15a)"/>
+  <path class="flow" d="M160 158 L214 158" marker-end="url(#ch15a)"/>
+  <path class="flow-hot" d="M370 150 L424 150" marker-end="url(#ch15b)"/>
+  <text class="lbl-hot" x="376" y="142">tool calls</text>
+  <path class="flow" d="M424 168 L370 168" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="380" y="196">results</text>
+  <path class="flow" d="M560 146 L614 126" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="566" y="118">reads</text>
+  <path class="flow" d="M560 170 L614 188" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="566" y="208">writes</text>
+  <path class="flow" d="M740 192 L764 192" marker-end="url(#ch15a)"/>
+  <path class="flow-dash" d="M495 186 L495 224" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="505" y="212">gated</text>
+  <path class="flow-dash" d="M430 258 L160 186" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="230" y="212">card up, tap decides</text>
+  <path class="flow" d="M620 132 L370 250" marker-end="url(#ch15a)"/>
+  <path class="flow" d="M220 258 L160 186" marker-end="url(#ch15a)"/>
+  <text class="lbl-sm" x="20" y="310">The loop runs on the device even when the model is in the cloud: every tool reads local state.</text>
+</svg>
+<figcaption>
+  One turn. The model asks, the invoker executes, the broker holds a write until the person answers
+  the card, and the collector turns tool results into the agenda card without going through prose.
+</figcaption>
+</figure>
+
+<h4>The gate is structural</h4>
+
+<pre><code>// LifeOSKit/Sources/Insights/ToolGate.swift
+public actor ConfirmationBroker {
+    func decision(for write: PendingWrite) async -&gt; Bool {
+        pending.append(write)
+        onPending(write)
+        return await withCheckedContinuation { continuation in
+            continuations[write.id] = continuation
+        }
+    }
+    public func confirm(_ id: UUID) { resolve(id, allowed: true) }
+    public func cancel(_ id: UUID)  { resolve(id, allowed: false) }
+}</code></pre>
+
+<p>
+  <code>ToolInvoker.invoke</code> checks <code>requiresConfirmation</code> and, for a gated tool,
+  awaits <code>broker.decision(for:)</code> before <code>tool.call</code>. The continuation suspends
+  the tool's execution path until the UI resolves it; there is no other way a gated call proceeds.
+  That is what makes the gate a property of the code rather than a request in the prompt, and it is
+  the substantive improvement over the app this was ported from, which asked the model in the
+  system prompt to confirm first and therefore depended on the model choosing to. A cancelled write
+  returns "User declined this change" as the tool result so the model can acknowledge it. The
+  invoker records <code>didExecuteGatedWrite</code> the moment the gate opens, and
+  <code>AssistantTurn</code> reads it to refuse a device retry after a cloud failure, so a confirmed
+  create can never happen twice.
+</p>
+
+<h4>The loop</h4>
+
+<p>
+  On the cloud path <code>RemoteChatEngine</code> sends the thread, the six function declarations
+  and the context, and loops on tool-call replies as described in <a href="#s14-6">14.6</a>. The
+  context is repeated on every round because a stateless server has no memory of the last one. On
+  the device path <code>OnDeviceChatEngine</code> binds each tool through <code>SessionTool</code>
+  and Apple's session drives the calls itself; the invoker is the same object in both cases, so the
+  cap, the gate and the error shaping are identical whichever model is answering. The seventh call
+  in a turn is refused with a message telling the model to say the request could not be completed.
+</p>
+
+<h4>The context prefix</h4>
+
+<pre><code>// LifeOSKit/Sources/Assistant/AssistantContext.swift
+return """
+Current time: \(formatter.string(from: now)) (\(label))
+\(todayLines)
+\(tomorrowLines)
+"""</code></pre>
+
+<p>
+  Today and tomorrow are inlined so "what's on today?" needs no tool call: the cheapest possible
+  path and the most reliable one on a small model. The time zone label is printed as the caller
+  reached for it (Foundation relabels UTC as GMT, and the test pins that it comes back as UTC).
+  Relative dates are resolved against the stated current time, times are stated in the user's
+  zone, replies are a sentence or two, and the model is told to ask before assuming a duration.
+</p>
+
+<h4>Free time</h4>
+
+<p>
+  <code>CalendarStore.freeSlots</code> filters all-day events out of the busy set, because
+  "Anniversary" is context, not a meeting, and treating it as busy would zero out the whole day.
+  The pure core merges overlapping busy intervals, subtracts them from the window, and drops gaps
+  shorter than the requested duration; it is <code>nonisolated static</code> so six tests exercise
+  it without a container.
+</p>
+
+<div class="note"><b>The spec's floor was superseded</b>
+  The design spec floored the assistant on the device and escalated through the router's table,
+  and costed it at a rounding error on that basis. Since the conversational core landed, the
+  assistant runs through <code>AssistantTurn.run</code> exactly like the coach: cloud first under
+  Automatic, device under On device, no fallback under Cloud. The on-device path is the fallback,
+  not the floor.
+</div>
+
+<h3 id="s15-7"><span class="num">15.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Two days inline.</strong> The most common question costs zero tool rounds.</li>
+  <li><strong>Everything reads the cache.</strong> No tool touches EventKit; reads are indexed range
+    queries on <code>CalendarEvent</code>, and writes go through the provider once and re-sync a
+    30-day-back, 90-day-forward window.</li>
+  <li><strong>One fetch for all cards.</strong> <code>resolveEventCards</code> gathers every id across
+    the conversation into one <code>events(withIDs:)</code> query and a dictionary lookup, rather
+    than one round trip per reply.</li>
+  <li><strong>Bounded rounds.</strong> Six tool calls per turn, seven rounds at most, and the
+    thread is capped at twenty messages by <code>ChatStore.recent</code>. The server independently
+    bounds the request at 64 messages, 16 tools and 32,000 characters of context, so the endpoint
+    cannot be used as a general proxy on the project's key.</li>
+  <li><strong>Not streamed, on purpose.</strong> A tool call arrives in a stream as fragments of a
+    JSON argument string spread across chunks; the server grants a stream only to a turn with no
+    tools, and the assistant is not the screen someone watches word by word.</li>
+  <li><strong>Per-turn objects, no caches.</strong> The broker, collector and invoker are cheap
+    value-sized actors made per turn; <code>events(on:)</code> is a fresh one-day query per strip
+    tap. Nothing has to be invalidated.</li>
+  <li><strong>Cost.</strong> Per the spec's model, a cloud turn is roughly 1,000 tokens of tool
+    declarations, 600 of instructions and inlined events, and up to 2,000 of history per round,
+    with about 300 out. On the mini model that is well under a cent per turn and shares the coach's
+    150,000-token daily cap rather than needing one of its own.</li>
+</ul>
+
+<h3 id="s15-8"><span class="num">15.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Calendar not authorized</td><td>No tools are bound, the instructions say so, the empty state offers Connect, and a conversation with history shows a reconnect row.</td></tr>
+<tr><td>Apple Intelligence unavailable</td><td>The sheet shows one sentence and no composer.</td></tr>
+<tr><td>Model invents an event id</td><td><code>update_event</code> and <code>delete_event</code> return "No event with that id" and the wrong row is never touched.</td></tr>
+<tr><td>Event is one occurrence of a series</td><td>Writes are refused with an explanation to change the series in the calendar app.</td></tr>
+<tr><td>Model emits a bad date</td><td>The thrown description names the format; the invoker returns it as the tool result.</td></tr>
+<tr><td>Update drops a location</td><td>The card says "Removes the location" before Confirm is enabled.</td></tr>
+<tr><td>Cloud fails after a confirmed write</td><td>The failure stands; no device retry, no second card.</td></tr>
+<tr><td>Cloud refuses</td><td>Surfaced; never re-asked of the device.</td></tr>
+<tr><td>Any other failure</td><td>The reply reads "I couldn't answer that. Try again." and is written to the store like any reply.</td></tr>
+<tr><td>Event deleted after the reply</td><td>Its id no longer resolves; the card drops it silently.</td></tr>
+<tr><td>Reply touches no events</td><td>The latest reply still draws a card; older ones do not.</td></tr>
+<tr><td>Seven tool calls in one turn</td><td>The seventh is refused and the model is told to say the request could not be completed.</td></tr>
+<tr><td>A second account on the device</td><td>Its own conversation id in its own defaults suite; no shared transcript.</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<ul>
+  <li><code>CalendarToolsTests</code>, 10, against a fake calendar: there are six tools and only the
+    writes are gated, <code>get_events</code> returns ids and titles in range, a garbled date throws
+    rather than crashes, free slots are reported, a create maps onto the draft, an update rejects an
+    unknown id, writes to a recurring event are refused with an explanation, a delete dispatches for
+    a known one-off, the confirmation preview shows the current event, and the update preview calls
+    out a dropped location.</li>
+  <li><code>AssistantContextTests</code>, 2: unauthorized instructions say there are no calendar
+    tools; the context prefix inlines today and tomorrow.</li>
+  <li><code>ToolInvokerTests</code>, 6: a gated tool does not execute until confirmed, cancelling
+    yields the declined result, the seventh invocation is refused, an unknown name is an error
+    result not a crash.</li>
+  <li><code>RemoteChatEngineTests</code>, 14, and <code>AssistantTurnTests</code>, 15: the loop, the
+    cap, the confirmed-write guard, and the tier rules, all shared with the coach.</li>
+  <li><code>CalendarFreeSlotTests</code>, 6, and <code>ChatStoreTests</code>, 8: the slot maths and
+    that a reply remembers the events it was about across a reload.</li>
+</ul>
+
+<p>
+  Untested by a suite: the card's strip and rows (previews only), and the real EventKit write
+  round trip, which needs a device with calendar access.
+</p>
+
+<h3 id="s15-9"><span class="num">15.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Assistant/CalendarAccess.swift</code>, the two protocols, then the one-line conformance
+    at the top of <code>AssistantViewModel.swift</code>.</li>
+  <li><code>Assistant/CalendarTools.swift</code>, top to bottom, watching where <code>eventLine</code>
+    is used.</li>
+  <li><code>Insights/ToolGate.swift</code> and <code>ToolInvoker.swift</code>, to see how a
+    continuation becomes a gate.</li>
+  <li><code>Assistant/AssistantContext.swift</code>, for the instructions and the prefix.</li>
+  <li><code>Features/Assistant/ViewModel/AssistantViewModel.swift</code>, following
+    <code>send</code> and then <code>resolveEventCards</code>.</li>
+  <li><code>Features/Assistant/View/AssistantAgendaCard.swift</code>, then the sheet.</li>
+  <li><code>Persistence/CalendarStore.swift</code>, the free-slot core.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why can the model not route around the confirmation?</strong> The gated call is
+    suspended on a continuation inside the invoker; nothing the model emits resumes it.</li>
+  <li><strong>Why store event ids on the reply rather than the events?</strong> Events change;
+    ids re-resolve to the current truth and a deleted one vanishes.</li>
+  <li><strong>Why do writes go through <code>CalendarSync</code> and not the store?</strong> So the
+    provider is the source of truth and the cache reflects what it actually stored.</li>
+  <li><strong>Why is the loop on the device when the model is in the cloud?</strong> Every tool
+    reads local state; a server-driven loop would have to call back into the phone.</li>
+  <li><strong>Why are today and tomorrow inlined?</strong> The most common question then needs no
+    tool call, which is both the cheapest and the most reliable path.</li>
+  <li><strong>Why does an all-day event not block free time?</strong> It is context, not a
+    meeting; treating it as busy would zero out the day.</li>
+</ul>
+</section>

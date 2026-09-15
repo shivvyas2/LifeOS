@@ -1,0 +1,547 @@
+
+  /* Minimal reset. This is a standalone file and must not assume a host reset. */
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, h4, p, ul, ol, figure, pre { margin: 0; }
+  ul, ol { padding: 0; }
+  img, svg { display: block; max-width: 100%; }
+  table { border-collapse: collapse; }
+
+  :root {
+    --ground:      #EFEDE8;
+    --surface:     #FBFAF7;
+    --surface-2:   #E7E4DD;
+    --ink:         #16150F;
+    --ink-2:       #4A4740;
+    --ink-3:       #7C776C;
+    --rule:        #D6D2C8;
+    --accent:      #F0572E;
+    --accent-soft: #FBE4DB;
+
+    --hue-body:      #0E8C87;
+    --hue-activity:  #C99512;
+    --hue-recovery:  #3B7FEE;
+    --hue-nutrition: #7D5CEA;
+    --hue-money:     #2E9E5B;
+    --hue-habits:    #F0572E;
+    --hue-today:     #F0572E;
+    --hue-health:    #0E8C87;
+    --hue-session:   #C99512;
+    --hue-watch:     #3B7FEE;
+    --hue-library:   #7D5CEA;
+    --hue-notes:     #B8681A;
+    --hue-life:      #9C3D8F;
+    --hue-coach:     #5B6B8C;
+    --hue-social:    #D6437A;
+
+    --ok:      #2E7D52;
+    --warn:    #B27A08;
+    --danger:  #C2412A;
+
+    --display: 'Roboto', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --body:    'Roboto', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mono:    'Roboto Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 68ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #12110E;
+      --surface:     #1A1915;
+      --surface-2:   #24221D;
+      --ink:         #F2F0EA;
+      --ink-2:       #B8B3A8;
+      --ink-3:       #857F73;
+      --rule:        #33302A;
+      --accent:      #FF7551;
+      --accent-soft: #3A231A;
+
+      --hue-body:      #2CC0B8;
+      --hue-activity:  #E9B740;
+      --hue-recovery:  #6BA5FF;
+      --hue-nutrition: #A98CFF;
+      --hue-money:     #4FC77E;
+      --hue-habits:    #FF7551;
+    --hue-today:     #FF7551;
+    --hue-health:    #2CC0B8;
+    --hue-session:   #E9B740;
+    --hue-watch:     #6BA5FF;
+    --hue-library:   #A98CFF;
+    --hue-notes:     #E09A4E;
+    --hue-life:      #D57AC7;
+    --hue-coach:     #93A3C4;
+    --hue-social:    #FF7FA9;
+
+      --ok:     #5FC98D;
+      --warn:   #E0B14A;
+      --danger: #FF7A62;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #12110E;
+    --surface:     #1A1915;
+    --surface-2:   #24221D;
+    --ink:         #F2F0EA;
+    --ink-2:       #B8B3A8;
+    --ink-3:       #857F73;
+    --rule:        #33302A;
+    --accent:      #FF7551;
+    --accent-soft: #3A231A;
+
+    --hue-body:      #2CC0B8;
+    --hue-activity:  #E9B740;
+    --hue-recovery:  #6BA5FF;
+    --hue-nutrition: #A98CFF;
+    --hue-money:     #4FC77E;
+    --hue-habits:    #FF7551;
+    --hue-today:     #FF7551;
+    --hue-health:    #2CC0B8;
+    --hue-session:   #E9B740;
+    --hue-watch:     #6BA5FF;
+    --hue-library:   #A98CFF;
+    --hue-notes:     #E09A4E;
+    --hue-life:      #D57AC7;
+    --hue-coach:     #93A3C4;
+    --hue-social:    #FF7FA9;
+
+    --ok:     #5FC98D;
+    --warn:   #E0B14A;
+    --danger: #FF7A62;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 40px 140px;
+  }
+
+  /* ---------- Title page ---------- */
+
+  .cover { border-bottom: 1px solid var(--rule); padding-bottom: 40px; margin-bottom: 56px; }
+
+  .dotrow { display: flex; gap: 6px; margin-bottom: 34px; }
+  .dotrow span { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2); }
+  .dotrow span.on  { background: var(--ink); }
+  .dotrow span.now { background: var(--accent); }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(40px, 6vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  .cover-sub {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 26px;
+  }
+
+  .standfirst {
+    font-size: 18px;
+    color: var(--ink-2);
+    max-width: var(--measure);
+    margin: 0 0 30px;
+  }
+
+  .cover-author {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 34px;
+  }
+  .cover-author span { color: var(--ink-3); font-weight: 400; }
+  .cover-foot { border-top: 1px solid var(--rule); padding-top: 18px; }
+  /* ---------- Part dividers ---------- */
+  .part { margin: 96px 0 0; padding-top: 24px; border-top: 2px solid var(--ink); }
+  .part-kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 8px;
+  }
+  .part h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 14px; display: block; }
+  .part p { color: var(--ink-2); max-width: var(--measure); font-size: 17px; }
+  .part ul { color: var(--ink-2); }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 26px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ---------- Contents ---------- */
+
+  .contents { border-bottom: 1px solid var(--rule); padding-bottom: 40px; margin-bottom: 20px; }
+
+  .contents h2 {
+    font-family: var(--display);
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    border: none;
+    padding: 0;
+    margin: 0 0 6px;
+  }
+
+  .contents-note { color: var(--ink-3); font-size: 13px; margin: 0 0 26px; max-width: var(--measure); }
+
+  .toc ol { list-style: none; margin: 0; padding: 0; }
+  .toc > ol { columns: 2; column-gap: 40px; font-size: 13.5px; }
+  .toc-part {
+    break-inside: avoid;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 10px 0 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--rule);
+  }
+  .toc-part:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .toc-chap { break-inside: avoid; margin: 0 0 14px; }
+  .toc-chap > a { font-weight: 650; color: var(--ink); }
+  .toc-sec { padding-left: 30px; }
+
+  .toc a {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    text-decoration: none;
+    color: var(--ink-2);
+    line-height: 1.45;
+  }
+  .toc a:hover .toc-title { color: var(--accent); }
+  .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .toc-num   { flex: 0 0 auto; width: 2.6em; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+  .toc-chap > a .toc-num { color: var(--accent); }
+  .toc-title { flex: 0 1 auto; }
+  .toc-dots  { flex: 1 1 auto; min-width: 10px; border-bottom: 1px dotted var(--rule); transform: translateY(-4px); }
+  .toc-page  { flex: 0 0 auto; width: 2.4em; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+
+  /* ---------- Chapters ---------- */
+
+  .chapter { padding-top: 4px; }
+
+  .chapter-kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 76px 0 0;
+    padding-top: 18px;
+    border-top: 2px solid var(--accent);
+  }
+  .chapter[data-hue] .chapter-kicker { color: var(--hue); border-top-color: var(--hue); }
+
+  h2 {
+    font-family: var(--display);
+    font-size: 32px;
+    letter-spacing: -0.028em;
+    font-weight: 700;
+    margin: 10px 0 8px;
+    text-wrap: balance;
+    display: flex;
+    gap: 14px;
+  }
+  h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .chapter[data-hue] h2 .num { color: var(--hue); }
+
+  h3 {
+    font-family: var(--display);
+    font-size: 20px;
+    letter-spacing: -0.015em;
+    font-weight: 650;
+    margin: 44px 0 10px;
+    text-wrap: balance;
+    display: flex;
+    gap: 12px;
+  }
+  h3 .num { color: var(--ink-3); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-3);
+    font-weight: 700;
+    margin: 30px 0 8px;
+  }
+
+  .chapter[data-hue="body"]      { --hue: var(--hue-body); }
+  .chapter[data-hue="activity"]  { --hue: var(--hue-activity); }
+  .chapter[data-hue="recovery"]  { --hue: var(--hue-recovery); }
+  .chapter[data-hue="nutrition"] { --hue: var(--hue-nutrition); }
+  .chapter[data-hue="money"]     { --hue: var(--hue-money); }
+  .chapter[data-hue="habits"]    { --hue: var(--hue-habits); }
+  .chapter[data-hue="today"]     { --hue: var(--hue-today); }
+  .chapter[data-hue="health"]    { --hue: var(--hue-health); }
+  .chapter[data-hue="session"]   { --hue: var(--hue-session); }
+  .chapter[data-hue="watch"]     { --hue: var(--hue-watch); }
+  .chapter[data-hue="library"]   { --hue: var(--hue-library); }
+  .chapter[data-hue="notes"]     { --hue: var(--hue-notes); }
+  .chapter[data-hue="life"]      { --hue: var(--hue-life); }
+  .chapter[data-hue="coach"]     { --hue: var(--hue-coach); }
+  .chapter[data-hue="social"]    { --hue: var(--hue-social); }
+
+  p, ul, ol { max-width: var(--measure); }
+  p { margin: 0 0 16px; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--ink-3); }
+
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  strong { font-weight: 650; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.87em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 0 0 20px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  pre.tree { line-height: 1.5; }
+
+  /* ---------- Module-hue rails ---------- */
+
+  .rail { border-left: 3px solid var(--hue, var(--rule)); padding-left: 20px; margin: 34px 0; }
+  .rail[data-hue="body"]      { --hue: var(--hue-body); }
+  .rail[data-hue="activity"]  { --hue: var(--hue-activity); }
+  .rail[data-hue="recovery"]  { --hue: var(--hue-recovery); }
+  .rail[data-hue="nutrition"] { --hue: var(--hue-nutrition); }
+  .rail[data-hue="money"]     { --hue: var(--hue-money); }
+  .rail[data-hue="habits"]    { --hue: var(--hue-habits); }
+  .rail[data-hue="today"]     { --hue: var(--hue-today); }
+  .rail[data-hue="health"]    { --hue: var(--hue-health); }
+  .rail[data-hue="session"]   { --hue: var(--hue-session); }
+  .rail[data-hue="watch"]     { --hue: var(--hue-watch); }
+  .rail[data-hue="library"]   { --hue: var(--hue-library); }
+  .rail[data-hue="notes"]     { --hue: var(--hue-notes); }
+  .rail[data-hue="life"]      { --hue: var(--hue-life); }
+  .rail[data-hue="coach"]     { --hue: var(--hue-coach); }
+  .rail[data-hue="social"]    { --hue: var(--hue-social); }
+  .rail > h3:first-child, .rail > h4:first-child { margin-top: 0; }
+
+  /* ---------- PR/FAQ blocks ---------- */
+
+  .prfaq {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 24px 26px;
+    margin: 24px 0;
+  }
+  .prfaq-kicker {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  .prfaq .release {
+    font-size: 17px;
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: 16px;
+    margin: 0 0 22px;
+    max-width: var(--measure);
+  }
+  .faq-q { font-weight: 650; margin: 18px 0 4px; max-width: var(--measure); }
+  .faq-a { color: var(--ink-2); margin: 0; max-width: var(--measure); }
+
+  /* ---------- Study notes ---------- */
+  .study { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 22px 26px; margin: 28px 0; }
+  .study h4 { margin-top: 0; }
+  .study ol, .study ul { margin-bottom: 8px; }
+  .study .q { font-weight: 650; margin: 12px 0 2px; }
+  .study .a { color: var(--ink-2); margin: 0 0 6px; }
+  /* ---------- Tables ---------- */
+
+  .tablewrap { overflow-x: auto; margin: 0 0 22px; border: 1px solid var(--rule); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    font-weight: 700;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  td code { font-size: 12px; }
+  .num-cell { font-variant-numeric: tabular-nums; }
+
+  /* ---------- Callouts ---------- */
+
+  .note {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 0 0 22px;
+    max-width: var(--measure);
+    font-size: 14.5px;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+  }
+  .note b { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .note.blocked  { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+  .note.blocked b { color: var(--danger); }
+  .note.caution  { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+  .note.caution b { color: var(--warn); }
+  .note.good     { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 9%, var(--surface)); }
+  .note.good b { color: var(--ok); }
+
+  /* ---------- Figures / diagrams ---------- */
+
+  figure { margin: 30px 0; max-width: 100%; }
+  figure svg { max-width: 100%; height: auto; display: block; color: var(--ink); }
+  figcaption { font-size: 13px; color: var(--ink-3); margin-top: 12px; max-width: var(--measure); }
+
+  .diagram .box { fill: var(--surface); stroke: currentColor; stroke-width: 1.25; }
+  .diagram .box-alt { fill: var(--surface-2); stroke: currentColor; stroke-width: 1.25; }
+  .diagram .box-hot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .diagram .lbl { fill: currentColor; font-family: var(--body); font-size: 12px; }
+  .diagram .lbl-sm { fill: var(--ink-3); font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .diagram .lbl-hot { fill: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; }
+  .diagram .flow { stroke: currentColor; stroke-width: 1.25; fill: none; }
+  .diagram .flow-hot { stroke: var(--accent); stroke-width: 1.75; fill: none; }
+  .diagram .flow-dash { stroke: var(--ink-3); stroke-width: 1.25; fill: none; stroke-dasharray: 5 4; }
+  .diagram .wall { stroke: var(--danger); stroke-width: 2; stroke-dasharray: 7 5; }
+  .diagram .head { fill: currentColor; }
+  .diagram .head-hot { fill: var(--accent); }
+
+  /* ---------- Misc ---------- */
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--ink-3);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+    vertical-align: 2px;
+  }
+
+  .lede { font-size: 17px; color: var(--ink-2); max-width: var(--measure); margin: 0 0 24px; }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 44px 0; }
+
+  .colophon { color: var(--ink-3); font-size: 14px; }
+
+  @media (max-width: 720px) {
+    .page { padding: 32px 22px 100px; }
+    .toc > ol { columns: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+
+  @media print {
+    /* Force the light palette regardless of the rendering machine's theme. */
+    :root {
+      --ground: #FFFFFF; --surface: #FBFAF7; --surface-2: #F0EDE6;
+      --ink: #16150F; --ink-2: #46433C; --ink-3: #6E6960; --rule: #CFCABF;
+      --accent: #D8431C;
+      --hue-body: #0E7C78; --hue-activity: #A87C0C; --hue-recovery: #2E68D8;
+      --hue-nutrition: #6B4CD6; --hue-money: #24824A; --hue-habits: #D8431C;
+      --hue-today: #D8431C; --hue-health: #0E7C78; --hue-session: #A87C0C; --hue-watch: #2E68D8;
+      --hue-library: #6B4CD6; --hue-notes: #9E5612; --hue-life: #86307A; --hue-coach: #4B5B7C; --hue-social: #BF2F66;
+      color-scheme: light;
+    }
+
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    body { background: #fff; font-size: 10.5pt; line-height: 1.5; }
+    .page { max-width: none; padding: 0; }
+
+    /* Page 1: title page. Page 2: contents. Chapters start on page 3. */
+    .cover {
+      break-after: page;
+      min-height: 248mm;
+      display: flex;
+      flex-direction: column;
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+    .cover h1 { font-size: 34pt; margin-top: 46mm; }
+    .cover-foot { margin-top: auto; }
+
+    /* The contents run to a few pages; every chapter still starts on a fresh page after them. */
+    .contents { break-after: page; border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+    .part { break-before: page; border-top: none; margin-top: 0; padding-top: 60mm; min-height: 200mm; }
+    .part h2 { font-size: 30pt; }
+    .toc-part { break-after: avoid; }
+    .study { break-inside: avoid; }
+    .contents h2 { font-size: 16pt; margin-bottom: 3px; }
+    .contents-note { font-size: 8.4pt; margin-bottom: 12px; }
+    .toc > ol { columns: 2; column-gap: 8mm; font-size: 7.9pt; }
+    .toc-chap { margin-bottom: 4px; }
+    .toc a { line-height: 1.28; gap: 5px; }
+    .toc-dots { transform: translateY(-2.5px); }
+    .toc-sec { padding-left: 22px; }
+
+    .chapter-kicker { break-before: page; margin-top: 0; padding-top: 0; }
+    .chapter { break-before: page; }
+    h2 { font-size: 19pt; break-after: avoid; }
+    h3 { font-size: 13pt; break-after: avoid; margin-top: 26px; }
+    h4 { break-after: avoid; }
+
+    p, ul, ol, .lede, .standfirst, .faq-a, .faq-q, figcaption, .note { max-width: none; }
+
+    .tablewrap, figure, .prfaq, .note, pre { break-inside: avoid; }
+    /* Directory trees are long enough that keeping them whole strands half a page.
+       They break, with a few lines held together at each end. */
+    pre.tree { break-inside: auto; orphans: 4; widows: 4; }
+    table { font-size: 9pt; }
+    th, td { padding: 6px 9px; }
+    pre { font-size: 8.6pt; }
+
+    a { color: var(--ink); text-decoration: none; }
+    .toc a { color: var(--ink-2); }
+  }

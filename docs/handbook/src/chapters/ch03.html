@@ -1,0 +1,389 @@
+<section class="chapter" id="ch3">
+<p class="chapter-kicker">Chapter three</p>
+<h2><span class="num">3</span><span>Design system</span></h2>
+
+<p class="lede">
+  Sixteen feature folders have to read as one app. That happens because they share a small set of
+  primitives and differ by exactly one variable, the module hue, rather than because each screen
+  was designed carefully on its own. This chapter is the inventory of those primitives and the three
+  scales they are built on: colour, type and space.
+</p>
+
+<p>
+  Everything here lives in <code>LifeOSKit/Sources/DesignSystem</code>, a target with no
+  dependencies that also builds for macOS. That second fact shapes more of the code than it looks:
+  it is why colours are explicit light and dark pairs rather than UIKit dynamic colours, why the
+  width class is the package's own enum rather than <code>UserInterfaceSizeClass</code>, and why
+  the six-box code field keeps its keyboard configuration behind an <code>#if os(iOS)</code>. The
+  price is a few lines per component; the return is <code>swift test</code> running from a terminal
+  in seconds with no simulator.
+</p>
+
+<h3 id="s3-1"><span class="num">3.1</span><span>Principle</span></h3>
+
+<p>
+  <strong>The hub is neutral; the domains are tinted.</strong> Today is a warm off-white canvas.
+  Every domain screen is the same canvas with a whisper of its hue washed in across the top 260
+  points. This is a change from the first edition, where domain screens were saturated-at-top
+  gradients: the restyle kept the hue as a tint rather than a paint job, so cards became solid white
+  with one soft shadow instead of frosted glass fighting a gradient. The two visual languages
+  resolved into one hierarchy, and adding a module is still a token, not a design exercise.
+</p>
+
+<p>
+  Three rules hold the whole thing together. The accent never varies by module and has exactly two
+  meanings: today, and act. Numerals are the rounded face and words never are. And a missing value
+  is a dash, drawn by the component, never by the screen.
+</p>
+
+<h3 id="s3-2"><span class="num">3.2</span><span>Colour tokens</span></h3>
+
+<pre><code>// LifeOSKit/Sources/DesignSystem/Tokens.swift
+public enum ModuleHue: String, CaseIterable, Sendable {
+    case body, activity, recovery, nutrition, money, habits
+
+    public var top: Color { ... }        // saturated; survives only as chart and accent ink
+    public var pastel: Color { ... }     // carries the module identity on the light canvas
+    public var pastelDark: Color { ... } // the muted counterpart for dark mode
+}
+
+public enum LifeOSTokens {
+    /// The single accent. Means "today" and "act". Identical in both schemes.
+    public static let accent = Color(red: 0.94, green: 0.34, blue: 0.18)
+
+    /// Live session push states, on the live gradient, the same in both schemes.
+    public static let pushEasy = Color(red: 0.20, green: 0.72, blue: 0.45)
+    public static let pushNear = Color(red: 0.96, green: 0.65, blue: 0.14)
+    public static let pushOver = Color(red: 0.90, green: 0.27, blue: 0.23)
+
+    public static let liveGradientTop = ModuleHue.recovery.top
+    public static let liveGradientBottom = Color(white: 0.97)
+
+    public static let canvas = AdaptiveColor(light: Color(red: 0.949, green: 0.945, blue: 0.933),
+                                             dark: Color(white: 0.07))
+    public static let cardSurface = AdaptiveColor(light: .white, dark: Color(white: 0.13))
+    ...
+}</code></pre>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Token</th><th>Value</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>ModuleHue.body</code></td><td>Teal</td><td>Weight, composition, the Health hub</td></tr>
+<tr><td><code>ModuleHue.activity</code></td><td>Amber</td><td>Movement, the workout library</td></tr>
+<tr><td><code>ModuleHue.recovery</code></td><td>Blue</td><td>Whoop, HRV, sleep; also the live session gradient</td></tr>
+<tr><td><code>ModuleHue.nutrition</code></td><td>Purple</td><td>Declared; no screen owns it yet</td></tr>
+<tr><td><code>ModuleHue.money</code></td><td>Green</td><td>The Money tab and its charts</td></tr>
+<tr><td><code>ModuleHue.habits</code></td><td>Orange</td><td>Habit strips, the heart-rate stat group</td></tr>
+<tr><td><code>LifeOSTokens.accent</code></td><td>Orange, fixed</td><td>Today, the selected tab, the prominent action, the code field's focus ring</td></tr>
+<tr><td><code>pushEasy</code> / <code>pushNear</code> / <code>pushOver</code></td><td>Green, amber, red</td><td>How hard the live session is pushing against the day's capacity</td></tr>
+<tr><td><code>canvas</code> / <code>cardSurface</code> / <code>tileSurface</code></td><td>Off-white and white; near-black and dark grey</td><td>The three surfaces. Tiles are solid because translucent white over a near-white canvas is invisible</td></tr>
+<tr><td><code>dotMissed</code> / <code>dotFuture</code> / <code>dotPadding</code> / <code>dotOutline</code></td><td>Greys</td><td>The month grid's four non-day states; padding is faint rather than invisible so the month reads as one block</td></tr>
+<tr><td><code>alertBackground</code> / <code>alertText</code></td><td>Soft red, deep red</td><td>The anomaly banner; red enough to interrupt, soft enough to live on cream</td></tr>
+<tr><td><code>fabFill</code> / <code>fabGlyph</code></td><td>Ink on white, white on ink</td><td>Never the same luminance; a white plus on the ink token vanishes the moment the scheme flips</td></tr>
+<tr><td><code>cardShadow</code></td><td>6% black, light mode only</td><td>Dark mode separates surfaces by tone; a black shadow on a black canvas is invisible cost</td></tr>
+</tbody></table></div>
+
+<p>
+  Colours are <code>AdaptiveColor</code> pairs, resolved explicitly by the consuming view with
+  <code>token.resolve(scheme)</code>. It is one more line per use than a dynamic colour, and it is
+  the line that makes <code>TokensTests</code> possible: <code>alertColorsDifferByScheme</code> and
+  <code>fabFillAndGlyphStayOppositeInBothSchemes</code> read both halves of a pair and compare them,
+  which a UIKit dynamic colour would not let a terminal test do.
+</p>
+
+<h3 id="s3-3"><span class="num">3.3</span><span>One type scale</span></h3>
+
+<p>
+  Before <code>Typography.swift</code> existed there were 376 hand-written <code>.system(size:weight:)</code>
+  calls across 28 distinct sizes between 9 and 104, and three of those sizes accounted for 178 of
+  them. Nobody chose that; it is what happens when every screen picks its own number, and the drift
+  is invisible until two screens sit side by side. The scale has nine text steps and three numeral
+  steps, fewer than the app had, on purpose: a scale only does its job if the steps are far enough
+  apart that picking the wrong one is obvious.
+</p>
+
+<pre><code>// LifeOSKit/Sources/DesignSystem/Typography.swift
+public enum LifeOSType {
+    public static let eyebrow      = Font.system(size: 11, weight: .semibold)   // tracked uppercase markers
+    public static let caption      = Font.system(size: 12, weight: .regular)
+    public static let label        = Font.system(size: 13, weight: .medium)     // dense rows, chips
+    public static let secondary    = Font.system(size: 15, weight: .regular)
+    public static let rowTitle     = Font.system(size: 15, weight: .semibold)
+    public static let body         = Font.system(size: 17, weight: .regular)    // reading text
+    public static let sectionTitle = Font.system(size: 20, weight: .semibold)
+    public static let screenTitle  = Font.system(size: 24, weight: .bold)
+    public static let display      = Font.system(size: 34, weight: .bold)       // one per screen at most
+
+    /// The date on the hub, and nothing else. Its tracking travels with it.
+    public static let masthead = Font.system(size: 104, weight: .bold)
+    public static let mastheadTracking: CGFloat = -5
+
+    public static let numeral      = Font.system(size: 28, weight: .bold, design: .rounded)
+    public static let numeralLarge = Font.system(size: 44, weight: .bold, design: .rounded)
+    /// The only place a size may be passed in. Hero numerals size to their space.
+    public static func numeral(_ size: CGFloat, weight: Font.Weight = .bold) -&gt; Font
+}</code></pre>
+
+<p>
+  Two families, each with exactly one job. <strong>Text is the system sans, always.</strong>
+  <strong>Numerals are rounded, and only numerals.</strong> Rounded digits are easier to read at a
+  glance, which is why the money screen reached for the face in the first place, and a rounded label
+  next to a sans label is the drift the scale exists to stop. A serif was briefly the notes tab's
+  title face and is deliberately gone: it looked right on that one screen and wrong beside every
+  other.
+</p>
+
+<p>
+  The masthead is the one step outside the pattern and the reason it exists is instructive. The
+  hub's date was flattened into <code>display</code> to fit the scale, which took it from 104 to 34
+  points and turned the masthead the whole screen is built around into an ordinary heading. A scale
+  that cannot express the biggest thing in the app is missing a step rather than being violated by
+  one, so the step was added, with its negative tracking attached, because a caller who took the
+  font without the tracking would get a subtly wrong masthead.
+</p>
+
+<p>
+  Two companions keep the scale from being bypassed. <code>LifeOSType.UIKitScale</code> restates the
+  same sizes as <code>UIFont</code> for the note editor's text view, so changing a step changes both.
+  <code>LifeOSTextRole</code> and the <code>.lifeOSText(_:)</code> modifier give the same steps Dynamic
+  Type behaviour through <code>@ScaledMetric</code>, so screens can adopt accessibility sizes one at
+  a time without touching the masthead or the numerals.
+</p>
+
+<h3 id="s3-4"><span class="num">3.4</span><span>Space, radius and the glass panel</span></h3>
+
+<pre><code>// LifeOSKit/Sources/DesignSystem/Space.swift
+public enum Space {
+    public static let half: CGFloat = 4     // the only sub-grid value, for optical nudges inside a control
+    public static let x1: CGFloat = 8
+    public static let x2: CGFloat = 16
+    public static let x3: CGFloat = 24
+    public static let x4: CGFloat = 32
+    public static let x5: CGFloat = 40
+    public static let x6: CGFloat = 48
+    public static let x8: CGFloat = 64
+    public static let x10: CGFloat = 80
+}
+
+public enum Radius {
+    public static let small: CGFloat = 12
+    public static let medium: CGFloat = 20
+    public static let large: CGFloat = 28
+    public static let pill: CGFloat = 999
+}</code></pre>
+
+<p>
+  Named by multiples rather than by role, because roles drift (someone always needs a
+  "medium-large") while multiples cannot. Radii sit on the same grid so cards nest without optical
+  drift. The same file holds <code>GlassPanel</code>, <code>PrimaryButton</code> and
+  <code>SecondaryButton</code>. <code>GlassPanel</code> is where the app takes Liquid Glass from the
+  system rather than imitating it with a material: one <code>.glassEffect(.regular, in:)</code>, so
+  every frosted panel in the app gets real refraction and highlights from one place, and the
+  notes drawer, the profile's frosted panel over the photo and the coach's canvas all read as the
+  same surface.
+</p>
+
+<h3 id="s3-5"><span class="num">3.5</span><span>Layout metrics: phone and iPad</span></h3>
+
+<p>
+  Every number that varies with width lives in <code>LayoutMetrics</code>, for the same reason
+  <code>Space</code> exists. The app distinguishes exactly two widths and maps the platform's size
+  class onto them once, in <code>RootView</code>, so the package never imports UIKit's enum.
+</p>
+
+<pre><code>// LifeOSKit/Sources/DesignSystem/LayoutMetrics.swift
+public static func metrics(for width: LayoutWidth) -&gt; LayoutMetrics {
+    switch width {
+    case .compact:
+        LayoutMetrics(gutter: 20, sectionSpacing: 22,
+                      maxContentWidth: .infinity, heroScale: 1.0,
+                      fabBottomInset: 72, contentBottomInset: 130,
+                      railInset: 0,
+                      statColumns: 2, tileColumns: 3, isRegular: false)
+    case .regular:
+        LayoutMetrics(gutter: 32, sectionSpacing: 30,
+                      maxContentWidth: 1060, heroScale: 1.3,
+                      fabBottomInset: 28, contentBottomInset: 32,
+                      railInset: 112,
+                      statColumns: 4, tileColumns: 6, isRegular: true)
+    }
+}</code></pre>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Metric</th><th>Compact</th><th>Regular</th><th>Why the regular value</th></tr></thead>
+<tbody>
+<tr><td><code>maxContentWidth</code></td><td class="num-cell">unbounded</td><td class="num-cell">1060</td><td>Above a portrait iPad's 1024, on purpose: portrait is already one comfortable column and capping it bought only dead margin. The cap is for landscape and wide Stage Manager panes.</td></tr>
+<tr><td><code>contentBottomInset</code></td><td class="num-cell">130</td><td class="num-cell">32</td><td>Compact clears the floating pill bar, which overlaps the scroll view. Regular has a side rail instead, and the old inset left a band of dead space.</td></tr>
+<tr><td><code>railInset</code></td><td class="num-cell">0</td><td class="num-cell">112</td><td>The rail's real footprint is its 32 gutter plus its 64 width. At 80 every regular screen had its leading edge tucked under the rail; the Notes sidebar showed it plainly. The extra beyond 96 is the rail's shadow.</td></tr>
+<tr><td><code>statColumns</code> / <code>tileColumns</code></td><td class="num-cell">2 / 3</td><td class="num-cell">4 / 6</td><td>Derived rather than measured: <code>GridItem(.adaptive)</code> cannot cap the count, and a 1366-point pane would take eight tiles across.</td></tr>
+</tbody></table></div>
+
+<p>
+  <code>railInset</code> is stated as a number the screens apply rather than as a safe area inset,
+  because a safe area does not survive the trip through a <code>NavigationStack</code> into a
+  <code>ScrollView</code> whose background ignores it; the rail ended up drawn over the first column
+  of the month. <code>LayoutMetricsTests</code> pin every relationship in the table:
+  <code>onlyRegularWidthPaysForTheRailOnTheLeadingEdge</code>,
+  <code>theContentCapOnlyBitesWiderThanAPortraitIPad</code>, and a guard that every metric is
+  positive.
+</p>
+
+<h3 id="s3-6"><span class="num">3.6</span><span>Component inventory</span></h3>
+
+<p>
+  Thirty-four files. Each is stateless apart from animation phase, takes value types, and knows
+  nothing about the app's models. The inventory is grouped by what the component is for.
+</p>
+
+<h4>Canvas and cards</h4>
+<div class="tablewrap"><table>
+<thead><tr><th>Primitive</th><th>What it is</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>GradientCanvas(hue:)</code></td><td>The one canvas: neutral ground with the hue's pastel washed in over the top 260 points</td><td>Adding a module is a hue token</td></tr>
+<tr><td><code>SoftCard</code></td><td>The one card: white, 24-point continuous corners, one soft shadow in light mode, a tonal step in dark</td><td>The shadow is an offscreen pass; never the cell of a long repeated list</td></tr>
+<tr><td><code>PastelFillCard</code></td><td>Pastel fill, white icon bubble, quiet label, huge dark number; takes a <code>SplitNumeral</code> too</td><td>Nil renders a dash, never a zero</td></tr>
+<tr><td><code>IconBubbleTile</code></td><td>White card, pastel icon chip, big number</td><td>The Fitness look; distinct from the pastel-fill card</td></tr>
+<tr><td><code>MetricTile</code></td><td>Small solid tile for a repeated row: label above value</td><td>Deliberately not a <code>SoftCard</code>, for the shadow reason</td></tr>
+<tr><td><code>TrendStatTile</code></td><td>An <code>IconBubbleTile</code> with the week behind it as a <code>RoundedBarChart</code></td><td>A step count alone says nothing about whether it was a good day</td></tr>
+<tr><td><code>GlassPanel</code></td><td>Content on Liquid Glass with a hairline edge</td><td>Without the edge the panel dissolves into a light gradient</td></tr>
+<tr><td><code>InsightCallout</code></td><td>What LIFO said, drawn as a dashed card rather than a chat bubble</td><td>Dashed reads as generated, not stored; shared with the nudge</td></tr>
+<tr><td><code>AlertBanner</code></td><td>The red interruption: facts only, never advice</td><td>No anomalies is silence, not an empty red frame</td></tr>
+</tbody></table></div>
+
+<h4>Numbers and charts</h4>
+<div class="tablewrap"><table>
+<thead><tr><th>Primitive</th><th>What it is</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>HeroNumeral</code> / <code>HeroEmptyState</code></td><td>An 84-point rounded numeral with its unit and label; the empty state shown in its place</td><td>A numeral is never shown without its unit</td></tr>
+<tr><td><code>SplitNumeral</code></td><td>A hero figure and a quieter remainder, the way "120 / 80" is set; <code>.sleep(minutes:)</code> makes hours the hero</td><td>Pure struct, tested</td></tr>
+<tr><td><code>TrendSeries</code> / <code>TrendPoint</code></td><td>A metric over a window of days with the baseline a single reading needs; <code>value</code> is optional so a gap stays a gap to the chart</td><td>Every derived figure ignores gaps rather than counting them</td></tr>
+<tr><td><code>RoundedBarChart</code></td><td>Full-height soft track per day with a solid rounded bar; baseline is zero or the window's minimum</td><td>Weight against zero makes seven indistinguishable bars</td></tr>
+<tr><td><code>SleepComposition</code></td><td>One night in stages, deepest at the bottom, fixed order</td><td>A five-hour night and a fragmented seven look identical on a duration chart</td></tr>
+<tr><td><code>RecoveryBand</code></td><td>Whoop's own thresholds: below 34, 34 to 66, 67 and above</td><td>The colour is the point; 31% and 81% read alike as text</td></tr>
+</tbody></table></div>
+
+<h4>Calendar vocabulary</h4>
+<div class="tablewrap"><table>
+<thead><tr><th>Primitive</th><th>What it is</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>DotGrid</code> / <code>DotCell</code> / <code>DotState</code></td><td>The shared vocabulary of the whole app: filled is target met, hollow is missed, orange is today, grey is future, faint outline is no data, and <code>blank</code> is padding</td><td>Columns built once in <code>init</code>; padding cells hidden from VoiceOver</td></tr>
+<tr><td><code>MonthGridLayout</code></td><td>Pure calendar maths producing the cells, and <code>stepping(from:by:day:)</code> which keeps the requested day so walking a year forward from the 31st does not arrive at the 28th</td><td>Fully tested against a fixed UTC calendar</td></tr>
+<tr><td><code>MonthCalendarView</code> / <code>WeekdayHeader</code></td><td>The assembled month with narrow weekday letters rotated to the calendar's first weekday</td><td>Takes cells and a date, no data access</td></tr>
+<tr><td><code>WeekStrip</code></td><td>Seven days across the top of a domain screen with an optional progress ring per day</td><td>Selection is a binding; the view model decides what it means</td></tr>
+</tbody></table></div>
+
+<h4>Navigation and controls</h4>
+<div class="tablewrap"><table>
+<thead><tr><th>Primitive</th><th>What it is</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>PillNavBar</code> / <code>PillNavItem</code></td><td>A floating capsule of 52-point circular buttons; horizontal along a phone's bottom, vertical as an iPad rail</td><td>One component in two orientations; splitting them is how they drift</td></tr>
+<tr><td><code>ActionFan</code> / <code>QuickAction</code></td><td>The three actions as a flat row in a navigation bar, or a fan that arcs out of a corner</td><td>Fan radius 106 is set by geometry: under 76 two circles pass through each other</td></tr>
+<tr><td><code>QuickActionsToolbar</code></td><td>The environment value and modifier that puts the injected actions in a screen's bar</td><td>Placement is <code>.primaryAction</code> because macOS has no top bar to name</td></tr>
+<tr><td><code>SegmentedPills</code></td><td>A two-or-more way switch with a sliding capsule</td><td>Replaced the last piece of stock iOS chrome on the sign-in screen</td></tr>
+<tr><td><code>UnderlinePicker</code></td><td>Text tabs with an underline; collapses to a menu at accessibility sizes</td><td>The Health hub's Health and Fitness switch</td></tr>
+<tr><td><code>CodeField</code> / <code>CodeDigits</code></td><td>Six boxes over one real hidden text field, so autofill and paste keep working</td><td>The digit logic is a free function so a test never touches a view</td></tr>
+<tr><td><code>InlineStatus</code> / <code>InlineStatusView</code></td><td>The one thing a screen is complaining about, resolved by precedence</td><td>Three stacked coloured lines read as a broken app</td></tr>
+<tr><td><code>FocusableField</code>, <code>.shake(_:)</code></td><td>The text-field look with a focus ring; a decaying horizontal shake for a wrong code</td><td></td></tr>
+<tr><td><code>PrimaryButton</code> / <code>SecondaryButton</code></td><td>The one solid full-width action and its quiet companion</td><td>52 points tall</td></tr>
+<tr><td><code>ColorSchemePreference</code></td><td>System, light or dark; <code>system</code> is nil so SwiftUI keeps following the device</td><td>Stored per device, not per account</td></tr>
+</tbody></table></div>
+
+<h3 id="s3-7"><span class="num">3.7</span><span>Motion pieces</span></h3>
+
+<p>
+  Four components animate, and each earns it by being made of the app's own vocabulary rather than
+  decoration dropped on top.
+</p>
+
+<ul>
+  <li><strong><code>DotBloom</code></strong> is the onboarding animation: a month of dots filling in one by one with a spring per column. The first thing a new person sees is the grid they will read every morning, so the animation teaches the interface instead of entertaining. It respects reduce motion.</li>
+  <li><strong><code>ScanlineCat</code></strong> is the intro's greeting, a cat drawn as horizontal scanlines or as dots on the grid's own pitch. All geometry is in <code>ScanlineCatSilhouette</code> (three primitives: ellipse, rect, triangle, in a unit box) and <code>ScanlineSlicer</code> (which cuts shapes into merged x-spans at a given y, in closed form, so slicing costs no rasterisation). Both are pure and tested; <code>ScanlineSlicerTests</code> is the largest suite in <code>DesignSystemTests</code> at 443 lines. The view only decides colour, timing and how the cat assembles on appear: rows drift in from the side they are nearest, the face goes on last and solid because a striped eye cannot read as an eye.</li>
+  <li><strong><code>GlassGlobe</code></strong> is the coach's orb: a Siri-like glass slime, clear and silver, morphing on a <code>TimelineView</code> at 30 frames per second. Audio <code>intensity</code> makes it breathe. Hue is kept out of it; the colour is the light on glass.</li>
+  <li><strong><code>SlateAurora</code></strong> is the coach's backdrop, a three-by-three <code>MeshGradient</code> from onyx through blue slate to an alabaster bloom. Fixed rather than scheme-resolved, because the coach is an immersive dark surface in both appearances.</li>
+</ul>
+
+<h4>The live gradient and push-state tints</h4>
+<p>
+  A running session paints the recovery blue from the top to near white at the bottom, on the
+  in-session hero, the lock screen Live Activity and the Dynamic Island alike, so the numbers read
+  as the same data wherever they appear. On that gradient the three push colours say how hard the
+  session is pushing against the day's capacity: green is easy going, amber is near the ceiling,
+  red is over it. They are the same in both schemes because the gradient is. <a href="#ch8">Chapter 8</a>
+  has the maths that picks one.
+</p>
+
+<h3 id="s3-8"><span class="num">3.8</span><span>Dark mode</span></h3>
+
+<p>
+  Every hue has a dark variant, deep top and near-black bottom, and every surface token has both
+  halves. These were defined before any screen existed, because retrofitting a gradient system to
+  dark mode later is significantly harder than doing it once at the start, and the restyle to a
+  light canvas proved the point: the dark tokens changed values but no screen had to learn that
+  dark mode exists.
+</p>
+
+<div class="note"><b>No colour is defined only inside a scheme branch</b>
+Every token has a light value and a dark value, always both. A colour that exists only in the
+dark branch renders as whatever the parent inherited in light mode, usually black on black, and
+usually discovered by a user rather than a preview. The two exceptions are deliberate and named:
+<code>SlateAurora</code> and the live gradient are the same in both schemes because the surfaces
+they paint are immersive.
+</div>
+
+<h3 id="s3-9"><span class="num">3.9</span><span>The typography check</span></h3>
+
+<p>
+  The scale is only the scale if nothing else declares a font. <code>scripts/check-typography.sh</code>
+  is what keeps it that way: it greps every Swift file under <code>LIfeOS</code> and
+  <code>LifeOSKit/Sources</code>, excluding <code>Typography.swift</code> itself, and fails on four
+  patterns.
+</p>
+
+<pre><code># scripts/check-typography.sh
+check "Literal font sizes outside the scale (use a LifeOSType step):" \
+  '\.system(size: [0-9]'
+
+check "UIKit fonts outside the scale (use LifeOSType.UIKitScale):" \
+  '\(systemFont\|monospacedSystemFont\)(ofSize:'
+
+check "Rounded or serif faces declared outside the scale:" \
+  'design: \.\(rounded\|serif\)'
+
+check "Apple semantic text styles (use a LifeOSType step):" \
+  '\.font(\.\(largeTitle\|title[0-9]*\|headline\|subheadline\|body\|callout\|footnote\|caption[0-9]*\))'</code></pre>
+
+<p>
+  The first pattern matches a literal point size and not a computed one, because an icon drawn at a
+  fraction of its container is not type and has no step to pick. The fourth is the subtle one:
+  Apple's semantic styles are a second scale nobody chose, and they do not line up with ours. The
+  script exits non-zero on any hit, so it belongs in the same pre-push habit as
+  <code>swift test</code>. It is also honest about the present: the intro and signup screens still carry three
+  <code>.subheadline</code> and <code>.body</code> calls that predate the scale, and running the
+  script today lists exactly those three. That list is the work remaining, not a reason to loosen
+  the check.
+</p>
+
+<h3 id="s3-10"><span class="num">3.10</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Tokens.swift</code>: the hues, the accent, the surfaces, and the comment on every one.</li>
+  <li><code>Typography.swift</code>: the scale and the story of the 376 calls it replaced.</li>
+  <li><code>Space.swift</code>: the grid, the radii, and <code>GlassPanel</code>.</li>
+  <li><code>LayoutMetrics.swift</code>: read the doc comment on <code>railInset</code>; it is a complete bug post-mortem.</li>
+  <li><code>PillNavBar.swift</code> and <code>ActionFan.swift</code>: one component, two orientations, and why.</li>
+  <li><code>SignInChrome.swift</code>: <code>CodeField</code> over a hidden text field, and <code>InlineStatus.resolve</code>.</li>
+  <li><code>ScanlineSlicer.swift</code> then <code>ScanlineCatSilhouette.swift</code>: geometry a test can assert on.</li>
+  <li><code>scripts/check-typography.sh</code>: run it, and read what it finds.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why are colours <code>AdaptiveColor</code> pairs rather than UIKit dynamic colours?</strong> The package builds for macOS so tests run from a terminal, and a test can read both halves of a pair.</li>
+  <li><strong>Which face may a word never be set in?</strong> Rounded. It is for numerals only, and a rounded label beside a sans label is the drift the scale exists to stop.</li>
+  <li><strong>Why does <code>masthead</code> exist as its own step?</strong> Flattening the hub's date into <code>display</code> took it from 104 to 34 points; a scale that cannot express the biggest thing in the app is missing a step.</li>
+  <li><strong>Why is <code>railInset</code> 112 and not 96?</strong> The rail's footprint is 32 gutter plus 64 width; the rest is breathing room for its shadow. At 80 every screen's leading edge was under the rail.</li>
+  <li><strong>Why is the code field one hidden text field rather than six?</strong> So the system keyboard, <code>.oneTimeCode</code> autofill and paste keep working; the boxes are a rendering of that field and hold no state.</li>
+  <li><strong>Which two surfaces are the same colour in both schemes, and why is that allowed?</strong> The coach's aurora and the live session gradient; both are immersive surfaces whose tokens resolve as dark by design.</li>
+</ul>
+</section>

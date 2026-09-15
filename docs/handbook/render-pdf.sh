@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate Life-OS-Engineering-Handbook.pdf from index.html.
+# Regenerate Almanac-Engineering-Handbook.pdf from index.html (run build.py first).
 #
 # Two passes, the way a typesetter does it:
 #   1. render the PDF,
@@ -27,7 +27,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 
 const HTML = '${HERE}/index.html';
-const PDF  = '${HERE}/Life-OS-Engineering-Handbook.pdf';
+const PDF  = '${HERE}/Almanac-Engineering-Handbook.pdf';
 
 async function render() {
   const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
@@ -43,7 +43,7 @@ async function render() {
     margin: { top: '16mm', bottom: '18mm', left: '15mm', right: '15mm' },
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;font-family:Roboto,-apple-system,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Life OS Engineering Handbook · Rev D</span><span class="pageNumber"></span></div>',
+    footerTemplate: '<div style="width:100%;font-family:Helvetica,Arial,sans-serif;font-size:8pt;color:#8a857c;padding:0 15mm;display:flex;justify-content:space-between;"><span>Almanac Engineering Handbook · Shiv Vyas · Rev E</span><span class="pageNumber"></span></div>',
   });
   await browser.close();
 }

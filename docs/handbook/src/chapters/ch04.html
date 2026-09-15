@@ -1,0 +1,588 @@
+<section class="chapter" id="ch4">
+<p class="chapter-kicker">Chapter four</p>
+<h2><span class="num">4</span><span>The app shell, accounts and sign-in</span></h2>
+
+<p class="lede">
+  Before any tab exists, three objects decide whose data is open, whether a session still signs
+  them in, and which shell to draw around the screens. This chapter follows a launch from
+  <code>@main</code> to the first rendered tab, then the sign-in that gets a new person there, then
+  what keeps them signed in and how several people share one phone.
+</p>
+
+<h3 id="s4-1"><span class="num">4.1</span><span>Intent</span></h3>
+
+<p>
+  Signing in is required and it is the only entry point. That was already true in the first edition
+  and the reason has only strengthened: a store belongs to an account, notes sync to one, and every
+  connection is held per account. There is nowhere for a signed-out person's data to live that
+  would not become somebody else's the moment they signed in. What is new is that the shell must
+  handle more than one account on a device, must keep a session alive for someone who never closes
+  the app, and must survive an upgrade from the single-store world without looking like it deleted
+  a year of notes.
+</p>
+
+<div class="prfaq"><p class="prfaq-kicker">Working backwards</p>
+<p class="release">Almanac opens on the intro the first time and on Today every time after. Signing in takes an email or a phone number and a six-digit code, then a name. A returning person types the code and lands straight in the app. Two people can sign in on one phone and switch between them without either seeing the other's notes, journal or health.</p>
+<p class="faq-q">Why no password?</p><p class="faq-a">A password is a credential to lose, store and reset. A one-time code delivered to a channel the person already controls proves the same thing with no secret at rest and no reset flow to build.</p>
+<p class="faq-q">Email or phone?</p><p class="faq-a">Email is the default. It is free through Resend to 3,000 a month, needs no A2P registration, and carries none of the SMS failure modes. Phone goes through Twilio Verify behind an Edge Function, and when a text cannot be delivered the app offers email rather than retrying.</p>
+<p class="faq-q">How does the app know I am returning?</p><p class="faq-a">The account tells it, not the door you came through. After the code is accepted, <code>AuthSession.hasProfile</code> says whether a name was ever saved; with OTP there is no other difference between signing up and signing in.</p>
+<p class="faq-q">What happens if I stay in the app for two hours?</p><p class="faq-a">An access token lives an hour. A loop keyed on the sign-in state sleeps until 45 seconds before expiry and renews. Before that loop existed, every authenticated call after the first hour failed with a JWT expired error and nothing was watching the clock.</p>
+</div>
+
+<h3 id="s4-2"><span class="num">4.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">LIfeOS/App/
+├── LIfeOSApp.swift                    @main; owns AccountSession; re-roots per account
+├── AccountSession.swift               which scope and container are open; sign in, switch, sign out
+├── AppShell.swift                     onboarding or RootView; URL callbacks; session keep-alive; syncs on foreground
+├── RootView.swift                     the two shells over five tabs (Chapter 2)
+├── OrientationLock.swift              portrait on phone; the video player asks for more
+├── PushService.swift                  APNs registration and the nudge inbox; PushDelegate
+└── ChatTier.swift                     the one place the cloud engine is built
+
+LIfeOS/Features/Onboarding/
+├── Model/OnboardingModels.swift       OnboardingStep, AuthMode, IntroPage, SignupDraft, DialCountries
+├── ViewModel/OnboardingViewModel.swift send, verify, profile, restore, sign out
+└── View/SignupScreens.swift           SignupScaffold, IdentityScreen, CodeScreen, ProfileStepScreen
+
+LifeOSKit/Sources/Integrations/
+├── SupabaseAuth.swift                 the three auth calls over REST; AuthSession; AuthError
+├── AuthSessionStore.swift             AuthSessionStoring; KeychainAuthSessionStore; InMemoryAuthSessionStore
+├── AccountStore.swift                 the roster of accounts and one keychain item per account
+├── SessionRefresh.swift               SessionRefresher: restore on launch and foreground
+├── SessionKeepAlive.swift             when to renew a session that has not lapsed yet
+└── PhoneOTP.swift                     E.164 checks before a code is requested
+
+LifeOSKit/Sources/Persistence/
+├── UserScope.swift                    where an account's store and defaults live
+├── LifeOSContainer.swift              the schema; make(for:); adoptLegacyStore
+└── AccountDeviceAccess.swift          a device permission must also be granted by the account
+
+LifeOSKit/Sources/DesignSystem/
+└── SignInChrome.swift                 InlineStatus, SegmentedPills, CodeField, FocusableField, shake</pre>
+
+<h3 id="s4-3"><span class="num">4.3</span><span>Launch: from @main to the first tab</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="Launch sequence: LIfeOSApp constructs AccountSession, which asks AccountStore for the current scope and opens a ModelContainer for it. If a container exists, AppShell is mounted with hasStore true and re-rooted by scope id; AppShell restores the session through OnboardingViewModel and SessionRefresher, then shows RootView. If no container exists, AppShell shows OnboardingFlow with no store.">
+  <defs><marker id="ch4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker><marker id="ch4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker></defs>
+  <rect class="box" x="20" y="30" width="160" height="50" rx="8"/><text class="lbl" x="100" y="52" text-anchor="middle">LIfeOSApp</text><text class="lbl-sm" x="100" y="70" text-anchor="middle">@main</text>
+  <rect class="box-hot" x="240" y="30" width="180" height="50" rx="8"/><text class="lbl" x="330" y="52" text-anchor="middle">AccountSession</text><text class="lbl-sm" x="330" y="70" text-anchor="middle">scope + container</text>
+  <rect class="box" x="480" y="30" width="160" height="50" rx="8"/><text class="lbl" x="560" y="52" text-anchor="middle">AccountStore</text><text class="lbl-sm" x="560" y="70" text-anchor="middle">roster · keychain</text>
+  <rect class="box-alt" x="700" y="30" width="140" height="50" rx="8"/><text class="lbl" x="770" y="52" text-anchor="middle">store.sqlite</text><text class="lbl-sm" x="770" y="70" text-anchor="middle">Accounts/&lt;uid&gt;/</text>
+  <path class="flow" d="M180 55 L 234 55" marker-end="url(#ch4a)"/>
+  <path class="flow" d="M420 55 L 474 55" marker-end="url(#ch4a)"/><text class="lbl-sm" x="426" y="47">currentScope</text>
+  <path class="flow-hot" d="M330 80 L 330 110 L 770 110 L 770 86" marker-end="url(#ch4b)"/><text class="lbl-sm" x="500" y="104">LifeOSContainer.make(for:)</text>
+
+  <rect class="box" x="20" y="150" width="200" height="60" rx="8"/><text class="lbl" x="120" y="174" text-anchor="middle">AppShell</text><text class="lbl-sm" x="120" y="192" text-anchor="middle">hasStore · .id(scope.id)</text>
+  <rect class="box" x="280" y="150" width="200" height="60" rx="8"/><text class="lbl" x="380" y="174" text-anchor="middle">OnboardingViewModel</text><text class="lbl-sm" x="380" y="192" text-anchor="middle">restoreSession()</text>
+  <rect class="box" x="540" y="150" width="180" height="60" rx="8"/><text class="lbl" x="630" y="174" text-anchor="middle">SessionRefresher</text><text class="lbl-sm" x="630" y="192" text-anchor="middle">active · signedOut · rejected</text>
+  <path class="flow" d="M100 80 L 100 144" marker-end="url(#ch4a)"/><text class="lbl-sm" x="108" y="120">container?</text>
+  <path class="flow" d="M220 180 L 274 180" marker-end="url(#ch4a)"/>
+  <path class="flow" d="M480 180 L 534 180" marker-end="url(#ch4a)"/>
+  <path class="flow-dash" d="M630 210 L 630 240 L 800 240 L 800 86" marker-end="url(#ch4a)"/><text class="lbl-sm" x="640" y="234">refresh via Supabase</text>
+
+  <rect class="box-hot" x="20" y="260" width="200" height="50" rx="8"/><text class="lbl" x="120" y="282" text-anchor="middle">RootView</text><text class="lbl-sm" x="120" y="300" text-anchor="middle">signed in · has profile · has store</text>
+  <rect class="box-alt" x="280" y="260" width="200" height="50" rx="8"/><text class="lbl" x="380" y="282" text-anchor="middle">OnboardingFlow</text><text class="lbl-sm" x="380" y="300" text-anchor="middle">no store needed</text>
+  <path class="flow" d="M100 210 L 100 254" marker-end="url(#ch4a)"/>
+  <path class="flow" d="M180 210 L 180 235 L 380 235 L 380 254" marker-end="url(#ch4a)"/>
+</svg>
+<figcaption>
+  Two locks guard the tab hierarchy: a session, and a store to read through. Either alone
+  produces a wrong screen; both together produce the app.
+</figcaption>
+</figure>
+
+<p>
+  <code>LIfeOSApp</code> holds one piece of state, an <code>AccountSession</code>, and switches on
+  whether it has a container:
+</p>
+
+<pre><code>// LIfeOS/App/LIfeOSApp.swift
+@ViewBuilder private var shell: some View {
+    if let container = session.container {
+        AppShell(onSignedIn: { session.signIn($0, session: $1) },
+                 onSignedOut: { session.signOut() },
+                 hasStore: true, accountID: session.scope?.id)
+            .modelContainer(container)
+            // Re-rooted per account, so no screen carries the previous
+            // account's view models or scroll position into the next one.
+            .id(session.scope?.id ?? "none")
+            .environment(\.accountSession, session)
+            .task(id: session.scope?.id) { purgeSeededHistoryOnce() }
+    } else {
+        // Nobody signed in. The onboarding flow needs no store.
+        AppShell(onSignedIn: ..., onSignedOut: ..., hasStore: false, accountID: nil)
+    }
+}</code></pre>
+
+<p>
+  <code>AccountSession.init</code> does three things before the first frame. It adopts a
+  pre-accounts session if the roster is empty and the legacy keychain slot holds one, moving the old
+  <code>default.store</code> into the new account's directory in the same breath. It removes a
+  current account whose keychain session does not match its id, so a stale pointer can never open
+  somebody else's store. Then it adopts the current scope, which opens the container and hands the
+  owner id to <code>PushService</code> and <code>SurfaceCoordinator</code>. A container that cannot
+  open is not something the person can fix, and carrying on with the previous account's container
+  would show them somebody else's data, so the safe failure is nothing open.
+</p>
+
+<p>
+  <code>AppShell</code> is the second lock. A session alone is not enough to build the tab hierarchy:
+  every screen below <code>RootView</code> reads through a <code>ModelContext</code>, and mounting it
+  in a scene with no container gets as far as the first fetch before CoreData throws an
+  <code>NSException</code> for an entity it cannot find, which is not catchable from Swift and takes
+  the whole process. So the gate is three-way:
+</p>
+
+<pre><code>// LIfeOS/App/AppShell.swift
+if onboarding.isSignedIn &amp;&amp; hasFinishedOnboarding &amp;&amp; hasStore {
+    RootView(whoop: whoop, fitbit: fitbit, plaid: plaid, health: health, onSignOut: { ... })
+} else {
+    OnboardingFlow(model: onboarding, ...)
+}</code></pre>
+
+<p>
+  <code>hasFinishedOnboarding</code> is an <code>@AppStorage</code> in the account's own defaults
+  suite. Its job is narrower than its name: <code>isSignedIn</code> resolves synchronously from a
+  keychain read, so on a relaunch that restores a session the flag is already true on the first
+  render, instead of flashing the intro carousel for a frame before the launch task settles. The
+  first-run tour is keyed on its own flag so it fires exactly once per account however the person
+  arrived, and it is an overlay rather than a <code>fullScreenCover</code> because iOS can restore a
+  previously presented cover at launch and two covers contending for one window silently drops one.
+</p>
+
+<h3 id="s4-4"><span class="num">4.4</span><span>Signing in: a code, then a name</span></h3>
+
+<p>
+  <code>OnboardingStep</code> is a single enum rather than a pile of booleans, so an impossible
+  combination cannot be represented: <code>intro</code>, <code>identity</code>, <code>code</code>,
+  <code>profile</code>, <code>connections</code>, <code>signedIn</code>. <code>AuthMode</code> is
+  which door the person came through, and it changes copy and nothing else.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 420" role="img" aria-label="Sign-in sequence: IdentityScreen asks SupabaseAuth for available channels; sendCode posts to otp-start for phone or to GoTrue's otp endpoint for email; CodeScreen fires verify on the sixth digit, which posts to otp-check or GoTrue verify and returns an AuthSession; AccountStore records the account; hasProfile routes to signedIn or to the profile step; saveProfile uploads the avatar, saves the profiles row and updates user metadata.">
+  <defs><marker id="ch4c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker><marker id="ch4d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker></defs>
+  <text class="lbl-sm" x="20" y="24">SCREEN</text><text class="lbl-sm" x="300" y="24">VIEW MODEL</text><text class="lbl-sm" x="560" y="24">SERVER</text>
+  <line class="flow-dash" x1="100" y1="34" x2="100" y2="400"/>
+  <line class="flow-dash" x1="380" y1="34" x2="380" y2="400"/>
+  <line class="flow-dash" x1="680" y1="34" x2="680" y2="400"/>
+  <rect class="box" x="20" y="34" width="160" height="30" rx="8"/><text class="lbl" x="100" y="54" text-anchor="middle">IdentityScreen</text>
+  <rect class="box-hot" x="290" y="34" width="180" height="30" rx="8"/><text class="lbl" x="380" y="54" text-anchor="middle">OnboardingViewModel</text>
+  <rect class="box" x="600" y="34" width="160" height="30" rx="8"/><text class="lbl" x="680" y="54" text-anchor="middle">Supabase</text>
+
+  <path class="flow" d="M100 90 L 374 90" marker-end="url(#ch4c)"/><text class="lbl-sm" x="110" y="84">.task: loadChannels()</text>
+  <path class="flow" d="M380 110 L 674 110" marker-end="url(#ch4c)"/><text class="lbl-sm" x="390" y="104">GET auth/v1/settings</text>
+  <path class="flow" d="M100 150 L 374 150" marker-end="url(#ch4c)"/><text class="lbl-sm" x="110" y="144">Send code: sendCode()</text>
+  <path class="flow-hot" d="M380 170 L 674 170" marker-end="url(#ch4d)"/><text class="lbl-sm" x="390" y="164">phone: POST functions/v1/otp-start · email: POST auth/v1/otp</text>
+  <path class="flow" d="M380 200 L 106 200" marker-end="url(#ch4c)"/><text class="lbl-sm" x="110" y="194">step = .code; resend countdown 60s</text>
+
+  <rect class="box" x="20" y="214" width="160" height="30" rx="8"/><text class="lbl" x="100" y="234" text-anchor="middle">CodeScreen</text>
+  <path class="flow" d="M100 270 L 374 270" marker-end="url(#ch4c)"/><text class="lbl-sm" x="110" y="264">sixth digit lands: verifyCode()</text>
+  <path class="flow-hot" d="M380 290 L 674 290" marker-end="url(#ch4d)"/><text class="lbl-sm" x="390" y="284">phone: POST otp-check · email: POST auth/v1/verify</text>
+  <path class="flow" d="M674 310 L 386 310" marker-end="url(#ch4c)"/><text class="lbl-sm" x="390" y="326">AuthSession (hasProfile from user_metadata.first_name)</text>
+  <path class="flow" d="M380 345 L 106 345" marker-end="url(#ch4c)"/><text class="lbl-sm" x="110" y="339">AccountStore.add; step = hasProfile ? .signedIn : .profile</text>
+
+  <rect class="box" x="20" y="360" width="160" height="30" rx="8"/><text class="lbl" x="100" y="380" text-anchor="middle">ProfileStepScreen</text>
+  <path class="flow-hot" d="M380 395 L 674 395" marker-end="url(#ch4d)"/><text class="lbl-sm" x="390" y="389">avatar upload · profiles upsert · PUT auth/v1/user</text>
+</svg>
+<figcaption>
+  Three round trips for a new person, two for a returning one. The server never sees a password
+  and the app never stores one.
+</figcaption>
+</figure>
+
+<p>
+  <code>SupabaseAuth</code> is the whole auth client: no SDK, because the three calls needed here
+  are small and a dependency would pull in far more surface than that. The anon key is sent as the
+  API key on every call; it is public by design and Row Level Security is what protects rows.
+  Phone is always offered because SMS goes through the <code>otp-start</code> Edge Function and
+  Twilio Verify, not GoTrue's own provider; email availability still comes from
+  <code>auth/v1/settings</code>, and the identity screen waits for that answer rather than offering
+  a channel that cannot deliver.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SupabaseAuth.swift
+public func sendCode(to destination: String, channel: Channel) async throws {
+    if channel == .phone {
+        _ = try await postFunction("otp-start", body: ["phone": destination])
+        return
+    }
+    _ = try await post("otp", body: ["email": destination, "create_user": true])
+}
+
+public func verify(code: String, destination: String, channel: Channel) async throws -&gt; AuthSession {
+    if channel == .phone {
+        let data = try await postFunction("otp-check", body: ["phone": destination, "code": code])
+        return try decode(data)
+    }
+    let data = try await post("verify", body: ["token": code, "type": "email", "email": destination])
+    return try decode(data)
+}</code></pre>
+
+<p>
+  Before a phone number reaches the server, <code>PhoneOTP.isAcceptable</code> refuses what will
+  never be sent to: only Indian mobiles (<code>+91</code> then ten digits starting 6 to 9) and NANP
+  numbers (<code>+1</code> then ten digits) are accepted, and <code>pumpingPrefix</code> produces the
+  country-plus-early-digits key the server uses to catch SMS pumping against a neighbouring range.
+  The Edge Function enforces the same rules; this copy exists so the form can refuse without a
+  round trip.
+</p>
+
+<p>
+  <code>AuthError.fromHTTP</code> maps every failure the classifier knows about onto a sentence a
+  person can act on, and the Twilio cases are the interesting ones. A trial-account failure
+  (21608) blames the account, not the number, because the number is not the problem. An opted-out
+  number (21610) is given the remedy: text START. An unregistered campaign (30034) and a carrier
+  block (60410) are named rather than lumped into a generic failure. And an empty-bodied 502 with
+  no message stays channel-neutral, because email is now the default and the copy must not assume
+  SMS. <code>AuthErrorMappingTests</code> has one test per case, each named for the sentence it
+  guards.
+</p>
+
+<h4>The code screen</h4>
+<p>
+  This is the screen people fail on, so it does the work instead of asking for it. Six boxes rather
+  than one tracked field. Verification fires the moment the sixth digit lands. A wrong code shakes
+  and buzzes through <code>.sensoryFeedback(.error, trigger:)</code> rather than quietly turning a
+  line red, and the trigger is a counter rather than a Bool because two bad codes in a row must
+  play twice. The Verify button stays even though the sixth digit auto-verifies, because autofill
+  can land a full code without a keystroke and a screen with no button leaves that person nothing
+  to press.
+</p>
+
+<p>
+  The resend countdown is 60 seconds, not 45: the phone Edge Function's cooldown in
+  <code>otp_guard.ts</code> is 45 seconds, but email posts straight to GoTrue, governed by
+  <code>auth.email.max_frequency</code>, which is 60. The countdown has to clear the stricter of the
+  two or "Resend code" invites a 429.
+</p>
+
+<h3 id="s4-5"><span class="num">4.5</span><span>The returning-user door</span></h3>
+
+<p>
+  With OTP there is no password, so signing in and signing up are the same three steps. The intro
+  offers two doors, "Let's get started" on the last page and "Already have an account? Sign in" beneath it, and picking the wrong one is
+  harmless by design: the branch after verify is what routes.
+</p>
+
+<pre><code>// LIfeOS/Features/Onboarding/ViewModel/OnboardingViewModel.swift
+let session = try await auth.verify(code: draft.code.filter(\.isNumber),
+                                    destination: draft.destination, channel: draft.channel)
+try AccountStore().add(Account(userID: session.userID,
+                               label: session.email ?? session.phone ?? "Account"), session: session)
+AccountStore().clearLegacySession()
+store = KeychainAuthSessionStore(account: session.userID)
+self.session = session
+isSignedIn = true
+// The only thing that separates a returning user from a new one, and it is
+// known only now. The door they came through does not decide this; the account does.
+step = session.hasProfile ? .signedIn : .profile</code></pre>
+
+<p>
+  <code>hasProfile</code> is derived from <code>user_metadata.first_name</code> in the verify
+  response. That is why <code>saveProfile</code> still writes the name to user metadata even though
+  the profile row now lives in the <code>profiles</code> table: the flag that decides whether a
+  returning person is sent through signup again is read from the session, not from a table the
+  session has not loaded yet. <code>AuthSession</code> decodes the flag by hand with a default of
+  false, because sessions already in the keychain have no such key and a synthesised decoder would
+  throw on them and sign every existing person out on upgrade.
+</p>
+
+<p>
+  The profile step saves in a deliberate order: the picture goes to storage before the row, so the
+  row is never saved pointing at an object that does not exist; a failed upload costs the picture
+  and not the profile. A failed profile write does not strand the person at the last step either:
+  the account exists either way, so the error is shown and the step advances to connections.
+  <code>onboarding.step</code> is written to the account's defaults at that point so a relaunch
+  mid-signup resumes at connections rather than at the profile.
+</p>
+
+<h3 id="s4-6"><span class="num">4.6</span><span>Keeping a session alive</span></h3>
+
+<p>
+  Two pure pieces decide, and one loop acts. <code>SessionRefresher.restore()</code> is asked on
+  launch and on every return to the foreground. Its governing rule is that signing someone out is
+  destructive and cannot be undone without a fresh code, so it happens only when the server has
+  definitively refused the credential:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SessionRefresh.swift
+public func restore() async -&gt; Outcome {
+    guard let stored = store.load() else { return .signedOut }
+    guard stored.isExpired() else { return .active(stored) }
+    guard let refreshToken = stored.refreshToken, !refreshToken.isEmpty else {
+        store.clear(); return .rejected
+    }
+    do {
+        let refreshed = try await auth.refresh(refreshToken: refreshToken)
+        guard !Task.isCancelled,
+              store.load()?.refreshToken == stored.refreshToken,
+              store.load()?.userID == stored.userID else { return .signedOut }
+        guard refreshed.userID.isEmpty || refreshed.userID == stored.userID else {
+            store.clear(); return .rejected
+        }
+        let session = refreshed.carryingForward(stored)
+        try? store.save(session)
+        return .active(session)
+    } catch let error as AuthError where Self.isRefusal(error) {   // 400, 401, 403, 422
+        guard store.load()?.accessToken == stored.accessToken else { return .signedOut }
+        store.clear(); return .rejected
+    } catch {
+        return .active(stored)   // offline, outage, rate limit: keep it and try later
+    }
+}</code></pre>
+
+<p>
+  Every guard in that function is a bug that happened. Re-reading the store after the network call
+  and comparing the refresh token is what stops a logout during a refresh from resurrecting the
+  session. Comparing the user id is what stops a refresh from replacing the account's identity.
+  <code>carryingForward</code> exists because a refresh response is allowed to be sparse and must not
+  erase what is already known. And the <code>authURL</code> helper exists because
+  <code>appendingPathComponent</code> percent-encoded the <code>?</code> in
+  <code>token?grant_type=refresh_token</code>, GoTrue answered 404, and for a while no stored session
+  could ever be renewed: an hour after signing in every authenticated call began failing, and
+  signing in always looked fine. <code>AuthRefreshURLTests</code> pins the query staying a query.
+</p>
+
+<p>
+  <code>OnboardingViewModel.restoreSession</code> coalesces concurrent callers onto one task, because
+  Supabase rotates the refresh token on use and two concurrent refreshes would have the second
+  present a token the first just retired, signing the person out for doing nothing but
+  foregrounding the app during launch.
+</p>
+
+<p>
+  <code>SessionKeepAlive</code> covers the case neither event reaches: someone who keeps the app open
+  past the hour. It is two numbers and a function, pure so the schedule can be tested without
+  waiting an hour for it:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SessionKeepAlive.swift
+public static let margin: TimeInterval = 45   // inside isExpired's own minute of slack
+public static let floor: TimeInterval = 5     // never a spin against the auth endpoint
+
+public static func delay(untilExpiry expiresAt: Date, now: Date = .now) -&gt; TimeInterval {
+    max(expiresAt.timeIntervalSince(now) - margin, floor)
+}</code></pre>
+
+<p>
+  <code>AppShell</code> runs the loop in a <code>.task(id: onboarding.isSignedIn)</code>, so it starts
+  the moment somebody signs in and stops the moment they sign out rather than waking on a timer
+  behind the signup screen. The margin is deliberately inside <code>isExpired</code>'s sixty seconds
+  of slack: waking earlier finds a session the refresher considers healthy, does nothing, and spends
+  the wake for nothing. The floor is what stops a session that arrives already expired, or a clock
+  that jumps backwards, from turning the loop into a spin.
+</p>
+
+<h3 id="s4-7"><span class="num">4.7</span><span>Several accounts on one device</span></h3>
+
+<p>
+  <a href="#s1-7">Section 1.7</a> explained why isolation is a file per account. This section is
+  the bookkeeping that makes switching safe. <code>AccountStore</code> keeps two things: a roster in
+  defaults, because a list of who has used this phone is not a secret and enumerating accounts must
+  not need a keychain read each, and a keychain item per user id, because a refresh token is a
+  credential in its own right.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/AccountStore.swift
+public var currentScope: UserScope? {
+    // Nil rather than "the first account we can find": a current id naming an
+    // account that has been signed out must never silently open somebody else's store.
+    guard let id = defaults.string(forKey: Self.currentKey),
+          accounts.contains(where: { $0.userID == id }) else { return nil }
+    return UserScope(id: id)
+}
+
+public func add(_ account: Account, session: AuthSession) throws {
+    guard !account.userID.isEmpty, account.userID == session.userID else {
+        throw AccountStoreError.identityMismatch
+    }
+    try keychain(for: account.userID).save(session)
+    ...
+}
+
+@discardableResult
+public func setCurrent(_ userID: String) -&gt; Bool {
+    // Refuses an account with no stored session rather than switching to one that cannot sync.
+    guard accounts.contains(where: { $0.userID == userID }),
+          keychain(for: userID).load()?.userID == userID else { return false }
+    defaults.set(userID, forKey: Self.currentKey)
+    return true
+}</code></pre>
+
+<p>
+  <code>KeychainAuthSessionStore()</code> with no arguments defaults to whichever account is current,
+  read straight from defaults rather than through <code>AccountStore</code> because the store is
+  main-actor bound and this type is used from wherever a network call happens to be made. This
+  matters more than it looks: every network client in the app builds one of these to get a token,
+  and before accounts there was one slot, so after a switch they would all have carried on
+  presenting the previous account's token and reading the previous account's rows.
+</p>
+
+<p>Switching and signing out are the two places every cross-account surface is torn down, and the list is the map of what is per account:</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Surface</th><th>On switch</th><th>On sign out</th></tr></thead>
+<tbody>
+<tr><td>The store</td><td>Container replaced; the view tree re-rooted by <code>.id</code></td><td>Container closed; file left on disk</td></tr>
+<tr><td>Widget snapshot</td><td><code>SurfaceCoordinator.clear()</code> then adopt the next owner</td><td>Cleared; an empty snapshot is written</td></tr>
+<tr><td>Live Activity and watch bridge</td><td><code>endAll()</code>; bridge ended with discard</td><td>Same</td></tr>
+<tr><td>The recorder</td><td><code>beforeAccountChange</code> deactivates it</td><td>Same</td></tr>
+<tr><td>Push</td><td>Owner id re-attached; the inbox reloads from the new suite</td><td>Row deleted with the old token before the keychain is cleared; delivered notifications removed; APNs unregistered</td></tr>
+<tr><td>Pending OAuth (Whoop, Fitbit)</td><td>Left alone; keyed per account</td><td>In-flight browser credentials cleared; saved provider links stay with their owner</td></tr>
+<tr><td>Calendar and Health opt-ins</td><td>Read from the new suite</td><td>Removed from the suite; the device permission stays</td></tr>
+<tr><td>Plaid Link</td><td><code>resetForAccountChange()</code></td><td>Same</td></tr>
+<tr><td>The legacy keychain slot</td><td>Cleared</td><td>Cleared, belt and braces</td></tr>
+</tbody></table></div>
+
+<p>
+  The legacy slot deserves its own sentence because it is what made logging out impossible for a
+  build. It has no user id, so it is not "one account's" session and the per-account clear never
+  reached it; it survived every sign out and the next launch adopted it and signed the person back
+  in, into a scene with no store open, and the first note fetch threw. A credential that can restore
+  an account is that account's session whatever slot it sits in.
+</p>
+
+<p>
+  <code>AccountDeviceAccess</code> is the last piece: device permissions are app-wide in iOS, so
+  Calendar access granted while one account was open must also be granted by the next one.
+  <code>allowsCalendar</code> requires both the system authorisation and the account's own flag.
+</p>
+
+<h3 id="s4-8"><span class="num">4.8</span><span>The app delegate and push registration</span></h3>
+
+<p>
+  <code>PushDelegate</code> is the whole reason the app has a delegate: the device token arrives
+  through <code>didRegisterForRemoteNotificationsWithDeviceToken</code> and nowhere else, the
+  orientation query arrives through <code>supportedInterfaceOrientationsFor</code>, and the watch
+  mirroring handler must be installed at launch. <code>PushService</code> is one object rather than
+  two because registration and the inbox share the state that matters: the token, which arrives
+  long after the sign-in that asked for it and is needed again at sign out to delete the row.
+</p>
+
+<ul>
+  <li><strong>Authorisation is never requested at launch.</strong> A permission prompt on first run, before the app has shown anyone anything worth being interrupted about, is the fastest way to a permanent no. It is asked from the notification inbox, the first time that screen is opened.</li>
+  <li><strong>The registration is keyed to the active account</strong> and re-pushed on every foreground, because the row carries the timezone the send hour is read in; somebody who has flown somewhere would otherwise keep being nudged at eight in the morning where they used to live.</li>
+  <li><strong>Deregistration happens before the session goes,</strong> with the token captured by value, because deleting the row needs the access token of the account whose row it is. Left behind, that row would push one person's sleep onto a phone now showing somebody else's name.</li>
+  <li><strong>A nudge that arrives while the app is open is still shown.</strong> The point of the channel is that LIFO speaks first; suppressing it because someone happens to be looking at the app would drop the message entirely. A tap puts the nudge in the inbox and <code>RootView</code> opens the coach on it, seeding the sentence but not the numbers, which are worked out now against the store as it stands.</li>
+</ul>
+
+<h3 id="s4-9"><span class="num">4.9</span><span>Two shells, one set of screens</span></h3>
+
+<p>
+  <code>RootView</code> reads the platform's size class once and draws one of two shells. A compact
+  width gets the pill bar floating over the content along the bottom, and it stays put when the
+  keyboard opens, letting the keyboard cover it: without <code>.ignoresSafeArea(.keyboard)</code> the
+  whole stack is lifted and the bar rides up to sit on top of the note being written, in the strip
+  someone is actually looking at.
+</p>
+
+<p>
+  A regular width gets the same bar stood on end as a left rail, as an overlay so a screen's canvas
+  runs the full width underneath it. Overlays claim no layout room, which is why <code>railInset</code>
+  exists for the screens to apply themselves. The rail withdraws while the pane is being worked
+  with and comes back when that stops:
+</p>
+
+<pre><code>// LIfeOS/App/RootView.swift
+content
+    // Scrolling or dragging anywhere in the pane counts as working with the
+    // content. Simultaneous, not exclusive: it observes the touch rather than
+    // claiming it, so scroll views, text selection and Pencil strokes all still see it.
+    .simultaneousGesture(
+        DragGesture(minimumDistance: 12)
+            .onChanged { _ in withdrawRail() }
+            .onEnded { _ in scheduleRailReturn() }   // 1400 ms later
+    )
+    .overlay(alignment: .leading) {
+        PillNavBar(selection: $tab, items: navItems, axis: .vertical)
+            .opacity(isRailVisible ? 1 : 0)
+            .offset(x: isRailVisible ? 0 : -(metrics.gutter + 76))   // parked off the edge
+            .allowsHitTesting(isRailVisible)
+    }
+    .overlay(alignment: .leading) {
+        if !isRailVisible {
+            Color.clear.frame(width: 28).contentShape(.rect)
+                .onTapGesture { showRail() }   // a way back without scrolling something first
+        }
+    }</code></pre>
+
+<p>
+  The keyboard is the other way of working with the pane, and the one where the rail is most in the
+  way: on a landscape iPad the keyboard takes half the height and the note being written is what
+  is left. So <code>keyboardWillShow</code> withdraws the rail and <code>keyboardWillHide</code>
+  brings it back, and a tab change brings it back too, because a tab change is navigation, not
+  content work. The 1400 millisecond return delay is what stops it flickering between the flicks of
+  a fast scroll. Compact width never hides the bar: along the bottom it overlaps nothing that is
+  being read.
+</p>
+
+<h4>Orientation</h4>
+<p>
+  The iPhone target allows landscape in its build settings so that a workout video can be watched
+  sideways, but almost nothing else in the app is laid out for it. <code>OrientationLock</code>
+  therefore defaults to portrait on a phone and every orientation on an iPad, and the one screen
+  that wants more asks for it while it is on screen and hands it back when it leaves.
+  <code>release()</code> also requests a geometry update back to portrait, because a phone still
+  held sideways would otherwise stay in a landscape the next screen cannot draw.
+</p>
+
+<h3 id="s4-10"><span class="num">4.10</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Session found, no store open</td><td><code>AppShell</code> keeps the person in onboarding; <code>restoreSession</code> is not allowed to promote past the gate without <code>hasStore</code></td></tr>
+<tr><td>Offline at launch with an expired token</td><td><code>.active(stored)</code>: the session is kept and the next foreground tries again</td></tr>
+<tr><td>Server refuses the refresh token (400, 401, 403, 422)</td><td>Store cleared, <code>.rejected</code>, the person returns to signup with "Your session expired. Sign in again"</td></tr>
+<tr><td>Rate limited or 5xx on refresh</td><td>Kept; a refusal must be definitive</td></tr>
+<tr><td>Sign out during an in-flight refresh</td><td>The refresher re-reads the store after the network call and finds the token gone; returns <code>.signedOut</code> without saving</td></tr>
+<tr><td>Refresh response names a different user id</td><td>Cleared and rejected; a refresh cannot replace the account's identity</td></tr>
+<tr><td>Two restores at once (launch and foreground on a cold start)</td><td>Coalesced onto one task, because the refresh token rotates on use</td></tr>
+<tr><td>App kept open past the hour</td><td>The keep-alive loop wakes 45 seconds before expiry and renews</td></tr>
+<tr><td>Twilio cannot deliver</td><td>The specific cause is named and "Use email instead" is offered; the flag survives the trip back to the identity screen</td></tr>
+<tr><td>Wrong code, twice</td><td>Shakes and buzzes both times; the counter, not a Bool, drives it</td></tr>
+<tr><td>Autofill lands a code with no keystroke</td><td>Non-digits trimmed in the field, the Verify button remains</td></tr>
+<tr><td>Upgrade from the single-store build</td><td>The legacy session is adopted into the roster and <code>default.store</code> moved into the account's directory, once</td></tr>
+<tr><td>Current account id with no matching keychain session</td><td>Removed in <code>AccountSession.init</code>; nothing opens</td></tr>
+<tr><td>Store cannot be opened</td><td>Container nil, surfaces cleared, onboarding shown; never the previous account's data</td></tr>
+<tr><td>Second account signs in on the same device</td><td>Own store file, own defaults suite, own keychain item; the roster keeps the first</td></tr>
+<tr><td>Cover already presented at launch</td><td>The tour is an overlay, so nothing contends for the window</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>SessionRefreshTests</code>: twelve cases, one per row of the refresh policy, including <code>logoutDuringRefreshCannotResurrectTheSession</code> and <code>aRefreshCannotReplaceTheAccountIdentity</code>.</li>
+  <li><code>SessionKeepAliveTests</code>: the wake is late enough for the refresher to act, an already expired session still waits the floor, a clock jump does not spin.</li>
+  <li><code>AccountStoreTests</code>: nobody signed in means no scope, a mismatched identity cannot open another account's store, a restored roster uses its own stored session, and the bug the type exists to fix: a second sign-in no longer overwrites the first.</li>
+  <li><code>UserScopeTests</code>: two accounts get different files, an id cannot climb out of the accounts directory, the legacy store is adopted once and carries its write-ahead log, rows do not cross between accounts.</li>
+  <li><code>AuthErrorMappingTests</code>, <code>AuthRefreshURLTests</code>, <code>PhoneOTPTests</code>, <code>SignInChromeTests</code> (status precedence and <code>CodeDigits</code>).</li>
+  <li>Native: <code>SurfaceNativeChecks</code> proves a delayed notification from a previous account is rejected and the next account starts with missing readings, never previous values.</li>
+</ul>
+
+<h3 id="s4-11"><span class="num">4.11</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LIfeOS/App/LIfeOSApp.swift</code>: the two-way switch on a container.</li>
+  <li><code>LIfeOS/App/AccountSession.swift</code>: <code>init</code>, then <code>adopt(_:)</code>, then <code>signOut()</code>.</li>
+  <li><code>LifeOSKit/Sources/Integrations/AccountStore.swift</code>: the roster and the keychain per account.</li>
+  <li><code>LIfeOS/App/AppShell.swift</code>: the three-way gate, the keep-alive loop, and <code>handle(_ url:)</code>.</li>
+  <li><code>LifeOSKit/Sources/Integrations/SessionRefresh.swift</code>: read every guard as a bug report.</li>
+  <li><code>LifeOSKit/Sources/Integrations/SupabaseAuth.swift</code>: the three calls and <code>AuthError.fromHTTP</code>.</li>
+  <li><code>LIfeOS/Features/Onboarding/ViewModel/OnboardingViewModel.swift</code>: <code>verifyCode</code> and <code>saveProfile</code>.</li>
+  <li><code>LIfeOS/App/RootView.swift</code>, the <code>wideShell</code> and the rail functions.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why are there two locks before <code>RootView</code> mounts?</strong> A session without a store reaches the first fetch and CoreData throws an exception Swift cannot catch; a store without a session is somebody's data with nobody signed in.</li>
+  <li><strong>Which HTTP statuses sign a person out, and why only those?</strong> 400, 401, 403 and 422: the server refused the credential itself. 429 and 5xx are failures to answer, and a transport error is not an answer at all.</li>
+  <li><strong>Why is the keep-alive margin 45 seconds rather than 90?</strong> <code>isExpired</code> has 60 seconds of slack; waking before that finds a healthy session and does nothing.</li>
+  <li><strong>Why does <code>KeychainAuthSessionStore()</code> read the current account id from defaults directly?</strong> It is built from wherever a network call is made; going through the main-actor <code>AccountStore</code> would not be possible there, and defaulting to the current account is what stops every client presenting the old token after a switch.</li>
+  <li><strong>What decides whether a person sees the profile step?</strong> <code>AuthSession.hasProfile</code>, derived from user metadata in the verify response. The door they tapped decides only copy.</li>
+  <li><strong>Why is the resend countdown 60 seconds when the phone cooldown is 45?</strong> Email is governed by GoTrue's 60-second frequency; the countdown must clear the stricter of the two.</li>
+</ul>
+</section>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2560" viewBox="0 0 1600 2560">
-  <!-- Kindle cover ù 1600ù2560 (Amazon recommended portrait).
+  <!-- Kindle cover, 1600 by 2560 (Amazon recommended portrait).
        Same orbital as docs/brand/lifeos-icon.svg on the handbook cream plate. -->
   <defs>
     <radialGradient id="coverGround" cx="50%" cy="18%" r="90%">
@@ -55,21 +55,23 @@
     <circle cx="160" cy="1396" r="7" fill="#16150F"/>
     <circle cx="186" cy="1396" r="7" fill="#16150F"/>
     <circle cx="212" cy="1396" r="7" fill="#16150F"/>
-    <circle cx="238" cy="1396" r="7" fill="#F0572E"/>
-    <circle cx="264" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
+    <circle cx="238" cy="1396" r="7" fill="#16150F"/>
+    <circle cx="264" cy="1396" r="7" fill="#F0572E"/>
     <circle cx="290" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
     <circle cx="316" cy="1396" r="7" fill="none" stroke="#D6D2C8" stroke-width="2"/>
   </g>
 
-  <text x="160" y="1468" fill="#F0572E" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="6.6">LIFE OS</text>
+  <text x="160" y="1468" fill="#F0572E" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="6.6">ALMANAC</text>
 
   <text x="160" y="1588" fill="#16150F" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3.2">Engineering</text>
   <text x="160" y="1688" fill="#16150F" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="-3.2">Handbook</text>
 
-  <line x1="160" y1="1768" x2="1440" y2="1768" stroke="#D6D2C8" stroke-width="1"/>
+  <text x="160" y="1760" fill="#16150F" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="40" font-weight="500" letter-spacing="-0.5">Shiv Vyas</text>
 
-  <text x="160" y="1828" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">Revision D  ù  25 August 2026</text>
-  <text x="160" y="1872" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">iOS 26  ù  Swift 6  ù  MVVM</text>
+  <line x1="160" y1="1812" x2="1440" y2="1812" stroke="#D6D2C8" stroke-width="1"/>
+
+  <text x="160" y="1872" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">Revision E  ¬∑  15 September 2026</text>
+  <text x="160" y="1916" fill="#7C776C" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="22" font-weight="500" letter-spacing="1.2">iOS 26  ¬∑  watchOS 26  ¬∑  Swift 6  ¬∑  MVVM</text>
 
   <rect x="0" y="2528" width="1600" height="32" fill="#F0572E"/>
 </svg>

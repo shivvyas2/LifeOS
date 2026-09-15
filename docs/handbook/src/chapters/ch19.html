@@ -1,0 +1,1132 @@
+<section class="chapter" id="ch19">
+<p class="chapter-kicker">Chapter nineteen</p>
+<h2><span class="num">19</span><span>Integrations</span></h2>
+
+<p class="lede">
+  Eleven external systems feed or serve the app, and one had to be cut. Each is confined to the
+  <code>Integrations</code> target or a single feature file, so no screen knows a vendor exists: a
+  ViewModel sees rows in <code>DailyMetrics</code> and a connection state, nothing more.
+</p>
+
+<p>
+  Revision D described four integrations. Since then Apple Health went from nine types to
+  forty seven, Fitbit arrived as a second strap, Plaid brought bank sync, EventKit brought the
+  calendar, the coach gained a cloud tier and a voice, YouTube embeds carry the workout library,
+  and APNs delivers the morning nudge. Two straps writing the same row also forced a real merge
+  rule, the arbiter, which sits in the middle of this chapter because every health source now
+  goes through it. The chapter takes each system in turn: what it provides, how it authenticates,
+  the client code, the wire format, how its readings reach the spine, how it fails, and which
+  tests pin it.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 420" role="img" aria-label="Every integration and where its credential lives: HealthKit and EventKit are on-device frameworks, Whoop and Fitbit and Plaid and OpenAI go through Edge Functions that hold the secret, ElevenLabs and YouTube are called from the device with a public key or none, and all health readings pass through the arbiter into DailyMetrics.">
+  <defs>
+    <marker id="ch19a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch19b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="22">ON THE PHONE</text>
+  <text class="lbl-sm" x="330" y="22">EDGE FUNCTIONS (SECRETS)</text>
+  <text class="lbl-sm" x="640" y="22">VENDOR</text>
+
+  <rect class="box" x="20" y="40" width="150" height="36" rx="8"/><text class="lbl" x="95" y="63" text-anchor="middle">HealthKitReader</text>
+  <rect class="box" x="20" y="86" width="150" height="36" rx="8"/><text class="lbl" x="95" y="109" text-anchor="middle">EventKitSource</text>
+  <rect class="box" x="20" y="132" width="150" height="36" rx="8"/><text class="lbl" x="95" y="155" text-anchor="middle">WhoopSync</text>
+  <rect class="box" x="20" y="178" width="150" height="36" rx="8"/><text class="lbl" x="95" y="201" text-anchor="middle">FitbitSync</text>
+  <rect class="box" x="20" y="224" width="150" height="36" rx="8"/><text class="lbl" x="95" y="247" text-anchor="middle">PlaidSync</text>
+  <rect class="box" x="20" y="270" width="150" height="36" rx="8"/><text class="lbl" x="95" y="293" text-anchor="middle">RemoteEngine</text>
+  <rect class="box" x="20" y="316" width="150" height="36" rx="8"/><text class="lbl" x="95" y="339" text-anchor="middle">SpeechListener</text>
+  <rect class="box" x="20" y="362" width="150" height="36" rx="8"/><text class="lbl" x="95" y="385" text-anchor="middle">YouTubePlayerView</text>
+
+  <rect class="box-alt" x="330" y="132" width="180" height="36" rx="8"/><text class="lbl" x="420" y="155" text-anchor="middle">whoop-token</text>
+  <rect class="box-alt" x="330" y="178" width="180" height="36" rx="8"/><text class="lbl" x="420" y="201" text-anchor="middle">fitbit-sync</text>
+  <rect class="box-alt" x="330" y="224" width="180" height="36" rx="8"/><text class="lbl" x="420" y="247" text-anchor="middle">plaid-sync</text>
+  <rect class="box-alt" x="330" y="270" width="180" height="36" rx="8"/><text class="lbl" x="420" y="293" text-anchor="middle">lifo-agent</text>
+
+  <rect class="box" x="640" y="40" width="200" height="36" rx="8"/><text class="lbl" x="740" y="63" text-anchor="middle">Apple Health (framework)</text>
+  <rect class="box" x="640" y="86" width="200" height="36" rx="8"/><text class="lbl" x="740" y="109" text-anchor="middle">Calendar (framework)</text>
+  <rect class="box" x="640" y="132" width="200" height="36" rx="8"/><text class="lbl" x="740" y="155" text-anchor="middle">api.prod.whoop.com</text>
+  <rect class="box" x="640" y="178" width="200" height="36" rx="8"/><text class="lbl" x="740" y="201" text-anchor="middle">api.fitbit.com</text>
+  <rect class="box" x="640" y="224" width="200" height="36" rx="8"/><text class="lbl" x="740" y="247" text-anchor="middle">plaid.com</text>
+  <rect class="box" x="640" y="270" width="200" height="36" rx="8"/><text class="lbl" x="740" y="293" text-anchor="middle">api.openai.com</text>
+  <rect class="box" x="640" y="316" width="200" height="36" rx="8"/><text class="lbl" x="740" y="339" text-anchor="middle">api.elevenlabs.io</text>
+  <rect class="box" x="640" y="362" width="200" height="36" rx="8"/><text class="lbl" x="740" y="385" text-anchor="middle">youtube-nocookie.com</text>
+
+  <path class="flow" d="M170 58 L634 58" marker-end="url(#ch19a)"/>
+  <path class="flow" d="M170 104 L634 104" marker-end="url(#ch19a)"/>
+  <path class="flow-hot" d="M170 150 L324 150" marker-end="url(#ch19b)"/><path class="flow-hot" d="M510 150 L634 150" marker-end="url(#ch19b)"/>
+  <path class="flow-hot" d="M170 196 L324 196" marker-end="url(#ch19b)"/><path class="flow-hot" d="M510 196 L634 196" marker-end="url(#ch19b)"/>
+  <path class="flow-hot" d="M170 242 L324 242" marker-end="url(#ch19b)"/><path class="flow-hot" d="M510 242 L634 242" marker-end="url(#ch19b)"/>
+  <path class="flow-hot" d="M170 288 L324 288" marker-end="url(#ch19b)"/><path class="flow-hot" d="M510 288 L634 288" marker-end="url(#ch19b)"/>
+  <path class="flow-dash" d="M170 334 L634 334" marker-end="url(#ch19a)"/>
+  <path class="flow-dash" d="M170 380 L634 380" marker-end="url(#ch19a)"/>
+  <line class="wall" x1="310" y1="128" x2="310" y2="310"/>
+  <text class="lbl-sm" x="190" y="326">xi-api-key from Secrets.xcconfig</text>
+  <text class="lbl-sm" x="190" y="372">no key, an iframe</text>
+  <text class="lbl-hot" x="316" y="122">every client secret lives right of this line</text>
+</svg>
+<figcaption>
+  Solid arrows are direct framework or REST calls. Highlighted arrows pass through an Edge Function
+  because the vendor requires a client secret, and an <code>.ipa</code> is a zip file. Dashed arrows
+  carry no secret worth protecting. Whatever the path, every health reading ends in the same
+  <code>DailyMetrics</code> row via the arbiter in <a href="#s19-4">19.4</a>.
+</figcaption>
+</figure>
+
+<h3 id="s19-1"><span class="num">19.1</span><span>Apple HealthKit</span></h3>
+
+<p>
+  The primary source, and since 27 August the widest. Revision D read nine types with anchored
+  queries. The reader now covers forty seven metrics, and the design decision that made that
+  possible without forty seven schema changes is worth understanding first.
+</p>
+
+<h4>The vocabulary lives outside HealthKit</h4>
+
+<p>
+  <code>HealthMetric</code> is a plain Swift enum in <code>Integrations</code> with no HealthKit
+  import. It carries the vocabulary (a title, a unit label, a decimal count, a display group) and
+  the merge rules (which metrics a strap outranks the phone on, which a person can type). The
+  translation to <code>HKQuantityTypeIdentifier</code> lives in one static function on
+  <code>HealthKitReader</code>, behind <code>#if canImport(HealthKit)</code>, which is what keeps
+  the package building for macOS and <code>swift test</code> running from the terminal.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/HealthMetric.swift
+public enum HealthMetric: String, CaseIterable, Sendable, Identifiable {
+    // Movement
+    case steps, activeEnergyKcal, restingEnergyKcal, exerciseMinutes,
+         standMinutes, distanceKm, flightsClimbed, activeZoneMinutes
+    // Heart and fitness
+    case restingHR, walkingHR, hrvMs, vo2Max, cardioRecoveryBpm, readinessScore
+    // ... body, sleep, vitals, intake, mind, gait, cycle
+
+    /// Measured by a strap worn on the body, so a wearable outranks the phone.
+    public var claimedByWearable: Bool { ... }
+    /// A person can type this into the app, so a background sync must not
+    /// replace what they entered on purpose.
+    public var acceptsManualEntry: Bool {
+        switch self {
+        case .weightKg, .waterML: true
+        default: false
+        }
+    }
+    public var healthIsAuthoritative: Bool {
+        !claimedByWearable &amp;&amp; !acceptsManualEntry
+    }
+}</code></pre>
+
+<p>
+  Adding a metric is four lines in this enum plus one mapping line in the reader. Nothing else
+  changes, because of how the row stores it. <code>DailyMetrics</code> keeps its ten original
+  named columns (steps, sleep, weight and so on) because the sector scorers, the charts and the
+  Whoop merge read them by name. Everything else lands in <code>extrasData</code>, a JSON
+  dictionary keyed by <code>HealthMetric.rawValue</code>. A missing key means no reading;
+  nothing writes a zero to stand in for one. A parallel <code>sourcesData</code> bag records who
+  wrote each value, which is what the arbiter reads back.
+</p>
+
+<h4>Reading a day</h4>
+
+<p>
+  Revision D used anchored queries and persisted anchors. That is gone. The reader now asks for
+  one day at a time with <code>HKStatisticsQuery</code>, summing counts and averaging
+  measurements, because a day is the unit the spine stores and a statistics query
+  de-duplicates across sources for free. Summing raw samples yourself double-counts steps on a
+  day you carried a phone and a watch.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/HealthKitReader.swift
+/// Counts accumulate across the day; measurements are averaged over it.
+/// Summing a heart rate would produce a number in the thousands.
+static func option(for metric: HealthMetric) -> HKStatisticsOptions {
+    switch metric {
+    case .steps, .activeEnergyKcal, .restingEnergyKcal, .exerciseMinutes,
+         .standMinutes, .distanceKm, .flightsClimbed, .waterML,
+         .dietaryEnergyKcal, .proteinG, .carbsG, .fatG, .caffeineMg,
+         .daylightMinutes:
+        .cumulativeSum
+    default:
+        .discreteAverage
+    }
+}
+
+/// What to multiply HealthKit's number by to get the unit the app stores.
+static func scale(for metric: HealthMetric) -> Double {
+    unit(for: metric) == .percent() ? 100 : 1
+}</code></pre>
+
+<p>
+  The <code>scale</code> function exists because of a real bug. <code>HKUnit.percent()</code>
+  yields 0.98 for a 98 percent blood oxygen reading, and the app stores percentages as
+  percentages everywhere else, Whoop included. A Health-sourced SpO2 landed two orders of
+  magnitude below a Whoop one and rendered as "1.0". It went unnoticed because Whoop owns that
+  field and Health only fills its gaps.
+</p>
+
+<p>
+  Sleep is a category, not a quantity, so it is summed by hand from
+  <code>HKCategoryValueSleepAnalysis</code> samples. One query answers six metrics: total
+  asleep, deep, REM, core, awake and in-bed. <code>.inBed</code> is deliberately not counted as
+  sleep, because it is time on a mattress and would inflate the night by however long its
+  owner reads before turning the light off. Mindful minutes sum a category's durations; menstrual
+  flow takes the day's latest ordinal sample, because a value entered later is a correction.
+</p>
+
+<p>
+  A metric that errors is dropped rather than failing the day. One unreadable type must not cost
+  the user the other forty six.
+</p>
+
+<h4>Which days to re-read</h4>
+
+<p>
+  <code>HealthSyncWindow</code> is a pure function from "when did we last sync" to "which days to
+  read", oldest first. It always includes today, because a step count climbs until midnight.
+  It includes the day of the last sync as well as the days since, because a night's sleep is
+  recorded against the morning it ends and the day already covered can still gain a value. A
+  first sync backfills thirty days, the month the dot grid shows. A stamp from the future means
+  a clock change, not a sync that has not happened, and yields just today.
+</p>
+
+<h4>Live changes and the foreground rule</h4>
+
+<p>
+  <code>changes(for:)</code> returns an <code>AsyncStream</code> fed by one
+  <code>HKObserverQuery</code> per type. An observer rather than a timer: a step count changes
+  dozens of times an hour and not at all overnight, so any interval short enough to look live is
+  mostly wasted queries. The stream buffers one event (<code>bufferingNewest(1)</code>) because a
+  batch of samples landing together is one reason to re-read the day, not thirty. Every observer
+  handler calls its completion even on the error path, because HealthKit retries a query whose
+  handler never completed, and a silent leak of those is how an app ends up with a hundred live
+  observers.
+</p>
+
+<div class="note"><b>Background delivery is deliberately off</b>
+<code>enableBackgroundDelivery</code> needs an entitlement and wakes the app to write rows nobody
+is looking at. The launch and foreground syncs already cover the time the app was away, and the
+observer covers the time it is open. Revision D listed background delivery as a freshness
+mechanism; the code that shipped chose not to.</div>
+
+<h4>Authorisation and the cycle gate</h4>
+
+<p>
+  The authorisation trap from Revision D still holds: HealthKit never says whether read access was
+  granted, only whether it was asked, so branching on status is always a bug and an empty result
+  is indistinguishable from a refusal. The settings row therefore links out to Health rather than
+  claiming a state.
+</p>
+
+<p>
+  What is new is a second prompt. The first request asks for <code>HealthMetric.universal</code>,
+  everything that applies to everyone, plus the biological sex characteristic. Cycle metrics
+  (<code>basalBodyTemperatureCelsius</code>, <code>menstrualFlowLevel</code>) are requested in a
+  separate <code>requestCycleAuthorisation()</code> and only when cycle tracking is on. Not
+  because they are more private than a heart rate, but because a permission sheet that asks every
+  person for menstrual data tells most of them the app has misread who they are.
+  <code>healthSuggestsCycleTracking()</code> reads Health's own sex field to pick the default,
+  and it is a default only: the setting is offered either way. The display side of the gate is
+  <code>HealthDaySummary.groups(for:includingCycle:)</code>, which withholds cycle rows even for
+  a day that was read while the switch was on.
+</p>
+
+<p>
+  Two write purpose strings ship. The main app's declares that it saves activities the user
+  chooses to record; the watch's declares that it saves workouts recorded on the wrist. Revision
+  D's "read-only in V1" is no longer true: the live session recorder in
+  <a href="#ch8">Chapter 8</a> writes workouts, and App Store validation demanded the string.
+</p>
+
+<h4>Applying a day</h4>
+
+<p>
+  <code>HealthApply.write</code> is the one place the <code>HealthMetric</code> vocabulary meets
+  <code>DailyMetrics</code> columns. It is separated from the reader so the mapping can be tested
+  against a real in-memory store without a device: <code>MetricArbiter</code> can be perfectly
+  correct and still be wired into the wrong column, and only this layer catches that. Every
+  write goes through <code>MetricsStore.upsert</code>, a merge rather than a replace, so the
+  columns Health has nothing to say about are left exactly as Whoop or the user left them.
+</p>
+
+<h4>Failure handling</h4>
+
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Behaviour</th></tr></thead><tbody>
+<tr><td>Device has no Health store (iPad)</td><td><code>HealthKitError.unavailableOnThisDevice</code>; the connection row reads "Not available on this device"</td></tr>
+<tr><td>User refuses the sheet</td><td>Indistinguishable from no data. Row reads "No data yet. Check Almanac in Health &gt; Sharing"</td></tr>
+<tr><td>One type's query fails</td><td>Dropped from that day; the other metrics still write</td></tr>
+<tr><td>Observer query errors</td><td>Logged, completion still called, stream stays open</td></tr>
+<tr><td>Last sync stamp is in the future</td><td>Treated as a clock change; only today is re-read</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<p>
+  <code>HealthApplyTests</code> (nine tests) pins that Health fills an empty day across every
+  column, that Whoop values survive a Health sync, that a later sync corrects a step count, that
+  an empty Health day changes nothing, that counts are stored as integers, and that every write
+  records its provenance. <code>HealthMetricTests</code> and <code>HealthSyncWindowTests</code>
+  pin the vocabulary and the re-read window. The reader itself is verified on a device: it
+  needs a Health store to exist.
+</p>
+
+<h3 id="s19-2"><span class="num">19.2</span><span>Whoop</span></h3>
+
+<p>
+  Still the only source of Recovery percentage, Strain and Whoop's sleep scoring, and still the
+  integration with the most code: eleven files in <code>Integrations</code> and one archive
+  model in <code>Persistence</code>. Everything from Revision D holds, so this section states the
+  design briefly and spends its words on what changed: server-held connections, a wider digest,
+  the arbiter, and the two URL schemes.
+</p>
+
+<h4>The five collections, defined once</h4>
+
+<p>
+  <code>WhoopCollection</code> pairs each endpoint path with its OAuth scope, and
+  <code>WhoopOAuth.defaultScopes</code> is derived from it plus <code>offline</code>. This exists
+  because path and scope once drifted: two endpoints were added to the client while the
+  authorize request still asked for three scopes, Whoop 401'd a token it had just issued, and the
+  sync read that as a dead credential and deleted it. Colocating them makes a
+  fetchable-but-unauthorised collection unrepresentable, and
+  <code>everyCollectionsScopeIsRequestedAtAuthorization</code> pins it.
+</p>
+
+<div class="tablewrap"><table><thead><tr><th>Collection</th><th>Path</th><th>Scope</th><th>Feeds</th></tr></thead><tbody>
+<tr><td>Recovery</td><td><code>recovery</code></td><td><code>read:recovery</code></td><td>Recovery %, HRV, resting HR, SpO2, skin temp, calibrating flag</td></tr>
+<tr><td>Sleep</td><td><code>activity/sleep</code></td><td><code>read:sleep</code></td><td>Asleep minutes, stages, performance, efficiency, consistency, need and debt components</td></tr>
+<tr><td>Cycle</td><td><code>cycle</code></td><td><code>read:cycles</code></td><td>Day strain, calories, average and max HR</td></tr>
+<tr><td>Workout</td><td><code>activity/workout</code></td><td><code>read:workout</code></td><td><code>WorkoutRecord</code> rows with six zone durations, exercise minutes</td></tr>
+<tr><td>Body</td><td><code>user/measurement/body</code></td><td><code>read:body_measurement</code></td><td>Weight, when nothing else has written it</td></tr>
+</tbody></table></div>
+
+<h4>OAuth: PKCE on the phone, the secret on the server</h4>
+
+<p>
+  Whoop registers apps as confidential clients, so the token exchange runs in the
+  <code>whoop-token</code> Edge Function. The app builds the authorize URL with an S256 challenge
+  over a random 32-byte verifier, hands the returned code and verifier to the function, and the
+  function performs the exchange with <code>WHOOP_CLIENT_SECRET</code>. PKCE is kept even though
+  the exchange is server-side because it binds the code to this app instance.
+</p>
+
+<p>
+  The redirect is two hops. Whoop requires an https redirect URI, so it points at
+  <code>whoop-callback</code>, which 302s to a custom scheme. Sign-in opens in real Safari via
+  <code>UIApplication.open</code> because Whoop's login sits behind a Cloudflare challenge that
+  never clears inside <code>ASWebAuthenticationSession</code>. The pending verifier and state are
+  persisted to the Keychain as a list capped at five and fresh for fifteen minutes, because
+  Safari backgrounds the app and iOS may kill it before the callback returns, and because tapping
+  Connect twice creates two valid in-flight authorisations.
+</p>
+
+<div class="note caution"><b>Two URL schemes, and which one the bridge sends</b>
+The app claims both <code>almanac</code> and <code>lifeos</code>. The bridge sends
+<code>lifeos://whoop-callback</code> because that is the scheme every build already installed
+knows, including ones that predate the rename. Pointing it at <code>almanac</code> stranded anyone
+who had not updated: Safari was handed a scheme no installed app claimed and refused it as an
+invalid address. The comment in <code>whoop-callback/index.ts</code> records the plan to move to
+<code>almanac</code> once no old build is in use, and why <code>lifeos</code> is the weaker
+claim: a device that had the app before its bundle identifier changed carries the old install as
+a separate app that also claims it.</div>
+
+<h4>The connection now lives on the server too</h4>
+
+<p>
+  Migration <code>20260913090000_whoop_account_connections.sql</code> added a
+  <code>whoop_connections</code> table, and <code>whoop-token</code> now stores every issued pair
+  there under the caller's user id. The phone still keeps its own copy in the Keychain, scoped to
+  the signed-in account, but three things changed:
+</p>
+
+<ul>
+  <li><strong>Restore.</strong> A fresh install, or a second device, calls
+    <code>WhoopTokenExchange.restore()</code> (<code>{"action": "restore"}</code>). If the server
+    has a live pair it returns it; a 404 means this account never linked Whoop.
+    <code>WhoopConnectionViewModel.syncIfStale</code> tries this once per process before deciding
+    the strap is disconnected.</li>
+  <li><strong>Refresh under a lock.</strong> Whoop rotates the refresh token on every use, so two
+    devices refreshing at once would invalidate each other. The function claims the row through
+    <code>claim_whoop_refresh</code>, a 30-second lock, and a second caller gets
+    <code>refresh_busy</code> (503) rather than a dead credential. The update is conditioned on
+    the lock still being held, so a late refresh cannot resurrect a removed or reconnected row.</li>
+  <li><strong>Disconnect is a DELETE.</strong> The row goes, then the Keychain is cleared.</li>
+</ul>
+
+<p>
+  The function short-circuits when the stored access token has more than sixty seconds left,
+  returning it without touching Whoop, so a restore or a refresh check costs one database read.
+</p>
+
+<h4>Token lifecycle on the device</h4>
+
+<p>
+  <code>WhoopTokens.isExpired</code> treats a token as expired sixty seconds early, and
+  <code>WhoopSync.sync</code> refreshes proactively before fetching rather than reacting to a 401
+  mid-sync. Only a refused refresh clears the credential. A 401 from a collection endpoint throws
+  <code>accessDenied</code> and keeps the tokens: it usually means the grant predates a scope the
+  app now needs, and the fix is reconnect, which the message says in those words.
+  <code>aCollectionRejectionKeepsTheConnection</code> and
+  <code>aRejectedRefreshDoesClearTheConnection</code> pin the two branches.
+</p>
+
+<h4>Wire format</h4>
+
+<p>
+  Whoop's timestamps carry fractional seconds, which Foundation's stock ISO 8601 strategy
+  rejects, so <code>WhoopClient.decoder</code> tries fractional first then plain. Pages take
+  <code>start</code>, <code>end</code> and <code>limit=25</code> (Whoop's maximum) and follow
+  <code>next_token</code> up to a cap of 20 pages, logging when the cap truncates. Records with a
+  <code>score_state</code> other than <code>SCORED</code> are archived but not derived.
+</p>
+
+<p>
+  The DTO to sample mapping lives exactly once, as a computed <code>sample</code> property on each
+  DTO, because the live sync and <code>rederive()</code> once drifted apart. Three widenings
+  landed on 26 August and all three are in that one mapping:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/WhoopClient.swift
+// An empty object (every member nil) means Whoop reported no zone
+// data at all, not that every zone measured zero: `nil` here, not
+// `[0, 0, 0, 0, 0, 0]`, which would claim a reading that was never taken.
+zoneMinutes: score?.zone_durations.flatMap { z -> [Int]? in
+    let raw = [z.zone_zero_milli, z.zone_one_milli, z.zone_two_milli,
+               z.zone_three_milli, z.zone_four_milli, z.zone_five_milli]
+    guard raw.contains(where: { $0 != nil }) else { return nil }
+    return raw.map { WhoopSleepMath.minutes(fromMilliseconds: $0) ?? 0 }
+}</code></pre>
+
+<ul>
+  <li><strong>Zone durations.</strong> Six int64 milliseconds per workout, stored as six columns on
+    <code>WorkoutRecord</code>. They feed the live effort model in <a href="#ch8">Chapter 8</a>
+    and the coach's digest. An empty object decodes to nil, not six zeros;
+    <code>anEmptyZoneDurationsObjectDecodesToNil</code> pins it.</li>
+  <li><strong>Sleep need components.</strong> Baseline, need from debt, need from strain and need
+    from a recent nap, the last one negative by definition and preserved with its sign.</li>
+  <li><strong>The calibrating flag.</strong> <code>user_calibrating</code> lands on
+    <code>DailyMetrics.whoopRecoveryIsCalibrating</code>, optional so an existing store migrates.
+    A recovery produced during calibration is not a score that supports a comparison, and
+    presenting it unqualified is the same class of error as a false zero.</li>
+</ul>
+
+<h4>Archive first, derive second</h4>
+
+<p>
+  <code>WhoopSync.sync()</code> fetches all five collections for a rolling fourteen days, splits
+  every page into one payload per record with <code>WhoopRawSplit</code> (recovery is keyed by
+  its <code>cycle_id</code> because it carries no id of its own), stores them in
+  <code>WhoopRawRecord</code> under <code>(kind, externalID)</code> in one batched save, and only
+  then derives. There is no cursor: idempotency comes from upserts, so re-syncing is always
+  safe. <code>WhoopDerivation.rederive()</code> rebuilds every derived row from the archive with
+  no network call. The body measurement carries no date, so its archive row uses
+  <code>receivedAt</code> and a stable external id of <code>self</code>.
+</p>
+
+<p>
+  Derivation attributes sleep to the morning it ends, excludes naps from the day roll-up while
+  still storing them as <code>SleepRecord</code>s, converts kilojoules to kilocalories with the
+  exact divisor 4.184, and never lets a nil field overwrite a stored value. What changed is that
+  the columns other sources also write (resting HR, HRV, SpO2, respiratory rate, sleep minutes,
+  exercise minutes, weight) now go through the arbiter instead of being assigned directly. The
+  Whoop-only columns (recovery, strain, sleep performance) are still written directly, and
+  <code>whoopOnlyColumnsAreWrittenDirectly</code> pins that distinction.
+</p>
+
+<h4>Sync triggers</h4>
+
+<p>
+  Revision D had three manual triggers. There is now an automatic one:
+  <code>syncIfStale()</code> runs on launch and on every return to the foreground, gated by
+  <code>SyncStalenessPolicy</code> (<a href="#s19-14">19.14</a>). It is silent by design because
+  the screens already show correct, if stale, local data; only a dead credential surfaces. The
+  nightly server-side job and the webhook receiver remain unbuilt.
+</p>
+
+<h4>Auto-pairing the strap's broadcast</h4>
+
+<p>
+  A Whoop 4.0 can broadcast heart rate over Bluetooth. <code>WhoopAutoPair.choice(among:)</code>
+  decides whether to connect without asking: only a device whose name contains "whoop", and only
+  when there is exactly one. Another person's strap in a gym is not a reading this person owns.
+  The live sensor that consumes it is in <a href="#ch8">Chapter 8</a>.
+</p>
+
+<h4>Tests</h4>
+
+<p>
+  <code>WhoopTests</code> (29), <code>WhoopWireFormatTests</code> (28, on payloads captured from a
+  live v2 response, so a decode failure means the API moved), <code>WhoopPaginationTests</code>
+  (16), <code>WhoopTokenTests</code>, <code>WhoopArbitrationTests</code> (5) and
+  <code>WhoopArchiveTests</code> in <code>PersistenceTests</code>. Workout is the one collection
+  with no captured fixture; its tests use a hand-built payload.
+</p>
+
+<h3 id="s19-3"><span class="num">19.3</span><span>Fitbit</span></h3>
+
+<p>
+  The second wearable, added 27 August. It reads nine range collections through an Edge Function
+  and merges by rank. The interesting part is what it deliberately does not do: the phone never
+  holds a Fitbit token.
+</p>
+
+<h4>Why the tokens stay on the server</h4>
+
+<p>
+  Fitbit rotates its refresh token on every use and the old one stops working. Two devices
+  sharing one credential would sign each other out on every sync. So exactly one writer may hold
+  it, and that writer is a row in <code>fitbit_connections</code>. <code>FitbitAuthStoring</code>
+  has no token methods at all; it holds only the pending PKCE attempts, in the Keychain, scoped to
+  the signed-in account so a second account cannot complete the first one's authorisation.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/FitbitAuthStore.swift
+/// Deliberately has no token methods.
+///
+/// This is the whole difference from `WhoopTokenStoring`, and it is not an
+/// oversight: Fitbit rotates its refresh token on every use, so exactly one
+/// writer may hold it, and that writer is a row in the database.
+public protocol FitbitAuthStoring: Sendable {
+    func pendingAuths() -> [FitbitPendingAuth]
+    func savePending(_ pending: FitbitPendingAuth) throws
+    func clearPending()
+}</code></pre>
+
+<h4>OAuth</h4>
+
+<p>
+  Fitbit permits a custom scheme for a native app, so the redirect is
+  <code>lifeos://fitbit-callback</code> with no bridge function. <code>FitbitOAuth.session</code>
+  builds the authorize URL with PKCE and sends the ten scopes as one space-separated parameter.
+  Repeating the parameter makes Fitbit issue a narrower grant without saying so, and the first
+  sign of it is a 403 much later. The scope list is pinned on both sides:
+  <code>FitbitOAuth.defaultScopes</code> in Swift and <code>FITBIT_SCOPES</code> in
+  <code>_shared/fitbit.ts</code>, each with its own test, and the Deno one checks that no scope
+  the app does not read is requested (no location, no social, no ECG).
+</p>
+
+<p>
+  <code>fitbit-token</code> exchanges the code with <code>FITBIT_CLIENT_SECRET</code>, upserts the
+  pair on <code>user_id</code>, and returns only <code>{connected, fitbit_user_id, scopes}</code>.
+  No token in the response is the whole point.
+</p>
+
+<h4>The sync and its lease</h4>
+
+<p>
+  <code>FitbitSync.sync(days:token:)</code> posts <code>{days}</code> to <code>fitbit-sync</code>
+  with the Supabase access token. The function reads the connection through
+  <code>read_fitbit_connection</code> (a security-definer RPC, because the table has RLS enabled
+  and zero policies), refreshes if the access token is within sixty seconds of expiry, and pulls
+  the nine collections sequentially.
+</p>
+
+<p>
+  Refresh runs under a lease. <code>claim_fitbit_refresh</code> sets
+  <code>refresh_lease_until</code> thirty seconds ahead only if no lease is live, and returns the
+  row; a second sync on another device gets nothing back and the function answers
+  <code>retry: true</code>, which the app reads as "come back shortly" rather than a fault.
+  <code>aRefreshLockDoesNotBecomeAnEmptySuccessfulSync</code> pins that an empty retry response
+  throws <code>retryLater</code> instead of reporting zero days written.
+</p>
+
+<pre><code>// supabase/functions/fitbit-sync/index.ts
+/// Stop while there is still headroom rather than at zero. A sync that spends
+/// the user's last request leaves nothing for the retry, and Fitbit's quota
+/// resets only at the top of the hour.
+const QUOTA_FLOOR = 10;
+
+// Sequential, not Promise.all: the quota headroom arrives in each response,
+// and it can only stop the loop if the loop is still running.
+for (const collection of COLLECTIONS) {
+  if (stoppedForQuota) { failures[collection.key] = "rate_limited"; continue; }
+  ...
+  const remaining = quotaRemaining(response.headers);
+  if (remaining !== null &amp;&amp; remaining &lt;= QUOTA_FLOOR) stoppedForQuota = true;</code></pre>
+
+<p>
+  Fitbit allows 150 requests an hour. Range collections cost one request for up to 30, 100 or
+  365 days depending on the endpoint, which is why per-date collections (the daily activity
+  summary, nutrition) are absent: they cost a request per day. Each collection's cap is declared in
+  both <code>FitbitCollection.maximumRangeDays</code> and the function's <code>COLLECTIONS</code>
+  table, and exceeding it is a 400 that names nothing useful.
+</p>
+
+<h4>Wire format and derivation</h4>
+
+<p>
+  <code>FitbitWireFormat.swift</code> declares every numeric field optional. Fitbit omits what a
+  device did not record, and a non-optional field turns one missing number into a whole failed
+  range. SpO2 arrives as a bare array rather than an envelope. Resting heart rate is under a key
+  called <code>activities-heart</code>. Skin temperature is a nightly variation from baseline,
+  not an absolute, and is stored as <code>wristTemperatureCelsius</code> without pretending to be
+  a body temperature. VO2 max is a string that may be a range like "40-44"; the derivation takes
+  the midpoint.
+</p>
+
+<p>
+  <code>FitbitDerivation</code> is split in two: <code>days(from:)</code> is pure and turns
+  payloads into <code>[FitbitDay]</code>, and <code>derive</code> writes them through the arbiter
+  with <code>.fitbit</code> as the source. Dates are parsed with a POSIX locale in the user's own
+  time zone, because an ISO parser treats <code>yyyy-MM-dd</code> as UTC midnight and shifts
+  every night by a day for anyone west of Greenwich. Fitbit's "light" sleep is filed as Apple's
+  "core", the same stage under two vendors' names, so the sleep panel's total adds up.
+</p>
+
+<p>
+  The sync archives the raw response before deriving, under kinds prefixed
+  <code>fitbit-</code>, using <code>WhoopArchive</code> because that type is already a generic
+  raw-record store and only its name is Whoop-specific. The order of the error checks after the
+  write is deliberate: a declined scope must not discard the six collections that arrived intact,
+  so <code>partial(failed:)</code> is thrown after the days are written.
+</p>
+
+<h4>Failure handling</h4>
+
+<div class="tablewrap"><table><thead><tr><th>Condition</th><th>Server answer</th><th>App behaviour</th></tr></thead><tbody>
+<tr><td>No row for this user</td><td>404</td><td><code>notConnected</code>; the card offers Connect</td></tr>
+<tr><td>Refresh refused (<code>invalid_grant</code>)</td><td><code>needs_reauth: true</code>, row flagged</td><td><code>reauthenticationRequired</code>; the card says Reconnect and never retries</td></tr>
+<tr><td>Another device holds the lease</td><td><code>retry: true</code></td><td><code>retryLater</code> after writing nothing</td></tr>
+<tr><td>Quota floor reached mid-loop</td><td>Remaining collections marked <code>rate_limited</code>, <code>retry: true</code></td><td>Days that arrived are written, then <code>retryLater</code></td></tr>
+<tr><td>One collection 403s (declined scope)</td><td>That key in <code>failures</code></td><td><code>partial(failed:)</code> after writing the rest</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<p>
+  <code>FitbitOAuthTests</code>, <code>FitbitWireFormatTests</code>,
+  <code>FitbitDerivationTests</code> (ten, including <code>lightSleepBecomesCore</code>,
+  <code>aVO2MaxRangeBecomesItsMidpoint</code> and
+  <code>aDateIsReadInTheUsersOwnTimeZone</code>) and <code>FitbitSyncTests</code> (nine, over a
+  stub <code>URLProtocol</code>). On the server, <code>fitbit_test.ts</code> has ten Deno tests
+  over the pure helpers: failure classification, the quota header, the token form, the scope
+  list and each collection's path.
+</p>
+
+<h3 id="s19-4"><span class="num">19.4</span><span>The arbiter: who wins a column</span></h3>
+
+<p>
+  Revision D's rule was "Whoop writes its columns, HealthKit fills the gaps", implemented as a
+  boolean called <code>fillGapsOnly</code>. That worked with exactly two writers. A second strap
+  broke it: <code>fillGapsOnly</code> could not tell a Whoop value from a typed one, and the
+  question "should Fitbit replace this HRV" has a different answer depending on whether Whoop, the
+  phone or the person wrote it. So provenance is now recorded per metric per day, and the merge
+  is a rank.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/MetricSource.swift
+public enum MetricSource: String, Sendable, CaseIterable, Equatable {
+    case manual, whoop, fitbit, appleHealth
+}
+
+public struct SourceRanking: Sendable, Equatable {
+    public let primaryWearable: MetricSource   // .whoop unless the user chose Fitbit
+
+    /// 4 typed, 3 the authority, 2 a secondary reading, 1 a fallback, 0 unknown.
+    public func rank(_ source: MetricSource?, for metric: HealthMetric) -> Int {
+        guard let source else { return 0 }
+        switch source {
+        case .manual:
+            return 4
+        case .appleHealth:
+            return metric.healthIsAuthoritative ? 3 : 1
+        case .whoop, .fitbit:
+            guard metric.claimedByWearable else { return 2 }
+            return source == primaryWearable ? 3 : 2
+        }
+    }
+}</code></pre>
+
+<p>
+  The resolve function is eight lines and pure. A missing incoming reading never changes anything
+  (a source having no reading is not evidence of zero). An empty column takes whatever arrives.
+  Otherwise the incoming source must rank greater than <em>or equal to</em> the holder: equal
+  rank means the same source syncing again, which must be allowed to correct itself, and that is
+  what lets an afternoon Health sync raise the morning's step count.
+</p>
+
+<p>
+  The one subtle case is a value written before provenance existed.
+  <code>MetricSource.legacy(for:)</code> reads an unattributed value as rank 0 for almost every
+  metric, so the first sync after upgrade re-attributes it. Weight and water are the exception:
+  an unattributed typed metric is read as <code>.manual</code>, because treating it as unknown
+  would let the next Health sync silently replace a figure the person typed. That is the one path
+  that destroys data a person entered by hand, and
+  <code>anUnattributedTypedValueIsTreatedAsTyped</code> exists to keep it closed.
+</p>
+
+<div class="note good"><b>Why the vocabulary and the rule live apart from the sources</b>
+<code>MetricArbiter</code>, <code>MetricSource</code> and <code>HealthMetric</code> import nothing
+from HealthKit, Whoop or SwiftData. Every branch is exercised in
+<code>MetricArbiterTests</code> without a device, a prompt, a network or a store. Each sync
+(<code>HealthApply</code>, <code>WhoopDerivation.merged</code>,
+<code>FitbitDerivation.merged</code>) is a loop around this one call, and
+<code>WhoopArbitrationTests</code> and <code>HealthApplyTests</code> then check the wiring into
+real columns.</div>
+
+<h3 id="s19-5"><span class="num">19.5</span><span>Plaid</span></h3>
+
+<p>
+  Bank accounts and transactions, through four Edge Functions and a device-side cursor.
+  <a href="#ch11">Chapter 11</a> owns the feature; this section is the integration contract.
+</p>
+
+<ul>
+  <li><strong>Secret on the server.</strong> Every Plaid endpoint requires <code>client_id</code>
+    and <code>secret</code> on the request, so the device never calls Plaid. <code>PlaidClient</code>
+    calls <code>plaid-link-token</code>, <code>plaid-exchange</code>, <code>plaid-sync</code> and
+    <code>plaid-disconnect</code>, all resolving the user from the bearer token.</li>
+  <li><strong>Access tokens never reach the phone.</strong> <code>plaid_items</code> holds them
+    behind RLS with no policies, and <code>plaid-exchange</code> returns only
+    <code>item_id</code> and the institution name.</li>
+  <li><strong>The cursor lives on the device.</strong> <code>PlaidItemStore</code> keeps a
+    <code>/transactions/sync</code> cursor per item, serialised with an <code>NSLock</code>, and
+    only advances it after the rows are stored. The function pulls at most three pages per call
+    and returns <code>has_more</code>, so a years-long initial pull is several calls.</li>
+  <li><strong>OAuth banks.</strong> Institutions like Chase hand the browser to the bank, and the
+    bank redirects to <code>https://almanac.shivvyas.com/plaid-oauth</code>, a universal link
+    that iOS routes back into the app. <a href="#ch20">Chapter 20</a> covers the two-file site
+    behind it.</li>
+  <li><strong>Failure kinds.</strong> <code>classifyPlaidFailure</code> maps to three kinds:
+    <code>item_login_required</code> (reconnect banner, not a spinner), <code>rate_limited</code>
+    (retry later), <code>upstream_failure</code> (opaque, because Plaid's error bodies echo
+    request parameters). Balance failures travel separately from transaction failures because
+    <code>/transactions/sync</code> serves cached data and succeeds with an expired login, while
+    <code>/accounts/balance/get</code> is the call that actually throws it.</li>
+</ul>
+
+<h3 id="s19-6"><span class="num">19.6</span><span>EventKit and the calendar</span></h3>
+
+<p>
+  The calendar is read and written through a protocol so that a second provider (Google, planned)
+  slots in without the cache or the assistant changing. <a href="#ch6">Chapter 6</a> covers the
+  screens and <a href="#ch15">Chapter 15</a> the tools; this section covers the source.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/CalendarSource.swift
+public protocol CalendarSource: Sendable {
+    var source: CalendarEventSource { get }
+    var isAuthorized: Bool { get async }
+    func requestAccess() async throws -> Bool
+    func events(from: Date, to: Date) async throws -> [CalendarEventSnapshot]
+    func create(_ draft: CalendarEventDraft) async throws -> CalendarEventSnapshot
+    func update(sourceID: String, with draft: CalendarEventDraft) async throws -> CalendarEventSnapshot
+    func delete(sourceID: String) async throws
+}</code></pre>
+
+<p>
+  <code>EventKitSource</code> is an actor because <code>EKEventStore</code> is not Sendable.
+  Three details matter:
+</p>
+
+<ul>
+  <li><strong>Permission is per account, not per phone.</strong> iOS grants calendar access to the
+    app. <code>AccountDeviceAccess.allowsCalendar</code> requires both the system grant and a flag
+    in the account's own defaults suite, so a second person signing in does not inherit the first
+    person's calendar. The source also captures the account id at construction and refuses to
+    answer if the current account has changed since.</li>
+  <li><strong>Recurring occurrences get a qualified id.</strong> Every occurrence of a series
+    shares one <code>eventIdentifier</code>, so the natural key is qualified with the occurrence
+    start (<code>id#timestamp</code>). A qualified id never resolves through
+    <code>event(withIdentifier:)</code>, which makes a write against an occurrence fail with
+    <code>unknownEvent</code> instead of silently editing the wrong one; the tool layer refuses
+    recurring writes with a real explanation before that can happen.</li>
+  <li><strong>The prompt is never at launch.</strong> <code>requestAccess()</code> is called from
+    the agenda card's empty state, when the person has just asked for the thing that needs it.</li>
+</ul>
+
+<p>
+  <code>CalendarSync</code> pulls every authorised source over a window of 30 days back and 90
+  forward, merges with <code>CalendarMerge</code> (EventKit wins a collision on lowercased title
+  plus start date, which is what stops every event appearing twice when a Google account is also
+  added under iOS Settings), and hands the result to <code>CalendarStore.apply</code>. A source
+  that throws is skipped: partial data beats an empty screen, and sync is ambient, never a
+  user-visible request. Writes route to the source that owns the event and then re-sync, so the
+  cache reflects what the provider actually stored rather than the local draft.
+</p>
+
+<p>
+  <code>CalendarSyncTests</code>, <code>CalendarMergeTests</code> and
+  <code>EventKitSourceIDTests</code> cover the merge, the prune-only-what-you-fetched rule and the
+  occurrence key.
+</p>
+
+<h3 id="s19-7"><span class="num">19.7</span><span>Supabase auth and REST</span></h3>
+
+<p>
+  Still no SDK. <code>SupabaseAuth</code> makes five auth calls and <code>SupabaseREST</code>
+  makes an upsert, a windowed fetch and a narrow delete. The anon key goes in the
+  <code>apikey</code> header; RLS is what protects rows.
+</p>
+
+<h4>Two channels, two paths</h4>
+
+<div class="tablewrap"><table><thead><tr><th>Step</th><th>Email</th><th>Phone</th></tr></thead><tbody>
+<tr><td>Send a code</td><td><code>POST auth/v1/otp</code> with <code>create_user: true</code></td><td><code>POST functions/v1/otp-start</code> (Twilio Verify)</td></tr>
+<tr><td>Verify</td><td><code>POST auth/v1/verify</code>, <code>type: email</code></td><td><code>POST functions/v1/otp-check</code>, which mints a GoTrue session</td></tr>
+<tr><td>Availability</td><td>Read from <code>auth/v1/settings</code></td><td>Always offered; delivery is the function's job</td></tr>
+</tbody></table></div>
+
+<p>
+  Both channels are six-digit codes. The email template puts <code>{{ .Token }}</code> on the
+  page instead of the stock magic link, which cannot be typed into an app. Phone goes through
+  Twilio Verify rather than GoTrue's own SMS provider because the function can classify Twilio's
+  failure codes into sentences a person can act on, and rate-limit by phone, prefix and IP
+  (<a href="#ch20">Chapter 20</a>).
+</p>
+
+<p>
+  <code>AuthError.fromHTTP</code> is the one place server codes become copy. A
+  <code>{"error": "sms_opted_out"}</code> body becomes "That number opted out of our texts. Text
+  START to our number to opt back in". A bare 502 with no message is channel-neutral, because
+  email is now the default and the old copy assumed SMS.
+  <code>AuthErrorMappingTests</code> pins every mapping.
+</p>
+
+<h4>The refresh URL bug</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SupabaseAuth.swift
+/// Deliberately not `appendingPathComponent` on the whole path.  That
+/// treats what it is given as a single component and percent-encodes the
+/// `?` into `%3F`, which sent the one call that carries a query to
+/// POST /auth/v1/token%3Fgrant_type=refresh_token.  GoTrue answers 404 to
+/// that, so a stored session could never be renewed.
+private func authURL(_ path: String) throws -> URL {
+    let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+    var components = URLComponents(
+        url: baseURL.appendingPathComponent("auth/v1/\(parts[0])"),
+        resolvingAgainstBaseURL: false
+    )
+    if parts.count > 1 { components?.query = String(parts[1]) }
+    guard let url = components?.url else { throw AuthError.transport }
+    return url
+}</code></pre>
+
+<p>
+  This is worth reading because of how it presented: sign-in always worked, and an hour later
+  every authenticated call began failing 401. <code>AuthRefreshURLTests</code> now pins the
+  query string.
+</p>
+
+<h4>Session lifecycle: three pieces</h4>
+
+<ul>
+  <li><strong><code>SessionRefresher.restore()</code></strong> runs on launch and on every
+    foreground. It returns <code>signedOut</code>, <code>active</code> or <code>rejected</code>,
+    and only a definitive refusal (400, 401, 403, 422) clears the store. Offline, a 5xx and a 429
+    keep the session. A refreshed session carries forward the user id, phone, email and refresh
+    token from the one it replaces, because refresh responses may be sparse. Two guards protect
+    against races: a sign-out during the refresh cannot be resurrected (the store's refresh token
+    is compared before saving), and a refresh cannot change the account's identity.</li>
+  <li><strong><code>SessionKeepAlive</code></strong> answers the case the refresher cannot: a person
+    who keeps the app open for over an hour. It schedules a renewal 45 seconds before expiry,
+    inside <code>isExpired</code>'s own minute of slack so the wake finds a session the refresher
+    will actually renew, with a five-second floor so a clock that jumps backwards cannot become a
+    spin against the auth endpoint.</li>
+  <li><strong><code>AccountStore</code></strong> holds the roster of accounts that have signed in
+    on this device (ids and labels in defaults) and one Keychain session per user id. Signing in
+    as a second person no longer overwrites the first. <code>currentScope</code> returns nil
+    rather than the first account it can find, so a current id naming a signed-out account never
+    opens somebody else's store. The pre-accounts session slot is adopted once and cleared on
+    sign out, because a credential that can restore an account is that account's session
+    whatever slot it sits in. <a href="#ch4">Chapter 4</a> covers what the shell does with this.</li>
+</ul>
+
+<p>
+  <code>KeychainAuthSessionStore()</code> defaults its account to whichever id is current. This
+  matters more than it looks: every network client in the app builds one to get a token, and
+  before accounts there was one slot, so after a switch they would all have kept presenting the
+  previous person's token.
+</p>
+
+<h4>REST</h4>
+
+<p>
+  <code>SupabaseREST.upsert</code> sends <code>Prefer: resolution=merge-duplicates</code> so a
+  push that lost its response and retried does not create a second copy of every row.
+  <code>fetch(table:since:)</code> orders by <code>updated_at</code> ascending and uses
+  <code>gte</code> on the cursor, inclusive, because a row written in the same millisecond as the
+  previous page's last row must not be skipped; re-reading one row is free, missing one is silent
+  data loss. Both take and return bytes rather than dictionaries because a
+  <code>[String: Any]</code> is not Sendable and the call crosses an isolation boundary.
+  <code>delete</code> is deliberately narrow (one column, one value): the one thing the app
+  deletes over REST is its own push registration.
+</p>
+
+<p>
+  <code>SessionRefreshTests</code> (twelve, serialised, over a stub <code>URLProtocol</code>),
+  <code>SessionKeepAliveTests</code>, <code>AccountStoreTests</code> (seventeen) and
+  <code>AuthSessionProfileTests</code> pin the above.
+</p>
+
+<h3 id="s19-8"><span class="num">19.8</span><span>Apple Foundation Models</span></h3>
+
+<p>
+  The on-device tier. Revision D's correction still stands: on iOS 26 there is no public
+  <code>LanguageModel</code> protocol, so the app keeps two thin protocols of its own,
+  <code>Engine</code> for one-shot tasks and <code>ChatEngine</code> for conversations, and the
+  remote engines conform to the same ones. When iOS 27 ships Apple's seam, the remote engines
+  conform to it and the protocols are deleted without a caller changing.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/ModelAvailability.swift
+public enum ModelAvailability: Sendable, Equatable {
+    case available
+    case unavailablePermanently
+    case unavailableForNow
+
+    public static func from(_ availability: SystemLanguageModel.Availability) -> ModelAvailability {
+        switch availability {
+        case .available: return .available
+        case .unavailable(let reason):
+            switch reason {
+            case .deviceNotEligible: return .unavailablePermanently
+            case .appleIntelligenceNotEnabled, .modelNotReady: return .unavailableForNow
+            @unknown default: return .unavailableForNow
+            }
+        }
+    }
+}</code></pre>
+
+<p>
+  Apple's availability is collapsed to the one distinction the router acts on: can this answer
+  still change. Hardware eligibility never changes while the process is alive, so it is the only
+  answer the router may remember. Everything else is re-read every time, and an unknown reason
+  is assumed transient because re-checking costs a property read while wrongly caching "never"
+  would disable the free tier for the life of the process.
+</p>
+
+<p>
+  <code>OnDeviceEngine</code> creates a <code>LanguageModelSession</code> per call.
+  <code>LanguageModelSession</code> is a non-Sendable final class and <code>Engine</code> is
+  Sendable, and a one-shot task has no conversation to remember. <code>OnDeviceChatEngine</code>
+  also creates a session per turn, because the conversation's memory lives in the thread the app
+  renders, not in the session; it flattens the thread into one prompt, binds each
+  <code>CoachTool</code> as a <code>SessionTool</code>, and streams snapshots through
+  <code>onPartial</code>, cleaning markdown on the way past so the screen never shows a raw
+  asterisk for a second. <a href="#ch14">Chapter 14</a> covers the router that chooses between
+  this and the cloud.
+</p>
+
+<p>
+  The floor is iOS 26 because <code>FoundationModels</code> does not exist before it. There is no
+  older-OS cohort that always escalates; unavailability is only the runtime reasons above.
+</p>
+
+<h3 id="s19-9"><span class="num">19.9</span><span>ElevenLabs: hearing and speaking</span></h3>
+
+<p>
+  LIFO's voice loop uses ElevenLabs twice, both from the app target with the key from
+  <code>Secrets.xcconfig</code> under <code>ELEVENLABS_API_KEY</code>. This is the one vendor
+  called from the device with a real key. The key is passed into each call, never stored on a
+  type, and never logged. It is a personal key for a single-user build; the cost chapter
+  (<a href="#ch24">Chapter 24</a>) records what it spends.
+</p>
+
+<ul>
+  <li><strong>Scribe (speech to text).</strong> <code>ElevenLabsSpeechClient.transcribe</code> posts a
+    WAV clip as multipart form data to <code>v1/speech-to-text</code> with
+    <code>model_id: scribe_v2</code>. A clip under 1,024 bytes is rejected before upload as
+    too short to hear.</li>
+  <li><strong>Text to speech.</strong> <code>ElevenLabsVoiceClient.speech(for:voice:apiKey:)</code>
+    posts to <code>v1/text-to-speech/{voiceID}</code> with <code>eleven_flash_v2_5</code>, the
+    low-latency model, because a coach that speaks three seconds after the text has been read is
+    repeating, not answering. Speech is billed per character, so the text is capped at 1,200
+    characters (roughly ninety seconds) and truncated on a sentence boundary, because a voice
+    stopping mid-number sounds like a fault.</li>
+  <li><strong>Three voices.</strong> <code>AssistantVoice</code> names Rachel, Adam and Sarah by
+    ElevenLabs' public stock voice ids, which are stable across accounts and need no
+    provisioning. Three, deliberately: a list of dozens is a settings screen nobody finishes.
+    Spoken replies are off until asked for, because a coach that starts talking in a room the
+    phone knows nothing about is a worse default than silence.</li>
+</ul>
+
+<p>
+  <code>VoicePlayer</code> holds the <code>AVAudioPlayer</code> because it stops the moment it is
+  deallocated, sets the session to <code>.playback</code> with <code>.spokenAudio</code> and
+  <code>.duckOthers</code>, meters the level at 30 Hz for the orb in
+  <a href="#ch14">Chapter 14</a>, and hands the session back with
+  <code>notifyOthersOnDeactivation</code> so a podcast returns to full volume. A delayed
+  completion from an old player is checked by identity so it cannot stop a newer reply.
+</p>
+
+<h3 id="s19-10"><span class="num">19.10</span><span>Apple Speech and the microphone</span></h3>
+
+<p>
+  <code>SpeechListener</code> in <code>Features/Coach/Model</code> is the microphone. One tap
+  opens it and no second tap is needed: it watches the level, decides when the sentence is over,
+  and transcribes what it recorded. It is <code>nonisolated</code> because the
+  <code>AVAudioEngine</code> tap runs on the I/O thread, and every
+  <code>AVAudioSession</code> activation runs on a private serial queue because
+  <code>setActive</code> on the main thread can stall the UI.
+</p>
+
+<p>
+  The layering is: ElevenLabs Scribe is primary, Apple Speech is the backup when there is no
+  key, the upload fails, or the clip is too short. But Apple's recogniser runs alongside Scribe
+  even when Scribe will do the final transcript, for one reason: Scribe transcribes a clip that is
+  only uploaded once the turn is over, so it cannot put a word on screen while someone is still
+  talking. Apple's partials do exactly that and nothing else.
+</p>
+
+<p>
+  The decision "is the sentence over" lives in <code>Insights</code> as
+  <code>SpeechEndpointer</code>, a pure state machine fed one RMS reading per audio buffer. Its
+  clock is the audio itself, buffer frames over the sample rate, rather than the wall clock: a
+  thread busy elsewhere would otherwise put time into a silence the speaker never left.
+  <code>SpeechCapturePlan</code> decides, from whether a Scribe key exists and whether Apple's
+  recogniser is authorised and available, whether the app can listen at all. Both are tested in
+  <code>SpeechEndpointerTests</code> and <code>SpeechCapturePlanTests</code> against a made-up
+  room. <code>onEndOfSpeech</code> fires the moment the endpointer decides, before any transcript
+  exists, because the second or two spent uploading otherwise looks like the mic ignoring you.
+</p>
+
+<h3 id="s19-11"><span class="num">19.11</span><span>YouTube embeds</span></h3>
+
+<p>
+  The workout library (<a href="#ch10">Chapter 10</a>) plays curated YouTube videos. Two pieces
+  touch the vendor.
+</p>
+
+<p>
+  <code>WorkoutCatalogClient</code> is a read-only PostgREST call against
+  <code>workout_videos</code>, ordered by <code>updated_at</code>, with the user's bearer token.
+  The table grants <code>select</code> to authenticated users and nothing else. The catalog itself
+  is generated by <code>scripts/catalog/verify.ts</code> from <code>catalog.json</code>, which
+  checks each id against YouTube's oEmbed endpoint before it is allowed into the seed migration.
+</p>
+
+<p>
+  <code>YouTubePlayerView</code> wraps a <code>WKWebView</code> owned by the screen, not the view,
+  so rotating the phone or entering full screen does not give SwiftUI a new view identity and
+  restart the video. There is no JavaScript bridge: the person taps YouTube's own play button and
+  the recorder times the session. The load itself had to be learned by elimination:
+</p>
+
+<pre><code>// LIfeOS/Features/Workouts/View/YouTubePlayerView.swift
+// Loading the embed URL straight into the web view answers with
+// "Video player configuration error, Error 153": the embed needs a
+// page with an origin to sit in. So the iframe is wrapped in a
+// page of our own, based at the host the embed's `origin` names,
+// which is what youtube-ios-player-helper does too.
+view.loadHTMLString(Self.page(embedding: url), baseURL: Self.base)</code></pre>
+
+<p>
+  The QA report records the numbers: zero of six seed videos rendered on the first pass (error
+  152), and six of six after the page's <code>baseURL</code> was matched to the embed's
+  <code>origin</code> parameter and both were pointed at <code>youtube-nocookie.com</code>. A
+  video whose owner has barred embedding shows YouTube's own "Watch on YouTube" card, which no
+  delegate can see without the bridge this slice leaves out; the "Open in YouTube" link under the
+  player is the way out.
+</p>
+
+<h3 id="s19-12"><span class="num">19.12</span><span>APNs and the morning nudge</span></h3>
+
+<p>
+  The proactive half of LIFO sends one notification at eight in the morning local time, when a
+  rule finds something worth saying. The integration has a device half and a server half.
+</p>
+
+<p>
+  <strong>Device.</strong> <code>PushService</code> asks once for notification permission and
+  registers with APNs. <code>PushTokenClient.register</code> upserts
+  <code>{token, user_id, platform, timezone}</code> into <code>device_tokens</code>, where the
+  token is the primary key. That key is a correctness requirement: several accounts can share one
+  device, and a token left registered under the account that signed out would push one person's
+  sleep data onto a phone showing somebody else's name. Registering under a second account
+  replaces the row in one upsert, and sign-out deletes it. The time zone rides along because the
+  send hour is local, and a row with no usable zone never sends.
+</p>
+
+<p>
+  <code>NudgePayload(userInfo:)</code> reads the tapped notification. It carries the sentence, the
+  trigger name and the day, and deliberately not the numbers: a phone that has been off for days
+  would otherwise open on figures two days stale, so the tap-through re-evaluates locally.
+</p>
+
+<p>
+  <strong>Server.</strong> <code>_shared/apns.ts</code> signs one ES256 provider token from the
+  <code>.p8</code> in the function environment and reuses it for fifty minutes, because Apple
+  throttles senders that mint a token per push. Every send carries
+  <code>apns-collapse-id: lifo-nudge</code> so a phone that has been off for three days gets
+  today's nudge and not three, and <code>apns-expiration</code> twelve hours out so a morning
+  observation does not arrive after midnight. A 410, or a 400 with
+  <code>BadDeviceToken</code> (the one that actually appears after a reinstall), deletes the
+  row so the job does not push at a dead token forever. The reason is logged; the token never
+  is, because a device token in a log line is a way to push at somebody from outside the
+  function. The triggers, cooldown and cron are in <a href="#ch20">Chapter 20</a>.
+</p>
+
+<h3 id="s19-13"><span class="num">19.13</span><span>Screen Time: still cut</span></h3>
+
+<p>
+  Unchanged from Revision D and recorded so it is not re-attempted. Apple's
+  <code>DeviceActivity</code> API lets a report extension render usage figures and lets nothing
+  read them: not the host app, not SwiftData, not the coach. Since the product thesis is the join
+  across domains, a signal that provably cannot enter the join has no home here. The MacBook has
+  no API at any privilege level.
+</p>
+
+<h3 id="s19-14"><span class="num">19.14</span><span>What the integrations share</span></h3>
+
+<h4>The staleness rule</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SyncStalenessPolicy.swift
+public static func shouldSync(lastSync: Date?, now: Date = .now,
+                              calendar: Calendar = .current,
+                              staleAfter: TimeInterval = 3_600) -> Bool {
+    guard let lastSync else { return true }
+    guard lastSync &lt;= now else { return true }          // clock moved backwards
+    if lastSync &lt; calendar.startOfDay(for: now) { return true }
+    return now.timeIntervalSince(lastSync) > staleAfter
+}</code></pre>
+
+<p>
+  Two clocks, not one. Staleness handles the common case: data older than an hour is worth
+  refreshing on foreground. The day boundary handles the one that matters most: the first open of
+  the morning must pull the night's sleep, and a sync from 23:50 is only minutes old while still
+  knowing nothing about the night. Whoop, Fitbit and Health all consult it, which is why the
+  three connection cards refresh themselves at the same moments.
+</p>
+
+<h4>Per-account credentials</h4>
+
+<p>
+  Every Keychain store (<code>KeychainAuthSessionStore</code>, <code>KeychainWhoopTokenStore</code>,
+  <code>KeychainFitbitAuthStore</code>) defaults its account attribute to the id under
+  <code>accounts.current</code>. Every per-account preference (sync cursors, "seen the tour",
+  calendar consent) lives in <code>UserDefaults.currentAccount</code>, a suite named for the
+  account. Device preferences (appearance, the assistant's voice, which engine answers) stay in
+  <code>standard</code> on purpose: they belong to the phone, not to whoever is signed in.
+</p>
+
+<h4>The secret rule</h4>
+
+<p>
+  Whoop, Fitbit, Plaid, Twilio and OpenAI each require a secret, and each has an Edge Function
+  that holds it. The device holds public identifiers (client ids, the anon key), one personal
+  ElevenLabs key, and its own tokens. <a href="#s23-2">23.2</a> tabulates the tiers.
+</p>
+
+<h3 id="s19-15"><span class="num">19.15</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LifeOSKit/Sources/Integrations/HealthMetric.swift</code>, the vocabulary and the three merge properties.</li>
+  <li><code>MetricSource.swift</code> and <code>MetricArbiter.swift</code>, the rank and the eight-line rule.</li>
+  <li><code>HealthApply.swift</code>, then <code>HealthKitReader.swift</code> from <code>day(_:)</code> downward.</li>
+  <li><code>WhoopCollection.swift</code>, <code>WhoopClient.swift</code> (the DTOs and their <code>sample</code> properties), <code>WhoopSync.swift</code>, <code>WhoopDerivation.swift</code>.</li>
+  <li><code>FitbitAuthStore.swift</code> for what is absent, then <code>supabase/functions/fitbit-sync/index.ts</code>.</li>
+  <li><code>SupabaseAuth.swift</code>, <code>SessionRefresh.swift</code>, <code>AccountStore.swift</code>.</li>
+  <li><code>SyncStalenessPolicy.swift</code>, then find its three callers with a grep.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does a Fitbit HRV reading not overwrite a Whoop one, while a Health step count does overwrite yesterday's Health step count?</strong> HRV is <code>claimedByWearable</code>, so the secondary strap ranks 2 against the primary's 3. Steps are <code>healthIsAuthoritative</code>, so Health ranks 3 against its own 3, and equal rank is allowed to correct itself.</li>
+  <li><strong>What would happen if you deleted <code>MetricSource.legacy(for:)</code>?</strong> An unattributed typed weight would rank 0 and the next Health sync would replace it. That is the one path that destroys hand-entered data.</li>
+  <li><strong>Why does Whoop keep a token in the Keychain but Fitbit does not?</strong> Fitbit's refresh token is single use and rotates, so only one writer may hold it; the server row is that writer. Whoop's is held both places, with a server-side lock around refresh.</li>
+  <li><strong>Which HTTP statuses sign a user out, and why not 429?</strong> 400, 401, 403 and 422 are the server refusing the credential. 429 and 5xx are temporary by definition, and opening the app on a plane must not log you out.</li>
+  <li><strong>Why is HealthKit's percent scaled by 100 and what bug did it fix?</strong> <code>HKUnit.percent()</code> yields a 0 to 1 fraction; the app stores percentages as percentages, and Health SpO2 was rendering as 1.0.</li>
+  <li><strong>Why does the Whoop bridge send <code>lifeos://</code> and not <code>almanac://</code>?</strong> Every installed build knows <code>lifeos</code>; pointing at <code>almanac</code> stranded builds that predate the rename.</li>
+</ul>
+</section>

@@ -1,0 +1,770 @@
+<section class="chapter" id="ch20">
+<p class="chapter-kicker">Chapter twenty</p>
+<h2><span class="num">20</span><span>The backend</span></h2>
+
+<p class="lede">
+  One Supabase project: seventeen migrations, thirteen Edge Functions, two email templates, a
+  cron job, and a two-file static site. Everything in this chapter exists for one of three
+  reasons: a secret that cannot ship in an <code>.ipa</code>, data that must cross between
+  people, or work that a sleeping phone cannot do.
+</p>
+
+<p>
+  Revision D described a schema of five tables and two deployed functions. The backend has grown
+  since, but its rules have not: every table has Row Level Security enabled without exception,
+  every policy scopes to <code>auth.uid()</code>, every metric column is nullable, and the
+  service-role key exists only in function environments. This chapter walks the configuration,
+  the migrations in order, the functions one by one, the tests, and the operational shape the
+  cron job forces. Every RLS claim below is quoted from the SQL on disk.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 380" role="img" aria-label="The backend surface: the app talks to GoTrue for auth, PostgREST for rows under RLS, Storage for avatars, and Edge Functions for anything needing a secret; the functions use the service role behind resolveUser; pg_cron calls lifo-nudge hourly; the static site serves the Plaid universal link.">
+  <defs>
+    <marker id="ch20a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch20b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="22">DEVICE</text>
+  <text class="lbl-sm" x="300" y="22">SUPABASE PROJECT</text>
+  <text class="lbl-sm" x="660" y="22">VENDORS</text>
+
+  <rect class="box-hot" x="20" y="150" width="150" height="60" rx="10"/>
+  <text class="lbl" x="95" y="176" text-anchor="middle">Almanac app</text>
+  <text class="lbl-sm" x="95" y="196" text-anchor="middle">anon key + user JWT</text>
+
+  <rect class="box" x="300" y="44" width="180" height="36" rx="8"/><text class="lbl" x="390" y="67" text-anchor="middle">GoTrue (auth/v1)</text>
+  <rect class="box" x="300" y="90" width="180" height="36" rx="8"/><text class="lbl" x="390" y="113" text-anchor="middle">PostgREST (rest/v1)</text>
+  <rect class="box" x="300" y="136" width="180" height="36" rx="8"/><text class="lbl" x="390" y="159" text-anchor="middle">Storage (avatars)</text>
+  <rect class="box-alt" x="300" y="182" width="180" height="60" rx="8"/>
+  <text class="lbl" x="390" y="206" text-anchor="middle">Edge Functions</text>
+  <text class="lbl-sm" x="390" y="226" text-anchor="middle">resolveUser then service role</text>
+  <rect class="box" x="300" y="256" width="180" height="50" rx="8"/>
+  <text class="lbl" x="390" y="277" text-anchor="middle">Postgres</text>
+  <text class="lbl-sm" x="390" y="295" text-anchor="middle">RLS on every table</text>
+  <rect class="box" x="300" y="320" width="180" height="36" rx="8"/><text class="lbl" x="390" y="343" text-anchor="middle">pg_cron + pg_net</text>
+
+  <rect class="box" x="660" y="120" width="180" height="36" rx="8"/><text class="lbl" x="750" y="143" text-anchor="middle">Twilio Verify</text>
+  <rect class="box" x="660" y="166" width="180" height="36" rx="8"/><text class="lbl" x="750" y="189" text-anchor="middle">Whoop · Fitbit · Plaid</text>
+  <rect class="box" x="660" y="212" width="180" height="36" rx="8"/><text class="lbl" x="750" y="235" text-anchor="middle">OpenAI</text>
+  <rect class="box" x="660" y="258" width="180" height="36" rx="8"/><text class="lbl" x="750" y="281" text-anchor="middle">APNs</text>
+  <rect class="box" x="660" y="44" width="180" height="36" rx="8"/><text class="lbl" x="750" y="67" text-anchor="middle">Resend (SMTP)</text>
+  <rect class="box-alt" x="660" y="320" width="180" height="36" rx="8"/><text class="lbl" x="750" y="343" text-anchor="middle">almanac.shivvyas.com</text>
+
+  <path class="flow" d="M170 165 L294 62" marker-end="url(#ch20a)"/>
+  <path class="flow" d="M170 172 L294 108" marker-end="url(#ch20a)"/>
+  <path class="flow" d="M170 178 L294 154" marker-end="url(#ch20a)"/>
+  <path class="flow-hot" d="M170 190 L294 212" marker-end="url(#ch20b)"/>
+  <path class="flow" d="M390 126 L390 250" marker-end="url(#ch20a)"/>
+  <path class="flow-hot" d="M420 242 L420 250" marker-end="url(#ch20b)"/>
+  <path class="flow" d="M480 62 L654 62" marker-end="url(#ch20a)"/>
+  <path class="flow-hot" d="M480 200 L654 138" marker-end="url(#ch20b)"/>
+  <path class="flow-hot" d="M480 208 L654 184" marker-end="url(#ch20b)"/>
+  <path class="flow-hot" d="M480 216 L654 230" marker-end="url(#ch20b)"/>
+  <path class="flow-hot" d="M480 224 L654 276" marker-end="url(#ch20b)"/>
+  <path class="flow-dash" d="M390 320 L390 312" marker-end="url(#ch20a)"/>
+  <path class="flow-dash" d="M480 338 L300 338"/>
+  <text class="lbl-sm" x="200" y="330">hourly: lifo-nudge</text>
+  <path class="flow-dash" d="M170 200 L654 338" marker-end="url(#ch20a)"/>
+  <text class="lbl-sm" x="500" y="368">universal link, no data</text>
+</svg>
+<figcaption>
+  The app never holds a secret and never calls a vendor that needs one. Every highlighted arrow
+  passes through a function that first resolves the caller from their own JWT and only then uses
+  the service role, scoped to that id.
+</figcaption>
+</figure>
+
+<h3 id="s20-1"><span class="num">20.1</span><span>Configuration</span></h3>
+
+<p>
+  <code>supabase/config.toml</code> is pushed to the hosted project with
+  <code>supabase config push</code>. The parts that decide behaviour:
+</p>
+
+<div class="tablewrap"><table><thead><tr><th>Block</th><th>Setting</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>[auth]</code></td><td><code>jwt_expiry = 3600</code>, <code>enable_refresh_token_rotation = true</code>, <code>refresh_token_reuse_interval = 10</code></td><td>An hour-long access token is why <code>SessionKeepAlive</code> exists. Rotation is why concurrent refreshes must be coalesced (19.7).</td></tr>
+<tr><td><code>[auth]</code></td><td><code>additional_redirect_urls</code> lists <code>almanac://auth-callback</code> and <code>lifeos://auth-callback</code></td><td>Both schemes the app claims.</td></tr>
+<tr><td><code>[auth.rate_limit]</code></td><td><code>sms_sent = 8</code>, <code>token_verifications = 8</code>, <code>email_sent = 30</code></td><td>GoTrue's own limits, in front of the function's abuse guard.</td></tr>
+<tr><td><code>[auth.email]</code></td><td><code>otp_length = 6</code>, <code>otp_expiry = 3600</code>, <code>max_frequency = "1m0s"</code></td><td>The six-box code field in the app.</td></tr>
+<tr><td><code>[auth.email.smtp]</code></td><td><code>host = "smtp.resend.com"</code>, <code>pass = "env(RESEND_API_KEY)"</code>, <code>admin_email = "env(RESEND_SENDER_EMAIL)"</code>, <code>sender_name = "Almanac"</code></td><td>Custom SMTP is required for a custom template. <code>admin_email</code> is required by the CLI or the push fails.</td></tr>
+<tr><td><code>[auth.email.template.magic_link]</code></td><td><code>subject = "Your Almanac code"</code>, <code>content_path = ./supabase/templates/magic_link.html</code></td><td>The template puts the token on the page, not a link.</td></tr>
+<tr><td><code>[auth.sms.test_otp]</code></td><td><code>11234567890 = "123123"</code></td><td>The test number, mirrored as <code>TEST_PHONE</code> in the function.</td></tr>
+<tr><td><code>[auth.external.apple]</code></td><td><code>enabled = true</code>, <code>client_id = "com.shivvyas.lifeos"</code></td><td>Kept enabled so a config push does not switch Sign in with Apple off.</td></tr>
+<tr><td><code>[functions.whoop-callback]</code>, <code>[functions.whoop-token]</code></td><td><code>verify_jwt = false</code></td><td>The dashboard resets <code>verify_jwt</code> to true on every deploy. The callback is a browser redirect with no JWT; the token function resolves the user itself.</td></tr>
+<tr><td><code>[edge_runtime]</code></td><td><code>deno_version = 2</code></td><td>The functions use <code>jsr:</code> imports.</td></tr>
+</tbody></table></div>
+
+<p>
+  Secrets are set with <code>supabase secrets set</code> and never appear in the file: the
+  <code>env()</code> references resolve at push time. <code>supabase/functions/.env</code> holds
+  local-only values for <code>supabase functions serve</code> and is gitignored along with
+  <code>.branches</code>, <code>.temp</code> and any <code>.env.*.local</code>.
+</p>
+
+<h3 id="s20-2"><span class="num">20.2</span><span>The migrations, in order</span></h3>
+
+<p>
+  Migrations are the schema's history. Reading them in order is reading the product's history.
+  Each entry below names what the migration creates and quotes the RLS shape it leaves behind.
+</p>
+
+<h4>20260811 · initial_schema</h4>
+
+<p>
+  Five tables mirroring the SwiftData models: <code>daily_metrics</code> (unique on
+  <code>(user_id, date)</code>, <code>date</code> typed as <code>date</code> not
+  <code>timestamptz</code> so a device in another zone cannot write to the adjacent day),
+  <code>workout_records</code>, <code>sleep_records</code> (with a check that
+  <code>ended_at &gt; started_at</code>), <code>whoop_raw</code> and <code>sync_state</code>. A
+  <code>touch_updated_at()</code> trigger sets <code>updated_at = now()</code> on every update so
+  a client can never advance it past the server's clock and win a conflict it should have lost.
+  Every table gets four policies of the same shape:
+</p>
+
+<pre><code>-- supabase/migrations/20260811164841_initial_schema.sql
+create policy "own rows readable" on public.daily_metrics
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy "own rows insertable" on public.daily_metrics
+  for insert to authenticated with check ((select auth.uid()) = user_id);
+create policy "own rows updatable" on public.daily_metrics
+  for update to authenticated using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+create policy "own rows deletable" on public.daily_metrics
+  for delete to authenticated using ((select auth.uid()) = user_id);</code></pre>
+
+<p>
+  <code>(select auth.uid())</code> rather than bare <code>auth.uid()</code> is a Postgres
+  planner idiom: the subselect is evaluated once per statement instead of once per row.
+</p>
+
+<h4>20260825 · otp_abuse_guard</h4>
+
+<p>
+  <code>otp_events</code> records every SMS start, failed check, successful check and block, keyed
+  by a peppered SHA-256 of the phone, a "pumping prefix" (country code plus the first digits), and
+  a hash of the IP. RLS is enabled with no policies, so no client can read or write it; only the
+  service role reaches it. <code>otp_user_id_for_phone(p_phone)</code> is a
+  <code>security definer</code> function that looks a phone up in <code>auth.users</code>, with
+  execute revoked from <code>anon</code> and <code>authenticated</code> and granted to
+  <code>service_role</code> only.
+</p>
+
+<h4>20260826 · plaid_items</h4>
+
+<p>
+  <code>(user_id, item_id)</code> primary key, the Plaid <code>access_token</code> in plaintext,
+  and a unique constraint on <code>(user_id, institution_id)</code> so the same bank cannot be
+  connected twice. <code>alter table public.plaid_items enable row level security;</code> with no
+  policies: the credential is readable only by the service role.
+</p>
+
+<h4>20260827 · lifo_usage</h4>
+
+<p>
+  The token ledger: <code>(user_id, day)</code> with a <code>tokens bigint</code>. RLS on, no
+  policies. <code>lifo_debit(p_user, p_tokens)</code> is an atomic upsert-and-add returning the
+  new total, granted to <code>service_role</code> only. This is the database constraint behind
+  the cost ceiling in <a href="#ch24">Chapter 24</a>.
+</p>
+
+<h4>20260827 · friends_and_messages</h4>
+
+<p>
+  Three tables. <code>profiles</code> is the one table any signed-in user may read
+  (<code>for select to authenticated using (true)</code>) because people search for each other by
+  name; inserts and updates are own-row only. <code>friendships</code> encodes the state machine
+  in policy:
+</p>
+
+<pre><code>-- supabase/migrations/20260827130000_friends_and_messages.sql
+create policy "ask for a friendship"
+  on public.friendships for insert to authenticated
+  with check (requester = auth.uid() and status = 'pending');
+create policy "addressee answers"
+  on public.friendships for update to authenticated
+  using (addressee = auth.uid())
+  with check (addressee = auth.uid() and status = 'accepted');
+create policy "either side may end it"
+  on public.friendships for delete to authenticated
+  using (auth.uid() in (requester, addressee));</code></pre>
+
+<p>
+  A request can only be created pending, only the addressee can accept, and only accepted is a
+  valid update target. <code>messages</code> lets participants read their conversation and lets a
+  sender insert only when an accepted friendship exists in either direction.
+</p>
+
+<h4>20260827 · friendship_column_grants</h4>
+
+<p>
+  Two lines: revoke <code>update</code> on <code>friendships</code> from <code>authenticated</code>,
+  then <code>grant update (status)</code>. The update policy already constrains rows; this
+  constrains columns, so the addressee cannot rewrite who the requester was.
+</p>
+
+<h4>20260828 · notes</h4>
+
+<p>
+  <code>note_folders</code> and <code>note_documents</code>, with client-generated UUID primary
+  keys (the device creates pages offline), a <code>blocks jsonb</code> column, a
+  <code>deleted_at</code> tombstone so deletions sync, and partial indexes for archived pages and
+  journal entries. One policy each, <code>for all using (auth.uid() = user_id) with check
+  (auth.uid() = user_id)</code>. The sync that drives this is in <a href="#ch12">Chapter 12</a>.
+</p>
+
+<h4>20260828 · profiles_and_avatars, then avatars_signed_in_only</h4>
+
+<p>
+  The first adds the onboarding fields to <code>profiles</code> and creates a public
+  <code>avatars</code> bucket. The second, the same day, reverses the public part: the bucket
+  becomes private, accepts only <code>image/jpeg</code>, and reads require a signed-in user.
+  The write policies pin the object name to exactly <code>{uid}/avatar.jpg</code>:
+</p>
+
+<pre><code>-- supabase/migrations/20260828150000_avatars_signed_in_only.sql
+create policy "own avatar insert"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and name = (select auth.uid())::text || '/avatar.jpg'
+  );</code></pre>
+
+<p>
+  One file per person, in their own folder, no other name possible. The app reads avatars with a
+  signed URL and its own token (<a href="#ch17">Chapter 17</a>).
+</p>
+
+<h4>20260829 · fitbit_connections, then fitbit_lock</h4>
+
+<p>
+  A user-keyed row holding both Fitbit tokens, the expiry, the granted scopes and a
+  <code>needs_reauth</code> flag. RLS enabled, deliberately no policies, so the row's own owner
+  cannot read it from a client. The second migration adds <code>refresh_lease_until</code> and
+  two <code>security definer</code> RPCs: <code>claim_fitbit_refresh</code>, which sets a lease
+  only if none is live and returns the row, and <code>read_fitbit_connection</code>. Both have
+  execute revoked from <code>public</code>, <code>anon</code> and <code>authenticated</code>. The
+  migration comment explains why: Fitbit's refresh token is single use, so two devices sharing it
+  would sign each other out, and a single server row with a lock is the only arrangement where
+  exactly one writer rotates it.
+</p>
+
+<h4>20260829 · shared_stats</h4>
+
+<p>
+  <code>profile_stats</code> holds three figures a person may choose to share (streak, days
+  tracked, workouts) behind a <code>shares</code> flag. The select policy is the first one that
+  crosses users:
+</p>
+
+<pre><code>-- supabase/migrations/20260829120000_shared_stats.sql
+create policy "own stats and accepted friends' stats"
+  on public.profile_stats for select to authenticated
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted'
+        and ((f.requester = auth.uid() and f.addressee = profile_stats.user_id)
+          or (f.addressee = auth.uid() and f.requester = profile_stats.user_id))
+    )
+  );</code></pre>
+
+<p>
+  Every statement is <code>drop policy if exists</code> then <code>create</code>, which is what
+  made the migration re-runnable after it first failed halfway.
+</p>
+
+<h4>20260830 · proactive_nudges</h4>
+
+<p>
+  <code>device_tokens</code> with the APNs token as primary key and the user's time zone, four
+  own-row policies. <code>nudge_log</code> keyed <code>(user_id, day)</code> with the trigger
+  name and never the sentence, RLS on and no policies. And a change to the ledger:
+  <code>lifo_usage</code> gains a <code>kind</code> column, its primary key becomes
+  <code>(user_id, day, kind)</code>, and <code>lifo_debit</code> is dropped and recreated with a
+  third parameter. Chat and nudges do not share a budget, because a heavy chat evening must not
+  eat the next morning's nudge.
+</p>
+
+<div class="note caution"><b>The deploy order this migration forces</b>
+The old <code>lifo_debit(uuid, bigint)</code> is dropped. A deployed <code>lifo-agent</code>
+that still calls it with two arguments fails every debit after the migration runs, and a new
+<code>lifo-agent</code> that calls it with three fails before. So the order is: push the
+migration, then deploy <code>lifo-agent</code> and <code>lifo-nudge</code> together, in that
+window. The plan file for slice 2 records that the migration was applied on 29 August and the
+functions deployed after it.</div>
+
+<h4>20260913 · whoop_account_connections</h4>
+
+<p>
+  <code>whoop_connections</code>, user-keyed, holding the pair and a
+  <code>refresh_lock uuid</code> with <code>refresh_locked_until</code>. RLS on, then
+  <code>revoke all ... from anon, authenticated</code> and <code>grant all ... to
+  service_role</code>. <code>claim_whoop_refresh(p_user_id, p_lock)</code> takes a thirty-second
+  lock the same way Fitbit's does, keyed by a caller-supplied UUID so the release can be
+  conditioned on still holding it.
+</p>
+
+<h4>20260914 · social_groups</h4>
+
+<p>
+  The largest migration. Four tables (<code>social_groups</code>, <code>group_members</code> with
+  an <code>invited | accepted</code> status and a <code>shares_activity</code> flag,
+  <code>group_messages</code> with a <code>(sender, client_id)</code> unique key for idempotent
+  sends, <code>group_activity</code>) and nine <code>security definer</code> functions. The shape
+  is different from the friends tables: clients get <code>select</code> only, and every write goes
+  through a function that enforces the rule in code.
+</p>
+
+<pre><code>-- supabase/migrations/20260914090000_social_groups.sql
+revoke all on public.social_groups, public.group_members, public.group_messages,
+  public.group_activity from anon, authenticated;
+grant select on public.social_groups, public.group_members, public.group_messages,
+  public.group_activity to authenticated;
+
+create policy "members and invitees see group" on public.social_groups for select to authenticated
+ using (exists(select 1 from public.group_members m where m.group_id=id and m.user_id=auth.uid()));
+create policy "accepted members read chat" on public.group_messages for select to authenticated
+ using(public.is_group_member(group_id));</code></pre>
+
+<p>
+  <code>is_group_member</code> is itself a definer function so a policy on
+  <code>group_members</code> can consult <code>group_members</code> without recursion. The
+  functions carry the product rules: only accepted friends can be invited, a group holds at most
+  50 people, an owner who leaves hands the group to the earliest-joined member or deletes it when
+  alone, and <code>send_group_message</code> returns the existing id when a retried
+  <code>client_id</code> matches the same body and raises when it matches different text.
+  <code>group_leaderboard</code> accepts exactly three metric names and raises on anything else.
+</p>
+
+<h4>20260914 · group_wellness_leaderboards</h4>
+
+<p>
+  A second, separate consent. <code>shares_wellness</code> on <code>group_members</code>, and
+  <code>group_wellness_daily</code> holding three 0 to 100 scores per day, each paired with its
+  source and checked so a score cannot exist without one:
+  <code>check ((effort is null) = (effort_source is null))</code>. Own-row select only;
+  <code>publish_group_wellness</code> accepts at most two days (today and yesterday), rejects a
+  day outside a narrow range, rejects an <code>observed_at</code> more than five minutes in the
+  future or four days in the past, and only overwrites a row with a newer observation. Health
+  scores are never readable as rows by anyone but their owner; other members see only the ranked
+  result of <code>group_wellness_leaderboard</code>.
+</p>
+
+<h4>20260915 · workout_videos and its seed</h4>
+
+<p>
+  <code>workout_videos</code> keyed by <code>youtube_id</code> with a
+  <code>split</code>, arrays for <code>goal</code>, <code>muscles</code> and
+  <code>equipment</code>, an <code>intensity</code> from 1 to 3 and a <code>verified_at</code>.
+  Grants are revoked from both roles and <code>select</code> is granted back to
+  <code>authenticated</code> with a policy of <code>using (true)</code>: a catalog, readable by
+  anyone signed in, writable by nobody but the migration. The seed is generated by
+  <code>scripts/catalog/verify.ts</code>, carries 122 <code>insert ... on conflict do update</code>
+  rows, and ends with a <code>delete where youtube_id not in (...)</code> so the seed is a full
+  sync rather than an append.
+</p>
+
+<h4>The RLS shapes, summarised</h4>
+
+<div class="tablewrap"><table><thead><tr><th>Shape</th><th>Tables</th><th>Who reaches the rows</th></tr></thead><tbody>
+<tr><td>Own rows, four policies</td><td>daily_metrics, workout_records, sleep_records, whoop_raw, sync_state, device_tokens</td><td>The owner, from the app</td></tr>
+<tr><td>Own rows, one <code>for all</code> policy</td><td>note_folders, note_documents</td><td>The owner, from the app</td></tr>
+<tr><td>RLS on, no policies</td><td>otp_events, plaid_items, lifo_usage, fitbit_connections, nudge_log, whoop_connections</td><td>Service role only, from a function</td></tr>
+<tr><td>Readable by any signed-in user</td><td>profiles, workout_videos</td><td>Search and catalog</td></tr>
+<tr><td>Cross-user by relationship</td><td>friendships, messages, profile_stats</td><td>Both participants, or accepted friends</td></tr>
+<tr><td>Select only, writes via definer functions</td><td>social_groups, group_members, group_messages, group_activity, group_wellness_daily</td><td>Members, with every rule in code</td></tr>
+</tbody></table></div>
+
+<div class="note"><b>An RLS mistake does not throw</b>
+It returns an empty result set, which looks exactly like "no data yet". This is why
+<code>SupabaseREST</code> always sends the user's token and never the anon key alone, and why the
+two pgTAP files in <a href="#s20-5">20.5</a> exist.</div>
+
+<h3 id="s20-3"><span class="num">20.3</span><span>The shared door</span></h3>
+
+<p>
+  <code>_shared/supabase.ts</code> is forty lines and the most important file in the folder. Every
+  function that touches a user's row calls <code>resolveUser(req)</code> first:
+</p>
+
+<pre><code>// supabase/functions/_shared/supabase.ts
+/// Resolves the caller from their own token.
+///
+/// This is a security boundary, not a formality. Every one of these functions
+/// reads a bank credential keyed by user, so a service-role client that
+/// trusted a user_id from the request body would let any signed-in user pull
+/// anyone else's transactions.
+export async function resolveUser(req: Request): Promise&lt;string | null&gt; {
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) return null;
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY,
+    { global: { headers: { Authorization: authorization } } });
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) return null;
+  return data.user.id;
+}</code></pre>
+
+<p>
+  The user id comes from GoTrue validating the bearer token, never from the body. Only after that
+  does <code>serviceClient()</code> build the privileged client, and every query it runs is
+  filtered by that id. <code>_shared/plaid.ts</code> re-exports these so the Plaid functions have
+  one import, and its comment states the rule for the folder: a module named for one integration
+  must not be the front door for another.
+</p>
+
+<h3 id="s20-4"><span class="num">20.4</span><span>The Edge Functions</span></h3>
+
+<p>
+  Thirteen functions, each a <code>Deno.serve</code> that owns the door (method, auth, body
+  parsing, the fetch) and delegates every decision to a pure helper in <code>_shared/</code> that
+  has a test beside it. The table gives the contract; the subsections give the parts worth
+  studying.
+</p>
+
+<div class="tablewrap"><table><thead><tr><th>Function</th><th>Auth</th><th>Secrets</th><th>Does</th></tr></thead><tbody>
+<tr><td>otp-start</td><td>anon key</td><td>TWILIO_*, OTP_PEPPER</td><td>Rate-limits, then starts a Twilio Verify SMS</td></tr>
+<tr><td>otp-check</td><td>anon key</td><td>TWILIO_*, service role</td><td>Checks the code, mints a GoTrue session</td></tr>
+<tr><td>whoop-callback</td><td>none (<code>verify_jwt = false</code>)</td><td>none</td><td>https to <code>lifeos://</code> redirect; renders the code for the manual flow</td></tr>
+<tr><td>whoop-token</td><td>user JWT via resolveUser</td><td>WHOOP_CLIENT_SECRET</td><td>Exchange, refresh under lock, restore, disconnect</td></tr>
+<tr><td>plaid-link-token</td><td>user JWT</td><td>PLAID_CLIENT_ID, PLAID_SECRET</td><td>Mints a Link token keyed to the user</td></tr>
+<tr><td>plaid-exchange</td><td>user JWT</td><td>PLAID_*</td><td>Public token to Item; refuses duplicates; cleans up on storage failure</td></tr>
+<tr><td>plaid-sync</td><td>user JWT</td><td>PLAID_*</td><td>Up to three pages per Item; balances separately</td></tr>
+<tr><td>plaid-disconnect</td><td>user JWT</td><td>PLAID_*</td><td>Removes the Item at Plaid before the row</td></tr>
+<tr><td>fitbit-token</td><td>user JWT</td><td>FITBIT_CLIENT_SECRET</td><td>Exchange; stores the pair; returns no token</td></tr>
+<tr><td>fitbit-sync</td><td>user JWT</td><td>FITBIT_CLIENT_SECRET</td><td>Refresh under lease; nine collections under a quota floor</td></tr>
+<tr><td>lifo-agent</td><td>user JWT</td><td>OPENAI_API_KEY</td><td>Budget check, guardrails, chat or one-shot task, streaming, debit</td></tr>
+<tr><td>lifo-nudge</td><td>service role bearer (cron only)</td><td>OPENAI_API_KEY, APNS_*</td><td>Hourly trigger evaluation and push</td></tr>
+</tbody></table></div>
+
+<h4>OTP: the abuse guard</h4>
+
+<p>
+  SMS costs money per message and "SMS pumping" is a known fraud where a bot requests thousands
+  of codes to premium-rate ranges. <code>allowStart</code> in <code>otp_guard.ts</code> counts
+  <code>otp_events</code> rows through PostgREST with <code>Prefer: count=exact</code> and
+  <code>Range: 0-0</code> (so no row bodies are transferred) across six windows:
+</p>
+
+<div class="tablewrap"><table><thead><tr><th>Key</th><th>Window</th><th>Limit</th><th>Error</th></tr></thead><tbody>
+<tr><td>phone</td><td>45 seconds</td><td>0 prior starts</td><td>rate_phone</td></tr>
+<tr><td>phone</td><td>1 hour</td><td>5</td><td>rate_phone</td></tr>
+<tr><td>phone</td><td>24 hours</td><td>10</td><td>rate_phone</td></tr>
+<tr><td>IP</td><td>1 hour</td><td>10</td><td>rate_ip</td></tr>
+<tr><td>IP</td><td>24 hours</td><td>25</td><td>rate_ip</td></tr>
+<tr><td>prefix</td><td>1 hour</td><td>15</td><td>rate_prefix</td></tr>
+</tbody></table></div>
+
+<p>
+  <code>allowCheck</code> blocks after five failed checks in fifteen minutes. Phones are accepted
+  only in two ranges (<code>+1</code> with ten digits, <code>+91</code> with ten digits starting 6
+  to 9), and <code>PhoneOTP</code> in Swift mirrors the rule so the form refuses a number the
+  server would never send to, without a round trip. The identities are stored hashed with a
+  pepper (<code>OTP_PEPPER</code>, falling back to the service key), so the events table holds
+  no phone numbers.
+</p>
+
+<p>
+  <code>otp-check</code> then does something GoTrue has no built-in for: it mints a session for a
+  phone-verified user. <code>mintSession</code> finds or creates the user with a synthetic email
+  (<code>p{digits}@phone.lifeos.internal</code>), generates a magic link through the admin API,
+  and immediately verifies its <code>hashed_token</code> to obtain a session, which is returned
+  verbatim. The lookup uses <code>otp_user_id_for_phone</code> with the digits only, because
+  GoTrue strips the leading <code>+</code> before storing <code>auth.users.phone</code>, and the
+  one Deno test in <code>otp_session_test.ts</code> pins exactly that.
+</p>
+
+<p>
+  <code>classifyTwilioFailure</code> maps Twilio's numeric codes to nine kinds, and
+  <code>SEND_FAILURE_STATUS</code> maps every kind to an HTTP status; a test checks that no kind
+  can be added to one without the other. The distinction the code comments insist on: 21608
+  (trial account, unverified number) cannot happen on a paid account and is the operator's
+  problem, while 21610 (opted out) is per number and only the user can undo it. Each gets copy
+  that sends the reader to the right fix.
+</p>
+
+<h4>Whoop and Fitbit tokens</h4>
+
+<p>
+  Both are described in <a href="#ch19">Chapter 19</a>. The pattern to notice here is shared:
+  read the row, short-circuit if the access token is still good, claim a lock or lease before
+  refreshing, condition the write on still holding it, and release in <code>finally</code>.
+  Neither function ever logs a provider's error body on the token path, because OAuth errors can
+  echo credentials.
+</p>
+
+<h4>Plaid: the exchange that must not strand an Item</h4>
+
+<pre><code>// supabase/functions/plaid-exchange/index.ts
+// Past this point the Item exists at Plaid and bills monthly. Any failure
+// below must not strand it: without a row, plaid-disconnect has nothing to
+// look up and the device never learns the item_id, so the Plaid dashboard
+// becomes the only remedy. Best-effort remove it before returning.
+try {
+  const { error } = await db.from("plaid_items").insert({ ... });
+  if (error) {
+    await removeExchangedItem(exchanged.access_token);
+    if (error.code === "23505") {
+      return json({ error: "institution_already_connected" }, 409);
+    }
+    return json({ error: "storage_failed" }, 500);
+  }
+} catch (storageError) {
+  await removeExchangedItem(exchanged.access_token);
+  throw storageError;
+}</code></pre>
+
+<p>
+  Plaid bills per live Item. The function checks for a duplicate institution before spending the
+  exchange, treats a failed lookup as a refusal rather than as "no duplicate", and if the insert
+  fails after the exchange it removes the Item at Plaid before answering. The unique constraint
+  is the last line of defence against the check-then-insert race, and a 23505 from it is reported
+  the same way as the guard. <code>plaid-disconnect</code> is the mirror: it removes the Item at
+  Plaid first and deletes the row only when Plaid confirms it is gone or says
+  <code>ITEM_NOT_FOUND</code>.
+</p>
+
+<h4>lifo-agent: the coach's cloud tier</h4>
+
+<p>
+  The most consequential function. Its request path is worth a diagram because every step is a
+  guard, and the guards are the cost ceiling.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="The lifo-agent request path: resolve the user, read today's chat usage, refuse at the daily cap, parse and bound the request, build the body with SCOPE first and the context behind it, call OpenAI with low reasoning effort retrying once without tuning on a 400, then either stream deltas and debit in flush or parse the reply and debit before parsing.">
+  <defs><marker id="ch20c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs>
+  <rect class="box" x="20" y="40" width="130" height="50" rx="8"/><text class="lbl" x="85" y="61" text-anchor="middle">resolveUser</text><text class="lbl-sm" x="85" y="79" text-anchor="middle">401 if not</text>
+  <rect class="box" x="180" y="40" width="130" height="50" rx="8"/><text class="lbl" x="245" y="61" text-anchor="middle">lifo_usage read</text><text class="lbl-sm" x="245" y="79" text-anchor="middle">kind = chat</text>
+  <rect class="box-hot" x="340" y="40" width="130" height="50" rx="8"/><text class="lbl" x="405" y="61" text-anchor="middle">cap 150,000?</text><text class="lbl-sm" x="405" y="79" text-anchor="middle">429 exhausted</text>
+  <rect class="box" x="500" y="40" width="130" height="50" rx="8"/><text class="lbl" x="565" y="61" text-anchor="middle">parseRequest</text><text class="lbl-sm" x="565" y="79" text-anchor="middle">64 msgs · 16 tools · 32k ctx</text>
+  <rect class="box" x="660" y="40" width="180" height="50" rx="8"/><text class="lbl" x="750" y="61" text-anchor="middle">chatBody / openAIBody</text><text class="lbl-sm" x="750" y="79" text-anchor="middle">SCOPE first, context behind</text>
+  <path class="flow" d="M150 65 L174 65" marker-end="url(#ch20c)"/>
+  <path class="flow" d="M310 65 L334 65" marker-end="url(#ch20c)"/>
+  <path class="flow" d="M470 65 L494 65" marker-end="url(#ch20c)"/>
+  <path class="flow" d="M630 65 L654 65" marker-end="url(#ch20c)"/>
+
+  <rect class="box" x="500" y="140" width="340" height="50" rx="8"/><text class="lbl" x="670" y="161" text-anchor="middle">POST api.openai.com (reasoning_effort: low)</text><text class="lbl-sm" x="670" y="179" text-anchor="middle">a 400 retries once with the tuning lifted off</text>
+  <path class="flow" d="M750 90 L750 134" marker-end="url(#ch20c)"/>
+
+  <rect class="box-alt" x="20" y="240" width="330" height="60" rx="8"/><text class="lbl" x="185" y="262" text-anchor="middle">stream: drainSSE, forward {delta}</text><text class="lbl-sm" x="185" y="282" text-anchor="middle">debit in flush, from the usage chunk</text>
+  <rect class="box-alt" x="500" y="240" width="340" height="60" rx="8"/><text class="lbl" x="670" y="262" text-anchor="middle">whole: debit first, then parse</text><text class="lbl-sm" x="670" y="282" text-anchor="middle">text · tool_calls · refusal (403) · schema-checked output</text>
+  <path class="flow" d="M560 190 L300 234" marker-end="url(#ch20c)"/>
+  <path class="flow" d="M670 190 L670 234" marker-end="url(#ch20c)"/>
+  <text class="lbl-sm" x="330" y="214">chat with no tools</text>
+  <text class="lbl-sm" x="680" y="214">tools, or a one-shot task</text>
+</svg>
+<figcaption>
+  Nothing reaches the provider without a resolved user, a budget read, a bounded body and the
+  server's own guardrail prompt in first position. Every path that produced a billable call
+  debits the ledger, including refusals and unparseable replies.
+</figcaption>
+</figure>
+
+<p><strong>The guardrail lives on the server.</strong> <code>SCOPE</code> in <code>lifo.ts</code>
+  tells the model it is LIFO, coaching one person over their own data, declining essays and world
+  knowledge, never diagnosing, never recommending securities, and citing only numbers it was
+  given. It is the first system message on every request, and the client cannot strip what it
+  never carries. A client that sends a message with <code>role: "system"</code> is refused
+  outright by <code>parseRequest</code>, because a later system message displaces an earlier one
+  in most providers' weighting. The context (the device's rendered digest, or the calendar
+  assistant's rules) arrives in its own field and is placed as a second system message behind
+  <code>SCOPE</code>.</p>
+
+<p><strong>Two tasks with schemas, one without.</strong> <code>answer</code> and <code>nudge</code>
+  ask for strict JSON against a named schema, and <code>parseOutput</code> validates the reply
+  against that task's own schema rather than a literal field name, throwing loudly on a property
+  type it does not know how to check so a future schema cannot silently skip validation.
+  <code>chat</code> declares no schema, because a completion may come back as prose or as tool
+  calls and there is no single shape to check.</p>
+
+<p><strong>The style prompt is copied, and pinned twice.</strong> <code>CONVERSATION</code> is a
+  verbatim copy of <code>ResponseStyle.conversation</code> in Swift: no markdown, no dashes, no
+  quotation marks for emphasis, figures with units, one question at most. The two tiers are meant
+  to write identically, and the copy had drifted at birth, so a Deno test and a Swift test each
+  pin the same prohibitions.</p>
+
+<p><strong>Bounds, not tuning knobs.</strong> <code>MAX_CHAT_MESSAGES = 64</code>,
+  <code>MAX_CHAT_TOOLS = 16</code>, <code>MAX_CONTEXT_LENGTH = 32000</code>. Without them the
+  endpoint is a general OpenAI proxy on the project's key for any authenticated user. The device
+  sends at most a 20-turn window, six calendar tools, and a context budgeted at 8,000 characters.</p>
+
+<p><strong>Streaming.</strong> A chat turn with no tools may ask for a stream, and the coach does,
+  because the wait for the first word is the whole of how fast it feels. The function re-emits the
+  provider's SSE as its own <code>{"delta": "..."}</code> frames closed by <code>[DONE]</code>, so
+  the client never learns OpenAI's chunk format and swapping providers is not an app release.
+  <code>stream_options.include_usage</code> is set because usage arrives only in a final chunk,
+  and without it a streamed turn would be free against the cap. A tool-bearing turn is never
+  streamed: a tool call arrives as fragments of a JSON argument string across chunks, and
+  reassembling those on the server would put half the device's round loop up here.</p>
+
+<p><strong>Low reasoning effort.</strong> The body sends <code>reasoning_effort: "low"</code> and
+  <code>verbosity: "low"</code>. The default is medium, and medium is most of the wait; a coaching
+  question over a week of numbers is not a reasoning problem, because the thinking that matters
+  happened on the device when the digest was built. Low also spends fewer tokens, the same lever
+  as the daily cap pulled from the other end. A 400 from the provider retries once with the two
+  parameters lifted off, because a model that stops accepting one of them should cost a slower
+  answer, never no answer.</p>
+
+<p><strong>Debit everything.</strong> The non-streaming path debits before it parses. A refusal
+  or a malformed reply still consumed real tokens, and leaving those unmetered would let someone
+  burn unlimited budget by asking off-topic questions in a loop. The debit's own failure is
+  logged and never costs the user their answer. Logs carry ids, task names, token counts and
+  latency; never the prompt, never the key.</p>
+
+<h4>lifo-nudge: rules decide, a model phrases</h4>
+
+<p>
+  The proactive half. <code>pg_cron</code> calls it hourly with the service-role key as a
+  bearer, and the function refuses any other caller. Each run selects the users whose local clock
+  has just reached the send hour (8am, inside a 7am to 9pm quiet floor that widening the send hour
+  can never breach), fetches 94 days of <code>daily_metrics</code>, <code>workout_records</code>
+  and <code>nudge_log</code> for the whole batch in three queries, and evaluates four triggers per
+  user in a fixed order:
+</p>
+
+<ol>
+  <li><code>strongWeek</code>: seven-day step mean at least 25 percent above the trailing three
+    weeks, or a personal best in the last three days against 90 days of history. First on
+    purpose: a channel that only carries bad news gets switched off.</li>
+  <li><code>shortSleep</code>: three nights each more than an hour under the person's own median
+    over the prior four weeks, needing at least fourteen nights of baseline. Their own median,
+    not seven hours, so a habitual six-hour sleeper is not told they are failing daily.</li>
+  <li><code>stepsCollapsing</code>: three-day mean under 60 percent of the trailing fortnight,
+    with a baseline of at least 2,000 so someone who does not carry their phone is left alone.</li>
+  <li><code>streakAtRisk</code>: a workout streak of three or more days counted back from
+    yesterday, because at 8am nobody has trained yet.</li>
+</ol>
+
+<p>
+  A trigger that fired inside the seven-day cooldown steps aside. Nothing firing is the common
+  outcome and a valid one; it reaches no model. When one fires, the function first inserts the
+  <code>nudge_log</code> row, so two overlapping cron runs both reach here and the unique key on
+  <code>(user_id, day)</code> lets exactly one win. Only then does it ask the model to phrase,
+  with a prompt of roughly 300 tokens carrying the trigger's figures and an instruction to use
+  only those. Every fired trigger carries a fallback sentence, so an OpenAI outage delivers the
+  observation plainly rather than swallowing it. A refusal is the one failure that sends nothing,
+  the same distinction <code>EscalationPolicy</code> draws on the device between a transient fault
+  and a safety decision. The phrasing spend debits the <code>nudge</code> kind against its own cap
+  of 4,000 tokens, a runaway guard more than a budget.
+</p>
+
+<p>
+  A forced send exists for proving delivery: <code>{"test_user_id": ...}</code> bypasses the
+  triggers, the cooldown and the send hour, writes no log row and spends no tokens, and reports
+  how many tokens were found and how many sends succeeded. Silence being the design, there was
+  otherwise no way to know the APNs half was wired without waiting days for a real trigger.
+</p>
+
+<pre><code>-- supabase/functions/lifo-nudge/schedule.sql (NOT a migration, run once per project)
+select cron.schedule('lifo-nudge-hourly', '0 * * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'lifo_project_url')
+           || '/functions/v1/lifo-nudge',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'Authorization', 'Bearer ' ||
+        (select decrypted_secret from vault.decrypted_secrets where name = 'lifo_nudge_key')),
+    body := '{}'::jsonb, timeout_milliseconds := 55000);
+$$);</code></pre>
+
+<p>
+  The schedule is deliberately not a migration. It needs the project's own function URL, which
+  differs per environment, and the service-role key, which must never be committed; both are
+  read from Vault. Hourly rather than daily because the send hour is local and a single daily run
+  would serve one time zone.
+</p>
+
+<h3 id="s20-5"><span class="num">20.5</span><span>Tests</span></h3>
+
+<p>
+  Two kinds. The Deno tests run with <code>deno test</code> in
+  <code>supabase/functions/_shared/</code> and touch no network: 100 tests across seven files.
+</p>
+
+<div class="tablewrap"><table><thead><tr><th>File</th><th>Tests</th><th>Pins</th></tr></thead><tbody>
+<tr><td><code>lifo_test.ts</code></td><td>44</td><td>Task config, the guardrail's presence on every task, schema validation, refusal handling, the chat body's message order, role filtering, the three bounds, tool-call normalisation, tuning and its removal, streaming gating, SSE reassembly across split reads</td></tr>
+<tr><td><code>nudge_test.ts</code></td><td>25</td><td>Day arithmetic across month and year ends, local hour and day in the user's zone, the quiet window, cooldown, each trigger's firing and non-firing cases, trigger order, fallback sentences</td></tr>
+<tr><td><code>fitbit_test.ts</code></td><td>10</td><td>Failure kinds, quota header, token form, the scope list holds nothing unread, each collection's path</td></tr>
+<tr><td><code>apns_test.ts</code></td><td>9</td><td>JWT header and claims, base64url, PEM tolerance, payload carries no numbers, collapse and expiry headers, dead-token detection from both answers, provider token reuse</td></tr>
+<tr><td><code>otp_twilio_test.ts</code></td><td>7</td><td>Twilio code classification and that every kind has a status</td></tr>
+<tr><td><code>plaid_test.ts</code></td><td>4</td><td>The three failure kinds and a non-JSON body</td></tr>
+<tr><td><code>otp_session_test.ts</code></td><td>1</td><td>A returning user's phone is found in GoTrue's stored format</td></tr>
+</tbody></table></div>
+
+<p>
+  The pgTAP files in <code>supabase/tests/</code> run inside a transaction that is rolled back,
+  so the disposable users and groups they insert never persist. <code>social_groups.test.sql</code>
+  switches <code>request.jwt.claim.sub</code> between an owner, a friend and an outsider and
+  checks the rules from each seat: an invitee sees the group but not the roster, cannot send chat
+  or read the leaderboard, cannot forge membership with a direct update (error 42501), a retried
+  send does not duplicate, an outsider sees nothing. <code>group_wellness.test.sql</code> checks
+  that activity sharing does not grant health-score consent and that no score is stored before
+  the second opt-in. These are the tests that catch an RLS mistake, which otherwise looks like an
+  empty screen.
+</p>
+
+<h3 id="s20-6"><span class="num">20.6</span><span>Email templates</span></h3>
+
+<p>
+  <code>magic_link.html</code> and <code>confirmation.html</code> are the same design: a card on
+  the app's canvas colour with an accent band across the head, the dot grid drawn with table
+  cells so it survives image blocking, and the six-digit <code>{{ .Token }}</code> in a 42-point
+  monospaced span with 12 pixels of letter spacing. Tables and inline styles throughout, because
+  email clients strip style blocks, ignore flexbox, and Outlook renders through Word. No images
+  anywhere: nothing to host or have go missing in a year. The subject lines are set in
+  <code>config.toml</code>, and <code>supabase config push</code> is what sends the templates to
+  the hosted project.
+</p>
+
+<h3 id="s20-7"><span class="num">20.7</span><span>The static site</span></h3>
+
+<p>
+  <code>web/</code> is a two-file site deployed on Vercel at <code>almanac.shivvyas.com</code>.
+  Its only job is to make Plaid's OAuth redirect land back inside the app.
+</p>
+
+<pre><code>// web/.well-known/apple-app-site-association
+{ "applinks": { "details": [ {
+    "appIDs": ["Z42YU5W6WY.com.shivvyas.lifeos"],
+    "components": [ { "/": "/plaid-oauth*" } ]
+} ] } }</code></pre>
+
+<p>
+  Banks that use OAuth hand the browser to the bank, and the bank redirects to a URI Plaid was
+  told about in advance. On iOS that must be a universal link, because a custom scheme cannot be
+  registered with Plaid and would not survive the hop through Safari. The association file claims
+  the one path, <code>vercel.json</code> forces its content type to <code>application/json</code>
+  (without which iOS ignores the file and every OAuth connection silently falls back to Safari),
+  and <code>plaid-oauth.html</code> is the fallback page a person sees only when the link does not
+  resolve. That page must not look like an error and must never claim the connection failed,
+  because by then Plaid has usually already succeeded; it offers an <code>almanac://plaid-oauth</code>
+  button back into the app. The README lists the four steps the repository cannot do: DNS, the
+  Plaid dashboard's allowed redirect URIs, the <code>PLAID_REDIRECT_URI</code> secret, and the
+  Associated Domains capability on the App ID.
+</p>
+
+<h3 id="s20-8"><span class="num">20.8</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>supabase/functions/_shared/supabase.ts</code>, the door every function uses.</li>
+  <li><code>supabase/migrations/20260811164841_initial_schema.sql</code> for the policy shape, then <code>20260914090000_social_groups.sql</code> for the definer-function shape.</li>
+  <li><code>_shared/lifo.ts</code> top to bottom, then <code>lifo-agent/index.ts</code>.</li>
+  <li><code>_shared/nudge.ts</code>, then <code>lifo-nudge/index.ts</code>, then <code>schedule.sql</code>.</li>
+  <li><code>_shared/otp_guard.ts</code> and <code>otp_twilio.ts</code> together.</li>
+  <li><code>plaid-exchange/index.ts</code> for the cleanup pattern.</li>
+  <li><code>supabase/tests/social_groups.test.sql</code>, to see RLS tested from three seats.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why must <code>resolveUser</code> run before <code>serviceClient</code> in every function?</strong> The service role bypasses RLS. A user id taken from the request body would let any signed-in person read anyone's bank credential.</li>
+  <li><strong>Which tables have RLS enabled with zero policies, and what does that mean?</strong> otp_events, plaid_items, lifo_usage, fitbit_connections, nudge_log, whoop_connections. Nobody but the service role can read or write them, including the row's own owner.</li>
+  <li><strong>Why does the social groups migration grant only <code>select</code> to clients?</strong> Every write has a rule (friends only, 50 max, owner succession, idempotent sends) that a row policy cannot express, so writes go through definer functions that raise.</li>
+  <li><strong>Why is the guardrail prompt on the server and not in the app?</strong> A client cannot strip what it never carries, and a client system message is refused so it cannot displace it.</li>
+  <li><strong>What does the streamed path do that makes it not a free path through the cap?</strong> It asks for <code>include_usage</code> and debits in <code>flush</code>, which runs even when the client abandons the stream.</li>
+  <li><strong>Why is <code>schedule.sql</code> not a migration?</strong> It needs the per-environment function URL and the service-role key, both read from Vault at run time.</li>
+  <li><strong>What breaks if <code>lifo-agent</code> is deployed before the proactive_nudges migration?</strong> Its three-argument <code>lifo_debit</code> call fails until the migration creates that signature; deploy order is migration first, then both functions.</li>
+</ul>
+</section>

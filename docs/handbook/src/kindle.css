@@ -1,0 +1,81 @@
+/* Kindle stylesheet for the Almanac Engineering Handbook.
+   Plain CSS 2.1 only: no custom properties, no columns, no color-mix(), no
+   media queries. Kindle applies its own body font, size and night mode, so
+   this file only shapes structure: headings, code, tables, callouts. */
+
+body { margin: 0; padding: 0; }
+h1, h2, h3, h4 { font-weight: bold; page-break-after: avoid; }
+h1 { font-size: 1.9em; margin: 1em 0 0.5em; }
+h2 { font-size: 1.6em; margin: 1.2em 0 0.4em; }
+h3 { font-size: 1.25em; margin: 1.3em 0 0.3em; }
+h4 { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.08em; color: #6E6960; margin: 1.4em 0 0.3em; }
+p { margin: 0 0 0.8em; }
+ul, ol { margin: 0 0 0.9em 1.4em; padding: 0; }
+li { margin-bottom: 0.25em; }
+a { color: #D8431C; text-decoration: none; }
+strong { font-weight: bold; }
+code { font-family: monospace; font-size: 0.9em; }
+pre { font-family: monospace; font-size: 0.8em; line-height: 1.35; white-space: pre-wrap; word-wrap: break-word; border: 1px solid #CFCABF; padding: 0.6em 0.8em; margin: 0 0 1em; page-break-inside: avoid; }
+pre.tree { page-break-inside: auto; }
+hr { border: none; border-top: 1px solid #CFCABF; margin: 2em 0; }
+
+/* Title page */
+.titlepage { text-align: left; margin-top: 3em; }
+.cover-sub { text-transform: uppercase; letter-spacing: 0.3em; color: #D8431C; font-size: 0.8em; margin-bottom: 0.2em; }
+.titlepage h1 { font-size: 2.6em; margin: 0 0 0.3em; line-height: 1.05; }
+.cover-author { font-size: 1.2em; margin: 0 0 1.4em; }
+.cover-author span { color: #6E6960; }
+.standfirst { font-size: 1.05em; color: #46433C; margin-bottom: 1.5em; }
+.cover-foot { border-top: 1px solid #CFCABF; padding-top: 0.8em; }
+.meta span { display: inline-block; margin-right: 1.2em; font-family: monospace; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.06em; color: #6E6960; }
+
+/* Contents page */
+.contents-note { color: #6E6960; font-size: 0.9em; }
+.contents-list, .contents-list ol { list-style: none; margin-left: 0; }
+.contents-list > li { margin: 0.7em 0 0.3em; font-weight: bold; }
+.contents-list ol { margin: 0.2em 0 0.4em 1.2em; font-weight: normal; }
+.contents-list ol li { margin: 0.1em 0; }
+
+/* Part dividers */
+.part { margin-top: 4em; text-align: left; }
+.part-kicker { font-family: monospace; text-transform: uppercase; letter-spacing: 0.12em; color: #6E6960; font-size: 0.8em; }
+.part h2 { font-size: 2.2em; margin: 0.2em 0 0.5em; }
+.part ul { list-style: none; margin-left: 0; }
+
+/* Chapters */
+.chapter-kicker { font-family: monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #D8431C; font-size: 0.8em; border-top: 2px solid #D8431C; padding-top: 0.6em; margin: 0; }
+.chapter h2 { margin-top: 0.2em; }
+.num { color: #D8431C; margin-right: 0.5em; }
+h3 .num { color: #6E6960; }
+.lede { font-size: 1.08em; color: #46433C; margin-bottom: 1.2em; }
+
+/* Tables */
+.tablewrap { margin: 0 0 1.2em; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85em; }
+th, td { text-align: left; vertical-align: top; padding: 0.4em 0.5em; border-bottom: 1px solid #CFCABF; }
+th { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.06em; color: #6E6960; background: #F0EDE6; }
+
+/* Callouts */
+.note { border: 1px solid #CFCABF; padding: 0.7em 0.9em; margin: 0 0 1.2em; font-size: 0.95em; background: #FBFAF7; }
+.note b { display: block; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3em; }
+.note.blocked { border-color: #C2412A; }
+.note.blocked b { color: #C2412A; }
+.note.caution { border-color: #B27A08; }
+.note.caution b { color: #B27A08; }
+.note.good { border-color: #2E7D52; }
+.note.good b { color: #2E7D52; }
+.rail { border-left: 3px solid #CFCABF; padding-left: 0.9em; margin: 1.4em 0; }
+.prfaq { border: 1px solid #CFCABF; padding: 0.9em 1em; margin: 1em 0; background: #FBFAF7; }
+.prfaq-kicker { font-family: monospace; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.1em; color: #D8431C; margin-bottom: 0.5em; }
+.prfaq .release { border-left: 2px solid #D8431C; padding-left: 0.8em; margin-bottom: 1em; }
+.faq-q { font-weight: bold; margin: 0.9em 0 0.2em; }
+.faq-a { color: #46433C; margin: 0; }
+.study { border: 1px solid #CFCABF; padding: 0.9em 1em; margin: 1.2em 0; background: #FBFAF7; }
+.study .q { font-weight: bold; margin: 0.7em 0 0.1em; }
+.study .a { color: #46433C; margin: 0 0 0.3em; }
+.tag { font-family: monospace; font-size: 0.75em; border: 1px solid #CFCABF; padding: 0 0.3em; }
+
+/* Figures */
+figure { margin: 1.4em 0; text-align: center; }
+figcaption { font-size: 0.85em; color: #6E6960; margin-top: 0.5em; text-align: left; }
+.colophon { color: #6E6960; font-size: 0.85em; }

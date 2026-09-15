@@ -1,0 +1,429 @@
+<section class="chapter" id="ch2">
+<p class="chapter-kicker">Chapter two</p>
+<h2><span class="num">2</span><span>MVVM and project structure</span></h2>
+
+<p class="lede">
+  Every screen in Almanac is built the same way: a Model of value types, a ViewModel that owns all
+  state and every decision, and a View that renders and forwards intent. The folder layout mirrors
+  that exactly, one folder per screen, so a file's path tells you its layer before you open it.
+</p>
+
+<p>
+  The first edition described nine view models and four tabs. There are now thirty-three observable
+  classes, most of them view models, across sixteen feature folders and five tabs, plus a composition root that has grown to
+  844 lines because it is the one place every feature is wired to every other. The shape did not
+  change. This chapter explains why it held, and adds the two things that were not in the first
+  edition: the composition root itself, and the preview and checks harness that lets a screen be
+  captured and verified without an account.
+</p>
+
+<h3 id="s2-1"><span class="num">2.1</span><span>Why MVVM here</span></h3>
+
+<p>
+  SwiftUI will happily let a view query the database. <code>@Query</code> in a <code>View</code> is
+  one line and works immediately, and it is the reason this app does not do it. Three specific
+  things break:
+</p>
+
+<ol>
+  <li><strong>Nothing is testable without a simulator.</strong> Goal evaluation, streak arithmetic, sector scoring and the arbiter are the parts most likely to be wrong, and they would live inside a view body that only a running device can exercise.</li>
+  <li><strong>Derivation gets re-run per render.</strong> Status-per-day, the month grid, the streak, the money rollup: computed in <code>body</code>, they recompute on every state change, including ones that have nothing to do with them.</li>
+  <li><strong>Persistence types leak into layout code.</strong> Once a view knows what a <code>@Model</code> class is, changing the schema means editing views. The schema has changed many times since Revision D.</li>
+</ol>
+
+<p>
+  MVVM fixes all three for the price of one extra file per screen. The ViewModel does the fetching
+  and all derivation once, hands the View a plain value type, and can be exercised in a unit test
+  with an in-memory container in milliseconds.
+</p>
+
+<div class="note"><b>The rule that makes it work</b>
+A ViewModel never imports SwiftUI, and a View never imports SwiftData. Both are checkable by
+reading the first ten lines of a file, and between them they force everything else into place.
+<code>grep -rn "import SwiftData" LIfeOS/Features/*/View</code> returns nothing today, and it
+should stay that way.
+</div>
+
+<h4>Where are the view controllers?</h4>
+<p>
+  There are none, and that is not an omission. <code>UIViewController</code> is UIKit's unit of
+  screen ownership: it manages a view hierarchy's lifecycle by hand. SwiftUI replaces that whole
+  job with declarative views that re-render from state, so the controller's two remaining
+  responsibilities split cleanly: owning state and making decisions went to the ViewModel, and
+  describing what is on screen went to the View struct. The one place UIKit still appears is
+  <code>PushDelegate</code>, because APNs registration and the orientation query have no SwiftUI
+  entry point, and the note editor's <code>UITextView</code>, because block editing needs a text
+  view SwiftUI does not offer.
+</p>
+
+<h3 id="s2-2"><span class="num">2.2</span><span>What each layer owns</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 300" role="img" aria-label="Four columns: View sends intent to ViewModel and receives a snapshot; ViewModel calls a store and receives rows; the store reads SwiftData models. Integrations writes to the store and is never called by a View. A dashed line marks that nothing left of the store imports SwiftData.">
+  <defs><marker id="ch2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs>
+  <text class="lbl-sm" x="20" y="24">VIEW</text><text class="lbl-sm" x="240" y="24">VIEWMODEL</text><text class="lbl-sm" x="470" y="24">STORE</text><text class="lbl-sm" x="690" y="24">MODEL</text>
+  <rect class="box" x="20" y="44" width="170" height="70" rx="8"/><text class="lbl" x="105" y="68" text-anchor="middle">TodayScreen</text><text class="lbl-sm" x="105" y="86" text-anchor="middle">SwiftUI only</text><text class="lbl-sm" x="105" y="102" text-anchor="middle">no logic</text>
+  <rect class="box-hot" x="240" y="44" width="180" height="70" rx="8"/><text class="lbl" x="330" y="68" text-anchor="middle">TodayViewModel</text><text class="lbl-sm" x="330" y="86" text-anchor="middle">@Observable @MainActor</text><text class="lbl-sm" x="330" y="102" text-anchor="middle">fetch · derive · publish</text>
+  <rect class="box" x="470" y="44" width="170" height="70" rx="8"/><text class="lbl" x="555" y="68" text-anchor="middle">MetricsStore</text><text class="lbl-sm" x="555" y="86" text-anchor="middle">upsert · metrics</text><text class="lbl-sm" x="555" y="102" text-anchor="middle">goals · workouts</text>
+  <rect class="box-alt" x="690" y="44" width="150" height="70" rx="8"/><text class="lbl" x="765" y="68" text-anchor="middle">SwiftData</text><text class="lbl-sm" x="765" y="86" text-anchor="middle">DailyMetrics</text><text class="lbl-sm" x="765" y="102" text-anchor="middle">UserGoals</text>
+  <path class="flow" d="M190 64 L 234 64" marker-end="url(#ch2a)"/><text class="lbl-sm" x="196" y="56">intent</text>
+  <path class="flow" d="M234 94 L 196 94" marker-end="url(#ch2a)"/><text class="lbl-sm" x="196" y="112">TodaySnapshot</text>
+  <path class="flow" d="M420 64 L 464 64" marker-end="url(#ch2a)"/><text class="lbl-sm" x="424" y="56">store call</text>
+  <path class="flow" d="M464 94 L 426 94" marker-end="url(#ch2a)"/><text class="lbl-sm" x="424" y="112">[DailyMetrics]</text>
+  <path class="flow" d="M640 79 L 684 79" marker-end="url(#ch2a)"/>
+  <rect class="box" x="470" y="170" width="170" height="60" rx="8"/><text class="lbl" x="555" y="194" text-anchor="middle">Integrations</text><text class="lbl-sm" x="555" y="212" text-anchor="middle">HealthApply · WhoopSync</text>
+  <path class="flow" d="M555 170 L 555 120" marker-end="url(#ch2a)"/><text class="lbl-sm" x="565" y="150">write, never called by a View</text>
+  <line class="wall" x1="445" y1="30" x2="445" y2="250"/>
+  <text class="lbl-sm" x="20" y="270">nothing left of this line imports SwiftData; the store hands back value types, so the two boxes on the left stay testable and previewable.</text>
+</svg>
+<figcaption>
+  The View sends intent and renders a snapshot. The ViewModel is the only place that decides
+  anything. The store owns the invariant (one row per day) so callers cannot get it wrong.
+</figcaption>
+</figure>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Layer</th><th>Lives in</th><th>Shape</th><th>May import</th></tr></thead>
+<tbody>
+<tr><td>Domain model</td><td><code>LifeOSKit/Sources/Persistence</code></td><td><code>@Model</code> classes, stores, pure logic</td><td>Foundation, SwiftData</td></tr>
+<tr><td>Feature model</td><td><code>Features/&lt;Screen&gt;/Model</code></td><td><code>struct</code>, <code>Sendable</code>, <code>Equatable</code>: the screen's rendered state</td><td>Foundation, Persistence value types, DesignSystem value types</td></tr>
+<tr><td>ViewModel</td><td><code>Features/&lt;Screen&gt;/ViewModel</code></td><td><code>@Observable @MainActor final class</code></td><td>Foundation, Observation, Persistence, Integrations, Sectors, Insights; never SwiftUI</td></tr>
+<tr><td>View</td><td><code>Features/&lt;Screen&gt;/View</code></td><td><code>struct: View</code>, plus its private subviews</td><td>SwiftUI, DesignSystem, its own ViewModel; never SwiftData</td></tr>
+<tr><td>Shared component</td><td><code>Components/{Model,ViewModel,View}</code></td><td>Same three shapes, reused by two or more screens</td><td>As above</td></tr>
+<tr><td>Design primitive</td><td><code>LifeOSKit/Sources/DesignSystem</code></td><td>Stateless View structs, tokens, pure layout maths</td><td>SwiftUI only; knows nothing about the app</td></tr>
+<tr><td>Wiring</td><td><code>App/</code> and <code>App/Surfaces/</code></td><td>The scene, the shell, the root, the account session, push, the watch bridge, the harness</td><td>Everything; this is the only place that may</td></tr>
+</tbody></table></div>
+
+<p>
+  The distinction between the shared component and the design primitive is the one people get
+  wrong. <code>DesignSystem</code> holds things that would make sense in any app:
+  <code>HeroNumeral</code>, <code>DotGrid</code>, <code>PillNavBar</code>. <code>Components</code>
+  holds things that are reusable but specifically about this app's data: the quick-log sheet, the
+  Whoop connect modal, the avatar button that knows where the photo is stored.
+</p>
+
+<h3 id="s2-3"><span class="num">2.3</span><span>The screen first directory layout</span></h3>
+
+<p>
+  Folders are named after screens, not after layers. <code>Features/Money/</code> holds everything
+  the Money tab is, and inside it the three MVVM folders classify each file. Finding code starts
+  with "which screen," which is how anyone actually thinks about a bug report.
+</p>
+
+<pre class="tree">LIfeOS/                                  app target, file-system synchronised
+├── App/
+│   ├── LIfeOSApp.swift                  @main; owns AccountSession; re-roots per account
+│   ├── AppShell.swift                   onboarding or app; URL callbacks; session keep-alive
+│   ├── RootView.swift                   five tabs, every view model, every sheet
+│   ├── AccountSession.swift             which store is open; sign in, switch, sign out
+│   ├── ChatTier.swift                   the one place the cloud engine is built
+│   ├── OrientationLock.swift            portrait on phone, except the video player
+│   ├── PushService.swift                APNs registration and the nudge inbox
+│   └── Surfaces/
+│       ├── SurfaceCoordinator.swift     publishes SurfaceSnapshot to widgets and watch
+│       ├── WatchSessionBridge.swift     the mirrored workout session
+│       ├── WorkoutLiveActivityController.swift
+│       ├── SurfaceDesignPreview.swift   widget gallery harness (flag-gated)
+│       ├── SurfaceNativeChecks.swift    inbox and snapshot checks (DEBUG)
+│       ├── SurfaceSettingsScreen.swift  "Widgets &amp; Watch" settings page
+│       └── LaunchFilmPreview.swift      synthetic captures for the launch film (flag-gated)
+│
+├── Features/                            one folder per screen
+│   ├── Onboarding/    intro, signup, profile step, tour, connections
+│   ├── Today/         hub, agenda, month, day sheet, event sheet, metric detail
+│   ├── Health/        the hub with Health and Fitness halves
+│   ├── Body/          weight and wellness sections
+│   ├── Activity/      the live session recorder and Begin Activity
+│   ├── Recovery/      Whoop detail and trend chart
+│   ├── Workouts/      the library, planner sheet, video player
+│   ├── Money/         Plaid, budgets, charts, drill-down
+│   ├── Notes/         the PARA library, editor, inbox, drawer, Pencil
+│   ├── Plan/          habits, still hosted inside Notes
+│   ├── Life/          the nine-sector board, close, in-flight, detail
+│   ├── Coach/         LIFO: screen, orb, speech, voices
+│   ├── Assistant/     the calendar assistant sheet
+│   ├── Social/        friends, chat, groups, leaderboards
+│   ├── Settings/      profile screen, edit sheet, connections, Plaid Link
+│   └── Notifications/ the nudge inbox screen
+│
+├── Components/                          shared across two or more screens
+│   ├── Model/ProfilePhotoDownsizing.swift
+│   ├── ViewModel/QuickLogViewModel.swift
+│   └── View/  QuickLogSheet, AddEntrySheet, JournalEntrySheet,
+│              CapsuleButton, ProfileAvatar, WhoopConnectModal
+│
+└── Resources/  Assets.xcassets, PrivacyInfo.xcprivacy
+
+LifeOSKit/Sources/                       eight targets; see 1.2
+AlmanacWatch/                            the watch app: controller, screen, delegate
+AlmanacWidgets/                          HealthWidget and WorkoutLiveActivity
+AlmanacWatchWidgets/                     the watch complication
+supabase/                                migrations, functions, templates, tests
+scripts/catalog/                         the catalog verifier
+web/                                     plaid-oauth.html and the app-site association</pre>
+
+<p>
+  Every feature folder has a <code>View/</code>; most have all three. <code>Health/</code> and
+  <code>Life/</code> have no <code>Model/</code> because their snapshots are assembled from other
+  features' snapshots or from package types. <code>Notifications/</code> is a single file because
+  the inbox's state lives in <code>PushService</code>. A folder with fewer than three subfolders is
+  not a violation; it is a screen that did not need the layer.
+</p>
+
+<div class="note"><b>Why this works without touching the project file</b>
+The app target uses a <code>PBXFileSystemSynchronizedRootGroup</code>. Any folder created under
+<code>LIfeOS/</code> is picked up by Xcode automatically, because the directory structure is the
+project structure. Moving a screen between folders is a <code>git mv</code>. The corollary still
+holds: do not put documentation in these folders, because every file is a build input and a
+<code>README.md</code> is copied into the bundle as a resource.
+</div>
+
+<h3 id="s2-4"><span class="num">2.4</span><span>Anatomy of a feature folder</span></h3>
+
+<p>
+  Every feature folder answers the same questions in the same order. Chapters 5 to 18 are each one
+  instance of this template.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Folder</th><th>Contains</th><th>Test</th></tr></thead>
+<tbody>
+<tr><td><code>Model/</code></td><td>One snapshot struct per screen, plus any small enums it needs. Value types only. No methods that fetch, no dates computed from <code>.now</code>.</td><td>Compiles without SwiftUI or SwiftData</td></tr>
+<tr><td><code>ViewModel/</code></td><td>One class per screen. Holds <code>private(set) var snapshot</code>, the context, and the funcs the view calls.</td><td>Instantiable in a test with an in-memory container</td></tr>
+<tr><td><code>View/</code></td><td>The screen struct and its private subviews. Reads only from its view model; owns <code>@State</code> for presentation concerns like sheet visibility and focus.</td><td>A <code>#Preview</code> per subview; a design-preview page for the screen</td></tr>
+</tbody></table></div>
+
+<p>The ViewModel shape is identical everywhere, which is the point:</p>
+
+<pre><code>// LIfeOS/Features/Today/ViewModel/TodayViewModel.swift
+@MainActor @Observable
+final class TodayViewModel {
+    private(set) var snapshot = TodaySnapshot()
+    private(set) var detail: DayDetailSnapshot?
+
+    private var context: ModelContext?
+    private let calendar: Calendar
+
+    init(calendar: Calendar = .current) { self.calendar = calendar }
+
+    func attach(_ context: ModelContext) { self.context = context }
+
+    /// One pass over the day rows: the day-to-status map is built once and used
+    /// for both the grid and the streak.
+    func load() {
+        guard let context else { return }
+        let store = MetricsStore(context: context, calendar: calendar)
+        // Bounded: the grid needs this month and the streak needs recent
+        // history, never the whole table.
+        let start = calendar.date(byAdding: .day, value: -400, to: .now) ?? .distantPast
+        ...
+    }
+}</code></pre>
+
+<p>
+  The context arrives through <code>attach</code> rather than the initialiser because
+  <code>RootView</code> constructs every view model as <code>@State</code> before the environment is
+  available, and a snapshot with its empty default is a valid thing to render in the meantime.
+  Two view models break the pattern for a reason each states in a comment:
+  <code>AssistantViewModel</code> takes its context in <code>init</code> because it builds a
+  <code>ChatStore</code> immediately, so <code>RootView</code> holds it as an optional and creates it
+  in <code>attachAll()</code>; and <code>ActivityRecorder</code> takes a <code>UserDefaults</code> suite
+  so the design preview and the checks harness can run it against disposable defaults.
+</p>
+
+<p>
+  A calendar is injected everywhere a date is normalised. It defaults to <code>.current</code> and
+  a test passes a fixed UTC calendar, which is what makes "which day does 23:30 belong to" a
+  deterministic question in <code>PersistenceTests</code>.
+</p>
+
+<div class="note caution"><b>Injection is by context, not by protocol</b>
+Every view model builds a concrete store from a <code>ModelContext</code>, so testing one means
+standing up an in-memory <code>ModelContainer</code> rather than passing a stub. The consequence
+the first edition named is still true: the package has 1,298 tests across 130 suites and the app
+target has none. What changed is the mitigation. Everything that can be decided by arithmetic now
+lives in the package where a test can reach it (<code>SessionKeepAlive</code>,
+<code>LiveEffort</code>, <code>HUDPlacement</code>, <code>CodeDigits</code>), and the view models
+that cannot be unit tested are driven by the checks harness in 2.7 instead.
+</div>
+
+<h3 id="s2-5"><span class="num">2.5</span><span>The composition root</span></h3>
+
+<p>
+  <code>RootView</code> is where every feature is wired to every other, and it is the one file in
+  the app that may know about all of them. Five tabs, stated rather than inferred from ordering:
+</p>
+
+<pre><code>// LIfeOS/App/RootView.swift
+private enum AppTab: Hashable { case today, health, money, notes, life }
+
+@State private var tab: AppTab = .today   // deliberately not persisted: a cold launch lands on Today
+
+private var navItems: [PillNavItem&lt;AppTab&gt;] {
+    [
+        PillNavItem(value: .today,  systemImage: "circle.grid.3x3.fill",  label: "Today"),
+        PillNavItem(value: .health, systemImage: "heart.fill",             label: "Health"),
+        PillNavItem(value: .money,  systemImage: "dollarsign",            label: "Money"),
+        PillNavItem(value: .notes,  systemImage: "text.book.closed.fill",  label: "Notes"),
+        PillNavItem(value: .life,   systemImage: "square.grid.3x3.fill",   label: "Life"),
+    ]
+}</code></pre>
+
+<p>
+  Health absorbed activity, weight, recovery and wellness so the bar stays free for the other life
+  domains. Plan lost its tab to Notes, where habits now live as a section. Settings sits behind the
+  profile avatar on Today rather than spending a slot. The Life board maps three of its nine sectors
+  back onto tabs, and <code>LifeSector.ownsTab</code> in the <code>Sectors</code> package is the one
+  decision about which three; <code>RootView</code> reads it and asserts if the switch ever drifts.
+</p>
+
+<p>The root does five jobs, and each is one mechanism:</p>
+
+<ol>
+  <li><strong>Owns every view model as <code>@State</code></strong>, nineteen of its own plus the four connection view models the shell hands it, and attaches the context to all of them in <code>attachAll()</code> from a single <code>.task</code>. Cross-feature wiring happens here and only here: the recorder's <code>onSaved</code> triggers a Health sync, the coach's <code>bundleExtras</code> closure reads the money and life snapshots, notes get their sync client.</li>
+  <li><strong>Reloads on save, never on a timer.</strong> One <code>.task</code> listens for <code>ModelContext.didSave</code> and calls <code>reloadAll()</code>. A save is the only thing that can change what a screen shows while the app is running, so nothing polls. Detail pages reload only while open, because off screen they are six months of rows nobody is looking at.</li>
+  <li><strong>Draws two shells over one set of screens.</strong> A compact width gets the pill bar floating over the content; a regular width gets the same bar stood on end as a rail. The screens are identical in both; 4.9 has the rail's behaviour.</li>
+  <li><strong>Presents every sheet and cover</strong> from one place, keyed on optionals rather than parallel booleans where the sheet has content: <code>today.detail</code> is the only source of truth for the day sheet, <code>openMetric</code> is a value rather than four flags, <code>eventSheet</code> is an enum of create or edit.</li>
+  <li><strong>Routes what arrives from outside:</strong> a widget deep link through <code>SurfaceCoordinator.pendingRoute</code>, a tapped nudge through <code>PushService.pending</code>, a scene activation that syncs the calendar and restarts the Health watcher.</li>
+</ol>
+
+<p>
+  The three quick actions (calendar assistant, LIFO, begin activity) are defined once in
+  <code>RootView</code> and injected through <code>EnvironmentValues.quickActions</code>. Notes and Life
+  own their own <code>NavigationStack</code>s several levels down, and a toolbar has to be attached
+  inside the stack it belongs to; threading an array through both would put the same three
+  buttons in four call sites, which is how a set drifts apart.
+</p>
+
+<h3 id="s2-6"><span class="num">2.6</span><span>Shared components</span></h3>
+
+<p>
+  <code>Components/</code> is split into the same three folders, for the same reason: a shared
+  piece of UI that owns state has a view model, and it belongs somewhere obvious.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Component</th><th>State</th><th>Used by</th></tr></thead>
+<tbody>
+<tr><td><code>QuickLogSheet</code></td><td><code>QuickLogViewModel</code>: writes water and weight through <code>MetricsStore</code>, source <code>manual</code></td><td>Begin Activity, the root</td></tr>
+<tr><td><code>AddPlanEntrySheet</code>, <code>AddMoneySheet</code></td><td>Stateless; a closure with the typed fields</td><td>Notes (habits), Money</td></tr>
+<tr><td><code>JournalEntrySheet</code></td><td>Stateless; text only</td><td>Health, wellness section</td></tr>
+<tr><td><code>WhoopConnectModal</code></td><td>Reads <code>WhoopConnectionViewModel</code></td><td>Health hub, Settings</td></tr>
+<tr><td><code>CapsuleButton</code></td><td>Stateless; quiet or prominent</td><td>Every card with a CTA</td></tr>
+<tr><td><code>ProfileAvatar</code></td><td>Takes photo bytes; falls back to a glyph, never initials</td><td>Today's toolbar, the profile</td></tr>
+<tr><td><code>ProfilePhotoDownsizing</code></td><td>Pure: resizes to the bucket's cap</td><td>Onboarding, the edit sheet</td></tr>
+</tbody></table></div>
+
+<p>
+  A component earns its place in <code>Components/</code> the second time it is needed, not the
+  first. <code>SessionHUD</code> and <code>ActivityControls</code> are the recent example: they were
+  private to Begin Activity until the video player needed them, and they were moved rather than
+  copied.
+</p>
+
+<div class="note"><b>Where the dash rule lives</b>
+"A missing metric renders as a dash, never as 0" is the single most repeated rule in this app. It
+is enforced by type: <code>MetricTile</code>, <code>IconBubbleTile</code>, <code>PastelFillCard</code>,
+<code>TrendStatTile</code> and <code>HeroNumeral</code> all take <code>String?</code> and render the
+dash themselves. A screen cannot pass a zero it does not have, because it has nothing to pass.
+</div>
+
+<h3 id="s2-7"><span class="num">2.7</span><span>The preview and checks harness</span></h3>
+
+<p>
+  Most screens need an account, a store with weeks of rows, a connected strap and a signed-in
+  session before they show anything worth looking at. That made design review and QA slow and
+  made the state on screen unrepeatable. The harness fixes both. <code>LIfeOSApp</code> checks one
+  launch argument in <code>DEBUG</code>:
+</p>
+
+<pre><code>// LIfeOS/App/LIfeOSApp.swift
+#if DEBUG
+if ProcessInfo.processInfo.arguments.contains("--design-preview") {
+    HealthActivityDesignPreview()
+} else {
+    shell
+}
+#endif</code></pre>
+
+<p>
+  <code>HealthActivityDesignPreview</code> builds an in-memory container, a disposable
+  <code>UserDefaults</code> suite, and an <code>ActivityRecorder</code> that never saves to Health,
+  then switches on <code>--page=</code>. Every page is a real screen fed a fixture; nothing is a
+  mock-up. The fixture uses six real rows lifted from the catalog seed so thumbnails resolve, a
+  WHOOP recovery of 82 and a live reading of 152 bpm, and it labels itself as sample data.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Argument</th><th>Renders</th><th>Modifiers</th></tr></thead>
+<tbody>
+<tr><td><code>--page=health</code> (default)</td><td>The Health hub</td><td><code>--fitness</code> opens the Fitness half; <code>--dark</code>; <code>--large</code> for accessibility type</td></tr>
+<tr><td><code>--page=activity</code></td><td>Begin Activity</td><td><code>--live</code> starts a backdated run and feeds twelve minutes of readings; <code>--strength</code>; <code>--hud-collapsed</code>; <code>--live-activity</code> requests a real Live Activity</td></tr>
+<tr><td><code>--page=library</code>, <code>library-empty</code></td><td>The workout library</td><td><code>--schedule-sheet</code></td></tr>
+<tr><td><code>--page=player</code></td><td>The video player</td><td><code>--video=&lt;id&gt;</code> picks a seed row; <code>--live</code></td></tr>
+<tr><td><code>--page=profile</code>, <code>settings</code>, <code>connections</code>, <code>sharing</code>, <code>categories</code></td><td>The named screen</td><td></td></tr>
+<tr><td><code>--page=checks</code></td><td>Runs <code>ActivityRecorderChecks</code> and writes <code>recorder-checks.txt</code> to Documents</td><td></td></tr>
+</tbody></table></div>
+
+<p>
+  Two more harnesses sit behind build flags rather than arguments, so they cannot ship even in a
+  debug build by accident: <code>SurfaceDesignPreview</code> (flag <code>SURFACE_DESIGN_PREVIEW</code>)
+  renders the widget gallery, the inbox and the "Widgets &amp; Watch" page and runs
+  <code>SurfaceNativeChecks</code>; <code>LaunchFilmPreview</code> (flag <code>LAUNCH_FILM_PREVIEW</code>)
+  renders the synthetic frames the launch film was cut from.
+</p>
+
+<h4>Native checks</h4>
+<p>
+  The checks are the answer to "the feature layer has no tests." They are not unit tests: they run
+  inside the app process, against real <code>UserDefaults</code> suites and a real in-memory
+  container, exercising the view models the way the app does. <code>ActivityRecorderChecks</code>
+  starts a session, feeds readings, counts reps, hands off to a watch that never answers, and
+  asserts on each step; <code>SurfaceNativeChecks</code> proves that a notification for one account
+  is rejected once another is signed in and that sign-out empties the widget snapshot. Each prints
+  <code>PASS</code> or <code>FAIL</code> and a title, the QA reports paste the output verbatim, and the
+  rule for a failing check is the same as for a failing test: fix the cause, never the check.
+</p>
+
+<h3 id="s2-8"><span class="num">2.8</span><span>Rules and review checklist</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Rule</th><th>Enforced how</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>A View never imports SwiftData</td><td>Review: visible in the imports</td><td>All reads go through a ViewModel; the schema can change without touching layout</td></tr>
+<tr><td>A ViewModel never imports SwiftUI</td><td>Review: visible in the imports</td><td>Keeps it testable and prevents View-shaped thinking leaking in</td></tr>
+<tr><td>A View never holds a <code>@Model</code> instance</td><td>Review: screens take snapshots</td><td>Rendering cannot fault an object or trigger a fetch mid-layout</td></tr>
+<tr><td>A ViewModel publishes value types only</td><td>Review: the snapshot struct is the surface</td><td>Nothing above the view model can mutate the database by accident</td></tr>
+<tr><td>No feature folder imports another feature folder</td><td>Review</td><td>Sharing goes through Components, which forces the shared thing to be named</td></tr>
+<tr><td>Cross-feature wiring lives in <code>RootView</code></td><td>Review</td><td>One file knows the whole graph; a feature never reaches sideways</td></tr>
+<tr><td>Derivation happens in the ViewModel, never in <code>body</code></td><td>Review</td><td><code>body</code> runs far more often than data changes</td></tr>
+<tr><td>Snapshot types are <code>Equatable</code></td><td>Compiler</td><td>Cheap re-render skipping, and ViewModel tests become one-liners</td></tr>
+<tr><td>Every font comes from <code>LifeOSType</code></td><td><code>scripts/check-typography.sh</code></td><td>The app once had 376 hand-written font calls across 28 sizes</td></tr>
+<tr><td>A new stored property on an existing model is optional or defaulted</td><td>Review; a hang on the spinner if missed</td><td>Installed stores refuse to open otherwise. The equipment column shipped without a default and had to be fixed the same day</td></tr>
+<tr><td>Anything decidable by arithmetic lives in the package</td><td>Review</td><td>A test can reach it; a view cannot be asserted on</td></tr>
+<tr><td>A screen that needs an account has a design-preview page</td><td>Review; the QA report lists the captures</td><td>Repeatable state, and a capture without loading anyone's data</td></tr>
+</tbody></table></div>
+
+<h3 id="s2-9"><span class="num">2.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>LIfeOS/App/LIfeOSApp.swift</code>: forty lines that decide whether a store is open and re-root the tree.</li>
+  <li><code>LIfeOS/App/AppShell.swift</code>: onboarding or app, and every URL that arrives.</li>
+  <li><code>LIfeOS/App/RootView.swift</code>: read <code>attachAll()</code> and <code>reloadAll()</code> first, then the <code>content</code> switch, then the two shells.</li>
+  <li><code>LIfeOS/Features/Today/ViewModel/TodayViewModel.swift</code>: the canonical view model shape.</li>
+  <li><code>LIfeOS/Features/Today/Model/TodaySnapshot.swift</code>: what a snapshot is and is not.</li>
+  <li><code>LIfeOS/Features/Health/View/HealthActivityDesignPreview.swift</code>: how a screen is rendered without an account.</li>
+  <li><code>LIfeOS/Features/Activity/ViewModel/ActivityRecorderChecks.swift</code>: what a native check looks like.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does a view model take its context through <code>attach</code> rather than <code>init</code>?</strong> Because <code>RootView</code> constructs them as <code>@State</code> before the environment context exists, and an empty snapshot is a valid first render.</li>
+  <li><strong>What triggers <code>reloadAll()</code>?</strong> <code>ModelContext.didSave</code>, scene activation, and a finished recorder save. Nothing polls.</li>
+  <li><strong>Where is the decision about which sectors map to a tab?</strong> <code>LifeSector.ownsTab</code> in the Sectors package; <code>RootView</code> only maps the answer onto its private enum.</li>
+  <li><strong>Why are the quick actions an environment value?</strong> Notes and Life own their own navigation stacks, and a toolbar must be attached inside the stack it belongs to.</li>
+  <li><strong>What is the difference between a native check and a unit test?</strong> A check runs inside the app process against real defaults and view models; a test runs in the package with no simulator. Both print a verdict; only the check can reach a view model.</li>
+  <li><strong>Which two harnesses are behind build flags rather than launch arguments, and why?</strong> The surface gallery and the launch film; a flag cannot be tripped by a stray argument in a debug build.</li>
+</ul>
+</section>

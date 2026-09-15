@@ -1,0 +1,730 @@
+<section class="chapter" id="ch16" data-hue="social">
+<p class="chapter-kicker">Chapter sixteen</p>
+<h2><span class="num">16</span><span>Social</span></h2>
+
+<p class="lede">
+  Find people, keep the ones you found, message them, and compare a day's effort in a private
+  group. Built on the Supabase project the app already has, with row level security doing every
+  bit of the guarding and no chat service in between.
+</p>
+
+<p>
+  Revision D described a personal app with no accounts. Since then Almanac gained sign-in, and
+  with it the first feature that is about someone other than the person holding the phone. The
+  design constraint was cost: the app ships free, so a friends list, a mailbox and a leaderboard
+  had to fit on Postgres rows behind PostgREST, with nothing per user to pay for. They do. This
+  chapter describes the three tables that arrived on 27 August 2026, the shared-figures table that
+  followed, and the groups and daily health comparisons that landed on 14 September.
+</p>
+
+<h3 id="s16-1"><span class="num">16.1</span><span>Intent</span></h3>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  From your profile, tap Together. Search a name, send a request, and once it is accepted you can
+  message that person, see the three figures they chose to share, and invite them into a group. A
+  group is a private chat with an optional leaderboard that ranks Effort, Recharge and Rest for
+  today or yesterday, on the app's own 0 to 100 scale, with the device each score came from
+  printed beside it. Health scores are shared per group, off by default, and stop the moment you
+  say so.
+</p>
+<p class="faq-q">Why is authorisation in the database and not in the app?</p>
+<p class="faq-a">
+  Because the client can only filter for display, never for privacy. Every table carries a policy
+  written against <code>auth.uid()</code>, and every write that has to be atomic goes through a
+  <code>security definer</code> function that takes the caller's identity from the token, never
+  from an argument. A leaked or mistaken query returns nothing it should not, and the Swift side is
+  free to be a thin request shaper.
+</p>
+<p class="faq-q">Why no chat SDK?</p>
+<p class="faq-a">
+  A message is a row. <code>SocialAPI</code> is PostgREST over <code>URLSession</code>, the same idiom
+  <code>SupabaseAuth</code> and <code>SupabaseREST</code> established, and the whole social layer adds
+  no dependency. Polling replaces realtime: five seconds while a chat is open, eight in a group,
+  and nothing at all otherwise.
+</p>
+<p class="faq-q">Are the leaderboard numbers WHOOP's or Apple's?</p>
+<p class="faq-a">
+  No, and the screen says so. Effort, Recharge and Rest are app-defined comparisons computed on the
+  device from <code>DailyMetrics</code>, each against the person's own goal or their own 28-day
+  baseline. Only the derived score, its source and its day leave the phone. Raw heart rate
+  variability, resting heart rate and sleep minutes never reach the leaderboard endpoint.
+</p>
+<p class="faq-q">What does a friend request let someone see?</p>
+<p class="faq-a">
+  A display name and whatever profile fields the person filled in. Nothing else until it is
+  accepted. Pending is not enough to read shared figures: asking to be someone's friend must not
+  be a way to read their numbers while they decide, or the request itself becomes the attack.
+</p>
+</div>
+
+<p>
+  What Social does not do: read receipts, edits, deletes or push for messages. The
+  <code>messages</code> table carries no read state, so the inbox never claims a message is unread;
+  it only says whether the last word was theirs. A message is a fact once sent.
+</p>
+
+<h3 id="s16-2"><span class="num">16.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Social/
+├── ViewModel/
+│   ├── FriendsViewModel.swift       friends, requests, outgoing, search with a generation counter
+│   ├── ChatViewModel.swift          one conversation: messages, pending rows, a send that cannot lose
+│   ├── InboxViewModel.swift         requests to answer, conversations to return to
+│   └── GroupViewModel.swift         SocialSession, GroupsViewModel, GroupViewModel
+└── View/
+    ├── SocialHubScreen.swift        "Together": People, Groups, Rankings; CreateGroupScreen
+    ├── FriendsScreen.swift          search field, requests above friends, one of three trailing states
+    ├── UserProfileScreen.swift      a person: photo, relationship actions, shared figures
+    ├── FriendChatScreen.swift       a direct conversation, polled every five seconds
+    ├── InboxScreen.swift            requests, then threads; InitialBubble
+    ├── GroupDetailScreen.swift      chat, leaderboard, members; GroupInviteScreen; bubble; composer
+    ├── SocialLeaderboard.swift      podium and lineup, ties kept intact
+    ├── ProfileActivitySharingCard.swift  the friends-only sharing toggle
+    ├── SocialStyle.swift            SocialTheme, SocialCanvas, SocialPanel, SocialAvatar, notices
+    └── SocialDesignPreview.swift    sample fixtures, driven by launch arguments
+
+LifeOSKit/Sources/Integrations/
+├── SocialAPI.swift                  profiles, friendships, messages over PostgREST
+├── GroupAPI.swift                   groups, members, group messages, leaderboards, via RPC
+├── SharedStatsClient.swift          profile_stats: the three figures shared with friends
+├── SocialWellness.swift             Effort, Recharge and Rest, computed on the device
+└── InboxDigest.swift                a flat mailbox folded into one row per person
+
+supabase/migrations/
+├── 20260827130000_friends_and_messages.sql   profiles, friendships, messages
+├── 20260827140000_friendship_column_grants.sql  update may touch status and nothing else
+├── 20260829120000_shared_stats.sql           profile_stats, readable by accepted friends
+├── 20260914090000_social_groups.sql          social_groups, group_members, group_messages, RPCs
+└── 20260914110000_group_wellness_leaderboards.sql  shares_wellness, group_wellness_daily, ranking
+supabase/tests/
+├── social_groups.test.sql           43 pgTAP assertions, run in a rolled-back transaction
+└── group_wellness.test.sql          23 more</pre>
+
+<p>
+  <a href="#ch20">Chapter 20</a> owns the backend in full. This chapter describes the tables only
+  as far as the Swift code depends on their shape.
+</p>
+
+<h3 id="s16-3"><span class="num">16.3</span><span>Model</span></h3>
+
+<p>
+  Every type the screens render is a <code>Codable</code> value decoded straight from PostgREST.
+  There is no SwiftData model in this feature: nothing social is cached on the device, and a screen
+  that loses the network shows what it last fetched plus one quiet sentence.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SocialAPI.swift
+public struct SocialProfile: Codable, Sendable, Equatable, Identifiable {
+    public let userID: UUID
+    public let displayName: String
+    public let firstName: String?      // every field past the name is optional:
+    public let country: String?        // a question someone may decline to answer
+    public let birthDate: Date?
+    public let heightCM: Double?
+    public let avatarPath: String?     // the object's path inside the avatars bucket
+}
+
+public enum FriendshipStatus: String, Codable, Sendable { case pending, accepted }
+
+public struct Friendship: Codable, Sendable, Equatable, Identifiable {
+    public let id: Int
+    public let requester: UUID
+    public let addressee: UUID
+    public let status: FriendshipStatus
+}
+
+public struct SocialMessage: Codable, Sendable, Equatable, Identifiable {
+    public let id: Int                 // negative while provisional, see ChatViewModel
+    public let sender: UUID
+    public let recipient: UUID
+    public let body: String
+    public let createdAt: Date
+}</code></pre>
+
+<p>
+  A friendship is one row whoever asked first, <code>pending</code> until the addressee accepts.
+  The unique constraint is on the ordered pair, and the API guards the reverse direction before
+  inserting. A profile that pads itself with placeholders for the fields somebody skipped looks
+  broken rather than private, which is why the optionals stay optional all the way to the screen.
+</p>
+
+<p>
+  The decoder is the one piece of the model worth a paragraph. PostgREST emits timestamps with
+  fractional seconds, which the default date strategy does not parse, and a bare <code>date</code>
+  column such as <code>birth_date</code> arrives with no clock at all, which neither ISO 8601
+  formatter accepts. Before the third branch was added, a profile carrying a birthday failed to
+  decode entirely, taking the person's name down with it. <code>SocialAPI.decoder</code> tries
+  fractional, then plain, then the day format, and is internal rather than private so a test can
+  exercise each branch.
+</p>
+
+<h4>Groups</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/GroupAPI.swift
+public struct SocialGroup: Codable, Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public let name: String
+    public let description: String
+    public let ownerID: UUID
+    public let members: [GroupMember]              // decoded from the embedded group_members
+    public var isInvitation: Bool { members.first?.status == "invited" }
+}
+
+public struct GroupMember: Codable, Sendable, Equatable, Identifiable {
+    public let groupID: UUID
+    public let userID: UUID
+    public let status: String                      // invited | accepted
+    public let sharesActivity: Bool
+    public let sharesWellness: Bool?               // optional: added by a later migration
+}
+
+public struct GroupMessage: Codable, Sendable, Equatable, Identifiable {
+    public let id: Int
+    public let groupID: UUID
+    public let sender: UUID
+    public let body: String
+    public let clientID: UUID                      // the idempotency key a retry reuses
+    public let createdAt: Date
+}
+
+public struct LeaderboardEntry: Codable, Sendable, Equatable, Identifiable {
+    public let userID: UUID
+    public let displayName: String
+    public let avatarPath: String?
+    public let score: Int                          // 0 to 100
+    public let position: Int                       // the server's rank, ties included
+    public let updatedAt: Date
+    public let source: String?                     // appleHealth | whoop | fitbit
+    public let day: String?
+}</code></pre>
+
+<p>
+  <code>groups(token:)</code> asks for <code>social_groups</code> with the caller's own
+  <code>group_members</code> row embedded and filtered, so one request returns the groups and, for
+  each, whether this person is a member or merely invited. <code>sharesWellness</code> is optional
+  because the column arrived in a second migration and an older row shape must still decode.
+</p>
+
+<h4>Shared figures and wellness days</h4>
+
+<pre><code>// LifeOSKit/Sources/Integrations/SharedStatsClient.swift
+public struct SharedStats: Codable, Sendable, Equatable, Identifiable {
+    public let userID: UUID
+    public let shares: Bool          // the owner's standing answer
+    public let streak: Int?          // nil is "not sent", not zero
+    public let daysTracked: Int?
+    public let workouts: Int?
+    public var hasFigures: Bool { shares &amp;&amp; (streak != nil || daysTracked != nil || workouts != nil) }
+}</code></pre>
+
+<p>
+  <code>shares</code> is separate from the figures because they say different things. A person who
+  turned sharing on this morning and has not opened the app since is sharing, with nothing to show,
+  which is not the same as having declined. The profile screen draws the panel only when
+  <code>hasFigures</code> is true: a row of dashes is not a fact.
+</p>
+
+<p>
+  <code>SocialWellnessDay</code> is one day's three scores with a source per score and an
+  <code>observedAt</code>. Its shape is enforced twice, once in Swift and once by the table's
+  check constraints: a score and its source are both null or both present, and every score is
+  between 0 and 100.
+</p>
+
+<h3 id="s16-4"><span class="num">16.4</span><span>ViewModel</span></h3>
+
+<p>
+  Five plain <code>@Observable</code> classes, none with retry logic of its own. Each reads the
+  session from the keychain on every call rather than capturing the token once, because
+  <code>AppShell</code> refreshes the session hourly and on foregrounding, and a screen left open
+  across that refresh would otherwise strand itself on a rotated token with endless 401s. Identity
+  does not rotate, so <code>myUserID</code> is the one thing still safe to capture.
+</p>
+
+<h4>A newer search never loses to a slower older one</h4>
+
+<p>
+  Search re-runs on every keystroke, so an older request can still be waiting on the network when
+  a newer one is issued. Without tracking which query is in flight, a slow response for "al" could
+  land after the fast response for "alex" and silently replace the right results with the wrong
+  ones.
+</p>
+
+<pre><code>// LIfeOS/Features/Social/ViewModel/FriendsViewModel.swift
+private var searchTask: Task&lt;Void, Never&gt;?
+private var searchGeneration = 0
+
+func search() {
+    searchTask?.cancel()
+    searchGeneration += 1
+    let generation = searchGeneration
+    // ... guards that name why nothing would happen: no config, signed out, no id yet
+    let issuedQuery = query
+    searching = true
+    searchResults = []
+    searchTask = Task {
+        defer { if generation == searchGeneration { searching = false } }
+        do {
+            try await Task.sleep(for: .milliseconds(250))
+            let results = try await api.search(trimmed, accessToken: accessToken)
+            guard !Task.isCancelled, issuedQuery == self.query else { return }
+            searchResults = results.filter { $0.userID != myUserID }
+        } catch {
+            guard !Task.isCancelled, issuedQuery == self.query else { return }
+            errorMessage = Self.reason("Search failed", error)
+        }
+    }
+}</code></pre>
+
+<p>
+  Three guards together: the previous task is cancelled, a 250 millisecond sleep debounces the
+  keystrokes, and the response is applied only if the query it was issued for is still the query
+  on screen. The generation counter is what lets the <code>defer</code> clear the spinner for the
+  latest search alone. The signed-in person is filtered out of results, because finding yourself in
+  your own friends search is noise.
+</p>
+
+<p>
+  The three early guards each set a sentence instead of returning silently, because saying nothing
+  is what "it just spins" looks like from the outside. <code>reason(_:_:)</code> carries the
+  server's own message through: an expired token, a missing grant and a dropped connection all
+  arrive as "it did not work" otherwise, and PostgREST always says which.
+</p>
+
+<h4>A send can never lose its row</h4>
+
+<pre><code>// LIfeOS/Features/Social/ViewModel/ChatViewModel.swift
+private(set) var messages: [SocialMessage] = []   // refresh() only ever assigns this
+private(set) var pending: [SocialMessage] = []    // provisional rows, kept apart
+private var nextProvisionalID = -1                // server ids are always positive
+
+func send() async {
+    guard !sending else { return }
+    let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty, text.unicodeScalars.count &lt;= 2000, let api, let accessToken, let myUserID else { return }
+
+    let provisionalID = nextProvisionalID
+    nextProvisionalID -= 1
+    pending.append(SocialMessage(id: provisionalID, sender: myUserID, recipient: friend.userID,
+                                 body: text, createdAt: .now))
+    sending = true
+    do {
+        try await api.send(text, to: friend.userID, accessToken: accessToken)
+        pending.removeAll { $0.id == provisionalID }
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { draft = "" }
+        await refresh()
+    } catch {
+        pending.removeAll { $0.id == provisionalID }
+        errorMessage = "Message wasn’t confirmed. Your draft is still here; check the conversation before trying again."
+    }
+    sending = false
+}</code></pre>
+
+<p>
+  The optimistic row goes into <code>pending</code>, not <code>messages</code>, so a poll landing
+  mid-send can never wholesale-replace it. The screen renders <code>messages + pending</code>. A
+  failed post removes the row it added rather than leaving a message on screen that never sent,
+  and keeps the draft. Reentry is guarded so a fast double-tap before the disabled state applies
+  cannot post twice. The draft is cleared only if it still equals what was sent, so a sentence
+  typed during the round trip is not thrown away.
+</p>
+
+<p>
+  Group chat goes one step further. <code>GroupViewModel.send</code> generates a
+  <code>clientID</code> per attempt and reuses it on retry; the server's
+  <code>send_group_message</code> inserts with <code>on conflict (sender, client_id) do nothing</code>
+  and returns the existing id, so a retry after a timeout that actually landed cannot post a
+  duplicate. A failed send is held in <code>failedSend</code> with a Retry button, the composer is
+  disabled until it is resolved, and a later refresh that finds the client id in the timeline clears
+  it.
+</p>
+
+<h4>The rest</h4>
+
+<ul>
+  <li><strong><code>InboxViewModel</code></strong> loads three things, not one per friend: the
+    friendships, the profiles behind them, and the whole mailbox in one 200-row request. The
+    grouping into one thread per counterpart is <code>InboxDigest.threads</code>, in the package,
+    because it is the only real logic the inbox has and it should be testable without a network.
+    The badge counts requests only: a conversation is not a task.</li>
+  <li><strong><code>GroupsViewModel</code></strong> loads the groups, then publishes the day's
+    wellness scores if any group has sharing on, then reads and, if sharing is on, pushes the three
+    profile figures. A refresh is skipped while a change is busy, and its results are dropped if the
+    signed-in user changed while it was in flight.</li>
+  <li><strong><code>GroupViewModel</code></strong> refreshes under a generation counter too, and
+    checks the roster before anything else: if the caller is no longer an accepted member, it sets
+    <code>accessLost</code>, clears the messages and board, and the screen says so instead of
+    rendering a stale chat. Messages merge by id rather than replace, so a page loaded through
+    <code>older()</code> survives a poll. The leaderboard has its own generation so a metric or day
+    switch cannot be overwritten by the previous request landing late.</li>
+</ul>
+
+<h3 id="s16-5"><span class="num">16.5</span><span>View</span></h3>
+
+<p>
+  Social is reached from the profile, not from a tab. <code>ProfileOverview</code> offers a Together
+  shortcut, and <code>ProfileScreen</code> pushes <code>SocialHubScreen</code> for it. This is a
+  place you go, not a home you live in, and the bar is the scarcest surface in the app.
+</p>
+
+<h4>Together</h4>
+
+<p>
+  <code>SocialHubScreen</code> is an <code>UnderlinePicker</code> with three sections. People embeds
+  <code>FriendsScreen</code>. Groups lists invitations first, each as a panel with Decline and Join,
+  then the joined groups as an adaptive grid of coloured cards. Rankings is the same grid with a
+  trophy and "View leaderboard", and opening a group from it lands on the leaderboard section
+  instead of the chat. The toolbar carries the inbox tray and a Create button;
+  <code>CreateGroupScreen</code> takes a name up to 60 characters, a description up to 240, and
+  invitees chosen from the friends list, capped at 49 so the group never exceeds 50. It generates
+  its group id up front, which is what makes a retried create idempotent on the server.
+</p>
+
+<h4>People</h4>
+
+<p>
+  <code>FriendsScreen</code> is one list with three shapes. A search field that, once typed in,
+  replaces the screen's own sections with results. Otherwise requests above friends, in that
+  order, because a decision waiting on you outranks a list you already know. A search result's
+  trailing control is always exactly one of Add, Requested or Friends, never a fourth "request me
+  back" state; accepting still happens from the requests section, which already owns that
+  decision. Tapping a friend opens <code>UserProfileScreen</code>, which shows the photo, the
+  relationship's actions (message and remove, accept and decline, cancel a sent request, or add),
+  and the shared figures panel when there are figures to draw.
+</p>
+
+<h4>Conversations</h4>
+
+<p>
+  <code>FriendChatScreen</code> and the group chat share <code>SocialMessageBubble</code> and
+  <code>SocialComposer</code>. Mine is ink on the right with a small bottom-trailing radius; theirs
+  is paper on the left. Day separators appear where the calendar day changes. The composer shows a
+  counter past 1800 characters and disables send past 2000, the same limit the table's check
+  constraint enforces. <code>followLatest</code> is read from scroll geometry: the list follows a
+  new message only if the reader was already within 140 points of the bottom or the message is
+  their own, so someone reading history is not yanked down by a reply. Polling runs in a
+  <code>.task(id: scenePhase)</code> loop and stops the moment the scene leaves the active phase.
+</p>
+
+<p>
+  The chat's first version on 27 August rode a night aurora. The 14 September restyle replaced that
+  with <code>SocialCanvas</code>, the cream gradient every social screen now shares, with a dark
+  counterpart, so a conversation and the friends list read as one place.
+</p>
+
+<h4>The leaderboard</h4>
+
+<p>
+  <code>SocialLeaderboard</code> keeps the server's ranks intact, ties included. A podium of three is
+  drawn only when it would not arbitrarily feature some people from a tie that crosses the podium
+  boundary, and the winner's avatar is larger only when all three ranks are distinct. Accessibility
+  sizes skip the podium for a single readable list. Each row prints the score, the source device
+  and how long ago it synced, and the footer says the one thing a reader needs: equal scores share
+  a rank; compare the same day; devices and goals differ. A <code>DisclosureGroup</code> explains
+  the selected metric's formula in plain words, and a date picker allows today or yesterday and
+  nothing else, matching the server's window.
+</p>
+
+<h4>Style</h4>
+
+<p>
+  <code>SocialTheme</code> is four pastels (coral, mint, lilac, yellow) chosen by a stable hash of a
+  uuid, so a person or a group is the same colour on every screen and every launch.
+  <code>SocialAvatar</code> shows the profile photo when there is one and initials on that pastel
+  when there is not. <code>InitialBubble</code> in the inbox hashes the name by hand for the same
+  reason: <code>String.hashValue</code> is randomised per launch, and a friend who changed colour
+  every time the app opened would be a small, constant lie.
+</p>
+
+<h3 id="s16-6"><span class="num">16.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 340" role="img" aria-label="The device's view models call SocialAPI, GroupAPI and SharedStatsClient, thin request shapers that send the anon key and the user's access token. Reads go to PostgREST tables guarded by row level security. Writes that must be atomic go to security definer RPC functions that take the caller from auth.uid(). SocialWellness computes scores on the device from DailyMetrics before anything is published.">
+  <defs>
+    <marker id="ch16a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch16b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+
+  <text class="lbl-sm" x="20" y="24">DEVICE</text>
+  <text class="lbl-sm" x="330" y="24">TRANSPORT</text>
+  <text class="lbl-sm" x="600" y="24">SUPABASE, RLS ON EVERY TABLE</text>
+
+  <rect class="box" x="20" y="44" width="200" height="44" rx="8"/>
+  <text class="lbl" x="120" y="71" text-anchor="middle">Friends · Chat · Inbox</text>
+  <rect class="box" x="20" y="104" width="200" height="44" rx="8"/>
+  <text class="lbl" x="120" y="131" text-anchor="middle">Groups · GroupViewModel</text>
+  <rect class="box-hot" x="20" y="200" width="200" height="58" rx="8"/>
+  <text class="lbl" x="120" y="224" text-anchor="middle">SocialWellness.scores</text>
+  <text class="lbl-hot" x="120" y="243" text-anchor="middle">DailyMetrics never leaves</text>
+
+  <rect class="box" x="330" y="44" width="180" height="44" rx="8"/>
+  <text class="lbl" x="420" y="71" text-anchor="middle">SocialAPI</text>
+  <rect class="box" x="330" y="104" width="180" height="44" rx="8"/>
+  <text class="lbl" x="420" y="131" text-anchor="middle">GroupAPI</text>
+  <rect class="box" x="330" y="164" width="180" height="44" rx="8"/>
+  <text class="lbl" x="420" y="191" text-anchor="middle">SharedStatsClient</text>
+  <text class="lbl-sm" x="420" y="232" text-anchor="middle">apikey + Bearer token</text>
+  <text class="lbl-sm" x="420" y="248" text-anchor="middle">URLSession, no SDK</text>
+
+  <rect class="box" x="600" y="44" width="240" height="58" rx="8"/>
+  <text class="lbl" x="720" y="68" text-anchor="middle">Tables via PostgREST</text>
+  <text class="lbl-sm" x="720" y="87" text-anchor="middle">profiles · friendships · messages</text>
+  <rect class="box-alt" x="600" y="120" width="240" height="72" rx="8"/>
+  <text class="lbl" x="720" y="144" text-anchor="middle">security definer RPCs</text>
+  <text class="lbl-sm" x="720" y="163" text-anchor="middle">create · invite · answer · leave</text>
+  <text class="lbl-sm" x="720" y="179" text-anchor="middle">send · publish · leaderboard</text>
+  <rect class="box" x="600" y="210" width="240" height="58" rx="8"/>
+  <text class="lbl" x="720" y="234" text-anchor="middle">profile_stats</text>
+  <text class="lbl-sm" x="720" y="253" text-anchor="middle">select: self or accepted friend</text>
+
+  <path class="flow" d="M220 66 L324 66" marker-end="url(#ch16a)"/>
+  <path class="flow" d="M220 126 L324 126" marker-end="url(#ch16a)"/>
+  <path class="flow-hot" d="M220 229 L300 229 L300 126 L324 126" marker-end="url(#ch16b)"/>
+  <text class="lbl-sm" x="228" y="220">scores only</text>
+  <path class="flow" d="M510 66 L594 66" marker-end="url(#ch16a)"/>
+  <path class="flow" d="M510 126 L594 156" marker-end="url(#ch16a)"/>
+  <path class="flow" d="M510 186 L594 239" marker-end="url(#ch16a)"/>
+  <line class="wall" x1="560" y1="40" x2="560" y2="280"/>
+  <text class="lbl-sm" x="470" y="300" fill="#C2412A">auth.uid() decides every row; the client never names itself</text>
+</svg>
+<figcaption>
+  The Swift side shapes requests and decodes rows. The database decides who may see or write what,
+  and the atomic operations live in functions the anon role cannot call.
+</figcaption>
+</figure>
+
+<h4>Friendship, end to end</h4>
+
+<ol>
+  <li>On appear, <code>FriendsViewModel</code> upserts the caller's own <code>profiles</code> row
+    from the local profile name. This is what makes the person findable; a failure here is the
+    difference between having friends and not, and it used to be discarded. It is now a
+    <code>publishWarning</code> that outlives a successful list fetch.</li>
+  <li>Search is an <code>ilike</code> filter on <code>display_name</code>, limited to 20, with
+    <code>%</code>, <code>*</code> and backslash escaped first so a search for a literal "50%" does
+    not match everything.</li>
+  <li>Add fetches the caller's own friendships and, if the pair is already linked in either
+    direction, returns without inserting. Idempotent, not an error: asking someone who already
+    asked you is not a mistake worth surfacing. The button flips to Requested before the round
+    trip so it does not flicker.</li>
+  <li>Accept sends a <code>PATCH</code> carrying exactly one column, <code>status</code>. The
+    database grants <code>update</code> on <code>friendships</code> to that column alone, and
+    Postgres enforces column grants before policies even run, so the same statement that accepts a
+    request can never smuggle in a new requester or a new timestamp.</li>
+  <li>Remove is a <code>DELETE</code> scoped by id, the same call for declining a pending request
+    and ending an accepted friendship, since either way the row stops existing.</li>
+  <li>Sending a message requires the <code>sender</code> column in the body, and RLS insists it
+    equal <code>auth.uid()</code>. The only place that identity exists on the device is the access
+    token's <code>sub</code> claim, so <code>SocialAPI.subject(ofAccessToken:)</code> reads it
+    without verifying the signature. Verification is the server's job; this only reads a claim
+    already trusted to authenticate every other call.</li>
+</ol>
+
+<h4>Groups, end to end</h4>
+
+<p>
+  Reads are plain PostgREST selects gated by <code>is_group_member</code>, a
+  <code>security definer</code> helper that exists to avoid recursive membership policies and that
+  takes the caller only from <code>auth.uid()</code>. Every write is an RPC, because each has an
+  invariant a bare insert cannot hold: <code>create_social_group</code> checks every invitee is an
+  accepted friend and rolls the whole thing back if one is not; <code>invite_group_member</code>
+  locks the group row before counting to 50; <code>leave_social_group</code> hands ownership to the
+  longest-standing member or deletes the group when the owner was the last one;
+  <code>send_group_message</code> locks the group so a concurrent removal cannot race a send in.
+  The anon role is revoked from all of them, and <code>truncate</code>, which bypasses row level
+  security, is revoked from everyone.
+</p>
+
+<h4>Wellness scores, end to end</h4>
+
+<p>
+  <code>RootView.socialActivity</code> assembles a <code>SocialActivitySnapshot</code> from the local
+  store: the streak, a count of tracked days, a count of workouts, and the last 30 days of
+  <code>DailyMetrics</code> run through <code>SocialWellness.scores</code> against the person's
+  exercise and sleep goals. The scoring rules are strict on purpose.
+</p>
+
+<ul>
+  <li><strong>Effort</strong> is exercise minutes over the goal, capped at 100. Apple Health uses
+    exercise time, WHOOP tracked workout time, Fitbit fairly plus very active minutes. A duplicate
+    reading is never summed across providers; <code>MetricArbiter</code> already chose one source per
+    metric and the score uses that one.</li>
+  <li><strong>Rest</strong> is sleep minutes over the goal, capped at 100. Extra sleep earns no
+    extra points.</li>
+  <li><strong>Recharge</strong> is <code>50 + 100 × (0.6 × (HRV ÷ usual HRV − 1) + 0.4 × (1 − RHR ÷ usual RHR))</code>,
+    clamped to 0 to 100, where "usual" is the median of at least seven distinct earlier days within
+    28, all from the same provider, never including today. A WHOOP reading still calibrating, a
+    non-finite number, an HRV outside 0 to 500 or a resting rate outside 20 to 150 yields nil, not
+    zero. Fifty means near your own baseline, and the screen says this is an estimate, not a
+    recovery percentage.</li>
+  <li>Only today and yesterday are published. The server refuses a day outside
+    <code>current_date − 2</code> to <code>current_date + 1</code>, an observation more than five
+    minutes in the future or four days in the past, and an older observation can never overwrite a
+    fresher row.</li>
+  <li>The day key is a Gregorian local date even when the device uses another calendar, so two
+    people in different locales rank on the same day.</li>
+</ul>
+
+<p>
+  Publishing happens from <code>RootView</code> after provider state changes, from the hub on
+  refresh, and when sharing is switched on, and only if some group has <code>shares_wellness</code>
+  set. The server-side ranking function joins members with sharing on to their daily row and
+  <code>rank()</code>s by the chosen metric, so ties share a position and a null score is simply
+  absent from the list rather than ranked last.
+</p>
+
+<h3 id="s16-7"><span class="num">16.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Three requests to build the inbox, not one per friend.</strong> Friendships, profiles
+    by an <code>in.()</code> list, and the whole mailbox in one 200-row request ordered newest
+    first. The limit is on messages, not conversations, so a very busy thread can crowd a quiet
+    one off the end. That is the right failure: what falls off is what was least recent.</li>
+  <li><strong>Polling is bounded to an open screen.</strong> Five seconds in a direct chat, eight in
+    a group, both inside <code>.task(id: scenePhase)</code> so backgrounding ends the loop. No
+    screen polls while not on screen, and nothing polls the friends list at all.</li>
+  <li><strong>Search is debounced and cancelled.</strong> 250 milliseconds, one in-flight request,
+    late responses dropped. A person typing a six-letter name costs at most one or two round
+    trips rather than six.</li>
+  <li><strong>Optimistic writes, no waiting.</strong> Add flips to Requested and a message appears
+    in <code>pending</code> before the round trip; both are reverted on failure rather than left
+    lying.</li>
+  <li><strong>Group messages page by id.</strong> Fifty newest on open, <code>id.lt</code> for older,
+    merged into the existing dictionary so a poll cannot discard a loaded page.</li>
+  <li><strong>Avatars are downloaded per row with a token and cached only by the task.</strong>
+    <code>SocialAvatar</code> keys its <code>.task</code> on <code>avatarPath</code>, so a list that
+    re-renders does not refetch faces unless the path changed.</li>
+  <li><strong>Nothing raw leaves the phone.</strong> The leaderboard endpoint receives three
+    integers, three source names, a day and a timestamp. HRV, heart rate and sleep minutes stay in
+    <code>DailyMetrics</code>. The profile figures are three counts. There is no AI in this feature
+    and no token budget to protect.</li>
+  <li><strong>Cost is Postgres rows and PostgREST calls.</strong> No realtime channel, no storage
+    beyond the avatars bucket <a href="#ch17">Chapter 17</a> owns, no third-party chat. The gin
+    index on <code>display_name</code>, the two <code>friendships</code> indexes, the
+    <code>(least, greatest, created_at)</code> conversation index and the
+    <code>(group_id, id desc)</code> timeline index are the whole query plan.</li>
+</ul>
+
+<h3 id="s16-8"><span class="num">16.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Signed out</td><td>Every screen shows a one-sentence guest state, never a request that 401s into a blank screen.</td></tr>
+<tr><td>No display name yet</td><td>The friends screen says to add a name in Edit profile; no row is published and nobody can find you.</td></tr>
+<tr><td>Publishing the profile fails</td><td>A warning that survives a later successful friends fetch, because "nobody can find you" outlives "the list loaded".</td></tr>
+<tr><td>Slow search response arrives after a newer one</td><td>Dropped. Only the query still on screen may write results.</td></tr>
+<tr><td>Search for "50%"</td><td>Wildcards escaped; it matches the literal text.</td></tr>
+<tr><td>Both people request each other</td><td>The second request is a no-op; one row links the pair.</td></tr>
+<tr><td>Accept sends more than <code>status</code></td><td>Rejected by the column grant before RLS runs.</td></tr>
+<tr><td>Message to someone who is not an accepted friend</td><td>Refused by the insert policy on <code>messages</code>.</td></tr>
+<tr><td>Send times out but landed</td><td>Direct: the pending row is removed and the draft kept, with a sentence asking to check the conversation first. Group: retry reuses the client id and the server returns the existing row.</td></tr>
+<tr><td>Double-tap send</td><td>Reentry guard; one post.</td></tr>
+<tr><td>Message from a person no longer in <code>profiles</code></td><td>Dropped from the inbox rather than shown nameless.</td></tr>
+<tr><td>Removed from a group while it is open</td><td>The next refresh sets <code>accessLost</code>; chat, board and members are cleared and the screen says so.</td></tr>
+<tr><td>Owner leaves</td><td>Ownership passes to the longest-standing member; if none, the group and its chat are deleted.</td></tr>
+<tr><td>Invite a non-friend</td><td>The RPC raises and, on create, the whole group creation rolls back.</td></tr>
+<tr><td>Group at 50 members</td><td>Invite refused under a row lock, so two concurrent invites cannot both succeed.</td></tr>
+<tr><td>Sharing switched off</td><td><code>SharedStatsClient.push</code> sends explicit nulls rather than omitting the figures, because an upsert leaves omitted columns standing.</td></tr>
+<tr><td>Sharing on, nothing pushed yet</td><td><code>hasFigures</code> is false; the panel is omitted.</td></tr>
+<tr><td>Pending friend reads shared figures</td><td>Refused by the <code>profile_stats</code> policy, which requires <code>accepted</code>.</td></tr>
+<tr><td>Fewer than 7 baseline days, or mixed providers</td><td>Recharge is nil and the person is unranked for that metric.</td></tr>
+<tr><td>Score day out of the server's window</td><td>The publish raises; an older observation never overwrites a fresher row.</td></tr>
+<tr><td>Two equal scores</td><td>Same rank from <code>rank()</code>; the podium is skipped if the tie crosses its boundary.</td></tr>
+<tr><td>Accessibility text sizes</td><td>No podium; one readable list. Friend request rows stack vertically.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>Tests</h4>
+
+<p>
+  Sixty Swift tests in five suites, all pure: request builders are static and free of
+  <code>self</code>, so a test asserts on the <code>URLRequest</code> a call would produce without a
+  network or a stub <code>URLProtocol</code>.
+</p>
+
+<ul>
+  <li><code>SocialAPITests</code> (22): every decode branch including the bare birthday, wildcard
+    escaping, the accept sending only <code>status</code>, the friendship request being a no-op in
+    both directions, the sender derived from the token's subject, and a refusal carrying the
+    server's reason.</li>
+  <li><code>GroupAPITests</code> (9): groups scoped to the caller, no request without a valid
+    session, message pages read newest first and shown chronologically, retry preserving the
+    idempotency key, the wellness upload carrying day and source and no raw signals, and a
+    membership denial arriving as an error rather than an empty success.</li>
+  <li><code>SharedStatsClientTests</code> (8): sharing off nulls the figures rather than omitting
+    them, an empty id list never leaves the device, the two <code>hasFigures</code> cases.</li>
+  <li><code>SocialWellnessTests</code> (15): missing and recorded zero remain different, goal
+    progress capped, manual and unattributed data excluded, the baseline cannot mix providers or
+    use today, duplicate days cannot complete calibration, non-finite signals yield no score, the
+    Gregorian day key in other calendar locales, naps cannot replace the main night.</li>
+  <li><code>InboxDigestTests</code> (6): one row per person carrying their newest message, the
+    newest conversation leads, a message from someone with no profile is dropped.</li>
+</ul>
+
+<p>
+  The database has its own suite: 43 pgTAP assertions for groups and chat and 23 for the wellness
+  leaderboard, each file inserting disposable identities inside a transaction that is rolled back,
+  switching to the <code>authenticated</code> role and setting the JWT claim by hand. They pin the
+  things Swift cannot: that creation is idempotent, that a blank name is a constraint error, that
+  an invalid invitee rejects creation atomically, that <code>authenticated</code> cannot truncate,
+  that nonmembers and invitees cannot read rankings, and that a stale device write does not
+  overwrite a fresher row. The wellness suite ran with the CLI's pgTAP runner unavailable, through
+  the management API instead; the validation notes record that live two-account verification and
+  three-provider accounts were not exercised.
+</p>
+
+<h3 id="s16-9"><span class="num">16.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+
+<ol>
+  <li><code>supabase/migrations/20260827130000_friends_and_messages.sql</code>: three tables and
+    seven policies. Everything in Swift is shaped by these.</li>
+  <li><code>LifeOSKit/Sources/Integrations/SocialAPI.swift</code>: the request builders, the
+    decoder, and <code>subject(ofAccessToken:)</code>.</li>
+  <li><code>LIfeOS/Features/Social/ViewModel/FriendsViewModel.swift</code>: the search generation
+    counter and the three named guards.</li>
+  <li><code>LIfeOS/Features/Social/ViewModel/ChatViewModel.swift</code>: <code>pending</code> kept
+    apart from <code>messages</code>.</li>
+  <li><code>supabase/migrations/20260914090000_social_groups.sql</code>: why every write is an RPC,
+    and the row locks inside them.</li>
+  <li><code>LifeOSKit/Sources/Integrations/SocialWellness.swift</code>: the three formulas and
+    every reason a score is nil.</li>
+  <li><code>supabase/migrations/20260829120000_shared_stats.sql</code>: why the figures are a
+    separate table from <code>profiles</code>.</li>
+  <li><code>LIfeOS/Features/Social/View/SocialLeaderboard.swift</code>: the podium rule for
+    ties.</li>
+</ol>
+
+<h4>Check yourself</h4>
+
+<ul>
+  <li><strong>Why are the shared figures not columns on <code>profiles</code>?</strong> The select
+    policy on <code>profiles</code> is <code>using (true)</code> for every signed-in user, because
+    search needs it, and row level security is row level. A column there would be world-readable.
+    A table of its own gets a policy that can name friendship.</li>
+  <li><strong>How does a slow search response lose to a faster newer one?</strong> The task is
+    cancelled, and the response is applied only if the query it was issued for still equals the
+    query on screen. A generation counter clears the spinner for the latest search alone.</li>
+  <li><strong>Why can a poll never erase a message being sent?</strong> Provisional rows live in
+    <code>pending</code>; <code>refresh()</code> only ever assigns <code>messages</code>; the screen
+    renders the sum.</li>
+  <li><strong>Why does accept send only one column?</strong> The database grants
+    <code>update</code> on <code>friendships</code> to <code>status</code> alone. Any other key fails
+    the whole request before RLS runs.</li>
+  <li><strong>Where does the sender id in a message come from?</strong> The access token's
+    <code>sub</code> claim, read without verification, because the server already verified it when
+    it issued the token and verifies it again on the request.</li>
+  <li><strong>What makes a group retry safe?</strong> A client-generated <code>clientID</code>
+    reused on retry, and a unique <code>(sender, client_id)</code> on the server with
+    <code>on conflict do nothing</code> returning the existing id.</li>
+  <li><strong>Why is Recharge nil for a new WHOOP user?</strong> It needs seven earlier distinct
+    days from the same provider within 28, none still calibrating, and today never counts toward
+    its own baseline.</li>
+</ul>
+</section>

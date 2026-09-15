@@ -1,0 +1,1102 @@
+<section class="chapter" id="ch14" data-hue="coach">
+<p class="chapter-kicker">Chapter fourteen</p>
+<h2><span class="num">14</span><span>LIFO, the coach</span></h2>
+
+<p class="lede">
+  LIFO is the one screen in Almanac that talks back. It reads a fortnight of your own numbers, your
+  month's money and your nine sector scores, answers in cards rather than paragraphs, can listen and
+  speak, remembers the conversation it is in, and, once a day at most, speaks first. This chapter is
+  how all of that is built, where the words go, and what it costs.
+</p>
+
+<h3 id="s14-1"><span class="num">14.1</span><span>Intent</span></h3>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Ask LIFO how you slept this week and it answers with a table of your actual nights, on the cloud
+  when the cloud can answer and on the phone when it cannot. Say it out loud and it stops listening
+  when you stop talking, reads one warm sentence back while the cards are still arriving, and never
+  reads a table aloud. Ask a follow-up and it knows what it said. Some mornings it sends a line
+  first: three short nights against your own baseline, a streak that today would break, a strong
+  week worth naming. Tap it and the conversation opens on that sentence.
+</p>
+<p class="faq-q">Which model answers?</p>
+<p class="faq-a">
+  The cloud first, the device second. The cloud tier is OpenAI's <code>gpt-5-mini</code> behind the
+  <code>lifo-agent</code> Edge Function; the device tier is Apple's Foundation Models. It used to
+  be the other way round on the grounds that the free engine should be tried first, and the result
+  was a worse common answer with the better one appearing only when the weaker model failed
+  outright. Quality picks the tier; a metered daily cap on the server is what keeps that affordable.
+</p>
+<p class="faq-q">What leaves the phone?</p>
+<p class="faq-a">
+  On a cloud turn, one rendered text block: a fortnight of derived daily numbers, the month's money
+  summary with up to thirty recent transactions, the sector scores, and the last twenty turns of the
+  conversation. Never the raw Whoop series (HRV, SpO2, skin temperature, respiratory rate), which
+  exist only in the on-device render. Every answer carries a disclosure you can open that shows the
+  verbatim text that was sent and which tier answered.
+</p>
+<p class="faq-q">How does it avoid inventing numbers?</p>
+<p class="faq-a">
+  Two ways. The prompt is the data: the model is told to cite only figures that appear in the text it
+  was given, and the render omits a missing field rather than writing zero. The reply is then
+  parsed by <code>CoachResponse</code> into paragraphs, tables and lists, and a table cell displays
+  exactly the string the answer supplied; nothing is recalculated on the way to the screen.
+</p>
+<p class="faq-q">Why cards instead of a paragraph?</p>
+<p class="faq-a">
+  A paragraph about six metrics is six numbers hidden in prose. The coach is instructed with a
+  small presentation grammar (a marker string, then rules: short paragraph for a simple question,
+  a two-column table for metrics, up to three bullets for actions, at most three sections) and the
+  screen renders those shapes natively. A short answer stays short; nothing is forced into a
+  dashboard.
+</p>
+</div>
+
+<p>
+  What the coach deliberately does not do: it has no tools. The calendar assistant in
+  <a href="#ch15">Chapter 15</a> carries six and runs a tool loop; LIFO carries none, which is
+  exactly what lets its whole reply be streamed. It does not diagnose, it does not pick investments,
+  and it declines requests that are not about coaching this person over their own data, because the
+  guardrail that says so lives on the server where a client cannot strip it.
+</p>
+
+<h3 id="s14-2"><span class="num">14.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Coach/
+├── Model/
+│   ├── AssistantVoice.swift          three ElevenLabs stock voices, off by default
+│   ├── ElevenLabsSpeechClient.swift  Scribe speech to text, multipart upload
+│   ├── ElevenLabsVoiceClient.swift   Flash text to speech, plus VoicePlayer
+│   └── SpeechListener.swift          mic capture, endpointing, transcription
+├── ViewModel/
+│   └── CoachViewModel.swift          the session: phases, send, hold and reveal, seed
+└── View/
+    ├── LifoCoachScreen.swift         text screen and voice screen over one model
+    ├── CoachResponseView.swift       paragraphs, metric cells, comparison tables, actions
+    ├── CoachVoiceOrb.swift           SceneKit sphere driven by audio level
+    ├── LifoAura.swift                the blue or green gradient behind everything
+    └── CoachDesignPreview.swift      DEBUG fixture, simulated audio, no network
+
+App/ChatTier.swift                    builds the one RemoteChatEngine both screens share
+App/PushService.swift                 APNs registration, inbox, the tap-through
+
+LifeOSKit/Sources/Insights/           the inference layer; reads Persistence only
+├── CoachTask.swift                   Tier, CoachTask, BriefTask, AnswerTask
+├── CoachTool.swift                   the tool contract, shared by both tiers
+├── ToolGate.swift                    PendingWrite and ConfirmationBroker
+├── ToolInvoker.swift                 per-turn cap, gating, error shaping
+├── CoachRouter.swift                 one-shot routing and CoachResult
+├── EscalationPolicy.swift            what each on-device error means
+├── TierPreference.swift              Automatic, Cloud, On device
+├── ModelAvailability.swift           Apple's availability, collapsed to three
+├── AssistantTurn.swift               the chat router: cloud first, device after
+├── CoachResponse.swift               the presentation grammar and its parser
+├── ResponseStyle.swift               house style, the cleaner, the conversation style
+├── SpokenReply.swift                 splits the SAY: line from the shown answer
+├── SpeechCapturePlan.swift           which transcriber owns the sentence
+├── SpeechEndpointer.swift            when a spoken turn is over
+├── AudioEnvelope.swift               attack and release smoothing for the visuals
+├── BriefCache.swift                  one brief per day (not wired to a screen yet)
+├── Engines/
+│   ├── Engine.swift                  one method, both tiers
+│   ├── OnDeviceEngine.swift          LanguageModelSession per call
+│   ├── RemoteEngine.swift            RemoteWire and the one-shot cloud call
+│   └── SessionTool.swift             binds a CoachTool into a session
+├── Chat/
+│   ├── ChatEngine.swift              ChatTurnMessage, ChatInstructions, the protocol
+│   ├── ChatWire.swift                request body, stream frames, reply parsing
+│   ├── OnDeviceChatEngine.swift      Foundation Models driving a streamed turn
+│   ├── RemoteChatEngine.swift        the tool loop and the SSE reader
+│   └── ToolSchema.swift              CoachTool to an OpenAI function declaration
+├── Context/
+│   ├── MetricsDigest.swift           the privacy boundary; the render per audience
+│   └── ContextBundle.swift           digest plus money plus sectors, under one budget
+└── Tasks/                            CoachAnswer · DailyBrief · SectorNote
+
+LifeOSKit/Sources/Persistence/ChatMessage.swift   conversations, local only
+
+supabase/functions/lifo-agent/index.ts      the door: auth, budget, fetch, stream relay
+supabase/functions/lifo-nudge/index.ts      the hourly job: triggers, claim, phrase, send
+supabase/functions/_shared/lifo.ts          SCOPE, task table, body builders, parsers
+supabase/functions/_shared/nudge.ts         the four triggers and the volume rules
+supabase/functions/_shared/apns.ts          ES256 provider token and the send
+supabase/migrations/20260827090000_lifo_usage.sql
+supabase/migrations/20260830090000_proactive_nudges.sql</pre>
+
+<div class="rail">
+<h4>Why the brain lives in the package and the mouth in the feature</h4>
+<p>
+  Everything that decides is in <code>Insights</code>: which tier, what the model may see, when a
+  sentence ends, how a reply splits between voice and screen. Everything that touches hardware is
+  in <code>Features/Coach</code>: the microphone, the audio session, SceneKit, the network calls
+  to ElevenLabs. The line is drawn so that every decision is a value type with a test, and the
+  feature folder is left holding only the parts that need a device to run.
+</p>
+</div>
+
+<h3 id="s14-3"><span class="num">14.3</span><span>Model</span></h3>
+
+<h4>A task names a floor, not a model</h4>
+
+<pre><code>// LifeOSKit/Sources/Insights/CoachTask.swift
+public enum Tier: Sendable, Equatable {
+    case onDevice
+    case cloud(Role)
+    public enum Role: String, Sendable, Codable { case reasoning, vision }
+}
+
+public protocol CoachTask: Sendable {
+    associatedtype Output: Generable &amp; Decodable
+    associatedtype Context: Sendable
+    var floor: Tier { get }
+    var remoteName: String? { get }
+    var instructions: String { get }
+    func prompt(_ context: Context, for audience: MetricsDigest.Audience) -&gt; String
+}</code></pre>
+
+<p>
+  Three things in this declaration carry most of the design. <code>Output</code> is both
+  <code>Generable</code> and <code>Decodable</code>, so one struct yields a schema for Apple's model
+  and decodes the JSON that comes back from the cloud; that constraint is what lets
+  <code>RemoteEngine.run</code> stay generic. <code>remoteName</code> is the server-side name of the
+  task, or nil for one that never leaves the phone: the model behind a name lives in the Edge
+  Function, so changing which model answers is a deploy, not an App Store release. And
+  <code>prompt</code> takes an audience, which is the whole privacy mechanism in one parameter: a
+  remote engine can only ever ask for the <code>.offDevice</code> render.
+</p>
+
+<p>
+  Three tasks exist. <code>AnswerTask</code> is named <code>answer</code> on the server and takes a
+  <code>ContextBundle</code>. <code>BriefTask</code> and <code>SectorNoteTask</code> are on-device
+  only; the sector note is what the monthly close in <a href="#ch13">Chapter 13</a> asks for, and the
+  brief has a cache but no screen yet.
+</p>
+
+<h4>A chat turn is a thread, not a prompt</h4>
+
+<pre><code>// LifeOSKit/Sources/Insights/Chat/ChatEngine.swift
+public struct ChatTurnMessage: Sendable, Equatable {
+    public enum Role: String, Sendable { case user, assistant }
+    public let role: Role
+    public let text: String
+}
+
+public struct ChatInstructions: Sendable, Equatable {
+    public let onDevice: String   // may name data that must not leave the phone
+    public let cloud: String      // this one travels
+}
+
+public protocol ChatEngine: Sendable {
+    func reply(
+        to thread: [ChatTurnMessage],
+        instructions: String,
+        tools: [any CoachTool],
+        invoker: ToolInvoker,
+        onPartial: @escaping @Sendable (String) -&gt; Void
+    ) async throws -&gt; AssistantTurn.Reply
+}</code></pre>
+
+<p>
+  <code>ChatInstructions</code> is two strings rather than one because the tiers are not owed the
+  same render. A single string would have to choose, and whichever it chose would be wrong on the
+  other tier. <code>onPartial</code> is handed the answer <strong>so far</strong>, cumulative, not
+  the piece that just arrived. Foundation Models yields snapshots and the cloud yields deltas, and
+  a screen that assigns the whole text it is given cannot lose a fragment the way one that appends
+  can.
+</p>
+
+<h4>What the screen holds</h4>
+
+<pre><code>// LIfeOS/Features/Coach/ViewModel/CoachViewModel.swift
+struct LifoTurn: Identifiable, Equatable {
+    let id: UUID
+    let question: String      // empty when LIFO spoke first
+    let answer: String
+    let sent: SentContext?    // nil for a seeded opening line
+}
+
+struct SentContext: Equatable {
+    let text: String          // the verbatim render, not a description of it
+    let tier: AssistantTurn.Tier
+    var headline: String {
+        let place = tier == .cloud ? "the cloud" : "this device"
+        let facts = text.split(separator: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+        return "\(facts) lines of your data, answered on \(place)"
+    }
+}</code></pre>
+
+<p>
+  <code>SentContext.text</code> is the thing itself. A summary of what was sent is a second thing
+  that can be wrong; the verbatim string cannot. The headline counts lines rather than characters
+  because the render is one fact per line and "1,847 characters" is a number nobody has a feel for.
+</p>
+
+<h4>The conversation on disk</h4>
+
+<p>
+  <code>ChatMessage</code> is a SwiftData model with a conversation id, a role stored as a raw string
+  (so the enum can gain cases without a migration), the text, tool summaries, and an optional JSON
+  blob of calendar event ids. <code>ChatStore.recent(conversationID:limit:)</code> returns the last
+  twenty messages oldest first, which is the order both a transcript and a prompt want. The store is
+  local only; chat history never leaves the device. The coach and the calendar assistant write into
+  the same store under different conversation ids, each kept in the account's own
+  <code>UserDefaults</code> suite so two people sharing a phone cannot resume into each other's
+  transcript.
+</p>
+
+<h3 id="s14-4"><span class="num">14.4</span><span>ViewModel</span></h3>
+
+<p>
+  <code>CoachViewModel</code> is <code>@MainActor @Observable</code> and owns one session. Its
+  state is a phase (<code>idle</code>, <code>listening</code>, <code>thinking</code>,
+  <code>answered</code>), the live transcript while listening, the answer as it streams, a status
+  line, a history of turns, and the question in flight.
+</p>
+
+<pre><code>// LIfeOS/Features/Coach/ViewModel/CoachViewModel.swift
+var pendingQuestion = ""        // on screen the instant it is asked
+var pendingSent: SentContext?
+private var holdingAnswer = false
+private var latestShown = ""
+private var heldTurn: LifoTurn?
+private var revealTimeout: Task&lt;Void, Never&gt;?
+private var spokeThisTurn = false
+private var turnID = UUID()
+
+private let chatRemote: (any ChatEngine)? = ChatTier.remote()
+private let speech = SpeechListener()
+let voicePlayer = VoicePlayer()</code></pre>
+
+<p>
+  <code>pendingQuestion</code> exists because a turn used to be appended to history only once there
+  was an answer to append it with, which meant the one moment you most want to see what you said,
+  while it is being thought about, was the one moment nothing showed it. It is pinned before any
+  store read in <code>send</code>, so whatever the rest of the method does or fails to do, the
+  question is on screen from the moment it was asked.
+</p>
+
+<p>
+  The <code>send</code> method does the following, in order: stops any speech in or out, pins the
+  question, mints a new <code>turnID</code>, decides once whether the answer will be held for the
+  voice, builds the context bundle from the last fourteen days of <code>MetricsStore</code> rows
+  plus whatever <code>bundleExtras</code> returns, appends the question to <code>ChatStore</code>,
+  reads the thread back, renders one instruction string per audience, and hands everything to
+  <code>AssistantTurn.run</code>. The <code>bundleExtras</code> closure is set by
+  <code>RootView</code> and pulls the money snapshot and the sector cards out of the view models
+  that own them, so the coach never holds screens it does not render.
+</p>
+
+<pre><code>// LIfeOS/Features/Coach/ViewModel/CoachViewModel.swift
+let reply = try await AssistantTurn.run(
+    instructions: ChatInstructions(onDevice: onDevice, cloud: cloud),
+    thread: thread,
+    tools: [],
+    broker: ConfirmationBroker(),
+    remote: chatRemote,
+    onPartial: { [weak self] text in
+        Task { @MainActor in
+            guard let self, self.phase == .thinking else { return }
+            self.received(text)
+        }
+    }
+)</code></pre>
+
+<p>
+  Every failure is mapped to a sentence the screen can act on. A refusal shows the model's own
+  words. A spent budget says "That is today's thinking budget used up. It resets tomorrow." An
+  on-device context overflow says the question covered too much at once, not that the network is
+  down. A missing session says to sign in again, which used to read as a connectivity problem and
+  sent people to check their wifi. Anything else is logged with the real error and, depending on
+  whether a session exists, either asks for a retry or offers the Apple Intelligence setting through
+  <code>needsAppleIntelligence</code>. On every failure the half-streamed answer is cleared: a
+  fragment under a failure line reads as LIFO contradicting itself.
+</p>
+
+<div class="note"><b>A router that is built and not used</b>
+  <code>CoachViewModel</code> still constructs a <code>CoachRouter</code> with a
+  <code>RemoteEngine</code>, but <code>send</code> routes through <code>AssistantTurn.run</code>
+  and never calls it. The router is the one-shot path and its live caller today is the monthly
+  close's sector note. The unused property is a leftover from before the conversational core
+  landed, and it is safe to delete.
+</div>
+
+<h3 id="s14-5"><span class="num">14.5</span><span>View</span></h3>
+
+<p>
+  <code>LifoCoachScreen</code> is one view with two presentations, chosen by
+  <code>CoachScreenStyle</code>: <code>.text</code>, a cobalt gradient fading into ink with a
+  composer along the bottom, and <code>.voice</code>, a sage gradient fading into forest black with
+  the orb in the middle and a microphone button below. Switching never recreates the model, so an
+  answer already being generated survives the switch. The screen forces the dark scheme and caps
+  its content at 800 points wide, which is how it reads on an iPad without becoming a wall of
+  text.
+</p>
+
+<p>
+  The text screen shows an opening when the transcript is empty (a two-line headline, three
+  suggestion cards for sleep, spending and today's focus) and the transcript otherwise. Each turn is
+  a white bubble for the question, right-aligned and black on white because your own words are the
+  brightest thing on the screen, then a <code>CoachResponseView</code> card, then a closed
+  <code>DisclosureGroup</code> labelled with the sent headline and a cloud or iPhone glyph. The
+  turn in flight draws from <code>pendingQuestion</code> with a "Thinking" row until the first
+  chunk lands, and then the answer as it is written, with no cursor and no per-character animation
+  because the text arrives fast enough that animating it would slow it down.
+</p>
+
+<p>
+  <code>CoachResponseView</code> parses the reply and renders each block: a paragraph as text with
+  inline markdown attributes, a two-column table of up to six rows as a grid of metric cells
+  (one column at accessibility type sizes), a wider table as a horizontally scrolling
+  <code>Grid</code> with alternating row tints, a list as numbered action rows with dividers. Each
+  block fades and lifts in a beat after the one above, with state on the block so a block already on
+  screen is never re-animated when the text under it streams on.
+</p>
+
+<p>
+  The voice screen shows <code>CoachVoiceOrb</code>, a SceneKit sphere with a physically based
+  emerald shell, a geometry shader that swells the surface with layered sine currents, a surface
+  shader that paints jade bands and a faint shimmer, and an additive halo plane behind it. A
+  <code>CADisplayLink</code> at 30 to 60 frames per second feeds the shader a phase and an energy
+  uniform; energy comes from <code>AudioEnvelope</code>, which smooths the microphone or playback
+  level with a fast attack and a slow release so the sphere breathes rather than twitches. Drag
+  tilts it, tap gives it an impulse, Reduce Motion freezes it, Reduce Transparency hides the halo,
+  and leaving the screen invalidates the display link. Under the orb sit the live transcript while
+  listening, the pending question and streaming answer, or the latest turn with its disclosure.
+</p>
+
+<h3 id="s14-6"><span class="num">14.6</span><span>How a turn is answered</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="A question flows from the coach screen through the view model into AssistantTurn.run, which tries RemoteChatEngine against the lifo-agent Edge Function and OpenAI, and falls back to OnDeviceChatEngine on Foundation Models; ChatStore on the device holds the thread.">
+  <defs>
+    <marker id="ch14a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch14b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">DEVICE</text>
+  <text class="lbl-sm" x="600" y="24">CLOUD</text>
+
+  <rect class="box" x="20" y="44" width="150" height="44" rx="8"/>
+  <text class="lbl" x="95" y="70" text-anchor="middle">LifoCoachScreen</text>
+
+  <rect class="box" x="20" y="120" width="150" height="44" rx="8"/>
+  <text class="lbl" x="95" y="146" text-anchor="middle">CoachViewModel</text>
+
+  <rect class="box-alt" x="20" y="230" width="150" height="56" rx="8"/>
+  <text class="lbl" x="95" y="253" text-anchor="middle">ChatStore</text>
+  <text class="lbl-sm" x="95" y="272" text-anchor="middle">last 20 turns, local</text>
+
+  <rect class="box-hot" x="230" y="120" width="170" height="44" rx="8"/>
+  <text class="lbl" x="315" y="146" text-anchor="middle">AssistantTurn.run</text>
+
+  <rect class="box" x="230" y="44" width="170" height="44" rx="8"/>
+  <text class="lbl" x="315" y="70" text-anchor="middle">ContextBundle</text>
+
+  <rect class="box" x="450" y="80" width="150" height="56" rx="8"/>
+  <text class="lbl" x="525" y="103" text-anchor="middle">RemoteChatEngine</text>
+  <text class="lbl-sm" x="525" y="122" text-anchor="middle">SSE, cloud render</text>
+
+  <rect class="box" x="450" y="200" width="150" height="56" rx="8"/>
+  <text class="lbl" x="525" y="223" text-anchor="middle">OnDeviceChatEngine</text>
+  <text class="lbl-sm" x="525" y="242" text-anchor="middle">Foundation Models</text>
+
+  <rect class="box" x="660" y="80" width="180" height="56" rx="8"/>
+  <text class="lbl" x="750" y="103" text-anchor="middle">lifo-agent</text>
+  <text class="lbl-sm" x="750" y="122" text-anchor="middle">JWT · cap · SCOPE</text>
+
+  <rect class="box-alt" x="660" y="200" width="180" height="44" rx="8"/>
+  <text class="lbl" x="750" y="226" text-anchor="middle">OpenAI gpt-5-mini</text>
+
+  <path class="flow" d="M95 88 L95 114" marker-end="url(#ch14a)"/>
+  <path class="flow" d="M95 164 L95 224" marker-end="url(#ch14a)"/>
+  <path class="flow" d="M170 142 L224 142" marker-end="url(#ch14a)"/>
+  <path class="flow" d="M170 66 L224 66" marker-end="url(#ch14a)"/>
+  <path class="flow" d="M315 88 L315 114" marker-end="url(#ch14a)"/>
+  <path class="flow-hot" d="M400 132 L444 112" marker-end="url(#ch14b)"/>
+  <text class="lbl-hot" x="404" y="104">first</text>
+  <path class="flow-dash" d="M400 152 L444 220" marker-end="url(#ch14a)"/>
+  <text class="lbl-sm" x="402" y="200">fallback</text>
+  <path class="flow-hot" d="M600 108 L654 108" marker-end="url(#ch14b)"/>
+  <path class="flow" d="M750 136 L750 194" marker-end="url(#ch14a)"/>
+  <line class="wall" x1="630" y1="40" x2="630" y2="300"/>
+  <text class="lbl-sm" x="440" y="300">raw Whoop series never cross</text>
+</svg>
+<figcaption>
+  One question, two engines. The cloud is tried first because it answers better; the device is what
+  still works when the cloud will not. The thread lives on the phone and travels with every turn.
+</figcaption>
+</figure>
+
+<h4>The router</h4>
+
+<p>
+  <code>AssistantTurn.run</code> restates <code>CoachRouter</code>'s rules for the chat path. With no
+  remote engine configured, the device answers. Otherwise the tier preference is read now, not
+  captured, because the switch in Settings can be flipped while the screen is open. <code>onDevice</code>
+  means the device and nothing else. <code>cloud</code> means the cloud with no fallback, because
+  someone who chose the stronger model wants to be told when it did not answer rather than quietly
+  handed a weaker one. <code>automatic</code> tries the cloud and falls back to the device on any
+  error except a refusal.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/AssistantTurn.swift
+} catch RemoteEngineError.refused(let reason) {
+    throw RemoteEngineError.refused(reason)       // never re-asked of a second model
+} catch {
+    guard await invoker.didExecuteGatedWrite == false else { throw error }
+    guard availability() == .available else { throw error }
+    let retry = ToolInvoker(tools: tools, broker: broker)
+    onPartial("")                                  // clear the cloud's half sentence
+    return try await device.reply(
+        to: thread, instructions: instructions.onDevice,
+        tools: tools, invoker: retry, onPartial: onPartial
+    )
+}</code></pre>
+
+<p>
+  Two guards matter. A refusal is never retried on the other tier, because a second model is not a
+  second opinion on a refusal, it is a way around one. And a turn in which the user already
+  confirmed a gated write is never retried, because the write has already happened and a fresh
+  invoker would let a second model ask for the same create, raise a second card, and get a second
+  yes from someone with no way to see that the first landed. That guard is set the moment the gate
+  opens, not after the call returns, since a write that threw may still have reached the calendar.
+</p>
+
+<h4>The cloud engine</h4>
+
+<p>
+  <code>RemoteChatEngine.reply</code> has two paths. With no tools, which is the coach's case, it
+  sends one request with <code>stream: true</code> and reads the server's event stream line by line
+  through <code>ChatWire.payload(inLine:)</code> and <code>ChatWire.streamEvent(payload:)</code>. The
+  text is accumulated in the engine, cleaned, and handed to <code>onPartial</code> whole on every
+  frame. A refusal or a spent budget arrives as an ordinary JSON body with a status, never inside
+  the stream, so the failure is read the same way as on the unstreamed path. A stream that carried
+  no text at all throws <code>unavailable</code> rather than returning an empty bubble.
+</p>
+
+<p>
+  With tools, which is the calendar assistant's case, it runs the loop: send the thread and the
+  function declarations, and if the reply is tool calls, run each one on the device through the
+  shared <code>ToolInvoker</code>, append an assistant message carrying the calls and a tool message
+  per result, and send again. The loop runs at most <code>ToolInvoker.invocationLimit + 1</code>
+  rounds, seven, bounded by the invoker's own cap rather than a second number of the engine's
+  invention. A call whose arguments will not parse is still answered, with a message telling the
+  model to explain rather than retry, because a provider left waiting on a result simply asks again
+  and spends the remaining rounds on it.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/Chat/ChatWire.swift
+public static func request(baseURL: URL, anonKey: String, accessToken: String,
+                           messages: [Message], tools: [any CoachTool],
+                           context: String = "", stream: Bool = false) throws -&gt; URLRequest {
+    var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/lifo-agent"))
+    request.httpMethod = "POST"
+    request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+    var body: [String: Any] = [
+        "task": "chat",
+        "messages": messages.map(\.payload),
+        "tools": try tools.map { try ToolSchema.function(for: $0) },
+    ]
+    if !context.isEmpty { body["context"] = context }
+    if stream { body["stream"] = true }
+    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    return request
+}</code></pre>
+
+<p>
+  The user's data travels in a <code>context</code> field of its own, never as a system message the
+  client wrote. The server wraps it in a system message of its own placed behind
+  <code>SCOPE</code>. A client-authored system message would land after the guardrail, providers
+  weight the later one heavily, and that is a way around the guardrail rather than a way to carry
+  data; the server refuses any message whose role is not user, assistant or tool.
+</p>
+
+<h4>The device engine</h4>
+
+<p>
+  <code>OnDeviceChatEngine</code> creates a <code>LanguageModelSession</code> per turn, binds any
+  tools through <code>SessionTool</code>, flattens the thread into one prompt with
+  <code>User:</code> and <code>Assistant:</code> lines, and streams the response. Foundation Models
+  yields snapshots of the whole answer so far, which is exactly the shape <code>onPartial</code> is
+  defined in, so there is nothing to accumulate. The style appended is <code>ResponseStyle.conversation</code>
+  unless the instructions carry the structured coach marker, in which case
+  <code>CoachPresentation.instruction</code> is used instead, so the device writes cards too.
+</p>
+
+<h4>The server's side of the contract</h4>
+
+<p>
+  <code>lifo-agent</code> is the door. It rejects anything but POST, resolves the caller from the
+  bearer token through <code>resolveUser</code> (the anon key admits the app to the project; the
+  token says which user is asking and is what gets billed), validates the body with
+  <code>parseRequest</code>, reads today's <code>lifo_usage</code> row for the <code>chat</code>
+  kind and returns 429 <code>exhausted</code> at 150,000 tokens, builds the OpenAI body, calls the
+  provider once with <code>reasoning_effort</code> and <code>verbosity</code> set to low and once
+  more without them if the provider returns 400, and either relays the stream or parses the reply.
+  It debits what the provider billed on every path, success, refusal and parse failure alike,
+  through the atomic <code>lifo_debit</code> function, because a refusal still consumed real
+  tokens and leaving those unmetered would let a user burn unlimited budget by asking off-topic
+  questions in a loop. The bundle in the request is used for one completion and discarded; log
+  lines carry ids, task names, token counts and latency, never content. Chapter 20 covers the
+  function internals; what matters here is the shape the device relies on.
+</p>
+
+<pre><code>// supabase/functions/_shared/lifo.ts
+const SCOPE = `You are LIFO, a personal life coach inside the LifeOS app.
+You coach one person using only their own data, which arrives in the prompt:
+health metrics, sleep, workouts, money, and life-sector scores.
+Stay on that scope. Decline requests unrelated to coaching this person over
+their own data (essays, code, general world knowledge) and redirect to what
+their data shows. Never give medical diagnoses; describe patterns and suggest
+talking to a professional where it matters. Never recommend specific
+investments or securities; keep money talk at budgeting and pattern level.
+Cite only numbers that appear in the data given to you; never invent one.`;</code></pre>
+
+<p>
+  <code>SCOPE</code> is first in every system prompt and always. The conversational style behind it
+  is a verbatim copy of <code>ResponseStyle.conversation</code>, and both a Swift test and a Deno
+  test pin the same prohibitions and permissions, because the copy had already drifted once at
+  birth: it dropped the quotation-mark rule and the "if you can answer without asking, answer"
+  clause, and the cloud model was allowed two habits the device model was not. Two prompts that are
+  meant to agree and are written twice do not stay agreeing unless something checks.
+</p>
+
+<h3 id="s14-7"><span class="num">14.7</span><span>Speech in, speech out</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 250" role="img" aria-label="A spoken turn: the microphone feeds the endpointer, which ends the turn; the clip goes to Scribe or Apple for a transcript; the transcript is sent; the reply streams with a SAY line first, which goes to ElevenLabs and plays while the cards are held; playback reveals the cards.">
+  <defs>
+    <marker id="ch14c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <rect class="box" x="20" y="40" width="120" height="50" rx="8"/>
+  <text class="lbl" x="80" y="61" text-anchor="middle">Microphone</text>
+  <text class="lbl-sm" x="80" y="79" text-anchor="middle">AVAudioEngine tap</text>
+
+  <rect class="box-hot" x="180" y="40" width="130" height="50" rx="8"/>
+  <text class="lbl" x="245" y="61" text-anchor="middle">SpeechEndpointer</text>
+  <text class="lbl-sm" x="245" y="79" text-anchor="middle">room floor + 1.5 s</text>
+
+  <rect class="box" x="350" y="40" width="130" height="50" rx="8"/>
+  <text class="lbl" x="415" y="61" text-anchor="middle">Transcribe</text>
+  <text class="lbl-sm" x="415" y="79" text-anchor="middle">Scribe, else Apple</text>
+
+  <rect class="box" x="520" y="40" width="120" height="50" rx="8"/>
+  <text class="lbl" x="580" y="66" text-anchor="middle">send(text)</text>
+
+  <rect class="box" x="680" y="40" width="160" height="50" rx="8"/>
+  <text class="lbl" x="760" y="61" text-anchor="middle">Streamed reply</text>
+  <text class="lbl-sm" x="760" y="79" text-anchor="middle">SAY: line first</text>
+
+  <rect class="box" x="680" y="150" width="160" height="50" rx="8"/>
+  <text class="lbl" x="760" y="171" text-anchor="middle">ElevenLabs Flash</text>
+  <text class="lbl-sm" x="760" y="189" text-anchor="middle">VoicePlayer.play</text>
+
+  <rect class="box-alt" x="440" y="150" width="200" height="50" rx="8"/>
+  <text class="lbl" x="540" y="171" text-anchor="middle">Held cards</text>
+  <text class="lbl-sm" x="540" y="189" text-anchor="middle">reveal on play, or 2 s</text>
+
+  <path class="flow" d="M140 65 L174 65" marker-end="url(#ch14c)"/>
+  <path class="flow" d="M310 65 L344 65" marker-end="url(#ch14c)"/>
+  <path class="flow" d="M480 65 L514 65" marker-end="url(#ch14c)"/>
+  <path class="flow" d="M640 65 L674 65" marker-end="url(#ch14c)"/>
+  <path class="flow" d="M760 90 L760 144" marker-end="url(#ch14c)"/>
+  <path class="flow" d="M680 175 L646 175" marker-end="url(#ch14c)"/>
+  <text class="lbl-sm" x="20" y="130">The mic closes itself. Nothing said in the first 0.4 s is lost: only endpointing waits, the recording is already running.</text>
+</svg>
+<figcaption>
+  The spoken turn. Two transcribers can run at once but only one owns the sentence; the reply
+  is asked for with a spoken first line so the voice can start before the last table row exists.
+</figcaption>
+</figure>
+
+<h4>Closing the mic when the sentence ends</h4>
+
+<p>
+  <code>SpeechEndpointer</code> is the whole of the "stop when I stop talking" rule, as a value type
+  with no audio types in it. The listener feeds it one RMS reading per buffer, timed by audio
+  frames over the sample rate rather than the wall clock, so a busy thread cannot put time into a
+  silence the speaker never left. A single fixed level cannot work: what means speech in a bedroom
+  means silence in a café. So the room measures itself. The first 0.4 seconds learn the noise floor
+  from the quietest frame; after that the floor learns only from non-voice frames, drops the moment
+  the room does and climbs slowly, and is clamped to 0.004 to 0.12 so a calibration that lands on
+  speech cannot put the bar above every later voice.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/SpeechEndpointer.swift
+public var openThreshold: Double { max(noiseFloor * 3 + 0.020, 0.055) }
+public var continueThreshold: Double { max(noiseFloor * 2 + 0.012, 0.035) }
+
+guard elapsed - lastVoiceAt &gt; tuning.trailingSilence else { return .keepListening }
+guard spokenFor &gt;= tuning.minSpeech else {
+    hasHeardSpeech = false; speechStartedAt = 0; lastVoiceAt = 0   // a blip, not a sentence
+    return .keepListening
+}
+decided = true
+return .finished</code></pre>
+
+<p>
+  Two thresholds, because a frame has to be clearly louder than the room to begin a sentence but
+  only a little louder to continue one; that is what keeps the soft tail of a word from reading as
+  the end of a thought. The tuning is named rather than left as numbers in a callback: 1.5 seconds
+  of trailing silence ends the turn, voice under 0.35 seconds is a cough, seven seconds of nothing
+  closes the mic, and sixty seconds is the backstop for a room so loud every frame reads as voice.
+  A verdict is latched once so buffers still in flight cannot finish the same turn twice.
+</p>
+
+<h4>Two transcribers, one sentence</h4>
+
+<p>
+  ElevenLabs Scribe transcribes a clip uploaded once the turn is over, which is accurate but cannot
+  show a word while someone is still speaking. Apple's recognizer reports partial results as they
+  are heard. <code>SpeechCapturePlan</code> decides the split: with a Scribe key Apple runs in the
+  <code>liveTextOnly</code> role, pinned to on-device recognition where the hardware allows so the
+  clip does not go to a second vendor merely to draw the words, and its final result is dropped so
+  the two transcripts cannot race. Without a key Apple is the transcriber and is never pinned, since
+  that transcript is the sentence and accuracy outranks the preference. A recognizer failure ends
+  the turn only when Apple owned the sentence; on the Scribe path it has cost the words under the
+  waveform and nothing else.
+</p>
+
+<p>
+  <code>SpeechListener</code> is deliberately not on the main actor: the audio engine's tap runs on
+  the I/O thread, and every <code>AVAudioSession</code> activation runs on a private serial queue
+  because <code>setActive</code> on the main thread stalls the UI. The clip is always written to a
+  temporary WAV, on both paths, so a second pass over the file is possible when the live partials
+  came back empty. When the endpointer says the sentence is over, <code>onEndOfSpeech</code> fires
+  before any transcript exists, and the screen switches to "Hearing that back" at that moment
+  rather than claiming to listen through the whole upload. Level callbacks are throttled to one
+  every 80 milliseconds.
+</p>
+
+<h4>Say one line first</h4>
+
+<p>
+  When the reply will be spoken, the model is asked for one extra line, prefixed <code>SAY:</code>,
+  before the written answer: one or two warm sentences, at most one figure, no markdown, not a
+  reading of the details. <code>SpokenReply</code> parses this from partial text as well as whole
+  text, because a stream spends most of its life half arrived, and reports
+  <code>isSpokenLinePending</code> while the text so far could still turn out to begin with the
+  prefix.
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/SpokenReply.swift
+public static let prefix = "SAY:"
+public let spoken: String?          // nil until the line is complete, nil when there is none
+public let shown: String            // empty while the spoken line is still arriving
+public let isSpokenLinePending: Bool</code></pre>
+
+<p>
+  The view model holds the cards while the voice fetches. <code>received(_:)</code> parses each
+  chunk, keeps <code>latestShown</code>, and the first time a spoken line is complete calls
+  <code>speak</code>, which fetches audio from <code>ElevenLabsVoiceClient</code> using the
+  <code>eleven_flash_v2_5</code> model for latency and plays it through <code>VoicePlayer</code>.
+  Whatever happens to the audio, a failure, a cancellation, or a voice switched off between asking
+  and answering, <code>reveal</code> runs on the way out, because silence is acceptable and a blank
+  screen is not. A two-second timeout reveals regardless, so a slow synthesis is a reason to hear
+  first, not a reason to see nothing. The <code>turnID</code> keeps a late exit from an old reply
+  from revealing a new one early, and <code>spokeThisTurn</code> keeps a line from being read once
+  per chunk. The spoken line is for the voice only: it is not rendered, not kept in history, and
+  not written to the store the next prompt is built from. If the model was asked for a line and did
+  not write one, the first plain paragraph of the answer is read instead, never a table.
+</p>
+
+<p>
+  Speech is billed per character, so <code>ElevenLabsVoiceClient</code> caps the text at 1,200
+  characters, cut on a sentence boundary because a voice stopping in the middle of a number sounds
+  like a fault rather than a limit. <code>VoicePlayer</code> holds its <code>AVAudioPlayer</code>
+  because one that is deallocated stops playing, sets the session to spoken audio that ducks other
+  apps, meters the level every 33 milliseconds for the orb, and hands the session back on stop so a
+  podcast returns to full volume. Voice is off by default, since a coach that starts talking in a
+  room the phone knows nothing about is a worse default than silence, and the three voices
+  (Rachel, Adam, Sarah) are ElevenLabs stock voices with stable public ids, offered only once
+  speech is on.
+</p>
+
+<h3 id="s14-8"><span class="num">14.8</span><span>LIFO speaks first</span></h3>
+
+<p>
+  Every sentence LIFO produced before September was a reply. The proactive half is a scheduled
+  job that reads rows the server already has, decides by rule whether there is anything worth
+  saying, phrases it with one small model call, and sends it through APNs. The design decision that
+  shapes everything is <strong>rules decide, the model writes</strong>. Letting a model read a
+  nightly digest and decide for itself was rejected on two grounds: it bills for every user every
+  night whether or not anything happened, and models calibrate "is this worth interrupting someone"
+  poorly, usually toward yes.
+</p>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 260" role="img" aria-label="pg_cron calls lifo-nudge hourly; it selects users at 8am local, evaluates four triggers over daily_metrics and workout_records, claims the day in nudge_log, phrases with OpenAI, sends through APNs; PushDelegate receives it, PushService puts it in the inbox, and a tap seeds the coach conversation.">
+  <defs>
+    <marker id="ch14d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">SERVER, HOURLY</text>
+  <text class="lbl-sm" x="620" y="24">DEVICE</text>
+
+  <rect class="box-alt" x="20" y="40" width="110" height="44" rx="8"/>
+  <text class="lbl" x="75" y="66" text-anchor="middle">pg_cron</text>
+
+  <rect class="box" x="160" y="40" width="130" height="44" rx="8"/>
+  <text class="lbl" x="225" y="66" text-anchor="middle">8am local?</text>
+
+  <rect class="box-hot" x="320" y="40" width="140" height="56" rx="8"/>
+  <text class="lbl" x="390" y="62" text-anchor="middle">evaluate()</text>
+  <text class="lbl-sm" x="390" y="82" text-anchor="middle">4 triggers, 7 day cooldown</text>
+
+  <rect class="box" x="320" y="140" width="140" height="44" rx="8"/>
+  <text class="lbl" x="390" y="166" text-anchor="middle">claim nudge_log</text>
+
+  <rect class="box" x="490" y="140" width="110" height="44" rx="8"/>
+  <text class="lbl" x="545" y="166" text-anchor="middle">phrase</text>
+
+  <rect class="box" x="490" y="40" width="110" height="44" rx="8"/>
+  <text class="lbl" x="545" y="66" text-anchor="middle">APNs</text>
+
+  <rect class="box" x="660" y="40" width="180" height="44" rx="8"/>
+  <text class="lbl" x="750" y="66" text-anchor="middle">PushDelegate</text>
+
+  <rect class="box" x="660" y="120" width="180" height="44" rx="8"/>
+  <text class="lbl" x="750" y="146" text-anchor="middle">PushService inbox</text>
+
+  <rect class="box-hot" x="660" y="200" width="180" height="44" rx="8"/>
+  <text class="lbl" x="750" y="226" text-anchor="middle">coach.seed(text)</text>
+
+  <path class="flow" d="M130 62 L154 62" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M290 62 L314 62" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M390 96 L390 134" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M460 162 L484 162" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M545 140 L545 90" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M600 62 L654 62" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M750 84 L750 114" marker-end="url(#ch14d)"/>
+  <path class="flow" d="M750 164 L750 194" marker-end="url(#ch14d)"/>
+  <text class="lbl-sm" x="320" y="120">nothing fired: stop, costs nothing</text>
+  <text class="lbl-sm" x="600" y="250">tap</text>
+  <line class="wall" x1="630" y1="34" x2="630" y2="250"/>
+</svg>
+<figcaption>
+  The proactive path. Silence is the common outcome and a valid one; only a fired trigger reaches
+  a model, and only to choose the words.
+</figcaption>
+</figure>
+
+<h4>The four triggers</h4>
+
+<p>
+  <code>_shared/nudge.ts</code> holds four pure functions from rows to an optional fired result,
+  each carrying a name, the numbers that made it fire, and a deterministic fallback sentence that
+  is sent when the model is unreachable so an outage never swallows an observation.
+</p>
+
+<ul>
+  <li><strong>short_sleep</strong>: three nights each more than an hour under the person's own
+    median over the previous four weeks, requiring at least fourteen baseline nights. Not a fixed
+    seven hours: a fixed number tells a habitual six-hour sleeper they are failing every day.</li>
+  <li><strong>steps_collapsing</strong>: the last three days average under 60 percent of the
+    trailing fortnight, with a baseline of at least 2,000 steps so someone who does not carry
+    their phone is not nudged about steps.</li>
+  <li><strong>streak_at_risk</strong>: a workout streak of three or more days counted back from
+    yesterday, since at eight in the morning nobody has trained yet.</li>
+  <li><strong>strong_week</strong>: a week averaging 25 percent above the previous three, or a
+    personal best in the last three days against at least 21 days of history.</li>
+</ul>
+
+<p>
+  The positive is evaluated first. A genuinely strong week is rare, the negatives are still true
+  tomorrow, and a channel that only ever carries bad news gets switched off, after which none of
+  the rest matters. A missing day is dropped, never treated as zero, so a phone that has not synced
+  does not fire a sleep nudge.
+</p>
+
+<h4>Volume and delivery</h4>
+
+<p>
+  The job runs hourly because the send hour, eight in the morning, is local, and each run picks up
+  whichever users' <code>device_tokens</code> row carries a timezone that has just reached it. A
+  row whose timezone the runtime does not recognise never sends, on the rule that a nudge at the
+  wrong hour is worse than no nudge. Nothing sends outside seven to nine local whatever the send
+  hour is set to. One push per user per day is enforced by the primary key on
+  <code>nudge_log (user_id, day)</code>: the job inserts before it phrases, and a second overlapping
+  run conflicts on 23505 and stops. The same trigger cannot fire again for seven days. The job makes
+  one query per table for the whole batch rather than three per user, then loops sequentially
+  because the expensive step is a model call per firing user and a burst of parallel APNs
+  connections is how a sender gets throttled. A dead token (APNs says unregistered) is deleted so
+  the job does not push at it forever.
+</p>
+
+<p>
+  On the phone, <code>PushDelegate</code> is the only reason the app has a UIKit delegate at all,
+  because the device token arrives through <code>didRegisterForRemoteNotificationsWithDeviceToken</code>
+  and nowhere else. <code>PushService</code> keys the registration to the active account, upserts
+  the token and current timezone on every foreground (which is what keeps the hour right for
+  someone who has flown somewhere), and deletes the row on sign out before the session is thrown
+  away. The table makes the token its own primary key, so registering under a second account
+  replaces the first account's row in one upsert and the wrong-account push is unrepresentable
+  rather than merely unlikely. Authorization is asked for from the notification inbox, never at
+  launch, because a permission prompt before the app has shown anything worth being interrupted
+  about is the fastest route to a permanent no.
+</p>
+
+<p>
+  A tapped notification lands in the inbox and sets <code>PushService.pending</code>;
+  <code>RootView</code> opens the coach on it through <code>coach.seed(_:)</code>. The sentence is
+  written to <code>ChatStore</code> as an assistant turn as well as appended to the transcript,
+  because the store is what <code>send</code> renders into the thread, and a nudge that skipped it
+  would be on screen and invisible to the model answering the reply. The payload carries the
+  sentence, the trigger name and the day, deliberately not the figures: a phone that has been off
+  for days would otherwise open on numbers two days stale, so whatever the conversation goes on to
+  say is worked out against the store as it stands now. A seeded turn has an empty question and
+  draws no bubble, since an empty bubble reads as a message you sent and deleted.
+</p>
+
+<div class="note caution"><b>What is still not built</b>
+  Device-side triggers (a sector ceiling slipping out of reach, a spend spike), the
+  <code>sector_snapshots</code> upload and the open-commitment rows from the proactive spec are
+  slice 3 and have no code. The server path is complete to the APNs request; the QA report notes
+  that no real push had been delivered when it was written, and that the APNs key, the App ID
+  capability and the <code>schedule.sql</code> cron job are one-time setup steps rather than code.
+  Until <code>APNS_KEY</code> is set the function returns <code>apns_not_configured</code> and sends
+  nothing, on purpose.
+</div>
+
+<h3 id="s14-9"><span class="num">14.9</span><span>The privacy boundary</span></h3>
+
+<p>
+  <code>MetricsDigest</code> is the only thing an engine is ever given about health.
+  <code>DailyMetrics</code> is a SwiftData class, not <code>Sendable</code>, full of per-source
+  detail; the digest is a value type of derived numbers. Because <code>Engine.run</code> takes a
+  digest, the compiler rather than a reviewer stops a raw row reaching a model. The render then
+  differs by audience:
+</p>
+
+<pre><code>// LifeOSKit/Sources/Insights/Context/MetricsDigest.swift
+if audience == .onDevice {
+    if let v = day.hrvMs { parts.append("hrv \(number(v))ms\(delta(v, averages.hrvMs))") }
+    if let v = day.spo2Pct { parts.append("spo2 \(number(v))%") }
+    if let v = day.skinTempCelsius { parts.append("skin \(number(v))C") }
+    if let v = day.respiratoryRate { parts.append("resp \(number(v))") }
+}</code></pre>
+
+<p>
+  HRV, SpO2, skin temperature and respiratory rate are the raw Whoop physiology, and they appear
+  only in the on-device render. Everything else in a day block (recovery, sleep and its stages,
+  debt, strain, resting heart rate, steps, exercise, workouts with their high-zone minutes) is a
+  derived daily figure and travels. A calibrating recovery is marked rather than dropped. A delta
+  against the fortnight baseline appears only where a baseline exists, so a comparison is never
+  implied that was not made.
+</p>
+
+<p>
+  <code>ContextBundle</code> adds the month's money and the sector scores. On device it renders the
+  digest plus one sector line, because the local window is small and a transaction list would push
+  the health data out of it. Off device it renders everything under one 8,000 character budget: the
+  user, sector and money-summary lines are built first and never trimmed, the digest takes what is
+  left and drops whole days oldest first to fit, and the recent transactions get only what remains,
+  which is why they are the first thing to disappear under a tight budget.
+</p>
+
+<div class="tablewrap"><table>
+<thead><tr><th>What</th><th>On-device turn</th><th>Cloud turn</th><th>Stored on the server?</th></tr></thead>
+<tbody>
+<tr><td>Derived daily metrics, 14 days</td><td>rendered</td><td>rendered</td><td>no</td></tr>
+<tr><td>HRV, SpO2, skin temp, respiratory rate</td><td>rendered</td><td>never</td><td>no</td></tr>
+<tr><td>Money summary and up to 30 transactions</td><td>summary only</td><td>rendered</td><td>no</td></tr>
+<tr><td>Sector scores and deltas</td><td>rendered</td><td>rendered</td><td>no</td></tr>
+<tr><td>The last 20 turns of the thread</td><td>rendered</td><td>sent</td><td>no; ChatStore is local</td></tr>
+<tr><td>The spoken clip</td><td>Apple, on device where possible</td><td>ElevenLabs Scribe when a key is set</td><td>no</td></tr>
+<tr><td>Token counts per day</td><td>none</td><td>lifo_usage</td><td>yes, numbers only</td></tr>
+<tr><td>Nudge sent, which trigger, which day</td><td>none</td><td>nudge_log</td><td>yes, never the sentence</td></tr>
+</tbody></table></div>
+
+<p>
+  The disclosure under every answer is how this is made honest rather than asserted. The row shows
+  which tier answered, reported by the engine rather than inferred from the preference, because an
+  automatic turn falls back to the device exactly when it matters and a screen that worked out the
+  tier from Settings would name the wrong one. Opening the row shows the verbatim render.
+</p>
+
+<div class="note"><b>The ElevenLabs key</b>
+  Speech to text and text to speech call ElevenLabs directly from the app with a key in
+  <code>Secrets.xcconfig</code>. The agent spec's second slice moves both behind a
+  <code>lifo-speak</code> Edge Function so the key leaves the bundle; that function does not exist
+  yet. Until it does, the voice path is the one place a vendor key ships in the binary.
+</div>
+
+<h3 id="s14-10"><span class="num">14.10</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>The daily cap is enforced where it can be.</strong> 150,000 tokens per user per day
+    for chat, 4,000 for nudges, read before the call and debited after it through
+    <code>lifo_debit</code>, an upsert-and-add in one SQL statement so two concurrent turns cannot
+    both read the same balance and each write their own. The two kinds are separate rows so a heavy
+    chat evening cannot eat the next morning's nudge. When the cap is hit the router falls back to
+    the device rather than to a bill or an error.</li>
+  <li><strong>Low reasoning effort.</strong> The chat body asks for <code>reasoning_effort: low</code>
+    and <code>verbosity: low</code>. The default is medium and medium is most of the wait; a coaching
+    question over a fortnight of numbers is not a reasoning problem, the thinking already happened
+    on the device when the digest was built. Low also spends fewer tokens, the same lever as the cap
+    pulled from the other end.</li>
+  <li><strong>Streaming, with usage.</strong> The wait for a first word is the whole of how fast
+    this feels, and it used to be the wait for the last one. The server re-emits the provider's
+    stream in its own <code>{"delta"}</code> shape so the device never learns a provider's chunk
+    format, asks for <code>stream_options.include_usage</code> so a streamed turn is still metered,
+    and debits in <code>flush</code>, which a client that walks away still reaches.</li>
+  <li><strong>Character budgets on the prompt.</strong> The digest fits 6,000 characters on device
+    and the whole bundle 8,000 off device, pinned by tests, dropping whole days oldest first so a day
+    that renders at all renders completely and the newest day, the one a question is about, is
+    always present.</li>
+  <li><strong>Missing fields cost nothing.</strong> A blank field is omitted rather than written
+    as nil; the same information for zero tokens.</li>
+  <li><strong>One request per turn for the coach.</strong> No tools means no rounds. The calendar
+    assistant's loop is bounded at seven rounds and the invoker refuses the seventh call.</li>
+  <li><strong>Speech is capped and cleaned.</strong> 1,200 characters at most, with markdown
+    stripped first, because paying a per-character meter to narrate asterisks is paying twice for a
+    formatting bug. The reply is only asked for a spoken line when the voice screen is up and
+    speech is on, so a typed question costs no extra tokens for a voice nobody will hear.</li>
+  <li><strong>The orb is cheap.</strong> One sphere with 96 segments, built once; the motion is a
+    GPU shader driven by two uniforms, with no per-frame mesh allocation, and the display link stops
+    when the screen leaves or Reduce Motion is on.</li>
+  <li><strong>Brief cache.</strong> <code>BriefCache</code> is an actor with an in-flight map so two
+    callers arriving for the same day generate once, and only a real answer is kept, since caching
+    a refusal would strand the user without a brief until midnight. It is ready for the day the
+    brief gets a screen.</li>
+  <li><strong>The nudge job batches.</strong> One query per table across every user due this hour,
+    a 94-day lookback stated in one constant so a new trigger cannot silently be starved of rows,
+    and roughly 300 tokens in and 60 out per fired user.</li>
+</ul>
+
+<p>
+  The agent spec's cost check assumed twenty questions a day at about 3,000 tokens in and 500 out
+  on the mini model, one brief a day, and speech on half the replies, and landed around $0.60 for
+  mini traffic, $0.40 for escalations and $0.50 for Flash speech per user per month, inside the
+  ceiling in <a href="#ch24">Chapter 24</a> with the ledger capping the tail. Those are modelled,
+  not measured.
+</p>
+
+<h3 id="s14-11"><span class="num">14.11</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Cloud refuses</td><td>The model's words are shown. Never retried on the device; a refusal is surfaced, not laundered.</td></tr>
+<tr><td>Daily cap spent</td><td>Automatic falls back to the device. On the cloud-only preference the screen says the budget resets tomorrow and offers no retry.</td></tr>
+<tr><td>Offline, DNS, timeout, 500</td><td><code>unavailable</code>; automatic falls back to the device, otherwise "try again in a moment".</td></tr>
+<tr><td>Session lapsed</td><td><code>notSignedIn</code> before any network call; the message says to sign in, not to check wifi.</td></tr>
+<tr><td>On-device context overflow</td><td>Its own sentence: the question covered too much at once. Not the cloud message, not the Apple Intelligence prompt.</td></tr>
+<tr><td>Apple Intelligence off</td><td>Re-read on every request, never cached; the error offers the Settings deep link.</td></tr>
+<tr><td>Device not eligible</td><td>The one availability the router remembers for the life of the process.</td></tr>
+<tr><td>Stream drops mid sentence</td><td><code>unavailable</code>; half a sentence is never returned as the whole one, and the fragment is cleared from the screen.</td></tr>
+<tr><td>Stream carries no text</td><td><code>unavailable</code>, never an empty bubble.</td></tr>
+<tr><td>Model emits markdown on the plain path</td><td><code>ResponseStyle.clean</code> strips it on every partial, so asterisks never show for a beat.</td></tr>
+<tr><td>Model writes a malformed table</td><td>Rows stay visible as text; no cells are invented.</td></tr>
+<tr><td>Nothing said into the mic</td><td>Closes after seven seconds with "I did not hear anything"; no clip uploaded.</td></tr>
+<tr><td>Cough or chair scrape</td><td>Under 0.35 seconds of voice is forgotten and the turn goes back to waiting.</td></tr>
+<tr><td>Scribe fails</td><td>Apple recognises the recorded file; if that fails too, the user is asked to type.</td></tr>
+<tr><td>Speech permission refused with a Scribe key</td><td>The turn proceeds without live words. Without a key it cannot proceed.</td></tr>
+<tr><td>Voice fetch fails or is cancelled</td><td>The held answer is revealed on the way out; two seconds is the ceiling either way.</td></tr>
+<tr><td>New question while the last is being read</td><td><code>stopSpeaking</code> first; the turn id prevents the old voice task revealing the new answer.</td></tr>
+<tr><td>Same notification tapped twice</td><td><code>seed</code> sees the sentence already first in history and reopens rather than repeats.</td></tr>
+<tr><td>Two cron runs overlap</td><td>The second insert into <code>nudge_log</code> conflicts and that run stops before phrasing.</td></tr>
+<tr><td>Provider rejects the tuning parameters</td><td>One retry without them; a slower answer rather than no answer.</td></tr>
+<tr><td>Provider omits usage</td><td>A zero debit is skipped, but the reply is still delivered; noted as the one path the cap cannot see.</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<p>
+  The Insights target is the most heavily tested part of the package, because almost everything in
+  it is a pure decision. The suites and what they pin:
+</p>
+
+<ul>
+  <li><code>AssistantTurnTests</code>, 15: cloud first, device fallback, spent budget falls back,
+    signed-out is served by the device, refusal never crosses tiers, each tier gets its own render,
+    a confirmed write is never retried, the preference cannot conjure a cloud that is not
+    configured.</li>
+  <li><code>CoachRouterTests</code>, 18, and <code>EscalationPolicyTests</code>, 9: every branch of
+    the one-shot router and every disposition of the escalation table, including that contention
+    retries locally and is never billed, and that availability is re-read rather than trusted
+    forever.</li>
+  <li><code>RemoteChatEngineTests</code>, 14: the streamed path yields the whole answer so far each
+    time, only a toolless turn asks for a stream, a spent budget is still the budget on the streamed
+    path, a tool call runs on the device and its result is sent back, unparseable arguments are
+    answered rather than stranded, a loop that will not converge is bounded, the context is
+    repeated on every round.</li>
+  <li><code>ChatWireTests</code>, 12, and <code>RemoteEngineTests</code>, 11: request shape, both
+    credentials, the context in its own field, the 429 and 403 mappings, a wrong-shaped 200 is
+    <code>unavailable</code>, a signed-out user never reaches the network.</li>
+  <li><code>MetricsDigestTests</code>, 16, and <code>ContextBundleTests</code>, 7: the off-device
+    render carries no raw Whoop series, nil never becomes zero, naps stay separate from nights,
+    whole days are dropped oldest first, a fully populated fortnight fits the budget, transactions
+    never push the render past budget, a collapsed budget still emits one day.</li>
+  <li><code>SpeechEndpointerTests</code>, 10, <code>SpeechCapturePlanTests</code>, 8,
+    <code>SpokenReplyTests</code>, 8, <code>AudioEnvelopeTests</code>, 3: the made-up rooms, the
+    transcriber split, the SAY line from partial text, and frame-rate independence.</li>
+  <li><code>ResponseStyleTests</code>, 18, <code>CoachResponseTests</code>, 8: the cleaner, the
+    instruction forbids what the cleaner strips, conversation keeps every typography prohibition and
+    grants exactly three permissions, tables keep units and missing values, escaped pipes do not add
+    columns, the voice reads table values without markdown.</li>
+  <li><code>ToolInvokerTests</code>, 6, <code>ToolSchemaTests</code>, 4, <code>CoachToolTests</code>,
+    2, <code>SchemaEncodingTests</code>, 3, <code>BriefCacheTests</code>, 5.</li>
+  <li><code>ChatStoreTests</code>, 8, in Persistence: oldest first and capped, conversations do not
+    bleed, event ids survive a reload.</li>
+  <li>On the server, <code>lifo_test.ts</code> has 44 Deno tests (a client system message is
+    refused, the thread, tool list and context are bounded, the chat prompt keeps every prohibition
+    and the three permissions, the tuning can be lifted off for the retry, a stream is only granted
+    to a turn with no tools), <code>nudge_test.ts</code> 25 (a habitual short sleeper is not told
+    they are failing, a phone that has not synced does not fire, the positive wins, every fired
+    trigger carries a sendable sentence), and <code>apns_test.ts</code> 9.</li>
+</ul>
+
+<p>
+  What is not tested by a suite: the microphone path end to end, real ElevenLabs round trips, a real
+  push delivery, the orb's frame rate on hardware, and whether a given nudge was worth interrupting
+  someone for. The QA reports say so, and the last of these needs a week of real days on a real
+  device.
+</p>
+
+<h3 id="s14-12"><span class="num">14.12</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Insights/CoachTask.swift</code>, for the floor, the audience and the three tasks.</li>
+  <li><code>Insights/Context/MetricsDigest.swift</code>, then <code>ContextBundle.swift</code>,
+    to see exactly what a model is shown and how the budget trims it.</li>
+  <li><code>Insights/AssistantTurn.swift</code>, the chat router, with
+    <code>CoachRouter.swift</code> beside it for the one-shot rules it restates.</li>
+  <li><code>Insights/Chat/RemoteChatEngine.swift</code> and <code>ChatWire.swift</code>, the stream
+    reader and the tool loop.</li>
+  <li><code>supabase/functions/_shared/lifo.ts</code> and <code>lifo-agent/index.ts</code>, the
+    other end of the wire.</li>
+  <li><code>Features/Coach/ViewModel/CoachViewModel.swift</code>, following <code>send</code> from
+    top to bottom, then <code>received</code>, <code>speak</code> and <code>reveal</code>.</li>
+  <li><code>Insights/SpeechEndpointer.swift</code> with its test file open next to it.</li>
+  <li><code>supabase/functions/_shared/nudge.ts</code>, then <code>lifo-nudge/index.ts</code>.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does the cloud go first when the device is free?</strong> Quality picks the tier;
+    the device answered worse on the questions this app gets, and the daily cap makes the cloud
+    affordable.</li>
+  <li><strong>Why is a refusal never retried on the other tier?</strong> A second model is not a
+    second opinion on a refusal; it is a way around one.</li>
+  <li><strong>What stops a raw Whoop row reaching OpenAI?</strong> The type system:
+    <code>Engine.run</code> takes a <code>MetricsDigest</code>, and the remote engine can only
+    request the <code>.offDevice</code> render, which omits the four physiology fields.</li>
+  <li><strong>Why is <code>onPartial</code> cumulative?</strong> Because both tiers can honestly
+    produce it and a screen that assigns cannot lose a fragment the way one that appends can.</li>
+  <li><strong>Why does the context travel in its own field and not as a system message?</strong>
+    So the server can place it behind <code>SCOPE</code>; a client system message would land after
+    the guardrail and outweigh it.</li>
+  <li><strong>Why two thresholds in the endpointer?</strong> Beginning a sentence must clear the
+    room clearly; continuing one need only stay a little above it, so the soft tail of a word is not
+    the end of a thought.</li>
+  <li><strong>Why does the nudge job insert into <code>nudge_log</code> before it phrases?</strong>
+    The primary key on <code>(user_id, day)</code> is the one-per-day rule, and inserting first makes
+    two overlapping cron runs safe without any locking logic.</li>
+  <li><strong>What is the one place a vendor key still ships in the app?</strong> ElevenLabs, until
+    <code>lifo-speak</code> exists.</li>
+</ul>
+</section>
