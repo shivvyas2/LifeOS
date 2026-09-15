@@ -112,6 +112,7 @@ final class TodayViewModel {
             snapshot.calendarAccess = CalendarAccessState.current
             snapshot.agenda = agenda
             snapshot.upcoming = upcoming
+            snapshot.scheduledWorkoutTitle = scheduledWorkoutTitle(context: context)
 
             // Keeps an open sheet current on every reload, including the
             // `didSave`-driven one in `RootView`. Without this, an external
@@ -126,6 +127,20 @@ final class TodayViewModel {
             // blanking the screen. Nothing here is recoverable by the user.
             assertionFailure("Today load failed: \(error)")
         }
+    }
+
+    /// The workout the person put on today from the library, by title.
+    ///
+    /// Two reads rather than a relationship: a bookmark names a video id, and
+    /// the catalog is a cache the next refresh can drop a row from, so a
+    /// schedule pointing at a video that is no longer there simply shows
+    /// nothing here.
+    private func scheduledWorkoutTitle(context: ModelContext) -> String? {
+        let scheduled = (try? BookmarkStore.scheduled(on: .now, context: context, calendar: calendar)) ?? []
+        guard !scheduled.isEmpty else { return nil }
+        let catalog = (try? CatalogStore.all(context: context)) ?? []
+        let titleByID = Dictionary(catalog.map { ($0.youtubeID, $0.title) }, uniquingKeysWith: { _, last in last })
+        return scheduled.compactMap { titleByID[$0.youtubeID] }.first
     }
 
     /// Builds the day sheet's contents from both stores.

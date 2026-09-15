@@ -17,8 +17,13 @@ struct WorkoutLibraryScreen: View {
     /// which is what both entry points pass today, means this screen opens
     /// the player on its own stack.
     var onOpen: ((CatalogVideo) -> Void)?
+    /// Opens the schedule sheet on the first row as the screen appears. Only
+    /// the design preview passes it: a capture cannot hold a row down.
+    var startsScheduling = false
 
     @State private var opened: CatalogVideo?
+    /// The row whose schedule sheet is up, and the day that sheet is showing.
+    @State private var scheduling: CatalogVideo?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
@@ -56,11 +61,23 @@ struct WorkoutLibraryScreen: View {
                 .labelStyle(.iconOnly)
             }
         }
+        .searchable(text: $model.query, prompt: "Search title, channel or muscle")
         .sheet(isPresented: $model.needsPreferences) { TrainingPreferencesSheet(model: model) }
+        .sheet(item: $scheduling) { video in
+            ScheduleWorkoutSheet(
+                title: video.title,
+                day: model.scheduledDay(for: video),
+                onAdd: { model.schedule(video, on: $0) },
+                onRemove: model.scheduledDay(for: video) == nil ? nil : { model.schedule(video, on: nil) }
+            )
+        }
         .navigationDestination(item: $opened) { video in
             VideoWorkoutScreen(video: video, model: recorder)
         }
         .task { await model.refreshIfDue() }
+        .onAppear {
+            if startsScheduling, scheduling == nil { scheduling = model.filtered.first }
+        }
         .tint(LifeOSTokens.accent)
     }
 
@@ -69,6 +86,17 @@ struct WorkoutLibraryScreen: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("TODAY")
                     .font(LifeOSType.eyebrow).tracking(0.6).opacity(0.55)
+                if let scheduled = model.scheduledToday {
+                    Button { open(scheduled) } label: {
+                        Label("Scheduled for today: \(scheduled.title)", systemImage: "calendar")
+                            .font(LifeOSType.caption.weight(.semibold))
+                            .foregroundStyle(LifeOSTokens.accent)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the workout")
+                }
                 HStack(alignment: .firstTextBaseline) {
                     Text(model.plan.map { "\($0.split.capitalized) day" } ?? "No plan yet")
                         .font(LifeOSType.sectionTitle)
@@ -94,6 +122,8 @@ struct WorkoutLibraryScreen: View {
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                chip("Saved", selected: model.savedOnly) { model.savedOnly.toggle() }
+                Divider().frame(height: 22)
                 ForEach(model.splitOptions, id: \.self) { split in
                     chip(split.capitalized, selected: (model.splitFilter ?? model.plan?.split) == split) {
                         model.splitFilter = model.splitFilter == split ? nil : split
@@ -137,11 +167,29 @@ struct WorkoutLibraryScreen: View {
     private var list: some View {
         LazyVStack(spacing: 12) {
             ForEach(model.filtered) { video in
-                WorkoutVideoRow(video: video) {
-                    if let onOpen { onOpen(video) } else { opened = video }
+                WorkoutVideoRow(
+                    video: video,
+                    action: { open(video) },
+                    isSaved: model.isSaved(video),
+                    scheduledDay: model.scheduledDay(for: video),
+                    onToggleSaved: { model.toggleSaved(video) }
+                )
+                // A context menu rather than a swipe: these rows are cards in
+                // a LazyVStack, and only a List row can be swiped.
+                .contextMenu {
+                    Button("Schedule…", systemImage: "calendar") { scheduling = video }
+                    if model.scheduledDay(for: video) != nil {
+                        Button("Remove from schedule", systemImage: "calendar.badge.minus", role: .destructive) {
+                            model.schedule(video, on: nil)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private func open(_ video: CatalogVideo) {
+        if let onOpen { onOpen(video) } else { opened = video }
     }
 
     private var emptyState: some View {
@@ -167,4 +215,52 @@ struct WorkoutLibraryScreen: View {
                 .fill(LifeOSTokens.cardSurface.resolve(scheme))
         )
     }
+}
+
+/// One day, picked for one video. Today is the floor: a workout cannot be
+/// scheduled into the past, and the store keeps only the day, never the time.
+private struct ScheduleWorkoutSheet: View {
+    let title: String
+    let onAdd: (Date) -> Void
+    /// Nil when this video is not scheduled yet, so the sheet offers no way to
+    /// remove a schedule that does not exist.
+    let onRemove: (() -> Void)?
+    @State private var day: Date
+    @Environment(\.dismiss) private var dismiss
+
+    init(title: String, day: Date?, onAdd: @escaping (Date) -> Void, onRemove: (() -> Void)?) {
+        self.title = title
+        self.onAdd = onAdd
+        self.onRemove = onRemove
+        _day = State(initialValue: day ?? .now)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    DatePicker("Day", selection: $day, in: Date.now.startOfToday..., displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                } header: {
+                    Text(title)
+                }
+                if let onRemove {
+                    Section {
+                        Button("Remove from schedule", role: .destructive) { onRemove(); dismiss() }
+                    }
+                }
+            }
+            .navigationTitle("Schedule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Add") { onAdd(day); dismiss() } }
+            }
+        }
+        .tint(LifeOSTokens.accent)
+    }
+}
+
+private extension Date {
+    var startOfToday: Date { Calendar.current.startOfDay(for: self) }
 }

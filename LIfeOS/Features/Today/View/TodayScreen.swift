@@ -60,6 +60,7 @@ struct TodayScreen: View {
             HStack(alignment: .top, spacing: 32) {
                 VStack(alignment: .leading, spacing: 22) {
                     month
+                    scheduledWorkout
                     agendaCard
                     streakLine
                 }
@@ -73,6 +74,7 @@ struct TodayScreen: View {
         } else {
             VStack(alignment: .leading, spacing: 22) {
                 month
+                scheduledWorkout
                 agendaCard
                 streakLine
                 if showsHealthPrompt { healthPrompt }
@@ -112,6 +114,38 @@ struct TodayScreen: View {
                 .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// The workout the person scheduled from the library. Informational: the
+    /// library is where a workout is played, and a card that opened a video
+    /// would put the player two taps from a calendar grid.
+    @ViewBuilder
+    private var scheduledWorkout: some View {
+        if let title = snapshot.scheduledWorkoutTitle {
+            SoftCard {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "dumbbell")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(LifeOSTokens.accent)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Scheduled workout")
+                            .font(LifeOSType.rowTitle)
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        Text(title)
+                            .font(LifeOSType.label.weight(.regular))
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("In Workout library")
+                            .font(LifeOSType.caption)
+                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 

@@ -72,4 +72,7 @@ struct TodaySnapshot: Equatable {
     var agenda: [CalendarEventSnapshot] = []
     /// The next seven days after today, flattened and capped by the view.
     var upcoming: [UpcomingEvent] = []
+    /// The title of the workout scheduled for today, when one is and the
+    /// catalog still holds it. A title, not a row: Today only says it is there.
+    var scheduledWorkoutTitle: String?
 }

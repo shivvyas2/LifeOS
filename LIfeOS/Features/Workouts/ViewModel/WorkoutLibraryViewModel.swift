@@ -44,6 +44,19 @@ final class WorkoutLibraryViewModel {
     var splitFilter: String? { didSet { applyFilters() } }
     var durationBand: DurationBand? { didSet { applyFilters() } }
     var equipmentFilter: String? { didSet { applyFilters() } }
+    /// What the person typed in the search field. Narrows the catalog before
+    /// the plan's own filters and stays narrowed through every widening step.
+    var query = "" { didSet { applyFilters() } }
+    /// Narrows the result to the rows the person saved. Applied after the
+    /// filter, so a widening step widens the catalog and not the saved set.
+    var savedOnly = false { didSet { applyFilters() } }
+
+    /// Every mark the person has made, keyed by video id, so a row asks one
+    /// dictionary rather than the store.
+    private(set) var bookmarks: [String: WorkoutBookmark] = [:]
+    /// The catalog row scheduled for today, when there is one and the catalog
+    /// still holds it.
+    private(set) var scheduledToday: CatalogVideo?
 
     /// Drives the preferences sheet: true until a training goal is set, and
     /// settable so the toolbar can reopen it.
@@ -83,6 +96,7 @@ final class WorkoutLibraryViewModel {
         let today = now()
         goals = try? store.goals()
         videos = (try? CatalogStore.all(context: context)) ?? []
+        loadBookmarks()
         capacity = CapacityInputs.todayCapacity(store: store, now: today, calendar: calendar)
 
         let weekAgo = calendar.date(byAdding: .day, value: -7, to: today) ?? today
@@ -141,13 +155,47 @@ final class WorkoutLibraryViewModel {
         applyFilters()
     }
 
+    // MARK: - Saved and scheduled
+
+    func isSaved(_ video: CatalogVideo) -> Bool { bookmarks[video.youtubeID]?.saved ?? false }
+    func scheduledDay(for video: CatalogVideo) -> Date? { bookmarks[video.youtubeID]?.scheduledFor }
+
+    func toggleSaved(_ video: CatalogVideo) {
+        guard let context else { return }
+        _ = try? BookmarkStore.toggleSaved(video.youtubeID, context: context)
+        loadBookmarks()
+        // The saved-only list is a filter result, so it has to be recomputed;
+        // every other list is unchanged by a heart.
+        if savedOnly { applyFilters() }
+    }
+
+    /// Nil clears the day. The store normalises to the start of the day, so a
+    /// picker's time of day never decides which day a workout lands on.
+    func schedule(_ video: CatalogVideo, on day: Date?) {
+        guard let context else { return }
+        try? BookmarkStore.schedule(video.youtubeID, on: day, context: context, calendar: calendar)
+        loadBookmarks()
+    }
+
+    /// Refetched rather than mutated in place: `toggleSaved` and `schedule`
+    /// delete a row that ends up neither saved nor scheduled, and a deleted
+    /// model left in this dictionary would be read by the next row that asks.
+    private func loadBookmarks() {
+        guard let context else { return }
+        let rows = (try? BookmarkStore.all(context: context)) ?? []
+        bookmarks = Dictionary(rows.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
+        let byID = Dictionary(videos.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
+        scheduledToday = ((try? BookmarkStore.scheduled(on: now(), context: context, calendar: calendar)) ?? [])
+            .compactMap { byID[$0.youtubeID] }.first
+    }
+
     // MARK: - Filtering
 
     /// The rule itself lives in `Sectors` as a pure function with tests; this
     /// maps the cache into it and the chosen ids back out.
     private func applyFilters() {
         guard let plan else {
-            filtered = videos
+            filtered = onlySaved(videos)
             status = refreshNotice
             return
         }
@@ -155,14 +203,22 @@ final class WorkoutLibraryViewModel {
         let result = WorkoutLibraryFilter.apply(
             videos: videos.map {
                 LibraryVideo(id: $0.youtubeID, title: $0.title, split: $0.split, intensity: $0.intensity,
-                             durationMinutes: $0.durationMinutes, goal: $0.goal, equipment: $0.equipment)
+                             durationMinutes: $0.durationMinutes, goal: $0.goal, equipment: $0.equipment,
+                             channel: $0.channel, muscles: $0.muscles)
             },
             plan: plan, goal: goals?.trainingGoal, split: splitFilter, band: durationBand,
-            equipment: equipmentFilter.map { Set([$0]) } ?? [])
-        filtered = result.rows.compactMap { byID[$0.id] }
+            equipment: equipmentFilter.map { Set([$0]) } ?? [], query: query)
+        filtered = onlySaved(result.rows.compactMap { byID[$0.id] })
         // Both lines, not one: a person offline on a widened list needs to
         // know the list is short *and* that the catalog is stale.
         status = [result.note, refreshNotice].compactMap { $0 }.joined(separator: "\n").nilIfEmpty
+    }
+
+    /// The saved chip, applied last: it intersects whatever the filter chose
+    /// with the saved ids rather than joining the rule itself, so clearing the
+    /// chip returns exactly the list that was there before.
+    private func onlySaved(_ rows: [CatalogVideo]) -> [CatalogVideo] {
+        savedOnly ? rows.filter { isSaved($0) } : rows
     }
 
     /// The splits worth offering: the ones the cache actually holds, with the

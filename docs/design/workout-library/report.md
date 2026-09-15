@@ -320,3 +320,23 @@ simulator (1206 x 2622, 402 x 874 points at 3x) after the HUD change, read
 back and confirmed clip-free.
 
 Final result: passed
+
+## Addendum: save, schedule and search (Sept 15 2026)
+
+The library gained a save-for-later heart, a schedule-for-a-day sheet, a
+"Saved" chip and a search field, so two captures were retaken or added on the
+iPhone 17 Pro simulator (1206 x 2622, 402 x 874 points at 3x):
+
+- `library-iphone.png` (**recaptured**): the Today card now opens with
+  "Scheduled for today: 30 Min PULL DAY DUMBBELL WORKOUT ..." above "Pull
+  day"; the chip rail starts with "Saved"; the first row carries a "Tue 15"
+  day chip beside its split, the second row a filled heart, and the rest an
+  outline heart. The search field sits at the foot of the screen as iOS 26
+  places it.
+- `library-schedule-sheet.png` (**new**): the sheet the "Schedule…" context
+  menu opens, with the video title as the section header, a graphical date
+  picker starting at today, "Remove from schedule" for a row that already has
+  a day, and Cancel and Add in the bar.
+
+Recorder checks page: **34 of 34 PASS**, the new one being "Remove rep never
+goes below zero". App build: **BUILD SUCCEEDED**.

@@ -126,6 +126,15 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         reps = counter.reps + manualReps
         sendPacket(force: true)
     }
+    /// A correction, not a count. It spends the manual tally first and then
+    /// offsets the automatic one, so the number on the wrist is what falls by
+    /// one, and it never falls below zero.
+    func removeRep() {
+        guard isStrength, state == .running || state == .paused else { return }
+        manualReps = max(-counter.reps, manualReps - 1)
+        reps = max(0, counter.reps + manualReps)
+        sendPacket(force: true)
+    }
     func nextSet() {
         guard isStrength, state == .running || state == .paused else { return }
         completedSets.append(reps ?? 0)
@@ -192,6 +201,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         case .discard: discard()
         case .nextSet: nextSet()
         case .addRep: addRep()
+        case .removeRep: removeRep()
         }
     }
 

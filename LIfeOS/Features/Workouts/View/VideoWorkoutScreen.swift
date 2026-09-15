@@ -70,7 +70,8 @@ struct VideoWorkoutScreen: View {
                             SessionHUD(readout: readout, activity: model.selection,
                                        zonesAvailable: model.zonesAvailable, showsTimer: false,
                                        countsAutomatically: model.source == .watch,
-                                       onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
+                                       onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                                       onNextSet: { model.nextSet() },
                                        isExpanded: $hudExpanded)
                         }
                         ActivityControls(model: model, onDone: { dismiss() })
@@ -206,7 +207,8 @@ struct VideoWorkoutScreen: View {
     private func hudCapsule(_ readout: LiveSessionReadout) -> some View {
         SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
                    showsTimer: false, countsAutomatically: model.source == .watch,
-                   onAddRep: { model.addRep() }, onNextSet: { model.nextSet() },
+                   onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                   onNextSet: { model.nextSet() },
                    isExpanded: .constant(false))
             .fixedSize(horizontal: true, vertical: false)
             .frame(maxHeight: VideoWorkoutLayout.overlayMaxHeight)

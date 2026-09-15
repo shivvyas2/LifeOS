@@ -117,7 +117,8 @@ struct BeginActivityScreen: View {
             Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
             SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false,
                        countsAutomatically: model.source == .watch,
-                       onAddRep: { model.addRep() }, onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
+                       onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                       onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
                 .padding(.top, 10)
         }
         .foregroundStyle(.white)

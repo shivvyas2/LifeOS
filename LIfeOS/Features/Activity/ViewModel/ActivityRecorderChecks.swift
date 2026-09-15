@@ -32,6 +32,8 @@ import AppSurfaces
             lifter.attach(context); lifter.saveToHealth = false; lifter.selection = .strength
             await lifter.start()
             check(lifter.source == .phone && lifter.reps == 0 && lifter.setIndex == 1, "A phone strength session starts at set 1 with zero reps")
+            lifter.addRep(); lifter.removeRep(); lifter.removeRep()
+            check(lifter.reps == 0, "Remove rep never goes below zero")
             lifter.addRep(); lifter.addRep(); lifter.nextSet(); lifter.addRep()
             check(lifter.reps == 1 && lifter.setIndex == 2 && lifter.completedSets == [2] && lifter.readout?.reps == 1, "Manual reps and sets count on the phone")
             var toAPhone = WatchPacket(sentAt: .now); toAPhone.reps = 40

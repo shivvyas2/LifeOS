@@ -43,7 +43,10 @@ struct HealthActivityDesignPreview: View {
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "library" || page == "library-empty" {
-                NavigationStack { WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder) }
+                NavigationStack {
+                    WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder,
+                                         startsScheduling: ProcessInfo.processInfo.arguments.contains("--schedule-sheet"))
+                }
             }
             // `--video=<id>` picks another seed row, which is how the embed
             // spot-check plays more than one video without a tap.
@@ -153,6 +156,10 @@ struct HealthActivityDesignPreview: View {
         }
         if !ProcessInfo.processInfo.arguments.contains("--page=library-empty") {
             try? CatalogStore.upsert(Self.catalog, context: context)
+            // One saved and one scheduled for today, both inside the plan's
+            // own filter, so a capture shows the heart and the day chip.
+            _ = try? BookmarkStore.toggleSaved("aFnUKszjprs", context: context)
+            try? BookmarkStore.schedule("ifVk1E5My7M", on: .now, context: context)
         }
         try? context.save()
     }

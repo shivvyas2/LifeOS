@@ -131,6 +131,14 @@ extension ActivityRecorder {
         reps = (reps ?? 0) + 1
         persist()
     }
+    /// The correction to `addRep`, on the same two paths. Zero is the floor:
+    /// a session cannot have counted fewer reps than none.
+    func removeRep() {
+        guard hasSession, selection == .strength else { return }
+        if source == .watch { watch?.send(.removeRep); return }
+        reps = max(0, (reps ?? 0) - 1)
+        persist()
+    }
     func nextSet() {
         guard hasSession, selection == .strength else { return }
         if source == .watch { watch?.send(.nextSet); return }

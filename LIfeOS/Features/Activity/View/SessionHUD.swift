@@ -14,6 +14,9 @@ struct SessionHUD: View {
     /// a tap, and calling that "auto" would invert the honesty label.
     var countsAutomatically: Bool = false
     var onAddRep: () -> Void = {}
+    /// A miscount, corrected. Counting down is not a rep, so it never reaches
+    /// below zero, and the glyph is a real minus sign rather than a hyphen.
+    var onRemoveRep: () -> Void = {}
     var onNextSet: () -> Void = {}
     @Binding var isExpanded: Bool
     @Environment(\.colorScheme) private var scheme
@@ -98,6 +101,7 @@ struct SessionHUD: View {
                 HStack(spacing: 10) {
                     Text(setLine).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     Spacer()
+                    Button("−1", action: onRemoveRep).buttonStyle(.glass)
                     Button("+1", action: onAddRep).buttonStyle(.glass)
                     Button("Next set", action: onNextSet).buttonStyle(.glass)
                 }.font(LifeOSType.label)
