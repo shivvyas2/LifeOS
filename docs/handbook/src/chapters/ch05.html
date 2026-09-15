@@ -1,10 +1,691 @@
-<section class="chapter" id="ch05" data-hue="notes">
-<p class="chapter-kicker">Chapter 5</p>
-<h2><span class="num">5</span><span>Stub ch05</span></h2>
-<p class="lede">Stub lede for ch05 &amp; friends.</p>
+<section class="chapter" id="ch5" data-hue="today">
+<p class="chapter-kicker">Chapter five</p>
+<h2><span class="num">5</span><span>Onboarding</span></h2>
+<p class="lede">
+  Five pages of pitch with a cat that waves, then an identity, a six-digit code, a name, and the
+  connections. Signup is mandatory and it is the only way in: a store belongs to an account, so
+  there is nowhere for a signed-out person's data to live.
+</p>
+
 <h3 id="s5-1"><span class="num">5.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch05a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch05a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s5-2"><span class="num">5.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<div class="prfaq">
+<p class="prfaq-kicker">Working backwards</p>
+<p class="release">
+  Almanac opens on a lit 3D cat and five pages that say what the app is, one domain per page in the
+  order the tabs appear. Signing in takes an email address or a phone number and a code, a first
+  and last name, and then offers WHOOP, Fitbit, a bank through Plaid and Apple Health. Every
+  connection is skippable. Nothing on the way in asks for a password. A returning user is sent
+  straight into the app once the code is accepted; a new one gets one welcome screen and then Today.
+</p>
+<p class="faq-q">Why is there an account at all?</p>
+<p class="faq-a">
+  Because the data outlives the phone, and because the app now supports several people on one
+  device. The account is what lets Supabase hold notes, a profile and provider links, what Row Level
+  Security keys every row to, and what names the SwiftData file this person's data lives in
+  (<a href="#ch4">Chapter 4</a>). Without it a lost device is a lost year, and a second person
+  signing in would inherit the first person's everything.
+</p>
+<p class="faq-q">Why no password?</p>
+<p class="faq-a">
+  A password is a credential to lose, store and reset. A one-time code delivered to a channel the
+  user already controls proves the same thing with no secret at rest and no reset flow to build.
+</p>
+<p class="faq-q">Email or phone?</p>
+<p class="faq-a">
+  Email first. It is free through Resend to 3,000 a month, needs no A2P registration, and carries
+  none of the SMS failure modes. An SMS costs about five cents and can fail four different ways.
+  Phone is offered as the alternative, to the US and India only, and the app asks Supabase which
+  channels are actually enabled before it renders the choice.
+</p>
+<p class="faq-q">Why can every connection be skipped?</p>
+<p class="faq-a">
+  A screen that blocks on a WHOOP login is a screen people abandon. Everything Almanac shows
+  degrades to a blank rather than a wrong number, so an unconnected app is honest, not broken.
+  Every connection is offered again in Settings.
+</p>
+</div>
+
+<h4>Flow anatomy</h4>
+<ul>
+  <li><code>IntroScreen</code>: five pages over one persistent SceneKit scene, with a "Skip" and a
+    sign-in door for a returning user.</li>
+  <li><code>IdentityScreen</code>: email and phone tabs, a dial-code picker, one field, one
+    complaint at a time.</li>
+  <li><code>CodeScreen</code>: six boxes, verification fired on the sixth digit, a shake on a wrong
+    code.</li>
+  <li><code>ProfileStepScreen</code>: photo, first and last name, birthday, height, gender,
+    country. Only the name is required.</li>
+  <li><code>ConnectionsScreen</code>: WHOOP, Fitbit, bank accounts, Apple Health, each with its
+    live state.</li>
+  <li><code>FirstRunTour</code>: one welcome screen after the account exists, shown once per
+    account, however the person arrived.</li>
+</ul>
+
+<h3 id="s5-2"><span class="num">5.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Onboarding/
+├── Model/
+│   ├── OnboardingModels.swift        step enum, auth mode, intro pages, draft, dial codes, Gender
+│   └── ProfilePhotoStore.swift       per-account avatar cache, LocalProfile, ProfileStore, ProfileSync
+├── ViewModel/
+│   └── OnboardingViewModel.swift     channels, send, verify, profile, restore, sign out
+└── View/
+    ├── IntroScreen.swift             the pager and the hero
+    ├── OnboardingCat.swift           the SceneKit character
+    ├── SignupScreens.swift           SignupScaffold, IdentityScreen, CodeScreen, ProfileStepScreen, CountryPicker
+    ├── ConnectionsScreen.swift       the four connection rows, plus OnboardingFlow
+    └── FirstRunTour.swift            the one-time welcome
+
+App/AppShell.swift                    chooses onboarding or RootView; owns the tour flag
+Components/Model/ProfilePhotoDownsizing.swift   512pt JPEG under the bucket limit
+
+LifeOSKit/Sources/DesignSystem/SignInChrome.swift   InlineStatus, CodeField, shake, focusableField
+LifeOSKit/Sources/Integrations/SupabaseAuth.swift   /auth/v1/settings, otp, verify, user
+LifeOSKit/Sources/Integrations/PhoneOTP.swift       E.164 rules, shared with the Edge Function
+LifeOSKit/Sources/Integrations/AuthSessionStore.swift   the keychain slot, per account
+LifeOSKit/Sources/Integrations/ProfileClient.swift  the profiles row and the avatars bucket</pre>
+
+<p>
+  <code>OnboardingFlow</code> lives beside <code>ConnectionsScreen</code> rather than in its own
+  file because it is a twenty-line switch over <code>OnboardingStep</code> and nothing else.
+  <code>AppShell</code> chooses between it and <code>RootView</code>, so the tab hierarchy is never
+  constructed for a signed-out user. The session and account machinery it leans on is described in
+  <a href="#ch4">Chapter 4</a>; this chapter is about the screens and the rules they enforce.
+</p>
+
+<h3 id="s5-3"><span class="num">5.3</span><span>Model</span></h3>
+
+<pre><code>// LIfeOS/Features/Onboarding/Model/OnboardingModels.swift
+enum OnboardingStep: Equatable {
+    case intro
+    case identity            // phone or email
+    case code                // OTP (phone or email)
+    case profile             // name, country
+    case connections         // Whoop and Health, all optional
+    case signedIn            // returning user; nothing left to ask
+}
+
+enum AuthMode: Equatable {
+    case signUp
+    case signIn
+}</code></pre>
+
+<p>
+  <code>OnboardingStep</code> is a single value because the alternative, a pile of booleans, can
+  represent states that do not exist. A user cannot be on the code screen and the profile screen at
+  once, and the type should say so. <code>AuthMode</code> is the door the user came through, and it
+  changes copy and nothing else. With OTP there is no password, so sign-in and signup are the same
+  three steps; picking the wrong door is harmless by design, because the branch after verify is what
+  actually routes.
+</p>
+
+<pre><code>// LIfeOS/Features/Onboarding/Model/OnboardingModels.swift
+struct SignupDraft: Equatable {
+    var channel: SupabaseAuthChannel = .email
+    var phone = ""
+    var dialCode = "+1"
+    var email = ""
+    var code = ""
+    var firstName = ""
+    var lastName = ""
+    var country = Locale.current.region?.identifier ?? "US"
+
+    var photo: Data?          // already downsized
+    var birthDate: Date?
+    var heightCM: Double?     // always centimetres, whatever the field shows
+    var gender: Gender = .unspecified
+
+    var e164: String { dialCode + phone.filter(\.isNumber) }
+
+    var canSendCode: Bool {
+        channel == .phone
+            ? PhoneOTP.isAcceptable(e164)
+            : email.contains("@") &amp;&amp; email.contains(".")
+    }
+    var canVerify: Bool { code.filter(\.isNumber).count >= 6 }
+    var canFinishProfile: Bool {
+        !firstName.trimmingCharacters(in: .whitespaces).isEmpty
+            &amp;&amp; !lastName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+}</code></pre>
+
+<p>
+  The draft holds what the user typed, before any of it is trusted. The three <code>can…</code>
+  properties are the only validation in the feature, and they live on the model rather than in a
+  view so a disabled button and a rejected submit can never disagree. Three details are worth
+  noticing:
+</p>
+<ul>
+  <li><strong>The photo is <code>Data</code>, not <code>UIImage</code>.</strong> That keeps the
+    draft a value type that can be compared for equality, and it means the bytes are already the
+    downsized JPEG that will be uploaded, so no view holds a multi-megabyte camera-roll original.</li>
+  <li><strong>Height is always centimetres internally.</strong> The imperial fields on the profile
+    step are bindings that translate for display. Storing the number in whichever unit the user
+    happened to be typing is how a height ends up silently wrong after a locale change.</li>
+  <li><strong>Only the name is required.</strong> Everything else on the profile step sharpens
+    what the app can say, and none of it is worth blocking someone at the door for.</li>
+</ul>
+
+<p>
+  <code>Gender</code> is deliberately not a biological-sex field wearing a friendlier label. It is
+  how someone wants to be addressed, "Prefer not to say" is the default and a real answer, and
+  <code>stored</code> returns nil for it so nothing is written to the server. If health baselines
+  ever need sex, that is a different question with different answers, and
+  <code>HealthConnectionViewModel</code> already reads it from Health's own characteristic rather
+  than from here (<a href="#s17-4">17.4</a>).
+</p>
+
+<p>
+  <code>DialCountries.all</code> is built from <code>Locale.Region.isoRegions</code> crossed with a
+  hand-typed table of known dial codes, so the list is complete and localised while a region with no
+  known code is dropped rather than guessed at. Offering the wrong prefix sends an SMS into the
+  void, and the user has no way to tell that is what happened. <code>otpRegions</code> is
+  <code>["US", "IN"]</code>: the country picker on the identity screen is filtered to those two,
+  and the view model resets a draft whose locale is elsewhere to the US.
+</p>
+
+<h3 id="s5-4"><span class="num">5.4</span><span>ViewModel</span></h3>
+
+<pre><code>// LIfeOS/Features/Onboarding/ViewModel/OnboardingViewModel.swift
+@MainActor @Observable
+final class OnboardingViewModel {
+    private(set) var step: OnboardingStep = .intro
+    private(set) var mode: AuthMode = .signUp
+    var draft = SignupDraft()
+
+    private(set) var isBusy = false
+    private(set) var errorMessage: String?
+    private(set) var phoneSendFailed = false
+    private(set) var resendIn = 0
+    private(set) var availableChannels: Set&lt;SupabaseAuthChannel&gt; = []
+    private(set) var isSignedIn: Bool
+    private(set) var session: AuthSession?
+
+    private var store: any AuthSessionStoring
+    private var auth: SupabaseAuth?
+    private var restoreTask: Task&lt;Bool, Never&gt;?
+
+    func loadChannels() async
+    func restoreSession() async -> Bool
+    func sendCode() async
+    func verifyCode() async
+    func saveProfile() async
+    func signOut()
+}</code></pre>
+
+<p>The rules that live here, and nowhere else:</p>
+
+<ul>
+  <li><strong>Channel availability is asked, not assumed.</strong> <code>loadChannels()</code>
+    reads <code>auth/v1/settings</code>. Email stays the default when it is configured and the
+    draft quietly falls back to phone when it is not; <code>phoneUnavailableNote</code> explains a
+    missing SMS provider rather than leaving a dead tab on screen.</li>
+  <li><strong>Email sends a six-digit code, not a magic link.</strong> Including
+    <code>{{ .Token }}</code> in the project's email template is what makes GoTrue send a code, and
+    <code>verifyCode()</code> posts it to <code>auth/v1/verify</code> exactly as phone does, with
+    no per-channel branch.</li>
+  <li><strong>The account, not the door, decides what comes next.</strong> After
+    <code>verify</code> the step is <code>session.hasProfile ? .signedIn : .profile</code>. A
+    "Sign in" tap with no account still creates one; a "Get started" tap on an existing account
+    skips the profile step it already has answers for.</li>
+  <li><strong>Verify also records the account.</strong> The same call adds the session to
+    <code>AccountStore</code>, clears the pre-accounts keychain slot, and re-points the view
+    model's own store at the per-account slot. From here on every network client in the app reads
+    this account's token (<a href="#ch4">Chapter 4</a>).</li>
+  <li><strong>A failed profile write does not strand the user.</strong> The account already exists
+    by then, so <code>saveProfile()</code> records the error and advances to
+    <code>.connections</code> anyway. Blocking the last step of signup on a metadata write would
+    trade a cosmetic failure for an unusable app.</li>
+  <li><strong>The photo goes to storage before the row.</strong> <code>saveProfile()</code> uploads
+    the avatar first and only then saves the <code>profiles</code> row, so the row never points at
+    an object that does not exist. A failed upload costs the picture and not the profile; it is a
+    <code>try?</code>.</li>
+  <li><strong>Names still go to <code>user_metadata</code> as well.</strong> The profile row is
+    the source of truth for display, but <code>hasProfile</code> is derived from
+    <code>user_metadata.first_name</code> when a session is refreshed, and that is what decides
+    whether a returning user is sent through signup again. Both writes are needed.</li>
+  <li><strong>Resend is rate-limited in the UI.</strong> A sixty-second countdown starts on every
+    send. Sixty, not forty-five: phone's Edge Function cooldown is 45 seconds, but email posts
+    straight to GoTrue, whose <code>auth.email.max_frequency</code> is 60. The countdown has to
+    clear the stricter of the two or "Resend code" invites a 429.</li>
+  <li><strong><code>isSignedIn</code> is stored, not computed.</strong> A computed
+    <code>store.load() != nil</code> is invisible to <code>@Observable</code>, which once left the
+    shell showing the app after a sign-out until something else happened to redraw it.</li>
+  <li><strong>Restoring is one call, and it is shared.</strong> <code>restoreSession()</code>
+    holds the in-flight <code>Task</code> so a launch, a foreground and the keep-alive loop arriving
+    together await one refresh. Supabase rotates the refresh token on use, so the second of a
+    concurrent pair would present a token the first had just retired and be refused.</li>
+</ul>
+
+<pre><code>// LIfeOS/Features/Onboarding/ViewModel/OnboardingViewModel.swift
+func verifyCode() async {
+    guard let auth, draft.canVerify else { return }
+    isBusy = true
+    errorMessage = nil
+    defer { isBusy = false }
+
+    do {
+        let session = try await auth.verify(
+            code: draft.code.filter(\.isNumber),
+            destination: draft.destination,
+            channel: draft.channel
+        )
+        try AccountStore().add(Account(userID: session.userID,
+            label: session.email ?? session.phone ?? "Account"), session: session)
+        AccountStore().clearLegacySession()
+        store = KeychainAuthSessionStore(account: session.userID)
+        self.session = session
+        isSignedIn = true
+        step = session.hasProfile ? .signedIn : .profile
+    } catch let error as AuthError {
+        errorMessage = error.readable
+    } catch {
+        errorMessage = "That code didn't work"
+    }
+}</code></pre>
+
+<p>
+  The initialiser has one more rule worth knowing. It reads the keychain synchronously and, if a
+  session is there, decides the opening step at once: <code>.connections</code> if the per-account
+  defaults say the person got that far and quit, otherwise <code>.signedIn</code> or
+  <code>.profile</code> by <code>hasProfile</code>. That is what lets a relaunch land on the app
+  without flashing the intro for a frame.
+</p>
+
+<div class="note"><b>hasProfile defaults to false on decode, by hand</b>
+A session already in the keychain from before this field existed has no <code>hasProfile</code>
+key. A synthesised <code>Decodable</code> would throw on it and sign every existing user out on the
+upgrade, so <code>AuthSession</code> writes its own initialiser and defaults the missing key to
+false. That default is safe only because the flag is read once, immediately after
+<code>verify()</code>; a restored session never consults it again.</div>
+
+<h3 id="s5-5"><span class="num">5.5</span><span>View</span></h3>
+
+<h4>The intro and the cat</h4>
+
+<p>
+  <code>IntroScreen</code> renders <code>IntroPage.all</code> in a <code>TabView</code> pager
+  under a hero that stays put while the pages slide. The pages are data rather than five
+  hand-written views for the same reason as before: a loop cannot let page three fall out of step
+  with page one. At accessibility text sizes the pager is replaced with a single continuous reading
+  surface, so a nested horizontal pager does not fight vertical accessibility scrolling. The copy
+  height is measured with <code>onGeometryChange</code> and the largest page wins, so the hero does
+  not jump between pages of different length.
+</p>
+
+<p>
+  The hero is <code>OnboardingCat</code>, a <code>UIViewRepresentable</code> over an
+  <code>SCNView</code>. It is a real lit character rather than an image sequence: an orthographic
+  camera, an ambient light and one omni key light, a physically based coat material, and a body
+  built from about thirty scaled spheres plus two extruded ear shapes and two extruded arcs for the
+  smile. The horizontal ink lines that make it read as the app's dotted illustration style come
+  from a surface shader modifier:
+</p>
+
+<pre><code>// LIfeOS/Features/Onboarding/View/OnboardingCat.swift
+coat.shaderModifiers = [.surface: """
+    #pragma body
+    float row = _surface.position.y * 16.0;
+    float edge = abs(fract(row) - 0.5);
+    float aa = max(fwidth(row), 0.025);
+    float ink = 1.0 - smoothstep(0.14 - aa, 0.14 + aa, edge);
+    _surface.diffuse.rgb *= mix(1.0, 0.035, ink);
+    """]</code></pre>
+
+<p>
+  Rows are computed from view-space <code>y</code>, so they stay horizontal as the cat turns, and
+  <code>fwidth</code> softens each edge at the rendered resolution so the lines do not shimmer.
+  Motion is a handful of <code>SCNAction</code>s: a breathing rise, a head tilt, a tail curl, an
+  eye blink on a 4.6 second keyframe loop, and a wave that plays on page change and on tap. All of
+  it is cheap by construction: the view is capped at 30 frames per second, the scene is paused
+  whenever the screen is not active or Reduce Motion is on, and <code>dismantleUIView</code> drops
+  the scene entirely. With Reduce Motion the cat still turns to face each page, it just snaps
+  instead of animating.
+</p>
+
+<h4>The signup scaffold</h4>
+
+<pre><code>// LIfeOS/Features/Onboarding/View/SignupScreens.swift
+struct SignupScaffold&lt;Content: View, Action: View&gt;: View {
+    let title: String
+    let subtitle: String
+    var step = 1
+    var totalSteps = 3
+    var showsProgress = true
+    var onBack: (() -> Void)?
+    @ViewBuilder let content: Content
+    @ViewBuilder let action: Action
+}</code></pre>
+
+<p>
+  Every signup step is the same shape: a back control, the wordmark, a progress rule, a title, a
+  subtitle, one field group, and one primary action pinned to the bottom in a
+  <code>safeAreaInset</code>. <code>SignupScaffold</code> owns that shape so the three screens
+  differ only in their content, which is what keeps them from drifting apart visually as they are
+  edited. Sign-in mode hides the progress rule and counts two steps rather than three; a returning
+  user has no profile step to count.
+</p>
+
+<h4>The code screen does the work instead of asking for it</h4>
+
+<p>
+  This is the screen people fail on, so it is built to remove the ways of failing. The single
+  tracked text field is gone; <code>CodeField</code> from <code>DesignSystem</code> draws six boxes
+  and calls back the moment the sixth digit lands, so verification fires without a tap. Autofill can
+  land a whole code with no keystroke, so a Verify button is kept for that user. A wrong code bumps
+  a counter, and the counter drives both a spring shake and an error haptic:
+</p>
+
+<pre><code>// LIfeOS/Features/Onboarding/View/SignupScreens.swift
+@State private var wrongAttempts = 0
+...
+CodeField(text: $model.draft.code, count: 6) { verify() }
+    .shake(wrongAttempts)
+    .animation(.spring(response: 0.28, dampingFraction: 0.4), value: wrongAttempts)
+...
+.onChange(of: model.errorMessage) { _, new in
+    guard new?.isEmpty == false else { return }
+    wrongAttempts += 1
+}
+.sensoryFeedback(.error, trigger: wrongAttempts)</code></pre>
+
+<p>
+  A counter rather than a Bool, because two bad codes in a row must shake twice, and a Bool that is
+  already true animates nothing.
+</p>
+
+<h4>One complaint at a time</h4>
+
+<p>
+  The identity screen can have three things to say at once: a validation error, a configuration
+  problem, and a note that SMS is off. Stacked, they read as a broken app. <code>InlineStatus.resolve</code>
+  picks the single most actionable one, with precedence error, then configuration, then warning,
+  and treats whitespace as absence so an empty string never paints a red gap. The "Use email
+  instead" escape is kept below the status rather than folded into it: it is an action the user can
+  take, not another thing going wrong.
+</p>
+
+<h4>The profile step</h4>
+
+<p>
+  A <code>PhotosPicker</code> circle at the top, two name fields, then four labelled rows that read
+  as a set: birthday, height, gender, country. The birthday picker opens on a plausible adult date
+  thirty years back rather than today, so the wheel is not three decades of scrolling. Height shows
+  feet and inches where the locale is imperial and centimetres elsewhere, through bindings that
+  only translate; the stored truth is centimetres. The picked photo is downsized before it is kept,
+  because a camera-roll original is several megabytes and this is displayed at 96 points
+  (<a href="#s17-6">17.6</a> for the maths).
+</p>
+
+<h4>Connections, and the flow</h4>
+
+<p>
+  <code>ConnectionsScreen</code> is the only onboarding screen that reads live state. It takes the
+  four shared connection view models that <code>AppShell</code> owns, so a connection made here is
+  already made when Settings opens later. Each row shows the provider's own
+  <code>statusDetail</code>, a spinner while it connects or syncs, a "Connected" label once it
+  has, and a disabled button with "Available when this service is enabled" when the build lacks the
+  provider's configuration. The Apple Health row calls <code>health.connect()</code>, which is the
+  permission prompt and the first sync in one; the same view model serves Today's empty-state
+  button and the Connections page in Settings.
+</p>
+
+<pre><code>// LIfeOS/Features/Onboarding/View/ConnectionsScreen.swift
+struct OnboardingFlow: View {
+    @Bindable var model: OnboardingViewModel
+    ...
+    var body: some View {
+        Group {
+            switch model.step {
+            case .intro:       IntroScreen(onStart: { model.beginSignup() },
+                                           onSignIn: { model.beginSignIn() })
+            case .identity:    IdentityScreen(model: model)
+            case .code:        CodeScreen(model: model)
+            case .profile:     ProfileStepScreen(model: model)
+            case .connections: ConnectionsScreen(model: model, whoop: whoop, fitbit: fitbit,
+                                                 health: health, plaid: plaid, onFinish: onFinish)
+            case .signedIn:    ProgressView().controlSize(.large)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: model.step)
+        .onChange(of: model.step) { _, step in
+            if step == .signedIn { onFinish() }
+        }
+    }
+}</code></pre>
+
+<p>
+  <code>onFinish</code> is called from <code>onChange</code> rather than from the
+  <code>.signedIn</code> view body, because a body can run more than once for a single state and
+  <code>onFinish</code> flips persisted app state.
+</p>
+
+<h4>The welcome</h4>
+
+<p>
+  <code>FirstRunTour</code> replaced a six-page second carousel with one scrollable screen: the cat,
+  "Welcome home.", three rows pointing at Today, connections and the coach, and an "Open my day"
+  button. It is presented by <code>AppShell</code> as an overlay rather than a
+  <code>fullScreenCover</code>, because iOS can restore a previously presented cover at launch and
+  two covers contending for one window silently drops one. Its flag,
+  <code>hasSeenFirstRunTour</code>, is stored in the per-account defaults and is separate from
+  <code>hasFinishedOnboarding</code>, so it fires exactly once per account however the person
+  arrived: signup, sign-in, or skip. A 400 millisecond delay and a cancellation check keep a stale
+  tour from presenting over a shell that is already going away.
+</p>
+
+<h3 id="s5-6"><span class="num">5.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 330" role="img" aria-label="The signup flow: intro, identity, code, then a branch on hasProfile into the profile step or straight to signed in; the profile step uploads the avatar, saves the profiles row and user metadata; connections; then AppShell records the account, opens its store and shows the tour once.">
+  <defs>
+    <marker id="ch5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">ONBOARDING FLOW</text>
+  <text class="lbl-sm" x="560" y="24">SUPABASE</text>
+
+  <rect class="box" x="20" y="44" width="110" height="40" rx="8"/>
+  <text class="lbl" x="75" y="69" text-anchor="middle">Intro</text>
+  <rect class="box" x="160" y="44" width="110" height="40" rx="8"/>
+  <text class="lbl" x="215" y="69" text-anchor="middle">Identity</text>
+  <rect class="box" x="300" y="44" width="110" height="40" rx="8"/>
+  <text class="lbl" x="355" y="69" text-anchor="middle">Code</text>
+  <path class="flow" d="M130 64 L154 64" marker-end="url(#ch5a)"/>
+  <path class="flow" d="M270 64 L294 64" marker-end="url(#ch5a)"/>
+
+  <rect class="box" x="560" y="44" width="120" height="40" rx="8"/>
+  <text class="lbl" x="620" y="69" text-anchor="middle">auth/v1/otp</text>
+  <rect class="box" x="710" y="44" width="130" height="40" rx="8"/>
+  <text class="lbl" x="775" y="69" text-anchor="middle">auth/v1/verify</text>
+  <path class="flow-dash" d="M215 44 L215 30 L620 30 L620 40" marker-end="url(#ch5a)"/>
+  <path class="flow-dash" d="M355 84 L355 100 L775 100 L775 88" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="380" y="112">code + destination</text>
+
+  <rect class="box-hot" x="300" y="130" width="110" height="52" rx="8"/>
+  <text class="lbl" x="355" y="152" text-anchor="middle">hasProfile?</text>
+  <text class="lbl-hot" x="355" y="170" text-anchor="middle">from the account</text>
+  <path class="flow-hot" d="M355 84 L355 124" marker-end="url(#ch5b)"/>
+
+  <rect class="box" x="160" y="210" width="110" height="40" rx="8"/>
+  <text class="lbl" x="215" y="235" text-anchor="middle">Profile step</text>
+  <rect class="box" x="300" y="210" width="110" height="40" rx="8"/>
+  <text class="lbl" x="355" y="235" text-anchor="middle">Connections</text>
+  <rect class="box-alt" x="440" y="210" width="90" height="40" rx="8"/>
+  <text class="lbl" x="485" y="235" text-anchor="middle">signedIn</text>
+  <path class="flow" d="M320 182 L215 206" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="240" y="192">no</text>
+  <path class="flow" d="M390 182 L485 206" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="445" y="192">yes</text>
+  <path class="flow" d="M270 230 L294 230" marker-end="url(#ch5a)"/>
+
+  <rect class="box" x="560" y="140" width="120" height="40" rx="8"/>
+  <text class="lbl" x="620" y="165" text-anchor="middle">avatars bucket</text>
+  <rect class="box" x="710" y="140" width="130" height="40" rx="8"/>
+  <text class="lbl" x="775" y="165" text-anchor="middle">profiles row</text>
+  <rect class="box" x="560" y="200" width="280" height="40" rx="8"/>
+  <text class="lbl" x="700" y="225" text-anchor="middle">auth/v1/user (user_metadata)</text>
+  <path class="flow-dash" d="M215 210 L215 160 L554 160" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="230" y="154">1 photo</text>
+  <path class="flow-dash" d="M680 160 L704 160" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="684" y="134">2 row</text>
+  <path class="flow-dash" d="M270 240 L554 220" marker-end="url(#ch5a)"/>
+  <text class="lbl-sm" x="470" y="262">3 names, for hasProfile</text>
+
+  <rect class="box-hot" x="160" y="280" width="370" height="40" rx="8"/>
+  <text class="lbl" x="345" y="305" text-anchor="middle">AppShell.onFinish: record account, open store, tour once</text>
+  <path class="flow-hot" d="M355 250 L355 274" marker-end="url(#ch5b)"/>
+  <path class="flow-hot" d="M485 250 L485 274" marker-end="url(#ch5b)"/>
+</svg>
+<figcaption>
+  The door the user came through never routes. The account does, once the code is verified. The
+  profile step writes three things in a fixed order so a row can never point at a missing picture,
+  and so a refreshed session can still tell a returning user from a new one.
+</figcaption>
+</figure>
+
+<p>Step by step, for a new user on a fresh install:</p>
+<ol>
+  <li><code>LIfeOSApp</code> finds no account, so <code>AccountSession.container</code> is nil and
+    <code>AppShell</code> is mounted with <code>hasStore: false</code>. It renders
+    <code>OnboardingFlow</code>.</li>
+  <li>The identity screen's <code>.task</code> asks <code>auth/v1/settings</code> which channels
+    exist and logs, rather than shows, a missing anon key.</li>
+  <li>"Send code" posts to <code>auth/v1/otp</code> for email or to the <code>otp-start</code>
+    Edge Function for phone (<a href="#ch20">Chapter 20</a>). The step becomes
+    <code>.code</code> and the sixty-second countdown starts.</li>
+  <li>The sixth digit fires <code>verifyCode()</code>. On success the session goes into the
+    per-account keychain slot, the account into the roster, and the step branches on
+    <code>hasProfile</code>.</li>
+  <li>The profile step uploads the avatar, saves the <code>profiles</code> row, mirrors it into the
+    per-account local caches, writes the names into <code>user_metadata</code>, and records
+    <code>"onboarding.step" = "connections"</code> so a quit here resumes here.</li>
+  <li>Connections are offered. "Continue to LifeOS" calls <code>onFinish</code>.</li>
+  <li><code>AppShell.onFinish</code> hands the account and session to
+    <code>AccountSession.signIn</code>, which opens this account's store, clears the resume marker,
+    and animates <code>hasFinishedOnboarding</code> to true. The whole scene re-roots on the new
+    account id and <code>RootView</code> mounts for the first time.</li>
+  <li>Four hundred milliseconds later the tour fades in, once.</li>
+</ol>
+
+<p>
+  For a returning user the shell's launch task calls <code>restoreSession()</code>. If the refresh
+  succeeds, a store is open and the step is <code>.signedIn</code>, it sets
+  <code>hasFinishedOnboarding</code> and pulls the profile from the server with
+  <code>ProfileSync.pull()</code>, because the profile belongs to the account and not to the phone
+  that typed it. A refused refresh is the only thing that sends someone back to signup.
+</p>
+
+<h3 id="s5-7"><span class="num">5.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>No store, no tab hierarchy.</strong> Onboarding never touches SwiftData. The tabs,
+    their view models and their first fetches are constructed only after an account has a store,
+    which is also what prevents the uncatchable Core Data exception a fetch against an empty schema
+    would raise (<a href="#ch4">Chapter 4</a>).</li>
+  <li><strong>The keychain is read synchronously at init.</strong> <code>isSignedIn</code> and the
+    opening step are decided before the first render, so a relaunch that restores a session never
+    paints the intro carousel for a frame.</li>
+  <li><strong>The cat costs what a 30 fps SceneKit view costs, and only while it is on screen.</strong>
+    It pauses when the scene phase is not active, when Reduce Motion is on, and when the view
+    disappears. Geometry is thirty low-segment spheres; the ink lines are a few shader
+    instructions rather than a texture.</li>
+  <li><strong>One refresh, however many callers.</strong> The shared <code>restoreTask</code> is
+    the difference between one token rotation and a refused second one.</li>
+  <li><strong>Email is the free channel.</strong> The default channel costs nothing per send;
+    phone is rate-limited on both sides and restricted to two regions so SMS pumping has nowhere to
+    aim (<code>PhoneOTP.pumpingPrefix</code> exists for the server's benefit).</li>
+  <li><strong>Avatars are 512 points, scale 1, JPEG 0.8.</strong> A profile photo is a few tens
+    of kilobytes by the time it is held in the draft, uploaded, and cached.</li>
+  <li><strong>The profile pull is two small requests.</strong> One row, and a bucket listing
+    scoped to the account's own folder; the picture itself is only downloaded when the listing's
+    timestamp differs from the recorded one (<a href="#s17-6">17.6</a>).</li>
+  <li><strong>Nothing about the intro leaves the device.</strong> The first network request is the
+    settings probe, made when the identity screen appears, not at launch.</li>
+</ul>
+
+<h3 id="s5-8"><span class="num">5.8</span><span>Edge cases and tests</span></h3>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>No <code>SUPABASE_ANON_KEY</code> in the build</td><td><code>isConfigured</code> is false; the identity screen shows "Sign-in is unavailable right now" and the key name goes to the log, not the screen</td></tr>
+<tr><td>SMS not enabled on the project</td><td>The phone tab stays but a warning explains it; sending is still possible by email</td></tr>
+<tr><td>Email not enabled, phone is</td><td><code>loadChannels()</code> flips the draft to phone silently</td></tr>
+<tr><td>Locale outside the US and India</td><td>The draft resets to <code>US</code>, <code>+1</code>; the country picker offers only the two OTP regions</td></tr>
+<tr><td>Wrong or expired code</td><td>Inline error, shake, haptic; the step stays <code>.code</code> so the code can be retried without resending</td></tr>
+<tr><td>SMS send fails</td><td>Error shown and <code>phoneSendFailed</code> set; "Use email instead" appears and survives backing out to the identity screen, but is cleared on the way to the intro</td></tr>
+<tr><td>Resend tapped early</td><td>Disabled until the sixty-second countdown clears; no 429 is ever provoked from the client</td></tr>
+<tr><td>Profile write fails</td><td>Error recorded, flow advances to connections; the account is already valid</td></tr>
+<tr><td>Avatar upload fails</td><td>Row saved without <code>avatar_path</code>; the local copy still shows the picture</td></tr>
+<tr><td>Quit during the profile or connections step</td><td>Relaunch resumes at connections; a quit before the profile step resumes at the profile step, by <code>hasProfile</code></td></tr>
+<tr><td>Returning user, session in keychain</td><td>Renewed at launch, then straight into the app; profile pulled from the server</td></tr>
+<tr><td>Returning user, session refused</td><td>Signed out with "Your session expired. Sign in again"</td></tr>
+<tr><td>Returning user, offline</td><td>Stays signed in. The credential is still good; only the network is missing</td></tr>
+<tr><td>Foregrounded mid-signup after an hour</td><td>Session renewed, but <code>hasFinishedOnboarding</code> is never promoted here, so nobody is yanked out of the profile step for switching apps</td></tr>
+<tr><td>Second person signs in on the same device</td><td>Gets their own store, keychain slot, defaults suite, avatar file and profile cache; the first person's remain, unopened</td></tr>
+<tr><td>Reduce Motion on</td><td>The cat still faces each page, without animating; the pager selects without easing</td></tr>
+<tr><td>Accessibility text sizes</td><td>The pager becomes one continuous column; the header caps its own type at xxxLarge so the wordmark and Skip stay on one line</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+
+<ul>
+  <li><code>SessionRefreshTests</code> (twelve tests) drives every branch of the refresher against a
+    stub <code>URLProtocol</code>: an expired session is refreshed and saved, a rejected refresh
+    token signs out, being offline, an outage and a 429 all keep the stored session, and a logout
+    during a refresh cannot resurrect it.</li>
+  <li><code>AuthSessionProfileTests</code> pins the <code>hasProfile</code> rules: a verified user
+    with a first name has one, a whitespace-only name does not, a stored session without the key
+    still decodes, and a refresh does not forget it.</li>
+  <li><code>AuthErrorMappingTests</code> maps every Edge Function failure kind, plus the generic
+    502 fallback on both channels, to a specific readable sentence.</li>
+  <li><code>PhoneOTPTests</code>: Indian mobiles accepted, Indian landline lengths rejected, US and
+    the local test number accepted, other countries and short values rejected.</li>
+  <li><code>SignInChromeTests</code>: <code>InlineStatus</code> precedence and blank handling; the
+    code field fills from the left, ignores non-digits, and drops overflow.</li>
+  <li><code>AccountStoreTests</code> (seventeen tests) covers the roster: a second account does not
+    evict the first, signing out clears the legacy slot too, removing an account leaves its store
+    on disk, a mismatched identity cannot open another account's store.</li>
+  <li><code>SessionKeepAliveTests</code>: the wake is late enough to act on, an already expired
+    session still waits the floor, a clock jump cannot produce a spin.</li>
+</ul>
+
+<p>
+  The signup screens themselves have no automated test; they are exercised by hand against the
+  project's test-number map, where <code>+1 123-456-7890</code> with code <code>123123</code>
+  returns a real session and never reaches Twilio. Email has no equivalent bypass and depends on the
+  Resend SMTP block being pushed to the hosted project.
+</p>
+
+<div class="note caution"><b>The guest bypass is gone</b>
+Earlier editions described a "Skip for now" guest mode. It no longer exists. A store belongs to an
+account, notes sync to one, and connections are held per account, so there is nowhere for a
+signed-out person's data to live that would not become somebody else's the moment they signed in.
+The intro's "Skip" only skips the pitch; it lands on the identity screen.</div>
+
+<h3 id="s5-9"><span class="num">5.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>Features/Onboarding/Model/OnboardingModels.swift</code>: the step enum and the draft are the whole contract.</li>
+  <li><code>Features/Onboarding/ViewModel/OnboardingViewModel.swift</code>: read <code>init</code>, <code>verifyCode</code>, <code>saveProfile</code>, <code>restoreSession</code> in that order.</li>
+  <li><code>App/AppShell.swift</code>: the gate on line 57 and the three <code>.task</code> blocks.</li>
+  <li><code>LifeOSKit/Sources/Integrations/SupabaseAuth.swift</code>: <code>AuthSession</code> and its hand-written decoder.</li>
+  <li><code>Features/Onboarding/View/SignupScreens.swift</code>: <code>CodeScreen</code> first, then the profile step's height bindings.</li>
+  <li><code>LifeOSKit/Sources/DesignSystem/SignInChrome.swift</code>: <code>InlineStatus.resolve</code> and <code>CodeField</code>.</li>
+  <li><code>Features/Onboarding/Model/ProfilePhotoStore.swift</code>: <code>ProfileSync.pull</code> and the stamp.</li>
+  <li><code>Features/Onboarding/View/OnboardingCat.swift</code>: the shader and the idle actions.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does tapping "Sign in" with no account still create one?</strong> Because OTP has no password; the only thing that distinguishes a new user is <code>hasProfile</code>, read after verify, and the mode only changes copy.</li>
+  <li><strong>Why is the resend countdown 60 seconds and not 45?</strong> Phone's Edge Function cooldown is 45s, but email goes straight to GoTrue whose <code>max_frequency</code> is 60s; the client has to clear the stricter one.</li>
+  <li><strong>What would break if <code>AuthSession</code> used a synthesised decoder?</strong> Every session stored before <code>hasProfile</code> existed would fail to decode and sign its user out on upgrade.</li>
+  <li><strong>Why is the tour an overlay and not a <code>fullScreenCover</code>?</strong> iOS can restore a cover at launch, and two covers contending for one window silently drops one.</li>
+  <li><strong>Why does the profile step upload the photo before saving the row?</strong> So the row can never point at an object that does not exist; a failed upload loses the picture, not the profile.</li>
+  <li><strong>Why does the identity screen probe <code>auth/v1/settings</code> rather than assuming both channels?</strong> A phone tab whose SMS provider is off is a button that silently fails; asking first turns that into a warning with a working alternative.</li>
+</ul>
 </section>

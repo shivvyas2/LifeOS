@@ -1,10 +1,351 @@
-<section class="chapter" id="ch24" data-hue="notes">
-<p class="chapter-kicker">Chapter 24</p>
-<h2><span class="num">24</span><span>Stub ch24</span></h2>
-<p class="lede">Stub lede for ch24 &amp; friends.</p>
-<h3 id="s24-1"><span class="num">24.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch24a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch24a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s24-2"><span class="num">24.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+<section class="chapter" id="ch24" data-hue="money">
+<p class="chapter-kicker">Chapter twenty-four</p>
+<h2><span class="num">24</span><span>Cost and the allowance</span></h2>
+
+<p class="lede">
+  Almanac ships free, so every user costs money and none of them pay it. That single fact caps the
+  architecture. This chapter says where the money goes, which lines are metered by a constraint in
+  the database rather than by good intentions, and what the app costs to run today.
+</p>
+
+<h3 id="s24-1"><span class="num">24.1</span><span>The ceiling</span></h3>
+
+<p>
+  Total running cost must stay under roughly <strong>two dollars per user per calendar month</strong>,
+  covering cloud inference, speech, bank data, the database, and notifications. There is no revenue
+  per user, so this comes out of pocket and unit economics decide what can be built. The number was
+  fixed on 25 August 2026 and nothing since has moved it.
+</p>
+
+<p>
+  The requirement is that spending <em>cannot</em> exceed the allowance, not that it usually does
+  not. Those are different engineering problems, and only the first survives concurrency and a
+  looping client. So the lines that scale with use (cloud tokens) are capped in Postgres, the lines
+  that scale with connections (Plaid) are bounded by a count the person controls, and the lines that
+  scale with nothing (Supabase, APNs, Vercel, YouTube) are on free tiers whose limits are named
+  below.
+</p>
+
+<div class="note">
+  <b>The allowance is internal</b>
+  Users are never shown a balance, a meter, a percentage, or a dollar figure. It exists to bound what
+  the app costs to run, not to be a feature. The only moment it becomes visible is when it runs out,
+  and then it is one sentence: <code>exhausted</code> comes back as a 429 from
+  <code>lifo-agent</code>, and <a href="#ch14">Chapter 14</a> shows how the coach screen turns that
+  into words.
+</div>
+
+<h3 id="s24-2"><span class="num">24.2</span><span>Where the money goes</span></h3>
+
+<p>
+  Every line below is either metered, bounded, or free. Nothing in the app calls a paid service
+  without one of the three applying.
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Line</th><th>Provider</th><th>Scales with</th><th>How it is bounded</th><th>What leaves the device</th></tr></thead>
+<tbody>
+<tr><td>Coach chat, answers, sector notes</td><td>OpenAI <code>gpt-5-mini</code> through <code>lifo-agent</code></td><td>Turns per user</td><td>150,000 tokens per user per day, kind <code>chat</code></td><td>The off-device render of <code>ContextBundle</code>: derived numbers, never raw series</td></tr>
+<tr><td>Morning nudge</td><td>OpenAI <code>gpt-5-mini</code> through <code>lifo-nudge</code></td><td>One send per user per day</td><td>4,000 tokens per user per day, kind <code>nudge</code>; a fallback sentence when spent</td><td>The trigger's few figures; about 300 tokens in, 60 out</td></tr>
+<tr><td>Speech in (Scribe) and out (Flash v2.5)</td><td>ElevenLabs, called from the app</td><td>Spoken turns, characters spoken</td><td>Voice off by default; replies capped at 1,200 characters; key rotation is the only kill switch today</td><td>The recorded WAV of a question; the text of a reply</td></tr>
+<tr><td>Bank sync</td><td>Plaid, four Edge Functions</td><td>Connected Items per user per month</td><td>One Item per bank; a failed exchange removes the Item so nothing bills for a row that was never stored</td><td>Nothing; transactions come back to the phone and stay there</td></tr>
+<tr><td>Sign-in codes</td><td>Resend (email), Twilio Verify (SMS)</td><td>Sign-ins</td><td>Email is the default and free; SMS only for US and India numbers, 45 s guard, pumping-prefix limits</td><td>An address or number, hashed with a pepper in <code>otp_events</code></td></tr>
+<tr><td>Database, auth, functions, storage</td><td>Supabase</td><td>Rows, function invocations, avatar bytes</td><td>Free tier; see 24.4 for the limits that would push it over</td><td>Notes, profile, avatar, friends, messages, shared stats, tokens</td></tr>
+<tr><td>Push</td><td>APNs</td><td>Sends</td><td>Free; one send per user per day by design</td><td>A sentence, a trigger name, a day</td></tr>
+<tr><td>Universal link site</td><td>Vercel</td><td>Requests</td><td>Free hobby tier; two static files</td><td>Nothing</td></tr>
+<tr><td>Workout videos</td><td>YouTube embeds</td><td>Plays</td><td>Free; the catalog is 122 curated ids in a table, no API key</td><td>The video id and the app's embed origin</td></tr>
+<tr><td>Wearables and Health</td><td>Whoop and Fitbit APIs, HealthKit</td><td>Syncs</td><td>Free at the developer tier; rate-limited, not billed</td><td>An OAuth token; readings come back to the phone</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>
+  Three of these lines are the whole cost story: cloud inference, speech, and Plaid. The rest round
+  to zero at the scale of a personal app with a handful of friends on it.
+</p>
+
+<h3 id="s24-3"><span class="num">24.3</span><span>The token ledger</span></h3>
+
+<p>
+  The cloud tier is metered by one table and one function. <code>lifo_usage</code> holds one row per
+  user, per day, per kind; <code>lifo_debit</code> adds to it in a single statement. Both live in
+  <code>supabase/migrations/20260827090000_lifo_usage.sql</code>, with the <code>kind</code> column
+  added by <code>20260830090000_proactive_nudges.sql</code> when the nudge got its own allowance.
+</p>
+
+<pre><code>-- supabase/migrations/20260830090000_proactive_nudges.sql
+alter table public.lifo_usage
+  add column kind text not null default 'chat';
+alter table public.lifo_usage drop constraint lifo_usage_pkey;
+alter table public.lifo_usage add primary key (user_id, day, kind);
+
+create function public.lifo_debit(p_user uuid, p_tokens bigint, p_kind text default 'chat')
+returns bigint language sql security definer set search_path = public as $$
+  insert into lifo_usage (user_id, day, kind, tokens)
+  values (p_user, current_date, p_kind, p_tokens)
+  on conflict (user_id, day, kind)
+  do update set tokens = lifo_usage.tokens + excluded.tokens
+  returning tokens;
+$$;
+
+revoke execute on function public.lifo_debit from public, anon, authenticated;
+grant execute on function public.lifo_debit(uuid, bigint, text) to service_role;</code></pre>
+
+<p>
+  Three things in that SQL carry the cost model. The upsert-and-add is one statement, so two
+  concurrent turns cannot both read the same balance and each write their own. The table has RLS
+  enabled with zero policies, so no client can read or forge its own usage; the service role inside
+  an Edge Function is the only writer and reader. And the function's execute grant is revoked from
+  every client role, so even a definer function cannot be called from the app.
+</p>
+
+<p>
+  The caps themselves are constants in the function, not in the schema, so changing one is a deploy
+  rather than a migration:
+</p>
+
+<pre><code>// supabase/functions/_shared/lifo.ts
+export const DAILY_TOKEN_CAP = 150_000;
+/// The nudge's own daily allowance, separate from DAILY_TOKEN_CAP.
+export const NUDGE_TOKEN_CAP = 4_000;
+
+export const MAX_CHAT_MESSAGES = 64;
+export const MAX_CHAT_TOOLS = 16;
+export const MAX_CONTEXT_LENGTH = 32_000;</code></pre>
+
+<p>
+  The door in <code>lifo-agent/index.ts</code> reads the day's <code>chat</code> row before calling
+  the provider and refuses with <code>exhausted</code> at or above the cap. After the reply it
+  debits whatever the provider reported in <code>usage.total_tokens</code>, on every path: a normal
+  answer, a refusal, a tool call, and a streamed turn, where the debit runs in the stream's
+  <code>flush</code> because usage only arrives with the last chunk. The debit is deliberately
+  non-fatal: a failed write to the ledger costs a log line, never the person's answer.
+</p>
+
+<div class="note caution">
+  <b>This is a cap, not a reservation</b>
+  Revision D described a proxy that reserved the worst-case cost before calling and settled
+  afterwards under a check constraint. That is not what shipped. What shipped reads the balance,
+  calls, then adds what was billed. A turn that starts at 149,999 tokens will complete and push the
+  row past the cap; the next turn is refused. The overshoot is bounded by one turn, and one turn is
+  bounded by <code>MAX_CONTEXT_LENGTH</code> plus the model's own output limit, which is why the
+  three bounds above matter as much as the cap. The reservation design is worth revisiting before a
+  second person's turns and nudges share the same provider key.
+</div>
+
+<h4>What a turn costs in tokens</h4>
+
+<p>
+  Prices are not in the repository, on purpose: the model name is a string in
+  <code>_shared/lifo.ts</code> and the key is in the function environment, so a price change is
+  never a code change. The arithmetic that <em>is</em> in the code is the shape of a turn.
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Turn</th><th>Input, roughly</th><th>Output, roughly</th><th>Where the number comes from</th></tr></thead>
+<tbody>
+<tr><td>Coach chat, one question</td><td>SCOPE plus up to 32,000 characters of context plus the thread; about 8,000 to 10,000 tokens at the cap</td><td>A few hundred tokens; <code>verbosity: "low"</code> and <code>reasoning_effort: "low"</code></td><td><code>MAX_CONTEXT_LENGTH</code>, <code>TUNING</code></td></tr>
+<tr><td>Daily brief, answer, sector note</td><td>The task prompt plus the digest render; smaller than chat because there is no thread</td><td>One paragraph or one sentence, schema-constrained</td><td><code>TASKS</code> table</td></tr>
+<tr><td>Morning nudge</td><td>About 300 tokens</td><td>About 60 tokens</td><td>Comment in <code>_shared/nudge.ts</code></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>
+  At 150,000 chat tokens a day the cap allows something like fifteen to twenty full-context turns,
+  or far more short ones, per person per day. At the list price OpenAI published for
+  <code>gpt-5-mini</code> when this was written (a quarter of a dollar per million input tokens and
+  two dollars per million output, a figure to re-check rather than trust), a person who hit the cap
+  every single day of a month would cost about a dollar and a quarter in input and well under a
+  dollar in output. Nobody hits the cap every day. The nudge, at 4,000 tokens a day, cannot reach
+  a cent a month. The ceiling holds with room in it, and the cap is what makes that a statement
+  about the worst day rather than the average one.
+</p>
+
+<div class="note">
+  <b>Why low reasoning effort</b>
+  Medium effort is most of the wait and most of the output tokens. The thinking already happened
+  on the device when <code>MetricsDigest</code> and <code>ContextBundle</code> were built: the model
+  is handed sums, averages and deltas, not a year of rows to reason over. A question over a week
+  of a person's own numbers is not a reasoning problem. If the provider ever rejects the tuning
+  parameters, the door retries once without them, so a rejected parameter costs a slower answer,
+  never no answer.
+</div>
+
+<h3 id="s24-4"><span class="num">24.4</span><span>The lines that are not metered</span></h3>
+
+<h4>Speech</h4>
+
+<p>
+  ElevenLabs is the one paid service the app calls directly, and the one line the ledger does not
+  see. Speech to text runs on <code>scribe_v2</code> per recorded question; text to speech runs on
+  <code>eleven_flash_v2_5</code> and is billed per character. Three things bound it. Spoken replies
+  are off until a person turns them on (<code>AssistantVoice.enabledKey</code> defaults to nothing).
+  The text sent to be spoken is cleaned of markdown and cut at
+  <code>ElevenLabsVoiceClient.maxCharacters</code>, 1,200 characters, on a sentence boundary, which
+  is about ninety seconds of speech. And every spoken reply is also a chat turn, so it already sits
+  under the token cap.
+</p>
+
+<div class="note blocked">
+  <b>The key ships in the bundle</b>
+  <code>ELEVENLABS_API_KEY</code> is read from <code>Config/Secrets.xcconfig</code> into
+  <code>Config/App-Info.plist</code> as <code>ElevenLabsAPIKey</code>, and
+  <code>AppConfig.elevenLabsAPIKey</code> hands it to both clients. A signed bundle is extractable,
+  so a stranger with the .ipa has the key, and there is no per-user cap on it because there is no
+  server between the app and ElevenLabs. Today the only kill switch is rotating the key in the
+  ElevenLabs dashboard and shipping a build. Moving speech behind an Edge Function with its own
+  <code>kind</code> in <code>lifo_usage</code> is item 2 of the privacy plan in
+  <a href="#chA">Appendix A</a>, and it is a cost item as much as a privacy one.
+</div>
+
+<h4>Plaid</h4>
+
+<p>
+  Plaid bills per connected Item per month, and the app can never call Plaid except through the four
+  Edge Functions in <a href="#ch20">Chapter 20</a>. Two rules keep the count honest.
+  <code>plaid-exchange</code> removes the Item at Plaid if inserting its row fails, so nothing bills
+  for a bank the app cannot find again. And <code>plaid-disconnect</code> removes the Item at Plaid
+  before deleting the row, so a disconnected bank stops billing the month it is disconnected. The
+  environment is set by <code>PLAID_ENV</code>, which defaults to <code>sandbox</code>; sandbox
+  Items are free, which is how the whole bank path was built and tested before a real institution
+  was touched. The price per Item is Plaid's and is not in the repository.
+</p>
+
+<h4>Supabase</h4>
+
+<p>
+  Everything server-side runs on one Supabase project on the free tier. The rows it holds per user
+  are small: a profile, a few hundred note pages at most, friendships, messages, shared stats, and
+  one token row per connected provider. Health rows, transactions and sector scores never reach it.
+  The lines that would push a project off the free tier, in the order they would go, are Edge
+  Function invocations (every coach turn, every sync, every OTP), then storage bytes (avatars are
+  pinned to one JPEG per user at 512 points, so this is bounded by user count), then database size
+  (notes are the only unbounded table, and ink drawings above 1.5 MB stay on the device). At a
+  personal scale none of these is close.
+</p>
+
+<h4>Sign-in</h4>
+
+<p>
+  Email codes go through Resend's SMTP, configured in <code>config.toml</code> with a sixty second
+  <code>max_frequency</code>, and are free at this volume. SMS is the expensive channel and is
+  treated that way: phone sign-in is offered only for US and India numbers, the
+  <code>otp-start</code> guard refuses a resend inside 45 seconds and rate-limits by pumping prefix,
+  and the committed configuration short-circuits every test number before Twilio is called. The
+  Twilio price per verification is Twilio's and is not in the repository.
+</p>
+
+<h4>Free by construction</h4>
+
+<p>
+  APNs costs nothing and the nudge sends at most once per user per local day, claimed by the
+  primary key on <code>nudge_log</code> before the model is asked. The universal-link site is two
+  static files on Vercel's hobby tier. YouTube embeds are free and keyless; the catalog is a
+  read-only table of 122 verified ids seeded by a script that checks each one against the oEmbed
+  endpoint, which is also keyless. Apple's Foundation Models cost nothing per call, which is what
+  makes the on-device tier a real fallback rather than a cheaper cloud.
+</p>
+
+<h3 id="s24-5"><span class="num">24.5</span><span>Why the ceiling holds</span></h3>
+
+<p>
+  The obvious approach does not work:
+</p>
+
+<pre><code>read spend  ->  if under cap  ->  call  ->  add cost</code></pre>
+
+<p>
+  Two concurrent requests both read a balance under the cap and both proceed. The app's answer is
+  not to pretend this cannot happen but to make the damage one turn wide and every turn small.
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Property</th><th>How</th></tr></thead>
+<tbody>
+<tr><td>The add is atomic</td><td><code>lifo_debit</code> is one <code>insert ... on conflict do update</code>; two debits never lose each other</td></tr>
+<tr><td>The overshoot is bounded</td><td>One turn at most past the cap, and a turn is bounded by 64 messages, 16 tools and 32,000 context characters before the model is called</td></tr>
+<tr><td>Every path is metered</td><td>Refusals, tool calls and streamed turns all debit; an unmetered path would be a free one, and a looping client would find it</td></tr>
+<tr><td>Budgets do not bleed</td><td>Chat and nudge are separate kinds with separate caps; a heavy evening of questions cannot cost the next morning's nudge</td></tr>
+<tr><td>The client cannot read or write the ledger</td><td>RLS with no policies, execute revoked from every client role</td></tr>
+<tr><td>The prompt cannot be widened from the client</td><td>SCOPE is prepended on the server and a thread carrying its own system message is refused</td></tr>
+<tr><td>A missing key fails closed</td><td>No <code>OPENAI_API_KEY</code> means the nudge sends its fallback sentence and the coach falls back to the device; nothing is attempted at a guessed cost</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>
+  The nudge adds one more guard the chat does not need: the rule decides whether to send and the
+  model only phrases. Letting a model decide would bill every user every night and calibrate toward
+  yes. Rules are free and instant, and the fallback sentence in <code>_shared/nudge.ts</code> is
+  what gets delivered when the model is down or the 4,000-token allowance is spent, so an outage
+  costs nothing and still says something.
+</p>
+
+<h3 id="s24-6"><span class="num">24.6</span><span>What it costs today</span></h3>
+
+<p>
+  Measured usage does not exist yet: the app has one real user and a few TestFlight testers, and
+  the ledger is the only meter. What can be said honestly is the shape.
+</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th>Line</th><th>Today</th><th>At the ceiling</th></tr></thead>
+<tbody>
+<tr><td>Cloud inference</td><td>Cents per month; most days do not reach a tenth of the cap</td><td>About a dollar and a quarter if the 150,000 cap were hit every day, plus the nudge at under a cent</td></tr>
+<tr><td>Speech</td><td>Zero unless a person turns voice on</td><td>Unbounded per person today; the 1,200-character cut and the chat cap are the only limits</td></tr>
+<tr><td>Plaid</td><td>Sandbox, free</td><td>One Item per connected bank, Plaid's monthly rate each</td></tr>
+<tr><td>Everything else</td><td>Free tier</td><td>Free tier</td></tr>
+<tr><td>Allowance</td><td colspan="2">$2.00 per user per month</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>
+  The sensitive input is not the per-token price, which the ledger bounds, but the two lines the
+  ledger does not see: how many people turn voice on, and how many banks each connects. The first
+  is fixed by moving speech server-side under its own kind. The second is a product decision, and
+  the honest reading of the ceiling is that a person with three banks and voice on is over it, and
+  a person with one bank and voice off is nowhere near it.
+</p>
+
+<div class="note good">
+  <b>Why not the cheapest model</b>
+  Providers list models an order of magnitude cheaper than <code>gpt-5-mini</code>. They are not
+  better than Apple's on-device model at the questions this app gets, so escalating to one means
+  paying for a worse answer than the free tier already produced. The selection rule is not cheapest
+  available but cheapest model meaningfully more capable than the device, and the cap is what makes
+  that affordable. Changing the model is an edit to one string in <code>_shared/lifo.ts</code> and a
+  function deploy, not an App Store release.
+</div>
+
+<h3 id="s24-7"><span class="num">24.7</span><span>Study notes</span></h3>
+
+<div class="study">
+<h4>Read in this order</h4>
+<ol>
+  <li><code>supabase/migrations/20260827090000_lifo_usage.sql</code>: the ledger and why it has no policies.</li>
+  <li><code>supabase/migrations/20260830090000_proactive_nudges.sql</code>: the <code>kind</code> column and the rewritten debit.</li>
+  <li><code>supabase/functions/_shared/lifo.ts</code>: the caps, the bounds, the task table, the tuning and its retry.</li>
+  <li><code>supabase/functions/lifo-agent/index.ts</code>: the balance read, the call, the debit on every path.</li>
+  <li><code>supabase/functions/lifo-nudge/index.ts</code> and <code>_shared/nudge.ts</code>: rules decide, the model phrases, the fallback sentence.</li>
+  <li><code>LIfeOS/Features/Coach/Model/ElevenLabsVoiceClient.swift</code>: the character cap and the cleaning before send.</li>
+  <li><code>supabase/functions/plaid-exchange/index.ts</code> and <code>plaid-disconnect/index.ts</code>: the two rules that keep the Item count honest.</li>
+</ol>
+<p class="q">Why are the caps constants in the function rather than a check constraint in the schema?</p>
+<p class="a">Changing a cap is then a deploy, not a migration, and the ledger stays a plain count that any future cap can read.</p>
+<p class="q">What stops a client from asking for the same answer in a loop for free?</p>
+<p class="a">Every path debits, including refusals and streamed turns, and the ledger is unreadable and unwritable from the client.</p>
+<p class="q">By how much can a person exceed the daily chat cap?</p>
+<p class="a">By one turn, because the check happens before the call and the debit after; the turn itself is bounded by the three request limits.</p>
+<p class="q">Which paid line is not metered at all today, and what bounds it?</p>
+<p class="a">ElevenLabs speech; voice off by default, a 1,200-character cut, and the fact that every spoken reply is also a capped chat turn.</p>
+<p class="q">Why does the nudge have its own kind and cap?</p>
+<p class="a">So a heavy chat evening cannot spend the next morning's nudge, and so the nudge, at 4,000 tokens, can never cost more than a fraction of a cent.</p>
+</div>
+
 </section>

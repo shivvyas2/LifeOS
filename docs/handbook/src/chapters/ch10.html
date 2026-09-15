@@ -1,10 +1,697 @@
-<section class="chapter" id="ch10" data-hue="notes">
-<p class="chapter-kicker">Chapter 10</p>
-<h2><span class="num">10</span><span>Stub ch10</span></h2>
-<p class="lede">Stub lede for ch10 &amp; friends.</p>
+<section class="chapter" id="ch10" data-hue="library">
+<p class="chapter-kicker">Chapter ten</p>
+<h2><span class="num">10</span><span>The workout library</span></h2>
+
+<p class="lede">
+  A curated table of 122 verified YouTube workouts, a pure planner that turns preferences, today's
+  battery and the week's splits into one session, a library that filters the catalog to it and
+  says every time it had to widen, and a player that puts the glass rings over the video wherever
+  the person drags them.
+</p>
+
 <h3 id="s10-1"><span class="num">10.1</span><span>Intent</span></h3>
-<p>Stub text with a <a href="#ch01">link</a> and <code>&lt;code&gt;</code>.</p>
-<figure><svg class="diagram" viewBox="0 0 400 100" role="img" aria-label="stub"><defs><marker id="ch10a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker></defs><rect class="box" x="10" y="10" width="100" height="40" rx="8"/><text class="lbl" x="60" y="35" text-anchor="middle">A</text><path class="flow" d="M110 30 L 200 30" marker-end="url(#ch10a)"/></svg><figcaption>Stub.</figcaption></figure>
-<h3 id="s10-2"><span class="num">10.2</span><span>Study notes</span></h3>
-<div class="study"><h4>Read in this order</h4><ol><li>one</li></ol><p class="q">Q?</p><p class="a">A.</p></div>
+
+<p>
+  Almanac could show what the body did and how recovered it was, but never suggested a session and
+  had no way to follow one. The request was plain: pull up workouts from YouTube matching what the
+  person wants to do (strength, then push, pull, legs, arms, chest), coordinated with how much they
+  can push today, with the live HUD on the video. Three constraints shaped everything that
+  follows.
+</p>
+
+<ul>
+  <li><strong>The app ships free.</strong> No runtime AI calls, no per-user YouTube API quota. The catalog is a table the service role writes; the app reads it with the person's own token and caches it.</li>
+  <li><strong>YouTube's terms.</strong> Videos play in YouTube's own player and nothing may obscure its controls or branding. The rings default to the top leading corner, the region farthest from the control bar, and a drop onto that bar is moved off it.</li>
+  <li><strong>A video the catalog cannot verify never ships.</strong> Every id is checked against YouTube's keyless oEmbed endpoint at seed time, and the seed migration is generated, never hand-edited.</li>
+</ul>
+
+<div class="prfaq">
+  <p class="prfaq-kicker">Working backwards</p>
+  <p class="release">
+    Open Health, Fitness, "Plan today's workout". The Today card already knows: "Pull day. You did
+    push on Saturday, so today is pull. Battery 83% · up to zone 5. 30 min." Below it a rail of
+    chips (Saved, then the splits with Pull already lit, then three lengths, then the equipment you
+    said you own) and a list of videos with real thumbnails, the channel, the minutes, three
+    intensity dots and the split. Search by title, channel or muscle. Tap the heart to keep one;
+    hold a row to schedule it for a day, and a "Tue 15" chip appears on it. Tap a row and the video
+    opens in YouTube's player; tap Start and the rings float over the picture. Drag them wherever
+    you like, tap the corner button or turn the phone for full screen, and the same video keeps
+    playing.
+  </p>
+  <p class="faq-q">Why not let the AI plan the workout?</p>
+  <p class="faq-a">
+    Cost and honesty. A pure function from four inputs is free, deterministic, and every rule in it
+    is a test. The reason it gives ("You did push on Saturday, so today is pull.") is the rule
+    itself, in words.
+  </p>
+  <p class="faq-q">What happens offline?</p>
+  <p class="faq-a">
+    The cache is the source the screen renders; the network only ever adds to it. A refresh that
+    fails leaves the last catalog on screen and says "Showing the last catalog we downloaded." An
+    empty cache with no network says "The library needs a connection the first time." and never a
+    fake list. Thumbnails come from YouTube's image host and fall back to a deliberate tile.
+  </p>
+  <p class="faq-q">Why does the Saved list ignore today's plan?</p>
+  <p class="faq-a">
+    A heart is a decision the person already made. Intersecting saves with the plan hid a push video
+    saved today from tomorrow's pull-day Saved list, while its heart was still filled in the full
+    list. The Saved chip is a different list, not a narrower one: the saved rows, newest mark first,
+    narrowed only by the search.
+  </p>
+</div>
+
+<h3 id="s10-2"><span class="num">10.2</span><span>Files and folders</span></h3>
+
+<pre class="tree">Features/Workouts/
+├── Model/
+│   └── VideoWorkoutLayout.swift              overlay inset, control strip, embed URL, id pattern
+├── View/
+│   ├── WorkoutLibraryScreen.swift            Today card, chip rail, rows, schedule sheet
+│   ├── WorkoutVideoRow.swift                 thumbnail, title, channel · minutes, dots, chips, heart
+│   ├── VideoWorkoutScreen.swift              portrait and full screen, rings over the player
+│   ├── DraggableHUD.swift                    drag, settle, remember per placement
+│   ├── YouTubePlayerView.swift               WKWebView host and the wrapper page
+│   └── TrainingPreferencesSheet.swift        goal, equipment, minutes
+└── ViewModel/
+    └── WorkoutLibraryViewModel.swift         cache, refresh, plan, filters, bookmarks
+
+App/
+└── OrientationLock.swift                     portrait by default; this screen asks for more
+
+LifeOSKit/Sources/Persistence/
+├── CatalogVideo.swift                        the wire row, the cached @Model, CatalogStore.upsert
+├── WorkoutBookmark.swift                     saved · scheduledFor, one row per video
+├── UserGoals.swift                           trainingGoal, equipmentRaw, sessionMinutes
+└── SourceRecords.swift                       WorkoutRecord.split and .videoID
+
+LifeOSKit/Sources/Sectors/
+├── WorkoutPlanner.swift                      the four rules and the rotation
+├── WorkoutLibraryFilter.swift                the plan's filter, the widening, the saved list
+└── CatalogRefresh.swift                      when an empty answer may replace the cache
+
+LifeOSKit/Sources/Integrations/
+├── WorkoutCatalogClient.swift                one PostgREST select, read only
+└── CapacityInputs.swift                      shared with the recorder (Chapter 8)
+
+LifeOSKit/Sources/AppSurfaces/
+└── HUDPlacement.swift                        anchors, origins, settle
+
+supabase/migrations/
+├── 20260915090000_workout_videos.sql         the table, RLS, revoke then grant select
+└── 20260915090100_workout_videos_seed.sql    generated: 122 upserts and one trailing delete
+
+scripts/catalog/
+├── catalog.json                              the curated rows; the only file a human edits
+├── verify.ts                                 oEmbed check per id, writes the seed
+├── verify_lib.ts                             parse, match, SQL
+└── verify_lib_test.ts                        7 Deno tests</pre>
+
+<h3 id="s10-3"><span class="num">10.3</span><span>Model</span></h3>
+
+<h4>The catalog</h4>
+
+<pre><code>-- supabase/migrations/20260915090000_workout_videos.sql
+create table public.workout_videos (
+  youtube_id   text primary key,
+  title        text not null,
+  channel      text not null,
+  duration_s   integer not null check (duration_s &gt; 0),
+  goal         text[] not null,        -- strength | hypertrophy | endurance | mobility
+  split        text not null,          -- push | pull | legs | upper | lower | full | core | arms | chest | back | shoulders | mobility | cardio
+  muscles      text[] not null default '{}',
+  equipment    text[] not null default '{}', -- none | dumbbells | barbell | bands | machine | kettlebell
+  intensity    smallint not null check (intensity between 1 and 3),
+  verified_at  timestamptz not null,
+  updated_at   timestamptz not null default now()
+);
+alter table public.workout_videos enable row level security;
+revoke all on public.workout_videos from anon, authenticated;
+grant select on public.workout_videos to authenticated;
+create policy "catalog is readable when signed in" on public.workout_videos
+  for select to authenticated using (true);</code></pre>
+
+<p>
+  Enums are text, as the notes table does, so a new split lands as data. The <code>revoke all</code>
+  is not decoration: Supabase grants <code>all</code> on a new public table to <code>anon</code> and
+  <code>authenticated</code> by default, so without it the sentence "signed-in users get read-only
+  access" would be untrue at the grant layer. It also takes away TRUNCATE, which bypasses row-level
+  security. The final review added it, matching the social groups table.
+</p>
+
+<p>
+  The seed today holds 122 rows: 22 cardio, 16 upper, 16 mobility, 15 legs, 8 each of push, pull
+  and full, 7 lower, 5 core, 5 arms, 4 each of chest, back and shoulders. Seventy-five come from
+  FitnessBlender, thirteen each from Sydney Cummings and Heather Robertson, five from Caroline
+  Girvan, and the rest from a handful of others. Intensity skews moderate: 71 at 2, 40 at 1, 11 at
+  3. Thumbnails are not stored; the app derives <code>https://i.ytimg.com/vi/&lt;id&gt;/hqdefault.jpg</code>.
+</p>
+
+<h4>The cache</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/CatalogVideo.swift
+/// A cached catalog row. The server is the source of truth; a refresh
+/// replaces the set, so a video pulled from the catalog disappears here.
+@Model
+public final class CatalogVideo {
+    #Unique&lt;CatalogVideo&gt;([\.youtubeID])
+    public var youtubeID: String
+    public var title: String
+    public var channel: String
+    public var durationS: Int
+    public var goal: [String]
+    public var split: String
+    public var muscles: [String]
+    public var equipment: [String]
+    public var intensity: Int
+    public var verifiedAt: Date
+    public var cachedAt: Date
+    public var durationMinutes: Int { Int((Double(durationS) / 60).rounded()) }
+}</code></pre>
+
+<p>
+  <code>CatalogStore.upsert</code> updates matches, inserts new rows and deletes absent ones, so the
+  cache mirrors the server after every successful refresh. It builds its lookup with
+  <code>uniquingKeysWith</code> rather than <code>uniqueKeysWithValues</code>: the primary key makes
+  a duplicate id impossible from the real table, and a trap on a malformed response is a crash
+  where keeping the last row is not.
+</p>
+
+<h4>The bookmark</h4>
+
+<pre><code>// LifeOSKit/Sources/Persistence/WorkoutBookmark.swift
+/// A person's mark on a catalog video: saved for later, scheduled for a day,
+/// or both. One row per video id; absent means neither.
+@Model
+public final class WorkoutBookmark {
+    #Unique&lt;WorkoutBookmark&gt;([\.youtubeID])
+    public var youtubeID: String
+    public var saved: Bool
+    /// A calendar day start, never a timestamp.
+    public var scheduledFor: Date?
+    public var updatedAt: Date
+}</code></pre>
+
+<p>
+  <code>BookmarkStore.toggleSaved</code> and <code>schedule</code> delete the row when it ends up
+  neither saved nor scheduled, so the table never accumulates empty marks. Both read the row's
+  fields before a possible delete, because a deleted model is not a thing to ask questions of.
+  <code>schedule</code> normalises to <code>startOfDay</code> with the caller's calendar so a
+  picker's time of day never decides which day a workout lands on.
+</p>
+
+<h4>Preferences and the record</h4>
+
+<p>
+  <code>UserGoals</code> gained three columns: <code>trainingGoal: String?</code>,
+  <code>equipmentRaw: [String] = []</code>, <code>sessionMinutes: Int?</code>.
+  <code>WorkoutRecord</code> gained <code>split: String?</code> and <code>videoID: String?</code>,
+  written when a session started from a video and nil for freeform sessions, and
+  <code>setsData</code> from Chapter 9. Every one is optional or defaulted, for the reason in
+  <a href="#s10-8">10.8</a>.
+</p>
+
+<h3 id="s10-4"><span class="num">10.4</span><span>ViewModel</span></h3>
+
+<h4>The planner</h4>
+
+<pre><code>// LifeOSKit/Sources/Sectors/WorkoutPlanner.swift
+public static func plan(goal: String?, sessionMinutes: Int?, batteryPercent: Int?,
+                        recentSplits: [(date: Date, split: String)], now: Date,
+                        calendar: Calendar = .current) -&gt; TrainingPlan {
+    let minutes = sessionMinutes ?? 30
+    let recent = recentSplits.filter { $0.date &gt;= weekAgo &amp;&amp; $0.date &lt;= now }.sorted { $0.date &gt; $1.date }
+    let cap: Int = { switch batteryPercent {
+        case .some(let b) where b &gt;= 67: return 3
+        case .some(let b) where b &gt;= 34: return 2
+        case .some: return 1
+        case .none: return 2 } }()
+
+    if (batteryPercent ?? 100) &lt;= 33 || (batteryPercent == nil &amp;&amp; hardYesterday) {
+        return TrainingPlan(split: "mobility", minutes: minutes, maxIntensity: 1,
+                            reason: "Recovery is low today, so this is a mobility day.")
+    }
+    switch goal {
+    case "mobility": ...
+    case "endurance": return TrainingPlan(split: "cardio", ..., reason: "Endurance today, paced by your battery.")
+    case "strength", "hypertrophy":
+        if let last = recent.first(where: { rotation.contains($0.split) }) {
+            let next = rotation[(rotation.firstIndex(of: last.split)! + 1) % rotation.count]
+            return TrainingPlan(split: next, ..., reason: "You did \(last.split) on \(weekday), so today is \(next).")
+        }
+        return TrainingPlan(split: "push", ..., reason: "First session this week: push.")
+    default:
+        return TrainingPlan(split: "full", ..., reason: "Set a goal for a plan built around you.")
+    }
+}</code></pre>
+
+<p>
+  Four rules in order: a red or unknown-after-a-hard-day battery forces mobility at intensity 1; a
+  mobility or endurance goal picks its own split, capped by battery; strength and hypertrophy
+  rotate push, pull, legs off the most recent of those three within seven days; no goal means full
+  body. The weekday in the reason is looked up on an <code>en_US_POSIX</code> copy of the calendar,
+  because some process environments resolve the locale to abbreviated names and the reason string
+  should be deterministic. The battery cap on intensity is the same band table as the effort
+  ceiling in Chapter 8, so "up to zone 4" on the Today card and the yellow ring on the HUD are the
+  same fact.
+</p>
+
+<h4>The filter</h4>
+
+<pre><code>// LifeOSKit/Sources/Sectors/WorkoutLibraryFilter.swift
+public static func apply(videos: [LibraryVideo], plan: TrainingPlan, goal: String?, split: String?,
+                         band: DurationBand?, equipment: Set&lt;String&gt;, query: String = "") -&gt; (rows: [LibraryVideo], note: String?) {
+    let chosenSplit = split ?? plan.split
+    // The intensity cap and the equipment the person owns are never
+    // widened away: a battery ceiling and a kit list are facts, not
+    // preferences to relax when the list comes back short.
+    let base = videos.filter { video in
+        video.intensity &lt;= plan.maxIntensity
+            &amp;&amp; (equipment.isEmpty || !Set(video.equipment).isDisjoint(with: equipment))
+            &amp;&amp; (normalizedQuery.isEmpty || matches(video, query: normalizedQuery))
+    }
+    var note: String?
+    var result = base.filter { $0.split == chosenSplit &amp;&amp; inBand($0) }
+    if result.isEmpty {
+        result = base.filter { $0.split == chosenSplit }
+        if !result.isEmpty { note = "Widened to any length." }
+    }
+    // Only when the split is the plan's own. A chip the person tapped is
+    // an instruction, and answering it with another split while the chip
+    // still reads selected would be the screen contradicting itself.
+    if result.isEmpty, split == nil {
+        result = base.filter { video in goal.map { video.goal.contains($0) } ?? true }
+        if !result.isEmpty { note = "Widened to any split for your goal." }
+    }
+    let rows = result.sorted { closeness to plan.minutes, then title }
+    return (rows, note)
+}</code></pre>
+
+<p>
+  The plan first: its split, its intensity cap, its length give or take fifteen minutes. An empty
+  result widens one step at a time and says which step it took, so a short list is never a
+  mystery. Three things never widen: the intensity cap, the equipment, and the search query. The
+  rows are ordered by closeness to the requested length, then title, so a 30-minute plan lists the
+  28-minute video before the 45.
+</p>
+
+<h4>The view model</h4>
+
+<pre><code>// LIfeOS/Features/Workouts/ViewModel/WorkoutLibraryViewModel.swift
+func load() {
+    guard let context else { return }
+    let store = MetricsStore(context: context, calendar: calendar)
+    let today = now()
+    goals = try? store.goals()
+    videos = (try? CatalogStore.all(context: context)) ?? []
+    loadBookmarks()
+    capacity = CapacityInputs.todayCapacity(store: store, now: today, calendar: calendar)
+
+    let weekAgo = calendar.date(byAdding: .day, value: -7, to: today) ?? today
+    let recent: [(date: Date, split: String)] = ((try? store.workouts(from: weekAgo, to: today)) ?? [])
+        .compactMap { record in record.split.map { (date: record.start, split: $0) } }
+
+    plan = WorkoutPlanner.plan(goal: goals?.trainingGoal, sessionMinutes: goals?.sessionMinutes,
+                               batteryPercent: capacity?.percent, recentSplits: recent,
+                               now: today, calendar: calendar)
+    applyFilters()
+}</code></pre>
+
+<p>
+  Everything the screen needs is read in one pass: preferences, the cache, today's battery, and the
+  week of splits the rotation turns on. The clock and the calendar are injected so tests can fix a
+  day. Every filter property (<code>splitFilter</code>, <code>durationBand</code>,
+  <code>equipmentFilter</code>, <code>query</code>, <code>savedOnly</code>) re-runs
+  <code>applyFilters()</code> on set, which maps the cached models into <code>LibraryVideo</code>
+  values, calls the pure filter, and maps the chosen ids back.
+</p>
+
+<pre><code>// LIfeOS/Features/Workouts/ViewModel/WorkoutLibraryViewModel.swift
+func refreshIfDue(force: Bool = false) async {
+    guard let context, !isRefreshing else { return }
+    let newest = videos.map(\.cachedAt).max()
+    let due = force || newest.map { now().timeIntervalSince($0) &gt; Self.refreshInterval } ?? true
+    guard due else { return }
+    guard let baseURL = AppConfig.supabaseURL, let anonKey = AppConfig.supabaseAnonKey else { noteOffline(); return }
+    guard let token = sessions.load()?.accessToken else { noteSignedOut(); return }
+    isRefreshing = true
+    defer { isRefreshing = false }
+    do {
+        let rows = try await WorkoutCatalogClient(baseURL: baseURL, anonKey: anonKey).videos(accessToken: token)
+        guard CatalogRefresh.shouldReplace(cacheCount: videos.count, incoming: rows.count) else {
+            refreshNotice = "The catalog came back empty. Showing the last one we downloaded."
+            applyFilters()
+            return
+        }
+        try CatalogStore.upsert(rows, context: context, now: now())
+        refreshNotice = nil
+        load()
+    } catch {
+        noteOffline()
+    }
+}</code></pre>
+
+<p>
+  The refresh runs when the newest cached row is more than a day old, or on pull to refresh. A
+  signed-out person is told to sign in rather than to find signal, because the catalog is read with
+  their own token. And a 200 with no rows is refused by <code>CatalogRefresh.shouldReplace</code>:
+  an unseeded table, a policy that stopped matching, or a range quirk all look like an empty array
+  at the client, and replacing a full cache with that would leave a person who had the whole
+  library a second ago with nothing.
+</p>
+
+<p>
+  Bookmarks are refetched after every change rather than mutated in place, because
+  <code>toggleSaved</code> and <code>schedule</code> can delete a row, and a deleted model left in
+  the dictionary would be read by the next row that asks. <code>pruneStaleSchedules</code> runs on
+  every load and clears any day that has passed, keeping the save, so a row never carries a stale
+  chip and the schedule sheet never opens on a day its own picker will not accept.
+</p>
+
+<h3 id="s10-5"><span class="num">10.5</span><span>View</span></h3>
+
+<h4>The library</h4>
+
+<p>
+  <code>WorkoutLibraryScreen</code> is pushed on whichever stack the person is already on (the
+  Fitness segment's training card, or Begin Activity's "Follow a video"), so the way back is the
+  way they came. It sits on a <code>GradientCanvas</code> in the activity hue with the Today card, a
+  status line when the list is non-empty, the chip rail, then the rows or an empty state. The
+  search field is in the navigation bar drawer, always visible, covering no row. The preferences
+  sheet is raised once, decided in <code>attach</code> rather than in every <code>load</code>,
+  because deciding it in <code>load</code> put the sheet back up the moment a Health sync ran.
+</p>
+
+<p>
+  Rows are cards in a <code>LazyVStack</code>, so scheduling is a context menu rather than a swipe:
+  only a <code>List</code> row can be swiped. The heart is a sibling of the opening button, never
+  inside it, because SwiftUI gives a button nested in a button no defined semantics and saving a
+  video would also open it. The channel and the minutes are two <code>Text</code>s, not one: a long
+  channel name used to push the minutes off the end of the line, and the minutes are the number a
+  person scans for. The channel truncates; the minutes never do. A scheduled row shows its day chip
+  in place of the equipment chips, because four chips beside a thumbnail truncate to "T…" and
+  "Dum…".
+</p>
+
+<h4>The player</h4>
+
+<pre><code>// LIfeOS/Features/Workouts/View/YouTubePlayerView.swift
+/// The web view behind the player, owned by the screen rather than the view.
+///
+/// Portrait, full screen and landscape are different layouts of the same
+/// player, and SwiftUI gives a view in a different branch a different
+/// identity, which would mean a new web view and a video starting over every
+/// time the phone turned or the full screen button was tapped.
+@MainActor
+final class YouTubePlayerHost {
+    let webView: WKWebView
+    fileprivate var loaded: String?
+    init() {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        webView = WKWebView(frame: .zero, configuration: configuration)
+    }
+}</code></pre>
+
+<p>
+  <code>VideoWorkoutScreen</code> holds one <code>YouTubePlayerHost</code> in its state and shows the
+  same web view in three layouts. Portrait: the player at 16:9 with the rings floating over it and
+  a full-screen button in the corner; "Open in YouTube" (always present, not only after a failure,
+  because a video the owner barred from embedding says so inside the player where nothing this
+  screen can see reaches); the title, channel, minutes and chips; then either "Start this workout"
+  or the elapsed clock, the rep buttons and <code>ActivityControls</code>. Full screen, entered by
+  the button or by turning the phone: black, the player letterboxed or filling, and one overlay
+  holding the rings, a Start pill before the session, and two glass buttons (session controls in a
+  sheet, and exit).
+</p>
+
+<pre><code>// LIfeOS/Features/Workouts/Model/VideoWorkoutLayout.swift
+static let embedOrigin = "https://www.youtube-nocookie.com"
+static let idPattern = /^[A-Za-z0-9_-]{11}$/
+
+static func embedURL(youtubeID: String) -&gt; URL? {
+    guard youtubeID.wholeMatch(of: idPattern) != nil else { return nil }
+    // `fs=0` removes YouTube's own full screen button. That button hands
+    // the video to a system layer above the whole app, where no HUD can
+    // be drawn; the screen offers its own full screen instead.
+    return URL(string: "https://www.youtube-nocookie.com/embed/\(youtubeID)"
+        + "?origin=\(embedOrigin)&amp;enablejsapi=1&amp;playsinline=1&amp;rel=0&amp;modestbranding=1&amp;fs=0")
+}</code></pre>
+
+<p>
+  The id pattern is checked before anything is interpolated into a URL or the wrapper page, and a
+  row that fails shows "This video will not play here." There is no JavaScript bridge: the person
+  taps YouTube's play button, the one gesture the embed needs, and the recorder times the session
+  rather than trying to follow the video's clock.
+</p>
+
+<h4>The draggable HUD</h4>
+
+<pre><code>// LifeOSKit/Sources/AppSurfaces/HUDPlacement.swift
+/// (0, 0) is the top leading corner inside the inset; (1, 1) the bottom
+/// trailing one.
+public struct Anchor: Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+    public static let topLeading = Anchor(x: 0, y: 0)
+    public var stored: String { "\(x),\(y)" }
+}
+
+/// Where a dropped HUD settles: inside the container, and off the strip
+/// it is not allowed to cover, on whichever side of it is nearer and fits.
+public static func settle(origin: CGPoint, hud: CGSize, container: CGSize, inset: CGFloat,
+                          avoiding strip: CGRect?) -&gt; CGPoint</code></pre>
+
+<p>
+  A position is kept as an anchor, a fraction of the free travel in each axis, rather than a point.
+  The same anchor puts the rings in the same relative place over a small player in portrait, a
+  letterboxed one in full screen and the whole screen in landscape, and it stays meaningful when
+  the HUD collapses to the bar. <code>DraggableHUD</code> stores one anchor per placement
+  ("compact", "fullscreen", "landscape") in <code>AppStorage</code>. The rings follow the finger
+  freely while dragging; the settle rule is applied once, on release, so it reads as a snap rather
+  than a wall. The strip it avoids is the bottom 56 points of the player, where YouTube draws its
+  control bar and logo. Four accessibility actions move it to each corner. It renders at zero
+  opacity until measured, because a HUD drawn at the inset for one frame and then jumping to its
+  saved spot reads as a glitch on every appearance.
+</p>
+
+<h4>Orientation</h4>
+
+<pre><code>// LIfeOS/App/OrientationLock.swift
+@MainActor
+enum OrientationLock {
+    static let standard: UIInterfaceOrientationMask =
+        UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
+    private(set) static var mask = standard
+
+    static func allow(_ allowed: UIInterfaceOrientationMask) { ... }
+
+    /// Back to the default, and back upright: a phone still held sideways
+    /// would otherwise stay in a landscape the next screen cannot draw.
+    static func release() {
+        allow(standard)
+        guard standard == .portrait else { return }
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+        }
+    }
+}</code></pre>
+
+<p>
+  The iPhone target now lists landscape in its build settings so the player can turn, but almost
+  nothing else in the app is laid out for it. So the app delegate answers every orientation query
+  from <code>OrientationLock.mask</code>, which defaults to portrait on a phone; the player screen
+  asks for <code>.allButUpsideDown</code> in <code>onAppear</code> and hands it back in
+  <code>onDisappear</code>, forcing the scene upright so the next screen is not asked to draw a
+  landscape it has no layout for. iPad keeps every orientation, as it always has.
+</p>
+
+<h3 id="s10-6"><span class="num">10.6</span><span>How it works</span></h3>
+
+<figure>
+<svg class="diagram" viewBox="0 0 860 380" role="img" aria-label="catalog.json is verified by oEmbed into a seed migration; Supabase serves the table read-only; the app caches it in SwiftData; the planner and filter turn preferences, battery and recent splits into today's list; the player starts the recorder and stamps the record.">
+  <defs>
+    <marker id="ch10a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head" points="0,0 10,5 0,10"/></marker>
+    <marker id="ch10b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><polygon class="head-hot" points="0,0 10,5 0,10"/></marker>
+  </defs>
+  <text class="lbl-sm" x="20" y="24">CURATION</text>
+  <text class="lbl-sm" x="320" y="24">DEVICE</text>
+  <text class="lbl-sm" x="640" y="24">SESSION</text>
+
+  <rect class="box" x="20" y="44" width="160" height="40" rx="8"/>
+  <text class="lbl" x="100" y="69" text-anchor="middle">catalog.json</text>
+  <rect class="box-alt" x="20" y="104" width="160" height="56" rx="8"/>
+  <text class="lbl" x="100" y="127" text-anchor="middle">verify.ts</text>
+  <text class="lbl-sm" x="100" y="147" text-anchor="middle">oEmbed · 122 of 122</text>
+  <rect class="box" x="20" y="184" width="160" height="56" rx="8"/>
+  <text class="lbl" x="100" y="207" text-anchor="middle">seed migration</text>
+  <text class="lbl-sm" x="100" y="227" text-anchor="middle">upserts + trailing delete</text>
+  <rect class="box" x="20" y="270" width="160" height="56" rx="8"/>
+  <text class="lbl" x="100" y="293" text-anchor="middle">workout_videos</text>
+  <text class="lbl-sm" x="100" y="313" text-anchor="middle">RLS · select only</text>
+
+  <rect class="box" x="320" y="44" width="200" height="56" rx="8"/>
+  <text class="lbl" x="420" y="67" text-anchor="middle">WorkoutCatalogClient</text>
+  <text class="lbl-sm" x="420" y="87" text-anchor="middle">daily or pull to refresh</text>
+  <rect class="box-hot" x="320" y="124" width="200" height="56" rx="10"/>
+  <text class="lbl" x="420" y="147" text-anchor="middle">CatalogVideo cache</text>
+  <text class="lbl-hot" x="420" y="167" text-anchor="middle">the source the screen renders</text>
+  <rect class="box-alt" x="320" y="204" width="200" height="56" rx="8"/>
+  <text class="lbl" x="420" y="227" text-anchor="middle">WorkoutPlanner</text>
+  <text class="lbl-sm" x="420" y="247" text-anchor="middle">goal · battery · recent splits</text>
+  <rect class="box-alt" x="320" y="284" width="200" height="56" rx="8"/>
+  <text class="lbl" x="420" y="307" text-anchor="middle">WorkoutLibraryFilter</text>
+  <text class="lbl-sm" x="420" y="327" text-anchor="middle">widen, and say so</text>
+
+  <rect class="box" x="640" y="124" width="200" height="56" rx="8"/>
+  <text class="lbl" x="740" y="147" text-anchor="middle">VideoWorkoutScreen</text>
+  <text class="lbl-sm" x="740" y="167" text-anchor="middle">one WKWebView, three layouts</text>
+  <rect class="box-hot" x="640" y="204" width="200" height="56" rx="10"/>
+  <text class="lbl" x="740" y="227" text-anchor="middle">ActivityRecorder</text>
+  <text class="lbl-hot" x="740" y="247" text-anchor="middle">start(following:)</text>
+  <rect class="box" x="640" y="284" width="200" height="56" rx="8"/>
+  <text class="lbl" x="740" y="307" text-anchor="middle">WorkoutRecord</text>
+  <text class="lbl-sm" x="740" y="327" text-anchor="middle">split · videoID · sets</text>
+
+  <path class="flow" d="M100 84 L 100 98" marker-end="url(#ch10a)"/>
+  <path class="flow" d="M100 160 L 100 178" marker-end="url(#ch10a)"/>
+  <path class="flow" d="M100 240 L 100 264" marker-end="url(#ch10a)"/>
+  <text class="lbl-sm" x="110" y="256">supabase db push</text>
+  <path class="flow" d="M180 298 L 250 298 L 250 72 L 314 72" marker-end="url(#ch10a)"/>
+  <path class="flow-hot" d="M420 100 L 420 118" marker-end="url(#ch10b)"/>
+  <path class="flow" d="M420 180 L 420 198" marker-end="url(#ch10a)"/>
+  <path class="flow" d="M420 260 L 420 278" marker-end="url(#ch10a)"/>
+  <path class="flow" d="M520 312 L 580 312 L 580 152 L 634 152" marker-end="url(#ch10a)"/>
+  <text class="lbl-sm" x="528" y="300">tap a row</text>
+  <path class="flow-hot" d="M740 180 L 740 198" marker-end="url(#ch10b)"/>
+  <path class="flow" d="M740 260 L 740 278" marker-end="url(#ch10a)"/>
+  <path class="flow-dash" d="M640 312 L 590 312 L 590 232 L 526 232" marker-end="url(#ch10a)"/>
+  <text class="lbl-sm" x="560" y="360">last 7 days of splits feed the rotation</text>
+</svg>
+<figcaption>
+  Curation is a script and a migration; the device caches, plans and filters; the session is the
+  Chapter 8 recorder with a video stamped on it. The saved record feeds tomorrow's plan.
+</figcaption>
+</figure>
+
+<h4>Step by step: from curation to a saved session</h4>
+<ol>
+  <li>A human edits <code>scripts/catalog/catalog.json</code>. <code>verify.ts</code> parses it (ids match the eleven-character pattern, goals and splits and equipment are from the fixed vocabularies, intensity is 1 to 3, no duplicate ids), then calls YouTube's oEmbed endpoint for every id and fails the run if any returns an error, a title that does not start with the row's title, a channel that differs beyond case and spacing, or a duration more than 10 percent off a length stated in the title.</li>
+  <li>It writes the seed: one upsert per row and one trailing <code>delete ... where youtube_id not in (...)</code> naming every verified id, so a seed run is a full sync and a row dropped from the JSON leaves the server on the next push. An empty catalog is refused before a single network call, because the trailing delete would make it a migration that wipes the table. After the first push the file name is frozen, so later passes use <code>--out</code> to write a new timestamped migration.</li>
+  <li>The library opens. <code>attach</code> loads the cache, the preferences, today's capacity and the week's splits, plans, filters, and raises the preferences sheet once if no goal is set. <code>.task</code> calls <code>refreshIfDue()</code>.</li>
+  <li>If the newest cached row is older than a day, one PostgREST select runs with the person's token. Rows replace the cache unless the answer is empty and the cache is not.</li>
+  <li>Tapping a row pushes <code>VideoWorkoutScreen</code>. The web view loads a wrapper page, based at the privacy-enhanced host, containing an iframe of the embed URL.</li>
+  <li>Start maps the split to an activity (cardio to <code>.other</code>, mobility to <code>.yoga</code>, everything else to <code>.strength</code>) and calls <code>recorder.start(following:)</code> with the video's id, split, title and channel. The video belongs to <em>this</em> start: a start that bails leaves nothing behind for the next freeform walk.</li>
+  <li>The rings appear over the player through <code>DraggableHUD</code>. The session runs exactly as in Chapters 8 and 9.</li>
+  <li>Finish writes the record with <code>videoID</code>, <code>split</code> and <code>sets</code>. The Fitness segment's row shows the split chip; tomorrow's planner reads it for the rotation.</li>
+</ol>
+
+<div class="note good">
+  <b>The embed that would not play</b>
+  On the first spot-check zero of six seed videos rendered; every one gave YouTube's "Error 152"
+  card. Loading the embed URL straight into the web view gave the harder error 153; wrapping it in
+  an iframe on a page of our own moved every id to 152; the fix was matching the query's
+  <code>origin</code> parameter to the page's own <code>baseURL</code> and pointing both at
+  <code>youtube-nocookie.com</code>. Six of six then rendered. The report records the elimination.
+</div>
+
+<h3 id="s10-7"><span class="num">10.7</span><span>Performance and cost</span></h3>
+
+<ul>
+  <li><strong>Zero per-user API cost.</strong> The catalog is one table read with the anon key and the person's JWT. No YouTube Data API, no quota, no key. Thumbnails are static images from YouTube's CDN.</li>
+  <li><strong>One fetch a day.</strong> <code>refreshInterval</code> is 86,400 seconds; a refresh is otherwise only on pull. The library works entirely from the cache after the first download.</li>
+  <li><strong>Curation is free at runtime.</strong> Verification runs on a laptop before a migration; the app never verifies anything.</li>
+  <li><strong>The planner and filter are pure and cheap.</strong> One pass over at most 122 rows per filter change, with the cached models mapped to value types once per pass. No index is needed at this size.</li>
+  <li><strong>One web view.</strong> The player host lives in the screen's state, so rotation and full screen never reload the video or lose the person's place.</li>
+  <li><strong>Bookmarks are one dictionary.</strong> A row asks a dictionary, not the store; the dictionary is rebuilt after a write, when the store is the truth.</li>
+  <li><strong>Capacity is shared, not recomputed differently.</strong> <code>CapacityInputs.todayCapacity</code> serves the recorder and the planner, so the battery is read once the same way.</li>
+  <li><strong>The HUD's settle is pure.</strong> Corner cases (a HUD wider than its player, a drop onto the control strip) are tests rather than thumbs on a device.</li>
+  <li><strong>What leaves the device.</strong> One authenticated read of the catalog; image requests to <code>i.ytimg.com</code>; the embed to <code>youtube-nocookie.com</code>, the privacy-enhanced host. Bookmarks, schedules and preferences never leave.</li>
+</ul>
+
+<h3 id="s10-8"><span class="num">10.8</span><span>Edge cases and tests</span></h3>
+
+<div class="note blocked">
+  <b>A field added to an existing @Model must be optional or defaulted</b>
+  Commit 2d01bd8 on 15 September: the goals row gained <code>equipmentRaw: [String]</code>, a
+  mandatory array with no default. SwiftData refused to migrate any store written before it
+  ("Validation error missing attribute values on mandatory destination attribute"). The container
+  never opened, the shell had no account to show, and the app sat on the signed-in spinner. The fix
+  is <code>= []</code>; the guard is <code>SchemaMigrationTests.fieldsAddedToTheGoalsRowHaveDefaults</code>,
+  which walks the entity's attributes and asserts each added one is optional or has a default.
+  Every column added since (bookmarks, <code>split</code>, <code>videoID</code>, <code>setsData</code>,
+  the extras and sources bags) follows the rule.
+</div>
+
+<div class="tablewrap"><table>
+<thead><tr><th>Condition</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>First open, no network</td><td>"The library needs a connection the first time." with a wifi.slash glyph; never a fake list</td></tr>
+<tr><td>Later open, no network</td><td>Last catalog shown; "Showing the last catalog we downloaded."</td></tr>
+<tr><td>Signed out</td><td>"Sign in to download the library." rather than a connection message</td></tr>
+<tr><td>Server answers 200 with zero rows</td><td>Cache kept; "The catalog came back empty. Showing the last one we downloaded."</td></tr>
+<tr><td>Server answers zero rows to an empty cache</td><td>Replaced, because there is nothing to lose</td></tr>
+<tr><td>No goal set</td><td>Preferences sheet once; plan is "full" with "Set a goal for a plan built around you."</td></tr>
+<tr><td>Battery 0 to 33</td><td>Mobility at intensity 1 regardless of goal</td></tr>
+<tr><td>Battery unknown after a hard day</td><td>Mobility; unknown otherwise caps intensity at 2</td></tr>
+<tr><td>No video at the plan's length</td><td>Widened to any length, and the list says so</td></tr>
+<tr><td>No video at the plan's split</td><td>Widened to any split for the goal, only when no split chip is tapped</td></tr>
+<tr><td>A split chip tapped and nothing matches</td><td>Empty state; the chip is an instruction and is not widened away</td></tr>
+<tr><td>Widened list while offline</td><td>Both lines shown, one under the other</td></tr>
+<tr><td>Saved chip with nothing saved</td><td>"Nothing saved yet. Tap the heart on a workout to keep it here."</td></tr>
+<tr><td>A schedule for a day that has passed</td><td>Cleared on load; the save is kept</td></tr>
+<tr><td>Schedule sheet seeded with a past day</td><td>Clamped to today, the picker's floor</td></tr>
+<tr><td>Unsave a scheduled row</td><td>Row kept for its schedule; unschedule an unsaved row deletes it</td></tr>
+<tr><td>A row whose id is not a YouTube id</td><td>Nothing interpolated; "This video will not play here."</td></tr>
+<tr><td>Owner disabled embedding</td><td>YouTube's own card inside the player, with its own link; the app's "Open in YouTube" is always present as a precaution</td></tr>
+<tr><td>Wrapper page fails to load</td><td><code>onLoadFailure</code> shows the fallback line</td></tr>
+<tr><td>Start bails (Health refused, watch took the session)</td><td>The video is not left stamped on the next session</td></tr>
+<tr><td>Relaunch mid-video</td><td>The draft carries the video; the record the restored session writes still names it</td></tr>
+<tr><td>Session started on the wrist while the player is idle</td><td><code>clearPendingVideoIfIdle</code> drops the video; a wrist workout is not the queued video</td></tr>
+<tr><td>HUD dropped onto the control strip</td><td>Moved to whichever side is nearer and fits</td></tr>
+<tr><td>HUD wider than its player</td><td>Sits at the inset</td></tr>
+<tr><td>Phone turned on any other screen</td><td>Stays portrait; only the player asks for landscape</td></tr>
+<tr><td>Leaving the player sideways</td><td><code>release()</code> forces the scene upright</td></tr>
+</tbody></table></div>
+
+<h4>Tests</h4>
+<ul>
+  <li><code>WorkoutPlannerTests</code> (6): red battery is mobility; strength rotates after the most recent split; the first session of the week is push; endurance and mobility goals; unknown goal is full body; unknown battery after a hard day is mobility.</li>
+  <li><code>WorkoutLibraryFilterTests</code> (9): widens to any length then any split; keeps the intensity cap while widening; orders by closeness then title; an explicit split chip is not widened away; equipment and band narrow without widening; search matches title, channel or muscle and survives widening; the saved list ignores the plan but not the query; an empty query changes nothing.</li>
+  <li><code>CatalogRefreshTests</code> (3), <code>CatalogVideoTests</code> (2: upsert is idempotent and removes missing rows; goals and workout columns default to absent), <code>WorkoutBookmarkTests</code> (4), <code>WorkoutCatalogClientTests</code> (2: the request carries both keys and selects everything; arrays decode and an unknown split is kept as text), <code>HUDPlacementTests</code> (9), <code>SchemaMigrationTests</code> (1).</li>
+  <li><code>scripts/catalog/verify_lib_test.ts</code>: 7 Deno tests for parsing, title and channel matching, duration plausibility, the SQL, and the empty-catalog refusal.</li>
+  <li><code>ActivityRecorderChecks</code>: finishing stamps the video and split; a failed start does not stamp the next session; a wrist-started session carries no stale video; a restored draft keeps its video.</li>
+</ul>
+
+<p>
+  The QA report records 1266 package tests in 168 suites after this slice, 34 of 34 recorder checks,
+  the library captured on iPhone in both schemes and on iPad, the empty state, the schedule sheet,
+  and the player before and during a session. The landscape capture is recorded as pending: at the
+  time of the report the iPhone was still portrait-only, and the rotation the player now asks for
+  arrived with the full-screen commit the following day.
+</p>
+
+<h3 id="s10-9"><span class="num">10.9</span><span>Study notes</span></h3>
+
+<h4>Read in this order</h4>
+<ol>
+  <li><code>scripts/catalog/verify_lib.ts</code>, then <code>verify.ts</code>: what a row must be before it can ship.</li>
+  <li><code>supabase/migrations/20260915090000_workout_videos.sql</code>: the table and why the revoke comes before the grant.</li>
+  <li><code>LifeOSKit/Sources/Sectors/WorkoutPlanner.swift</code> with its tests open.</li>
+  <li><code>LifeOSKit/Sources/Sectors/WorkoutLibraryFilter.swift</code>, the widening and the saved list.</li>
+  <li><code>LIfeOS/Features/Workouts/ViewModel/WorkoutLibraryViewModel.swift</code>: <code>load</code>, <code>refreshIfDue</code>, <code>applyFilters</code>, <code>loadBookmarks</code>.</li>
+  <li><code>LIfeOS/Features/Workouts/View/YouTubePlayerView.swift</code> and <code>VideoWorkoutLayout.swift</code>, the origin fix.</li>
+  <li><code>LifeOSKit/Sources/AppSurfaces/HUDPlacement.swift</code>, then <code>DraggableHUD.swift</code>, then <code>OrientationLock.swift</code>.</li>
+</ol>
+
+<h4>Check yourself</h4>
+<ul>
+  <li><strong>Why does the seed end with a delete?</strong> So a seed run is a full sync; a row removed from the JSON leaves the server on the next push instead of living forever.</li>
+  <li><strong>Why is an empty 200 not believed?</strong> An unseeded table or a policy that stopped matching looks the same as an empty catalog, and replacing a full cache with it strands the person.</li>
+  <li><strong>Which three filters are never widened, and why?</strong> Intensity cap, equipment, search: a battery ceiling and a kit list are facts, and a query is what the person is typing.</li>
+  <li><strong>Why is the web view held in the screen's state?</strong> Each layout branch would otherwise get a fresh view identity and restart the video on every rotation.</li>
+  <li><strong>Why is the HUD position an anchor and not a point?</strong> A fraction of free travel survives a size change: the small player, full screen, landscape, and the collapse to a bar.</li>
+  <li><strong>What did commit 2d01bd8 teach?</strong> A mandatory field added to a shipped model with no default stops the store from opening at all, and now a test guards it.</li>
+</ul>
+
 </section>

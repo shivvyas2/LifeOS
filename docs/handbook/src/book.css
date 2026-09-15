@@ -540,7 +540,9 @@
     pre.tree { break-inside: auto; orphans: 4; widows: 4; }
     table { font-size: 9pt; }
     th, td { padding: 6px 9px; }
-    pre { font-size: 8.6pt; }
+    /* Long code lines wrap on paper instead of being clipped at the margin. */
+    pre { font-size: 8.6pt; white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre.tree { white-space: pre; }
 
     a { color: var(--ink); text-decoration: none; }
     .toc a { color: var(--ink-2); }
