@@ -24,18 +24,24 @@ struct WorkoutVideoRow: View {
         // SwiftUI gives a button nested in a button no defined semantics, and
         // saving a video would also open it.
         HStack(alignment: .top, spacing: 0) {
-            Button(action: action) { content }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(video.title), \(video.channel), \(video.durationMinutes) minutes, \(video.split), intensity \(video.intensity) of 3")
-                .accessibilityHint("Opens the workout")
+            Button(action: action) {
+                // The padding is inside the label, so the card's own margin
+                // opens the video rather than being a dead 12pt border.
+                content
+                    .padding(.vertical, 12)
+                    .padding(.leading, 12)
+                    // The heart's own 44pt box is the right-hand gutter; a
+                    // second 12pt beside it would cost the title a word for
+                    // no visible margin.
+                    .padding(.trailing, isSaved == nil ? 12 : 0)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(video.title), \(video.channel), \(video.durationMinutes) minutes, \(video.split), intensity \(video.intensity) of 3")
+            .accessibilityHint("Opens the workout")
             if let isSaved { saveButton(isSaved) }
         }
-        .padding(.vertical, 12)
-        .padding(.leading, 12)
-        // The heart's own 44pt box is the right-hand gutter; a second 12pt
-        // beside it would cost the title a word for no visible margin.
-        .padding(.trailing, isSaved == nil ? 12 : 0)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(LifeOSTokens.cardSurface.resolve(scheme))
@@ -51,14 +57,16 @@ struct WorkoutVideoRow: View {
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Text("\(video.channel) · \(video.durationMinutes) min")
-                    .font(LifeOSType.caption.weight(.medium))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    .lineLimit(1)
-                    // A long channel name used to push the minutes off the end
-                    // once the heart took its 44pt: shrink the line instead of
-                    // dropping the one number a person scans for.
-                    .minimumScaleFactor(0.85)
+                // Two texts, not one: a long channel name used to push the
+                // minutes off the end of the line, and the minutes are the
+                // number a person scans for. The channel truncates; the
+                // minutes never do.
+                HStack(spacing: 0) {
+                    Text(video.channel).lineLimit(1).truncationMode(.tail)
+                    Text(" · \(video.durationMinutes) min").fixedSize()
+                }
+                .font(LifeOSType.caption.weight(.medium))
+                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                 // Dots and chips keep their own lines: three chips and a
                 // scale do not both fit beside a thumbnail, and a chip
                 // truncated to "Dum…" is worse than a taller row.
@@ -81,6 +89,7 @@ struct WorkoutVideoRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(saved ? "Saved" : "Save")
+        .accessibilityAddTraits(saved ? .isSelected : [])
     }
 
     private var thumbnail: some View {

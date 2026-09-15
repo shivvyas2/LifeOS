@@ -120,6 +120,17 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         session.delegate = self; builder.delegate = self
         self.session = session; self.builder = builder
         activityName = Self.startable.first { $0.type == session.workoutConfiguration.activityType }?.name ?? "Other"
+        // A session that had already stopped or ended before the relaunch has
+        // nothing left to track, so it is settled before anything adopts it:
+        // no timer, no motion, no packet, and never a flash of `.running`.
+        // The reset is unconditional because an already-ended session sends
+        // no further `.ended` callback to run it for us.
+        if recovered.state == .stopped || recovered.state == .ended {
+            state = .ending
+            await finish(at: .now)
+            resetAfterEnd()
+            return
+        }
         let started = recovered.startDate ?? .now
         startedAt = started
         mirroringFailed = false
@@ -128,24 +139,25 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         } catch {
             mirroringFailed = true
         }
+        // A recovered session did not just start on this launch, and there is
+        // no record of any pauses before the relaunch: everything from the
+        // original start to now is banked, which is as precise as `startDate`
+        // allows, and a paused session shows that elapsed time rather than
+        // zero. Only a running one has a live run to time from here.
+        accumulated = Date.now.timeIntervalSince(started)
         state = recovered.state == .paused ? .paused : .running
-        // A recovered session did not just start on this launch, and there
-        // is no record of any pauses before the relaunch: a running
-        // session's clock restarts `runningSince` at now and banks
-        // everything from the original start to now into `accumulated`,
-        // which is as precise as `startDate` allows.
-        if state == .running {
-            runningSince = .now
-            accumulated = Date.now.timeIntervalSince(started)
+        if state == .running { runningSince = .now }
+        // Whichever state came back: the motion handler already no-ops while
+        // the session is not running, and a resume only flips `state`, so
+        // starting motion here is the only chance a session recovered paused
+        // ever gets to count automatically. The counter's own history did not
+        // survive the relaunch, so the count stays unknown rather than zero,
+        // which would claim no reps were done.
+        if isStrength {
+            reps = nil; setIndex = 1; completedSets = []; manualReps = 0
+            startMotion()
         }
-        if isStrength && state == .running { reps = 0; setIndex = 1; completedSets = []; manualReps = 0; startMotion() }
         sendPacket(force: true)
-        // A session recovered already stopped or ended still needs saving:
-        // the same finish path the `.stopped` delegate branch uses, which
-        // captures its own builder/session locals and ends by resetting.
-        if recovered.state == .stopped || recovered.state == .ended {
-            await finish(at: .now)
-        }
     }
 
     func pause() { session?.pause() }
@@ -180,8 +192,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     /// one, and it never falls below zero.
     func removeRep() {
         guard isStrength, state == .running || state == .paused else { return }
+        // Nothing to correct while the count is unknown, which is where a
+        // recovered session starts: a dash must not become a zero.
+        guard let current = reps else { return }
         manualReps = max(-counter.reps, manualReps - 1)
-        reps = max(0, counter.reps + manualReps)
+        reps = max(0, current - 1)
         sendPacket(force: true)
     }
     func nextSet() {
@@ -260,8 +275,12 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         let builder = self.builder
         let session = self.session
         guard let builder, let session else { return }
+        // `try?` on the collection call alone: a builder recovered after its
+        // session already ended throws here, and letting that skip the finish
+        // would drop a workout HealthKit is still holding. A throw from the
+        // save itself is the one worth telling the person about.
+        try? await builder.endCollection(at: date)
         do {
-            try await builder.endCollection(at: date)
             _ = try await builder.finishWorkout()
         } catch {
             lastError = "Could not save to Health"

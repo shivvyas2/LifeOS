@@ -67,6 +67,7 @@ struct WorkoutLibraryScreen: View {
             ScheduleWorkoutSheet(
                 title: video.title,
                 day: model.scheduledDay(for: video),
+                today: model.today,
                 onAdd: { model.schedule(video, on: $0) },
                 onRemove: model.scheduledDay(for: video) == nil ? nil : { model.schedule(video, on: nil) }
             )
@@ -92,7 +93,8 @@ struct WorkoutLibraryScreen: View {
                             .font(LifeOSType.caption.weight(.semibold))
                             .foregroundStyle(LifeOSTokens.accent)
                             .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Opens the workout")
@@ -122,7 +124,7 @@ struct WorkoutLibraryScreen: View {
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                chip("Saved", selected: model.savedOnly) { model.savedOnly.toggle() }
+                chip("Saved", selected: model.savedOnly, minHeight: 44) { model.savedOnly.toggle() }
                 Divider().frame(height: 22)
                 ForEach(model.splitOptions, id: \.self) { split in
                     chip(split.capitalized, selected: (model.splitFilter ?? model.plan?.split) == split) {
@@ -149,7 +151,9 @@ struct WorkoutLibraryScreen: View {
         .scrollClipDisabled()
     }
 
-    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    /// `minHeight` grows the tap target without growing the capsule, so a
+    /// chip can reach 44pt while the rail still looks like the rail.
+    private func chip(_ title: String, selected: Bool, minHeight: CGFloat = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(LifeOSType.label)
@@ -159,6 +163,8 @@ struct WorkoutLibraryScreen: View {
                 .background(selected ? AnyShapeStyle(LifeOSTokens.accent)
                                      : AnyShapeStyle(LifeOSTokens.cardSurface.resolve(scheme)),
                             in: Capsule())
+                .frame(minHeight: minHeight)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -194,15 +200,18 @@ struct WorkoutLibraryScreen: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: model.videos.isEmpty ? "wifi.slash" : "line.3.horizontal.decrease.circle")
+            Image(systemName: model.hasNoSaves ? "heart"
+                  : model.videos.isEmpty ? "wifi.slash" : "line.3.horizontal.decrease.circle")
                 .font(.title2)
                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            Text(model.status ?? (model.videos.isEmpty
+            Text(model.hasNoSaves ? "Nothing saved yet."
+                 : model.status ?? (model.videos.isEmpty
                  ? "The library needs a connection the first time."
                  : "Nothing in the catalog matches these filters yet."))
                 .font(LifeOSType.secondary)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            Text(model.videos.isEmpty
+            Text(model.hasNoSaves ? "Tap the heart on a workout to keep it here."
+                 : model.videos.isEmpty
                  ? "Once it has downloaded, every session is here offline."
                  : "Clear a chip to see more of the catalog.")
                 .font(LifeOSType.caption)
@@ -221,6 +230,9 @@ struct WorkoutLibraryScreen: View {
 /// scheduled into the past, and the store keeps only the day, never the time.
 private struct ScheduleWorkoutSheet: View {
     let title: String
+    /// The start of today on the view model's own calendar, rather than a
+    /// second `Calendar.current` read inside the view.
+    let today: Date
     let onAdd: (Date) -> Void
     /// Nil when this video is not scheduled yet, so the sheet offers no way to
     /// remove a schedule that does not exist.
@@ -228,18 +240,21 @@ private struct ScheduleWorkoutSheet: View {
     @State private var day: Date
     @Environment(\.dismiss) private var dismiss
 
-    init(title: String, day: Date?, onAdd: @escaping (Date) -> Void, onRemove: (() -> Void)?) {
+    init(title: String, day: Date?, today: Date, onAdd: @escaping (Date) -> Void, onRemove: (() -> Void)?) {
         self.title = title
+        self.today = today
         self.onAdd = onAdd
         self.onRemove = onRemove
-        _day = State(initialValue: day ?? .now)
+        // Clamped, never seeded below the picker's own floor: a day that has
+        // passed would otherwise sit selected and "Add" would write it back.
+        _day = State(initialValue: max(day ?? today, today))
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("Day", selection: $day, in: Date.now.startOfToday..., displayedComponents: .date)
+                    DatePicker("Day", selection: $day, in: today..., displayedComponents: .date)
                         .datePickerStyle(.graphical)
                 } header: {
                     Text(title)
@@ -259,8 +274,4 @@ private struct ScheduleWorkoutSheet: View {
         }
         .tint(LifeOSTokens.accent)
     }
-}
-
-private extension Date {
-    var startOfToday: Date { Calendar.current.startOfDay(for: self) }
 }

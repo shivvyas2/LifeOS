@@ -39,17 +39,27 @@ struct WatchWorkoutScreen: View {
                 if workout.isStrength {
                     HStack {
                         VStack(alignment: .leading) {
-                            Text("\(workout.reps ?? 0)").font(.system(size: 30, weight: .bold, design: .rounded))
+                            // A dash, not a zero: a recovered session knows
+                            // its set but not how many reps came before it.
+                            Text(workout.reps.map(String.init) ?? "—")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
                             Text("reps · auto").font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Text("Set \(workout.setIndex ?? 1)").font(.caption)
                     }
                     if workout.state != .ending {
-                        HStack {
-                            Button("−1") { workout.removeRep() }
-                            Button("+1") { workout.addRep() }
+                        // Two rows: three bordered buttons split a 41mm screen
+                        // three ways and "Next set" wraps at about 48pt.
+                        VStack(spacing: 4) {
+                            HStack {
+                                Button("−1") { workout.removeRep() }
+                                    .accessibilityLabel("Remove one rep")
+                                Button("+1") { workout.addRep() }
+                                    .accessibilityLabel("Add one rep")
+                            }
                             Button("Next set") { workout.nextSet() }
+                                .frame(maxWidth: .infinity)
                         }.tint(.orange)
                     }
                 }

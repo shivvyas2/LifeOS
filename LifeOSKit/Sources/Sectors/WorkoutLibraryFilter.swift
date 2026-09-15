@@ -83,6 +83,19 @@ public enum WorkoutLibraryFilter {
         return (rows, note)
     }
 
+    /// The saved list, which is not the plan's list.
+    ///
+    /// A heart is a decision the person already made, so nothing about today
+    /// narrows it: not the split, not the length, not the equipment, not the
+    /// intensity cap, and there is nothing to widen either. Only a search the
+    /// person is typing narrows it. The caller's order is kept, so a view
+    /// model can sort by when each mark was made and have that survive.
+    public static func saved(videos: [LibraryVideo], query: String = "") -> [LibraryVideo] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else { return videos }
+        return videos.filter { matches($0, query: normalizedQuery) }
+    }
+
     private static func matches(_ video: LibraryVideo, query: String) -> Bool {
         video.title.lowercased().contains(query)
             || video.channel.lowercased().contains(query)

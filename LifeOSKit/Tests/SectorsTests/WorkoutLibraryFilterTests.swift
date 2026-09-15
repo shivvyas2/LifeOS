@@ -112,6 +112,22 @@ struct WorkoutLibraryFilterTests {
         #expect(result.rows.map(\.id) == ["matchLong"])
     }
 
+    @Test func savedListIgnoresThePlanButNotTheQuery() {
+        // Off the plan's split, over its intensity cap, far past its length,
+        // and kit the person did not pick: a saved row shows anyway.
+        let offPlan = video("offPlan", title: "Push Power", split: "push", intensity: 3,
+                            minutes: 75, equipment: ["barbell"])
+        let onPlan = video("onPlan", title: "Pull Day", split: "pull", minutes: 30)
+        #expect(WorkoutLibraryFilter.saved(videos: [offPlan, onPlan]).map(\.id) == ["offPlan", "onPlan"])
+        // The caller's order is the order, so a sort by when each was saved
+        // survives the filter.
+        #expect(WorkoutLibraryFilter.saved(videos: [onPlan, offPlan]).map(\.id) == ["onPlan", "offPlan"])
+        // A search still narrows the saved list, trimmed and case-folded the
+        // same way the plan's own filter does it.
+        #expect(WorkoutLibraryFilter.saved(videos: [offPlan, onPlan], query: "  PUSH ").map(\.id) == ["offPlan"])
+        #expect(WorkoutLibraryFilter.saved(videos: [offPlan, onPlan], query: "nothing").isEmpty)
+    }
+
     @Test func emptyQueryChangesNothing() {
         let rows = [video("a", title: "Alpha"), video("b", title: "Bravo")]
         let withoutQuery = WorkoutLibraryFilter.apply(videos: rows, plan: plan, goal: "strength",

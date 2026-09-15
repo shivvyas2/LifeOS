@@ -182,6 +182,7 @@ final class WorkoutLibraryViewModel {
     /// model left in this dictionary would be read by the next row that asks.
     private func loadBookmarks() {
         guard let context else { return }
+        pruneStaleSchedules(context: context)
         let rows = (try? BookmarkStore.all(context: context)) ?? []
         bookmarks = Dictionary(rows.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
         let byID = Dictionary(videos.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
@@ -189,37 +190,74 @@ final class WorkoutLibraryViewModel {
             .compactMap { byID[$0.youtubeID] }.first
     }
 
+    /// The day a picker may not go below, and the day a schedule is measured
+    /// against. Taken from the injected calendar and clock, never `Date.now`
+    /// read again somewhere else.
+    var today: Date { calendar.startOfDay(for: now()) }
+
+    /// A day that has passed is not a plan any more: clear it and keep the
+    /// save. Without this a row carries a stale chip forever, and the schedule
+    /// sheet opens on a day its own picker will not accept.
+    private func pruneStaleSchedules(context: ModelContext) {
+        let cutoff = today
+        for row in (try? BookmarkStore.all(context: context)) ?? [] {
+            guard let day = row.scheduledFor, day < cutoff else { continue }
+            try? BookmarkStore.schedule(row.youtubeID, on: nil, context: context, calendar: calendar)
+        }
+    }
+
     // MARK: - Filtering
 
     /// The rule itself lives in `Sectors` as a pure function with tests; this
     /// maps the cache into it and the chosen ids back out.
     private func applyFilters() {
-        guard let plan else {
-            filtered = onlySaved(videos)
+        let byID = Dictionary(videos.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
+        // The saved chip is a different list, not a narrower one. Intersecting
+        // the plan's result with the saved ids hid saves the plan had already
+        // filtered out: a push video saved today was gone from "Saved" on
+        // tomorrow's pull day, while its heart was still filled in the full
+        // list. So the source set is the saved rows themselves, newest mark
+        // first, and only the query narrows them.
+        if savedOnly {
+            let rows = videos.filter { isSaved($0) }.sorted {
+                (bookmarks[$0.youtubeID]?.updatedAt ?? .distantPast) > (bookmarks[$1.youtubeID]?.updatedAt ?? .distantPast)
+            }
+            filtered = WorkoutLibraryFilter.saved(videos: rows.map(libraryVideo), query: query)
+                .compactMap { byID[$0.id] }
+            // No widening note: nothing widened, and a note about the plan
+            // would describe a list the plan did not choose.
             status = refreshNotice
             return
         }
-        let byID = Dictionary(videos.map { ($0.youtubeID, $0) }, uniquingKeysWith: { _, last in last })
+        guard let plan else {
+            // Only reachable before `attach`, since the planner always returns
+            // a plan. There is no rule to apply but the query, which is the
+            // same shape as the saved list's rule.
+            filtered = WorkoutLibraryFilter.saved(videos: videos.map(libraryVideo), query: query)
+                .compactMap { byID[$0.id] }
+            status = refreshNotice
+            return
+        }
         let result = WorkoutLibraryFilter.apply(
-            videos: videos.map {
-                LibraryVideo(id: $0.youtubeID, title: $0.title, split: $0.split, intensity: $0.intensity,
-                             durationMinutes: $0.durationMinutes, goal: $0.goal, equipment: $0.equipment,
-                             channel: $0.channel, muscles: $0.muscles)
-            },
+            videos: videos.map(libraryVideo),
             plan: plan, goal: goals?.trainingGoal, split: splitFilter, band: durationBand,
             equipment: equipmentFilter.map { Set([$0]) } ?? [], query: query)
-        filtered = onlySaved(result.rows.compactMap { byID[$0.id] })
+        filtered = result.rows.compactMap { byID[$0.id] }
         // Both lines, not one: a person offline on a widened list needs to
         // know the list is short *and* that the catalog is stale.
         status = [result.note, refreshNotice].compactMap { $0 }.joined(separator: "\n").nilIfEmpty
     }
 
-    /// The saved chip, applied last: it intersects whatever the filter chose
-    /// with the saved ids rather than joining the rule itself, so clearing the
-    /// chip returns exactly the list that was there before.
-    private func onlySaved(_ rows: [CatalogVideo]) -> [CatalogVideo] {
-        savedOnly ? rows.filter { isSaved($0) } : rows
+    /// The cache row, reduced to what the pure filter reads.
+    private func libraryVideo(_ video: CatalogVideo) -> LibraryVideo {
+        LibraryVideo(id: video.youtubeID, title: video.title, split: video.split, intensity: video.intensity,
+                     durationMinutes: video.durationMinutes, goal: video.goal, equipment: video.equipment,
+                     channel: video.channel, muscles: video.muscles)
     }
+
+    /// True when the saved chip is on and the person has saved nothing at all,
+    /// so the empty state can say that rather than blaming the chips.
+    var hasNoSaves: Bool { savedOnly && !videos.contains { isSaved($0) } }
 
     /// The splits worth offering: the ones the cache actually holds, with the
     /// plan's own split first so the default filter reads as the default.

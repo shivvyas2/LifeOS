@@ -37,12 +37,14 @@ public enum BookmarkStore {
         if let row = try bookmark(for: id, context: context) {
             row.saved.toggle()
             row.updatedAt = .now
-            let stillWanted = row.saved || row.scheduledFor != nil
-            if !stillWanted {
+            // Read before the delete: a deleted model is not a thing to ask
+            // questions of, even one it answered correctly a line earlier.
+            let saved = row.saved
+            if !(saved || row.scheduledFor != nil) {
                 context.delete(row)
             }
             try context.save()
-            return row.saved
+            return saved
         } else {
             let row = WorkoutBookmark(youtubeID: id, saved: true)
             context.insert(row)

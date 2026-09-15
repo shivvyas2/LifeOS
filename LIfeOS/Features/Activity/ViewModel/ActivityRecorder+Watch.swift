@@ -132,11 +132,13 @@ extension ActivityRecorder {
         persist()
     }
     /// The correction to `addRep`, on the same two paths. Zero is the floor:
-    /// a session cannot have counted fewer reps than none.
+    /// a session cannot have counted fewer reps than none. An unknown count
+    /// stays unknown, because turning a dash into a 0 would claim no reps
+    /// were done.
     func removeRep() {
         guard hasSession, selection == .strength else { return }
         if source == .watch { watch?.send(.removeRep); return }
-        reps = max(0, (reps ?? 0) - 1)
+        if let current = reps { reps = max(0, current - 1) }
         persist()
     }
     func nextSet() {

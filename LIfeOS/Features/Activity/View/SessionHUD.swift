@@ -102,7 +102,9 @@ struct SessionHUD: View {
                     Text(setLine).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                     Spacer()
                     Button("−1", action: onRemoveRep).buttonStyle(.glass)
+                        .accessibilityLabel("Remove one rep")
                     Button("+1", action: onAddRep).buttonStyle(.glass)
+                        .accessibilityLabel("Add one rep")
                     Button("Next set", action: onNextSet).buttonStyle(.glass)
                 }.font(LifeOSType.label)
             }
