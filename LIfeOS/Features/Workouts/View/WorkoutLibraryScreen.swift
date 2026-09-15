@@ -61,7 +61,7 @@ struct WorkoutLibraryScreen: View {
                 .labelStyle(.iconOnly)
             }
         }
-        .searchable(text: $model.query, prompt: "Search title, channel or muscle")
+        .searchable(text: $model.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search title, channel or muscle")
         .sheet(isPresented: $model.needsPreferences) { TrainingPreferencesSheet(model: model) }
         .sheet(item: $scheduling) { video in
             ScheduleWorkoutSheet(

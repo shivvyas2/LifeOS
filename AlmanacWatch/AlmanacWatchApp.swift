@@ -29,6 +29,13 @@ struct AlmanacWatchApp: App {
                     WatchAppDelegate.pendingConfiguration = nil
                     workout.start(pending)
                 }
+                // Same before/after ordering for a relaunch over a session
+                // that is still active in HealthKit.
+                WatchAppDelegate.onRecovery = { Task { @MainActor in await workout.recover() } }
+                if WatchAppDelegate.pendingRecovery {
+                    WatchAppDelegate.pendingRecovery = false
+                    await workout.recover()
+                }
             }
             .onOpenURL { _ in bridge.refresh() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { bridge.refresh() } }

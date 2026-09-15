@@ -266,3 +266,19 @@ To be run by Shiv on the iPhone and watch when both are available.
   only iOS 26.0 simulators were used.
 
 Final result: passed
+
+## Draft port
+
+Two small additions ported onto this slice, both hardware-only to verify
+the same way the section 8 checks above are:
+
+- **The −1 correction.** `WatchWorkoutScreen` now has a "−1" button next to
+  "+1", calling `WatchWorkoutController.removeRep()`. Whether it reads
+  correctly on-wrist, and whether the correction lands on the number the
+  companion device sees, needs a real watch.
+- **Active workout recovery.** `WatchAppDelegate.handleActiveWorkoutRecovery()`
+  routes to `WatchWorkoutController.recover()`, which adopts a session
+  through `recoverActiveWorkoutSession()` after the app is relaunched over
+  one still active in HealthKit. Whether watchOS actually calls this method,
+  and whether the adopted session mirrors and saves correctly, is unverified
+  in the simulator and needs Shiv's watch.

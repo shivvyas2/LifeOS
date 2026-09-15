@@ -99,6 +99,55 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         }
     }
 
+    /// Adopts a HealthKit session that is still active when watchOS
+    /// relaunches the app (`WatchAppDelegate.handleActiveWorkoutRecovery()`),
+    /// e.g. after the system killed the app mid-workout. Wired the same way
+    /// `start(_:)` is wired to `handle(_:)`.
+    func recover() async {
+        guard state == .idle else { return }
+        // Synchronous, before the first await, for the same reason as
+        // `start`: a second recovery call must not race this into a second
+        // attempt.
+        state = .starting
+        lastError = nil
+        guard let recovered = try? await healthStore.recoverActiveWorkoutSession() else {
+            state = .idle
+            return
+        }
+        let session = recovered
+        let builder = recovered.associatedWorkoutBuilder()
+        builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: session.workoutConfiguration)
+        session.delegate = self; builder.delegate = self
+        self.session = session; self.builder = builder
+        activityName = Self.startable.first { $0.type == session.workoutConfiguration.activityType }?.name ?? "Other"
+        let started = recovered.startDate ?? .now
+        startedAt = started
+        mirroringFailed = false
+        do {
+            try await session.startMirroringToCompanionDevice()
+        } catch {
+            mirroringFailed = true
+        }
+        state = recovered.state == .paused ? .paused : .running
+        // A recovered session did not just start on this launch, and there
+        // is no record of any pauses before the relaunch: a running
+        // session's clock restarts `runningSince` at now and banks
+        // everything from the original start to now into `accumulated`,
+        // which is as precise as `startDate` allows.
+        if state == .running {
+            runningSince = .now
+            accumulated = Date.now.timeIntervalSince(started)
+        }
+        if isStrength && state == .running { reps = 0; setIndex = 1; completedSets = []; manualReps = 0; startMotion() }
+        sendPacket(force: true)
+        // A session recovered already stopped or ended still needs saving:
+        // the same finish path the `.stopped` delegate branch uses, which
+        // captures its own builder/session locals and ends by resetting.
+        if recovered.state == .stopped || recovered.state == .ended {
+            await finish(at: .now)
+        }
+    }
+
     func pause() { session?.pause() }
     func resume() { session?.resume() }
     func end() {

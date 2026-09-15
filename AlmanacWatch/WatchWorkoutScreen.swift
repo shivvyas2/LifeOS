@@ -47,6 +47,7 @@ struct WatchWorkoutScreen: View {
                     }
                     if workout.state != .ending {
                         HStack {
+                            Button("−1") { workout.removeRep() }
                             Button("+1") { workout.addRep() }
                             Button("Next set") { workout.nextSet() }
                         }.tint(.orange)

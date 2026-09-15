@@ -286,7 +286,9 @@ Hardware (Shiv's watch and phone): start from the phone and see the watch
 launch and the phone HUD show watch heart rate within 10 seconds; start from
 the watch and see the phone Live Activity appear; do 10 slow bicep curls and
 compare the auto count; pause on the watch and see the phone pause; finish
-and find one workout in Health. Record all five in
+and find one workout in Health; the −1 correction reads and lands correctly
+on-wrist; a relaunch over an active session is adopted through
+`recover()` and mirrors and saves correctly. Record all seven in
 `docs/design/watch-companion/report.md`.
 
 ## 9. Risks and open checks
