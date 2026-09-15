@@ -6,16 +6,16 @@ import Integrations
 
 /// One video, and the session that follows it.
 ///
-/// Portrait stacks the player over the session: the workout's own details and
-/// a single Start button before the timer runs, the HUD and the recorder's
-/// controls once it does. Landscape hands the screen to the video and floats
-/// the collapsed capsule at the top leading edge, the corner farthest from
-/// YouTube's control bar and its branding.
+/// The rings float over the video in both orientations, at the top leading
+/// edge, the corner farthest from YouTube's control bar and its branding.
+/// Portrait keeps the workout's details, the clock and the recorder's controls
+/// under the player; landscape hands the screen to the video and puts the
+/// controls behind one glass button.
 struct VideoWorkoutScreen: View {
     let video: CatalogVideo
     @Bindable var model: ActivityRecorder
 
-    @State private var hudExpanded = false
+    @State private var hudExpanded = true
     @State private var playerFailed = false
     @State private var showControls = false
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -62,17 +62,17 @@ struct VideoWorkoutScreen: View {
                         .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(alignment: .topLeading) {
+                            if model.hasSession, let readout = model.readout {
+                                rings(readout, repControls: false).padding(VideoWorkoutLayout.overlayInset)
+                            }
+                        }
                     openInYouTube
                     details
                     if model.hasSession || model.saved {
-                        if let readout = model.readout {
+                        if model.readout != nil {
                             elapsedLine
-                            SessionHUD(readout: readout, activity: model.selection,
-                                       zonesAvailable: model.zonesAvailable, showsTimer: false,
-                                       countsAutomatically: model.source == .watch,
-                                       onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
-                                       onNextSet: { model.nextSet() },
-                                       isExpanded: $hudExpanded)
+                            if model.selection == .strength, model.hasSession { repControlsRow }
                         }
                         ActivityControls(model: model, onDone: { dismiss() })
                     } else {
@@ -110,10 +110,8 @@ struct VideoWorkoutScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The clock on its own line, the way Begin Activity's hero carries it.
-    /// Five readings plus a timer do not fit the capsule at phone width, and
-    /// the reading that truncated was the battery percentage, which is the one
-    /// number that must never be half a number.
+    /// The clock on its own line, the way Begin Activity's hero carries it,
+    /// so the rings over the video stay small.
     private var elapsedLine: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
             let elapsed = model.timer?.elapsed(at: timeline.date) ?? 0
@@ -189,9 +187,10 @@ struct VideoWorkoutScreen: View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
             player.ignoresSafeArea()
-            HStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
                 if model.hasSession, let readout = model.readout {
-                    hudCapsule(readout)
+                    rings(readout)
+                    controlsButton
                 } else if !model.saved {
                     landscapeStart
                 }
@@ -201,26 +200,37 @@ struct VideoWorkoutScreen: View {
         }
     }
 
-    /// Collapsed, capped, and never expandable in landscape: a tap opens the
-    /// controls sheet instead, because an expanded panel over the video would
-    /// cover the very thing the person is watching.
-    private func hudCapsule(_ readout: LiveSessionReadout) -> some View {
-        SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
-                   showsTimer: false, countsAutomatically: model.source == .watch,
-                   onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
-                   onNextSet: { model.nextSet() },
-                   isExpanded: .constant(false))
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(maxHeight: VideoWorkoutLayout.overlayMaxHeight)
-            .clipShape(Capsule())
-            .overlay {
-                Color.clear
-                    .contentShape(Capsule())
-                    .onTapGesture { showControls = true }
-                    .accessibilityElement()
-                    .accessibilityLabel("Session controls")
-                    .accessibilityAddTraits(.isButton)
-            }
+    private func rings(_ readout: LiveSessionReadout, repControls: Bool = true) -> some View {
+        SessionRings(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
+                     countsAutomatically: model.source == .watch,
+                     onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                     onNextSet: { model.nextSet() }, showsRepControls: repControls, isExpanded: $hudExpanded)
+            .fixedSize()
+    }
+
+    /// Under the video in portrait, where there is room, so the rings over
+    /// the video stay as small as the rings.
+    private var repControlsRow: some View {
+        HStack(spacing: 10) {
+            Button("−1") { model.removeRep() }.accessibilityLabel("Remove one rep")
+            Button("+1") { model.addRep() }.accessibilityLabel("Add one rep")
+            Button("Next set") { model.nextSet() }
+        }
+        .font(LifeOSType.label)
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
+    /// Pause, finish and discard live in a sheet in landscape, behind one
+    /// glass button, so nothing but the rings sits over the video.
+    private var controlsButton: some View {
+        Button { showControls = true } label: {
+            Image(systemName: "ellipsis").font(.headline).foregroundStyle(.white)
+                .frame(width: 44, height: 44).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Circle())
+        .accessibilityLabel("Session controls")
     }
 
     private var landscapeStart: some View {

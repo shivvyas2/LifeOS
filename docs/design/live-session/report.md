@@ -211,3 +211,22 @@ PASS: Account transition stops recording and rejects late starts
   only iOS 26.0 simulators were used.
 
 Final result: passed
+
+## Rings, 2026-09-15
+
+The capsule HUD is gone. `SessionRings` draws the readings as glass rings
+with a dark wash under the glass, so white reads over a video frame and
+over the pale foot of the hero alike. Heart rate fills by zone against
+today's ceiling zone and the heart beats at the live tempo; effort fills
+against the top of the target band and turns red past it; battery is its
+percentage. Strength adds the rep count, which springs up on each new rep.
+Tapping the rings folds them into one bar with the clock and the pulse.
+
+- `player-rings.png`: the rings over the video in portrait, top leading,
+  with the rep buttons under the player where there is room.
+- `session-iphone-rings.png`: the same panel on Begin Activity's hero,
+  rep buttons inside it.
+- `session-iphone-rings-bar.png`: folded to the bar (`--hud-collapsed`).
+
+Landscape puts the rings and a glass controls button at the top leading
+edge; it is not captured here because the fixture cannot rotate.

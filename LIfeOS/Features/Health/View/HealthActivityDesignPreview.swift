@@ -28,7 +28,7 @@ struct HealthActivityDesignPreview: View {
             }
             else if page == "activity" {
                 BeginActivityScreen(model: fixture.recorder,
-                                    startsExpanded: ProcessInfo.processInfo.arguments.contains("--hud-expanded"))
+                                    startsCollapsed: ProcessInfo.processInfo.arguments.contains("--hud-collapsed"))
                     .task {
                         guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
                         fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? .strength : .run

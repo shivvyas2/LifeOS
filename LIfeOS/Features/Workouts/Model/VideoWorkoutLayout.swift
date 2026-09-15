@@ -1,19 +1,15 @@
 import Foundation
 
-/// Where the HUD sits over YouTube's player.
+/// Where the rings sit over YouTube's player.
 ///
-/// Section 5.3: in landscape the collapsed capsule floats at the top leading
-/// edge, the region farthest from the control bar and the branding that
-/// YouTube's terms name. `landscapeOverlay` off falls back to the portrait
-/// stack, which is the layout this app actually renders and verifies today.
-/// The side rail the spec sketched is not kept as a second code path: an
-/// off-branch that has never rendered is not a retreat path, and it is in
-/// git history if rotation is ever enabled.
+/// Section 5.3: the top leading edge in either orientation, the region
+/// farthest from the control bar and the branding that YouTube's terms name.
+/// `landscapeOverlay` off falls back to the portrait stack in landscape too.
 enum VideoWorkoutLayout {
     static let landscapeOverlay = true
     /// Inset from the safe area's top leading corner, in points.
     static let overlayInset: CGFloat = 16
-    /// The capsule never grows past this, and never expands in landscape.
+    /// The Start pill's height in landscape.
     static let overlayMaxHeight: CGFloat = 44
     /// The player's aspect ratio in portrait.
     static let playerAspectRatio: CGFloat = 16.0 / 9.0

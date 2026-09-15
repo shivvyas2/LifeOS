@@ -6,15 +6,15 @@ import AppSurfaces
 struct BeginActivityScreen: View {
     @Bindable var model: ActivityRecorder
     var onQuickLog: () -> Void = {}
-    /// The design fixture opens the HUD expanded so both states can be captured.
-    var startsExpanded = false
+    /// The design fixture folds the rings into the bar so both states can be captured.
+    var startsCollapsed = false
     /// The workout library, when the app supplies it. Nil in the design
     /// preview's plain recorder page, which has no library to push.
     var library: WorkoutLibraryViewModel?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
-    @State private var hudExpanded = false
+    @State private var hudExpanded = true
 
     var body: some View {
         NavigationStack {
@@ -69,7 +69,7 @@ struct BeginActivityScreen: View {
             }
         }
         .tint(LifeOSTokens.accent)
-        .onAppear { if startsExpanded { hudExpanded = true } }
+        .onAppear { if startsCollapsed { hudExpanded = false } }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
     }
 
@@ -115,10 +115,11 @@ struct BeginActivityScreen: View {
                     .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
             }
             Text("Elapsed time").font(LifeOSType.caption).opacity(0.85)
-            SessionHUD(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable, showsTimer: false,
-                       countsAutomatically: model.source == .watch,
-                       onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
-                       onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
+            SessionRings(readout: readout, activity: model.selection, zonesAvailable: model.zonesAvailable,
+                         countsAutomatically: model.source == .watch,
+                         onAddRep: { model.addRep() }, onRemoveRep: { model.removeRep() },
+                         onNextSet: { model.nextSet() }, isExpanded: $hudExpanded)
+                .fixedSize()
                 .padding(.top, 10)
         }
         .foregroundStyle(.white)
