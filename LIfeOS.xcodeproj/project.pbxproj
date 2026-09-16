@@ -7,21 +7,24 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00F6E2B27A984AF7B6A4F9D2 /* Motion in Frameworks */ = {isa = PBXBuildFile; productRef = 0BEF691ED9A34E748BA71A9C /* Motion */; };
 		1C653CDFCA5F5F89F00FE2DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */; };
 		204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
+		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = D04A72741F9CF213015F7725 /* AppSurfaces */; };
-		A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F60718293A4B5D /* DesignSystem */; };
 		65562F2ADB6E2321FAE9A9FB /* WorkoutLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */; };
 		68A03CA62FF558CFA54A53F7 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */; };
 		6E623354DC6DDB5C8B9B6C2C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
 		752AFAF9884EFF067331E697 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F99CEA62E9FE796BD5BA81FE /* Assets.xcassets */; };
 		77396051629F8B90D1C1875B /* HealthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B837A02BD3CD136DF62D37 /* HealthWidget.swift */; };
-		A6E1D4C2F0B34A7E9C1D2E3F /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F2E5D3A1C45B8FAD2E3F40 /* AgendaWidget.swift */; };
 		8C259920C8EDF206D42BCCB6 /* AlmanacWatchWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 624701EF004FBF42221FA616 /* AlmanacWatchWidgets.swift */; };
+		90261B2890C34AE7A9718E2D /* WatchWorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */; };
 		90509C80553530AC3C4FFB25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9136293255DF75D09FEAE189 /* PrivacyInfo.xcprivacy */; };
 		907FB39D01D3B252E2F9725A /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = F5C6D9F9A578760FC7F5C260 /* AppSurfaces */; };
+		A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F60718293A4B5D /* DesignSystem */; };
+		A6E1D4C2F0B34A7E9C1D2E3F /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F2E5D3A1C45B8FAD2E3F40 /* AgendaWidget.swift */; };
 		A96E559F303F84DB00789BA0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6D3302A34E0002272C5 /* LinkKit */; };
 		A985C690302A34E0002272C5 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A985C692302A34E0002272C5 /* DesignSystem */; };
 		A985C691302A34E0002272C5 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = A985C693302A34E0002272C5 /* Persistence */; };
@@ -31,13 +34,10 @@
 		A985C6E0302A34E0002272C5 /* Assistant in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6E1302A34E0002272C5 /* Assistant */; };
 		B2D8AC37220AF59954D72135 /* AlmanacWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5A224D947F9F20AEE96E695F /* AlmanacWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B7710CA5AC0DA4F764F5277A /* AlmanacWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */; };
+		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
 		C1A644C6813581BB160BA976 /* HealthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B837A02BD3CD136DF62D37 /* HealthWidget.swift */; };
 		DE5380CEF71189FC734B69BC /* AlmanacWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */; };
-		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
-		90261B2890C34AE7A9718E2D /* WatchWorkoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */; };
-		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
-		00F6E2B27A984AF7B6A4F9D2 /* Motion in Frameworks */ = {isa = PBXBuildFile; productRef = 0BEF691ED9A34E748BA71A9C /* Motion */; };
 		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 /* End PBXBuildFile section */
@@ -107,13 +107,11 @@
 		055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlmanacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BB1D631B325075AAB0B16BF /* AlmanacWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWidgets.entitlements; sourceTree = "<group>"; };
 		172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWatchApp.swift; sourceTree = "<group>"; };
-		AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchAppDelegate.swift; sourceTree = "<group>"; };
-		2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutController.swift; sourceTree = "<group>"; };
-		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
 		1F17F22DE820F38559377622 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutController.swift; sourceTree = "<group>"; };
 		30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWatch.entitlements; sourceTree = "<group>"; };
+		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
 		53B837A02BD3CD136DF62D37 /* HealthWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthWidget.swift; sourceTree = "<group>"; };
-		B7F2E5D3A1C45B8FAD2E3F40 /* AgendaWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
 		5A224D947F9F20AEE96E695F /* AlmanacWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlmanacWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A24A20B31209601FBC9A414 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWidgets.swift; sourceTree = "<group>"; };
@@ -124,6 +122,8 @@
 		9136293255DF75D09FEAE189 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A985C672302A34E0002272C5 /* LIfeOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LIfeOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A985C6A0302A34E0002272C5 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Secrets.xcconfig; path = Config/Secrets.xcconfig; sourceTree = "<group>"; };
+		AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchAppDelegate.swift; sourceTree = "<group>"; };
+		B7F2E5D3A1C45B8FAD2E3F40 /* AgendaWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgendaWidget.swift; sourceTree = "<group>"; };
 		DF561395544FEF105EA45CC5 /* AlmanacWatchWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWatchWidgets.entitlements; sourceTree = "<group>"; };
 		ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlmanacWatchWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -983,9 +983,17 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0BEF691ED9A34E748BA71A9C /* Motion */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Motion;
+		};
 		647335D29DECDB19368713D7 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
+		};
+		A1B2C3D4E5F60718293A4B5D /* DesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DesignSystem;
 		};
 		A985C692302A34E0002272C5 /* DesignSystem */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1020,17 +1028,9 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
 		};
-		0BEF691ED9A34E748BA71A9C /* Motion */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Motion;
-		};
 		D04A72741F9CF213015F7725 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
-		};
-		A1B2C3D4E5F60718293A4B5D /* DesignSystem */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = DesignSystem;
 		};
 		F5C6D9F9A578760FC7F5C260 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
