@@ -4,6 +4,8 @@ import SwiftData
 import Persistence
 import Integrations
 import AppSurfaces
+import UIKit
+import HealthKit
 
 /// Runs only from the isolated design preview, using disposable suites and an in-memory store.
 @MainActor enum ActivityRecorderChecks {
@@ -235,6 +237,45 @@ import AppSurfaces
             await recorder.start()
             check(recorder.timer == nil && !recorder.hasSession, "Account transition stops recording and rejects late starts")
             restored.deactivate(); other.deactivate(); afterSave.deactivate()
+            // Spec test 8: every catalog entry is a real HealthKit type with a symbol that draws.
+            let badTypes = ActivityCatalog.all.filter { HKWorkoutActivityType(rawValue: $0.healthRawValue) == nil }
+            let badSymbols = ActivityCatalog.all.filter { UIImage(systemName: $0.symbol) == nil }
+            check(badTypes.isEmpty && badSymbols.isEmpty,
+                  "Every catalog entry maps to HealthKit and an SF Symbol" + (badTypes + badSymbols).map { " · \($0.name)" }.joined())
+            // Spec test 9: recents are most recent first, deduplicated, capped at six.
+            let recentSuite = suite + ".recents"
+            let recentDefaults = UserDefaults(suiteName: recentSuite)!
+            defer { recentDefaults.removePersistentDomain(forName: recentSuite) }
+            var recents = ActivityRecents(defaults: recentDefaults)
+            recents.record(ActivityCatalog.type(named: "Badminton")!)
+            recents.record(ActivityCatalog.run)
+            check(recents.names == ["Run", "Badminton"], "Recents lead with the latest start")
+            recents.record(ActivityCatalog.run)
+            check(recents.names == ["Run", "Badminton"], "Starting an activity again does not duplicate it")
+            for name in ["Tennis", "Squash", "Yoga", "Golf", "Pilates"] { recents.record(ActivityCatalog.type(named: name)!) }
+            check(recents.names.count == ActivityRecents.limit && !recents.names.contains("Badminton"),
+                  "The seventh distinct start drops the oldest recent")
+            check(ActivityRecents(defaults: recentDefaults).names == recents.names, "Recents persist across instances")
+            // Spec test 10: a restored draft resolves its name through the catalog.
+            let restoreSuite = suite + ".restore"
+            let restoreDefaults = UserDefaults(suiteName: restoreSuite)!
+            defer { restoreDefaults.removePersistentDomain(forName: restoreSuite) }
+            let pilatesDraft = ActivityRecorder.Draft(timer: ActivitySessionState(activity: "Pilates"), healthSaved: false, recordsHealth: false)
+            restoreDefaults.set(try JSONEncoder().encode(pilatesDraft), forKey: ActivityRecorder.draftKey)
+            let restoredPilates = ActivityRecorder(defaults: restoreDefaults, liveActivitiesEnabled: false)
+            restoredPilates.attach(context)
+            check(restoredPilates.selection.name == "Pilates" && !restoredPilates.selection.countsReps && !restoredPilates.selection.showsZones,
+                  "A restored Pilates draft selects Pilates with reps and zones off")
+            restoredPilates.discard()
+            let nonsenseSuite = suite + ".nonsense"
+            let nonsenseDefaults = UserDefaults(suiteName: nonsenseSuite)!
+            defer { nonsenseDefaults.removePersistentDomain(forName: nonsenseSuite) }
+            let draft = ActivityRecorder.Draft(timer: ActivitySessionState(activity: "Nonsense"), healthSaved: false, recordsHealth: false)
+            nonsenseDefaults.set(try JSONEncoder().encode(draft), forKey: ActivityRecorder.draftKey)
+            let odd = ActivityRecorder(defaults: nonsenseDefaults, liveActivitiesEnabled: false)
+            odd.attach(context)
+            check(odd.selection.name == "Other", "A draft with an unknown activity name selects Other")
+            odd.discard()
         } catch { results.append("FAIL: \(error)") }
         return results.joined(separator: "\n")
     }

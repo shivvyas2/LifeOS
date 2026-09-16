@@ -67,7 +67,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private var collectionEnded = false
     private var finishing = false
     var recordingHealth = false
-    private static let draftKey = "activeWorkoutDraft"
+    static let draftKey = "activeWorkoutDraft"
     /// Everything a workout writes. The hand-off asks for the same set the
     /// phone branch does, so one grant covers both devices.
     private static let workoutTypes: Set<HKSampleType> = [HKObjectType.workoutType(), .quantityType(forIdentifier: .heartRate)!,
@@ -83,7 +83,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var onSaved: (() -> Void)?
     var zonesAvailable: Bool { zones != nil }
 
-    private struct Draft: Codable {
+    struct Draft: Codable {
         var timer: ActivitySessionState
         var healthSaved: Bool
         var recordsHealth: Bool?
