@@ -80,7 +80,7 @@ struct BeginActivityScreen: View {
                       systemImage: model.saved ? "checkmark.circle" : "timer")
                     .font(LifeOSType.label)
                 Spacer()
-                Image(systemName: model.selection.icon).font(.title2).accessibilityHidden(true)
+                Image(systemName: model.selection.symbol).font(.title2).accessibilityHidden(true)
             }
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
@@ -98,7 +98,7 @@ struct BeginActivityScreen: View {
     private func liveHero(_ readout: LiveSessionReadout) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(model.selection.rawValue, systemImage: model.selection.icon).font(LifeOSType.rowTitle)
+                Label(model.selection.name, systemImage: model.selection.symbol).font(LifeOSType.rowTitle)
                 Spacer()
                 Text(readout.isPaused ? "Paused" : readout.push.headline).font(LifeOSType.label)
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -133,12 +133,12 @@ struct BeginActivityScreen: View {
                 glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
                           value: fresh ? readout.heartRateText : nil, unit: "bpm",
                           caption: fresh ? (model.source == .watch ? "From Apple Watch" : "Live sensor reading") : model.isPaused ? "Activity paused" : model.sensor.status)
-                if model.zonesAvailable, model.selection != .yoga {
+                if model.zonesAvailable, model.selection.showsZones {
                     glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effortText,
                               unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
                               caption: capacityCaption(readout))
                 }
-                if model.selection == .strength {
+                if model.selection.countsReps {
                     glassTile(icon: "repeat", label: readout.setText ?? "Reps", value: readout.repsText, unit: "reps",
                               caption: model.completedSets.isEmpty
                                 ? (model.source == .watch ? "Counted from your wrist · auto" : "Tap +1 for each rep")
@@ -146,7 +146,7 @@ struct BeginActivityScreen: View {
                 }
                 glassTile(icon: "flame.fill", label: "Calories", value: readout.caloriesText, unit: "kcal",
                           caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
-                if [.walk, .run, .cycle].contains(model.selection) {
+                if model.selection.tracksDistance {
                     glassTile(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
                               value: readout.distanceKilometresText, unit: "km",
                               caption: readout.distanceMeters == nil ? "No distance reading" : "From Apple Health")
@@ -195,11 +195,11 @@ struct BeginActivityScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose your activity").font(LifeOSType.sectionTitle)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 10) {
-                ForEach(RecordedActivity.allCases) { activity in
+                ForEach(ActivityCatalog.popular) { activity in
                     Button { model.selection = activity } label: {
                         HStack {
-                            Image(systemName: activity.icon)
-                            Text(activity.rawValue).font(LifeOSType.rowTitle)
+                            Image(systemName: activity.symbol)
+                            Text(activity.name).font(LifeOSType.rowTitle)
                             Spacer(minLength: 0)
                             if model.selection == activity { Image(systemName: "checkmark").font(.caption.bold()) }
                         }

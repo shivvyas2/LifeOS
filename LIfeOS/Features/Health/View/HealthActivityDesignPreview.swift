@@ -4,6 +4,7 @@ import SwiftData
 import DesignSystem
 import Persistence
 import Integrations
+import AppSurfaces
 
 /// In-memory visual fixtures. Provider clients have empty, isolated credentials.
 struct HealthActivityDesignPreview: View {
@@ -31,7 +32,7 @@ struct HealthActivityDesignPreview: View {
                                     startsCollapsed: ProcessInfo.processInfo.arguments.contains("--hud-collapsed"))
                     .task {
                         guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
-                        fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? .strength : .run
+                        fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? ActivityCatalog.strength : ActivityCatalog.run
                         let start = Date.now.addingTimeInterval(-724)
                         await fixture.recorder.start(backdatedTo: start)
                         for second in stride(from: 0, to: 720, by: 2) {

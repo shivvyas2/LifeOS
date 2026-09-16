@@ -6,34 +6,13 @@ import Persistence
 import Integrations
 import AppSurfaces
 
-enum RecordedActivity: String, CaseIterable, Identifiable {
-    case walk = "Walk", run = "Run", cycle = "Cycle", strength = "Strength", yoga = "Yoga", other = "Other"
-    var id: String { rawValue }
-    var icon: String {
-        switch self {
-        case .walk: "figure.walk"
-        case .run: "figure.run"
-        case .cycle: "figure.outdoor.cycle"
-        case .strength: "dumbbell"
-        case .yoga: "figure.yoga"
-        case .other: "figure.mixed.cardio"
-        }
-    }
-    var healthType: HKWorkoutActivityType {
-        switch self {
-        case .walk: .walking
-        case .run: .running
-        case .cycle: .cycling
-        case .strength: .traditionalStrengthTraining
-        case .yoga: .yoga
-        case .other: .other
-        }
-    }
-}
-
 @MainActor @Observable
 final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
-    var selection: RecordedActivity = .walk
+    var selection: ActivityType = ActivityCatalog.walk
+    /// The last six activities started on this account, for the picker.
+    /// Same defaults as the draft, so the design preview's disposable suite
+    /// keeps its own list.
+    var recents: ActivityRecents
     var saveToHealth = HKHealthStore.isHealthDataAvailable()
     // The watch path in `ActivityRecorder+Watch.swift` writes this state, and
     // Swift has no setter that is internal to the module but closed to the
@@ -127,6 +106,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
         self.defaults = defaults
+        recents = ActivityRecents(defaults: defaults)
         self.liveActivitiesEnabled = liveActivitiesEnabled
         sensor = LiveHeartRateSensor(defaults: defaults)
         super.init()
@@ -162,7 +142,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         pendingVideoID = draft.videoID; pendingSplit = draft.split
         if let title = draft.followingTitle, let channel = draft.followingChannel { following = (title, channel) }
         zones = HeartRateZones(birthDate: birthDate())
-        selection = RecordedActivity(rawValue: draft.timer.activity) ?? .other
+        selection = ActivityCatalog.type(named: draft.timer.activity) ?? ActivityCatalog.other
         persist()
         notice = "Your activity timer was restored. Reconnect a sensor for live heart rate."
         if source == .watch {
@@ -238,7 +218,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         capacity = loadCapacity()
         effort = EffortAccumulator(); lastReadingAt = nil
         source = .phone
-        if selection == .strength { reps = 0; setIndex = 1; completedSets = [] } else { reps = nil; setIndex = nil; completedSets = [] }
+        recents.record(selection)
+        if selection.countsReps { reps = 0; setIndex = 1; completedSets = [] } else { reps = nil; setIndex = nil; completedSets = [] }
         recordingHealth = saveToHealth
         defer { busy = false }
         if await handOffToWatch() { return }
@@ -266,12 +247,12 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 session.delegate = self; builder.delegate = self
                 builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
                 let started = backdatedStart ?? .now
-                if timer == nil { timer = ActivitySessionState(activity: selection.rawValue, at: started) }
+                if timer == nil { timer = ActivitySessionState(activity: selection.name, at: started) }
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
                 guard active else { session.end(); builder.discardWorkout(); return }
             } else if timer == nil {
-                timer = ActivitySessionState(activity: selection.rawValue, at: backdatedStart ?? .now)
+                timer = ActivitySessionState(activity: selection.name, at: backdatedStart ?? .now)
             }
             persist()
         } catch {
@@ -326,7 +307,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                     durationMinutes: Int(timer.elapsed() / 60), activityName: timer.activity, energyKcal: energy)
                 row.distanceMeters = distance
                 row.videoID = pendingVideoID; row.split = pendingSplit
-                if selection == .strength { row.sets = completedSets + [reps ?? 0] }
+                if selection.countsReps { row.sets = completedSets + [reps ?? 0] }
                 context.insert(row)
             }
             try context.save()
@@ -406,7 +387,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     }
     private func syncLiveActivity() {
         guard liveActivitiesEnabled, let timer, let readout else { return }
-        liveActivity.sync(readout, timer: timer, icon: selection.icon)
+        liveActivity.sync(readout, timer: timer, icon: selection.symbol)
     }
     private func refreshReadout() {
         guard let timer else { readout = nil; return }

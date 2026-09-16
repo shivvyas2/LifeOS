@@ -64,7 +64,8 @@ extension ActivityRecorder {
             // eventually saves reads these three.
             clearPendingVideoIfIdle()
             saved = false; healthSaved = false
-            selection = RecordedActivity.allCases.first { $0.healthType == mirrored.workoutConfiguration.activityType } ?? .other
+            selection = ActivityCatalog.type(healthRawValue: mirrored.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
+            recents.record(selection)
             zones = HeartRateZones(birthDate: birthDate()); capacity = loadCapacity()
             effort = EffortAccumulator(); lastReadingAt = nil
             energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
@@ -72,8 +73,8 @@ extension ActivityRecorder {
             // and take the id of any Live Activity the background launch put
             // on screen before this timer existed, so it is updated in place.
             timer = ActivitySessionState(id: watch?.placeholderSessionID ?? UUID(),
-                                         activity: selection.rawValue, at: mirrored.startDate ?? .now)
-            if selection == .strength { reps = 0; setIndex = 1; completedSets = [] }
+                                         activity: selection.name, at: mirrored.startDate ?? .now)
+            if selection.countsReps { reps = 0; setIndex = 1; completedSets = [] }
             else { reps = nil; setIndex = nil; completedSets = [] }
         }
         source = .watch
@@ -114,7 +115,7 @@ extension ActivityRecorder {
         // this packet's reps rather than the previous packet's.
         let refreshes = packet.heartRate != nil && packet.heartRateAt != nil && isRunning
         if let energy = packet.energyKcal { self.energy = energy }
-        if selection == .strength {
+        if selection.countsReps {
             if let value = packet.reps { reps = value }
             if let value = packet.setIndex { setIndex = value }
             if let value = packet.completedSets { completedSets = value }
@@ -126,7 +127,7 @@ extension ActivityRecorder {
     /// Manual counting. On the watch source the command echoes back in the
     /// next packet; on the phone it counts here.
     func addRep() {
-        guard hasSession, selection == .strength else { return }
+        guard hasSession, selection.countsReps else { return }
         if source == .watch { watch?.send(.addRep); return }
         reps = (reps ?? 0) + 1
         persist()
@@ -136,13 +137,13 @@ extension ActivityRecorder {
     /// stays unknown, because turning a dash into a 0 would claim no reps
     /// were done.
     func removeRep() {
-        guard hasSession, selection == .strength else { return }
+        guard hasSession, selection.countsReps else { return }
         if source == .watch { watch?.send(.removeRep); return }
         if let current = reps { reps = max(0, current - 1) }
         persist()
     }
     func nextSet() {
-        guard hasSession, selection == .strength else { return }
+        guard hasSession, selection.countsReps else { return }
         if source == .watch { watch?.send(.nextSet); return }
         completedSets.append(reps ?? 0)
         reps = 0; setIndex = (setIndex ?? 1) + 1

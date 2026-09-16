@@ -29,7 +29,7 @@ import AppSurfaces
             for second in 0..<30 { recorder.sensor.onReading?(140, base.addingTimeInterval(Double(second))) }
             check(recorder.readout?.heartRate == 140 && recorder.readout?.zone == 3 && (recorder.readout?.effort ?? 0) > 0, "Readings yield zone and effort")
             let lifter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".lift")!, liveActivitiesEnabled: false)
-            lifter.attach(context); lifter.saveToHealth = false; lifter.selection = .strength
+            lifter.attach(context); lifter.saveToHealth = false; lifter.selection = ActivityCatalog.strength
             await lifter.start()
             check(lifter.source == .phone && lifter.reps == 0 && lifter.setIndex == 1, "A phone strength session starts at set 1 with zero reps")
             lifter.addRep(); lifter.removeRep(); lifter.removeRep()
@@ -78,7 +78,7 @@ import AppSurfaces
             mirrored.attach(context)
             var recoveries = 0
             while mirrored.busy, recoveries < 400 { recoveries += 1; try? await Task.sleep(for: .milliseconds(5)) }
-            check(mirrored.source == .watch && mirrored.selection == .strength && mirrored.hasSession,
+            check(mirrored.source == .watch && mirrored.selection.countsReps && mirrored.hasSession,
                   "A watch draft restores as a watch session")
             check(mirrored.saveToHealth, "A watch draft leaves Health saving on")
             var unknown = WatchPacket(sentAt: .now); unknown.v = 99; unknown.reps = 40; unknown.heartRate = 200
@@ -174,7 +174,7 @@ import AppSurfaces
             stale.active = false
             await bail.value
             let bailed = !stale.hasSession && stale.pendingVideoID == "abcdefghijk"
-            stale.active = true; stale.saveToHealth = false; stale.selection = .walk
+            stale.active = true; stale.saveToHealth = false; stale.selection = ActivityCatalog.walk
             await stale.start()
             let staleID = "almanac:\(stale.timer?.id.uuidString ?? "none")"
             await stale.finish()

@@ -120,7 +120,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         placeholderSessionID = id
     }
 
-    /// The same names and icons `RecordedActivity` uses. Duplicated rather
+    /// The same names and icons the activity catalog uses. Duplicated rather
     /// than imported: the bridge runs before any recorder exists.
     static func name(for type: HKWorkoutActivityType) -> String {
         switch type {

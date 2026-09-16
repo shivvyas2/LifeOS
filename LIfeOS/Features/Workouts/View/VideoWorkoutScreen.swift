@@ -33,11 +33,11 @@ struct VideoWorkoutScreen: View {
 
     /// The split decides what the recorder calls this session. A video is a
     /// strength session unless it plainly is not.
-    static func activity(for split: String) -> RecordedActivity {
+    static func activity(for split: String) -> ActivityType {
         switch split.lowercased() {
-        case "cardio": .other
-        case "mobility": .yoga
-        default: .strength
+        case "cardio": ActivityCatalog.other
+        case "mobility": ActivityCatalog.yoga
+        default: ActivityCatalog.strength
         }
     }
 
@@ -94,7 +94,7 @@ struct VideoWorkoutScreen: View {
                     if model.hasSession || model.saved {
                         if model.readout != nil {
                             elapsedLine
-                            if model.selection == .strength, model.hasSession { repControlsRow }
+                            if model.selection.countsReps, model.hasSession { repControlsRow }
                         }
                         ActivityControls(model: model, onDone: { dismiss() })
                     } else {

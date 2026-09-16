@@ -9,7 +9,7 @@ import DesignSystem
 /// clock and the pulse, for when the video matters more than the numbers.
 struct SessionRings: View {
     let readout: LiveSessionReadout
-    let activity: RecordedActivity
+    let activity: ActivityType
     let zonesAvailable: Bool
     /// Only a watch session counts reps by itself; on the phone every rep is
     /// a tap, and calling that "auto" would invert the honesty label.
@@ -26,7 +26,7 @@ struct SessionRings: View {
     /// Grows the rep count for a beat on every new rep.
     @State private var repPulse = false
 
-    private var showsEffort: Bool { activity != .yoga && zonesAvailable }
+    private var showsEffort: Bool { activity.showsZones && zonesAvailable }
     private var effortOver: Bool { SessionRingMath.effortIsOver(effort: readout.effort, target: readout.ceilingTarget) }
     private var shape: AnyShape {
         isExpanded ? AnyShape(RoundedRectangle(cornerRadius: 26, style: .continuous)) : AnyShape(Capsule())
@@ -41,7 +41,7 @@ struct SessionRings: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                if isExpanded, showsRepControls, activity == .strength { repControls.padding(.horizontal, 16) }
+                if isExpanded, showsRepControls, activity.countsReps { repControls.padding(.horizontal, 16) }
             }
             .padding(.vertical, isExpanded ? 10 : 8)
             .foregroundStyle(.white)
@@ -86,7 +86,7 @@ struct SessionRings: View {
                     Image(systemName: "battery.75percent")
                 }
             }
-            if activity == .strength { repCount }
+            if activity.countsReps { repCount }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(summary)
@@ -163,7 +163,7 @@ struct SessionRings: View {
             Text(readout.heartRateText ?? LiveSessionReadout.missing)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold)).monospacedDigit()
                 .contentTransition(.numericText())
-            if activity == .strength, let reps = readout.repsText {
+            if activity.countsReps, let reps = readout.repsText {
                 Text("· \(reps) reps").font(.subheadline.weight(.medium)).opacity(0.85)
             }
         }
@@ -187,7 +187,7 @@ struct SessionRings: View {
         if let zone = readout.zone { parts.append("zone \(zone)") }
         if showsEffort, let effort = readout.effort { parts.append(String(format: "effort %.1f estimated", effort)) }
         if showsEffort, let battery = readout.batteryPercent { parts.append("battery \(battery) percent") }
-        if activity == .strength, let reps = readout.reps { parts.append("\(reps) reps in set \(readout.setIndex ?? 1)") }
+        if activity.countsReps, let reps = readout.reps { parts.append("\(reps) reps in set \(readout.setIndex ?? 1)") }
         return parts.joined(separator: ", ")
     }
 }
@@ -216,8 +216,8 @@ extension PushState {
             ZStack {
                 LinearGradient(colors: [.black, .indigo], startPoint: .top, endPoint: .bottom).ignoresSafeArea()
                 VStack(alignment: .leading, spacing: 24) {
-                    SessionRings(readout: readout, activity: .strength, zonesAvailable: true, countsAutomatically: true, isExpanded: $expanded)
-                    SessionRings(readout: readout, activity: .run, zonesAvailable: true, isExpanded: $collapsed)
+                    SessionRings(readout: readout, activity: ActivityCatalog.strength, zonesAvailable: true, countsAutomatically: true, isExpanded: $expanded)
+                    SessionRings(readout: readout, activity: ActivityCatalog.run, zonesAvailable: true, isExpanded: $collapsed)
                 }.padding()
             }
         }
