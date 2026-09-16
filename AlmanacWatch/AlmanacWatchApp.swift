@@ -138,11 +138,24 @@ struct WatchDashboard: View {
         // watchOS has no `Menu`, so the Start list is a sheet.
         .sheet(isPresented: $isChoosingWorkout) {
             List {
-                ForEach(WatchWorkoutController.startable, id: \.type) { item in
-                    Button(item.name) { isChoosingWorkout = false; onStartWorkout(item.type) }
+                Section("Popular") {
+                    ForEach(ActivityCatalog.popular) { type in startRow(type) }
+                }
+                ForEach(ActivityCatalog.grouped(), id: \.group) { section in
+                    Section(section.group.rawValue) {
+                        ForEach(section.types) { type in startRow(type) }
+                    }
                 }
             }
             .navigationTitle("Start workout")
+        }
+    }
+    private func startRow(_ type: ActivityType) -> some View {
+        Button {
+            isChoosingWorkout = false
+            onStartWorkout(HKWorkoutActivityType(rawValue: type.healthRawValue) ?? .other)
+        } label: {
+            Label(type.name, systemImage: type.symbol)
         }
     }
     private func reading(_ title: String, value: String, icon: String, tint: Color) -> some View {

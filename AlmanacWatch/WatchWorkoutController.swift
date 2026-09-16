@@ -10,11 +10,11 @@ import Motion
 @MainActor @Observable
 final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     enum State { case idle, starting, running, paused, ending }
-    static let startable: [(name: String, type: HKWorkoutActivityType)] = [
-        ("Walk", .walking), ("Run", .running), ("Cycle", .cycling), ("Strength", .traditionalStrengthTraining), ("Yoga", .yoga), ("Other", .other)]
 
     private(set) var state: State = .idle
     private(set) var activityName = ""
+    /// The catalog entry for the running session, nil when idle.
+    private(set) var activity: ActivityType?
     private(set) var startedAt: Date?
     /// The workout clock, kept the way `ActivitySessionState` keeps it on the
     /// phone: a pause banks the time so far, a resume starts a new run. The
@@ -31,7 +31,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     /// Set when the workout could not be written to Health, so the screen can
     /// say so rather than ending in silence.
     private(set) var lastError: String?
-    var isStrength: Bool { session?.workoutConfiguration.activityType == .traditionalStrengthTraining }
+    var isStrength: Bool { activity?.countsReps == true }
 
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -58,7 +58,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         // while and a second Start tap must not open a second session.
         state = .starting
         lastError = nil
-        activityName = Self.startable.first { $0.type == configuration.activityType }?.name ?? "Other"
+        activity = ActivityCatalog.type(healthRawValue: configuration.activityType.rawValue) ?? ActivityCatalog.other
+        activityName = activity?.name ?? "Other"
         Task {
             do {
                 let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType.quantityType(forIdentifier: .heartRate)!, HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!]
@@ -93,7 +94,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 stopMotion()
                 self.session = nil; self.builder = nil
                 startedAt = nil; accumulated = 0; runningSince = nil
-                activityName = ""; mirroringFailed = false
+                activityName = ""; activity = nil; mirroringFailed = false
                 state = .idle
             }
         }
@@ -119,7 +120,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: session.workoutConfiguration)
         session.delegate = self; builder.delegate = self
         self.session = session; self.builder = builder
-        activityName = Self.startable.first { $0.type == session.workoutConfiguration.activityType }?.name ?? "Other"
+        activity = ActivityCatalog.type(healthRawValue: session.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
+        activityName = activity?.name ?? "Other"
         // A session that had already stopped or ended before the relaunch has
         // nothing left to track, so it is settled before anything adopts it:
         // no timer, no motion, no packet, and never a flash of `.running`.
@@ -236,7 +238,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         heartRate = nil; heartRateAt = nil; energyKcal = nil
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
         counter.reset()
-        activityName = ""; mirroringFailed = false; maxHeartRate = nil
+        activityName = ""; activity = nil; mirroringFailed = false; maxHeartRate = nil
         state = .idle
     }
 

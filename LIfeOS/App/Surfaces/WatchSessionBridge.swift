@@ -120,27 +120,13 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         placeholderSessionID = id
     }
 
-    /// The same names and icons the activity catalog uses. Duplicated rather
-    /// than imported: the bridge runs before any recorder exists.
+    /// The catalog's name and symbol for the type the wrist started, so the
+    /// placeholder Live Activity matches the card the recorder shows later.
     static func name(for type: HKWorkoutActivityType) -> String {
-        switch type {
-        case .walking: "Walk"
-        case .running: "Run"
-        case .cycling: "Cycle"
-        case .traditionalStrengthTraining: "Strength"
-        case .yoga: "Yoga"
-        default: "Other"
-        }
+        (ActivityCatalog.type(healthRawValue: type.rawValue) ?? ActivityCatalog.other).name
     }
     static func icon(for type: HKWorkoutActivityType) -> String {
-        switch type {
-        case .walking: "figure.walk"
-        case .running: "figure.run"
-        case .cycling: "figure.outdoor.cycle"
-        case .traditionalStrengthTraining: "dumbbell"
-        case .yoga: "figure.yoga"
-        default: "figure.mixed.cardio"
-        }
+        (ActivityCatalog.type(healthRawValue: type.rawValue) ?? ActivityCatalog.other).symbol
     }
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,
