@@ -218,7 +218,6 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         capacity = loadCapacity()
         effort = EffortAccumulator(); lastReadingAt = nil
         source = .phone
-        recents.record(selection)
         if selection.countsReps { reps = 0; setIndex = 1; completedSets = [] } else { reps = nil; setIndex = nil; completedSets = [] }
         recordingHealth = saveToHealth
         defer { busy = false }
@@ -254,6 +253,10 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             } else if timer == nil {
                 timer = ActivitySessionState(activity: selection.name, at: backdatedStart ?? .now)
             }
+            // Only a session that actually started belongs in the recents
+            // list; a refused or failed start above already returned or is
+            // about to throw, so it never reaches here.
+            recents.record(selection)
             persist()
         } catch {
             session?.end(); builder?.discardWorkout(); session = nil; builder = nil; timer = nil
