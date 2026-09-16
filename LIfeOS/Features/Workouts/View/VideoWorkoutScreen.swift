@@ -22,13 +22,17 @@ struct VideoWorkoutScreen: View {
     @State private var showControls = false
     /// Full screen chosen by the button, as opposed to by rotation.
     @State private var immersive = false
+    /// Full screen left by the button while still in landscape. Only an iPad
+    /// can set it: a phone in landscape leaves by turning back upright.
+    @State private var leftLandscape = false
     /// Where the letterboxed player sits in full screen portrait, so the
     /// control strip the HUD avoids is the player's, not the screen's.
     @State private var playerFrame = CGRect.zero
     @State private var host = YouTubePlayerHost()
     @Environment(\.horizontalSizeClass) private var sizeClass
-    /// The screen's own size. Landscape is wider than tall, which an iPad
-    /// reports where the compact vertical size class never would.
+    /// The screen's own size, measured behind the content and outside the
+    /// safe area. Landscape is wider than tall, which an iPad reports where
+    /// the compact vertical size class never would.
     @State private var screen = CGSize.zero
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
@@ -46,7 +50,8 @@ struct VideoWorkoutScreen: View {
 
     private var isLandscape: Bool { screen.width > screen.height }
     private var isWide: Bool { sizeClass == .regular && screen.width >= 900 }
-    private var isFullScreen: Bool { (isLandscape && VideoWorkoutLayout.landscapeOverlay) || immersive }
+    private var isFullScreen: Bool { (isLandscape && VideoWorkoutLayout.landscapeOverlay && !leftLandscape) || immersive }
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var watchURL: URL? { URL(string: "https://www.youtube.com/watch?v=\(video.youtubeID)") }
 
     var body: some View {
@@ -57,7 +62,13 @@ struct VideoWorkoutScreen: View {
                 portrait
             }
         }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { screen = $0 }
+        // Measured behind the content and outside the safe area, so hiding
+        // the bars in full screen cannot change the size the layout decision
+        // reads; otherwise a near square window would flip between layouts.
+        .background {
+            Color.clear.ignoresSafeArea()
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { screen = $0 }
+        }
         .navigationTitle("Workout")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(isFullScreen ? .hidden : .visible, for: .navigationBar)
@@ -70,6 +81,7 @@ struct VideoWorkoutScreen: View {
         // layout for.
         .onAppear { if UIDevice.current.userInterfaceIdiom == .phone { OrientationLock.allow(.allButUpsideDown) } }
         .onDisappear { OrientationLock.release() }
+        .onChange(of: isLandscape) { _, landscape in if !landscape { leftLandscape = false } }
     }
 
     // MARK: Portrait
@@ -260,7 +272,7 @@ struct VideoWorkoutScreen: View {
                 }
                 HStack(spacing: 10) {
                     if model.hasSession { controlsButton }
-                    if !isLandscape { fullScreenButton(entering: false) }
+                    if !isLandscape || isPad { fullScreenButton(entering: false) }
                 }
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
                 .padding(VideoWorkoutLayout.overlayInset)
@@ -271,11 +283,15 @@ struct VideoWorkoutScreen: View {
 
     private nonisolated static let overlaySpace = "videoWorkoutOverlay"
 
-    /// Into full screen from the portrait player, and back out of it. Not
-    /// offered in landscape, where turning the phone is the way out.
+    /// Into full screen from the portrait player, and back out of it. A phone
+    /// in landscape leaves by turning upright, so the button is hidden there;
+    /// an iPad lives in landscape and keeps it.
     private func fullScreenButton(entering: Bool) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.3)) { immersive = entering }
+            withAnimation(.snappy(duration: 0.3)) {
+                immersive = entering
+                leftLandscape = entering ? false : isLandscape
+            }
         } label: {
             Image(systemName: entering ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left")
                 .font(.headline).foregroundStyle(.white)
