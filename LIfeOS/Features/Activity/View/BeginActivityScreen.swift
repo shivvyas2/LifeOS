@@ -15,6 +15,7 @@ struct BeginActivityScreen: View {
     @Environment(\.colorScheme) private var scheme
     @State private var showSensors = false
     @State private var hudExpanded = true
+    @State private var showAllActivities = false
 
     var body: some View {
         NavigationStack {
@@ -191,28 +192,48 @@ struct BeginActivityScreen: View {
         .disabled(model.busy)
     }
 
+    /// The last six activities started, or the six the app always offered
+    /// when the account has none yet, then a tile that opens everything.
+    /// The current selection is always on the grid, even when it is not a
+    /// recent, so the picked activity is never invisible.
+    private var pickerTiles: [ActivityType] {
+        var tiles = model.recents.types()
+        if tiles.isEmpty { tiles = ActivityCatalog.popular }
+        if !tiles.contains(model.selection) { tiles.append(model.selection) }
+        return tiles
+    }
     private var activityPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose your activity").font(LifeOSType.sectionTitle)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145))], spacing: 10) {
-                ForEach(ActivityCatalog.popular) { activity in
-                    Button { model.selection = activity } label: {
-                        HStack {
-                            Image(systemName: activity.symbol)
-                            Text(activity.name).font(LifeOSType.rowTitle)
-                            Spacer(minLength: 0)
-                            if model.selection == activity { Image(systemName: "checkmark").font(.caption.bold()) }
-                        }
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .padding(16).frame(maxWidth: .infinity, minHeight: 58)
-                        .background(model.selection == activity ? LifeOSTokens.accentSoft.resolve(scheme) : LifeOSTokens.cardSurface.resolve(scheme),
-                                    in: RoundedRectangle(cornerRadius: 18))
+                ForEach(pickerTiles) { activity in
+                    pickerTile(activity.name, symbol: activity.symbol, selected: model.selection == activity) {
+                        model.selection = activity
                     }
-                    .buttonStyle(.plain).disabled(model.busy)
-                    .accessibilityAddTraits(model.selection == activity ? .isSelected : [])
                 }
+                pickerTile("More", symbol: "ellipsis.circle", selected: false) { showAllActivities = true }
+                    .accessibilityLabel("More activities")
             }
         }
+        .sheet(isPresented: $showAllActivities) {
+            ActivityPickerSheet(selection: $model.selection, onChoose: { _ in })
+        }
+    }
+    private func pickerTile(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: symbol)
+                Text(title).font(LifeOSType.rowTitle).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                if selected { Image(systemName: "checkmark").font(.caption.bold()) }
+            }
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .padding(16).frame(maxWidth: .infinity, minHeight: 58)
+            .background(selected ? LifeOSTokens.accentSoft.resolve(scheme) : LifeOSTokens.cardSurface.resolve(scheme),
+                        in: RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain).disabled(model.busy)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
     private var connections: some View {
         AccountPanel {
