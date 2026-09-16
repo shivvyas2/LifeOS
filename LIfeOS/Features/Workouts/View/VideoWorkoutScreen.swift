@@ -26,7 +26,10 @@ struct VideoWorkoutScreen: View {
     /// control strip the HUD avoids is the player's, not the screen's.
     @State private var playerFrame = CGRect.zero
     @State private var host = YouTubePlayerHost()
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// The screen's own size. Landscape is wider than tall, which an iPad
+    /// reports where the compact vertical size class never would.
+    @State private var screen = CGSize.zero
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -41,7 +44,8 @@ struct VideoWorkoutScreen: View {
         }
     }
 
-    private var isLandscape: Bool { verticalSizeClass == .compact }
+    private var isLandscape: Bool { screen.width > screen.height }
+    private var isWide: Bool { sizeClass == .regular && screen.width >= 900 }
     private var isFullScreen: Bool { (isLandscape && VideoWorkoutLayout.landscapeOverlay) || immersive }
     private var watchURL: URL? { URL(string: "https://www.youtube.com/watch?v=\(video.youtubeID)") }
 
@@ -53,6 +57,7 @@ struct VideoWorkoutScreen: View {
                 portrait
             }
         }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { screen = $0 }
         .navigationTitle("Workout")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(isFullScreen ? .hidden : .visible, for: .navigationBar)
@@ -73,43 +78,60 @@ struct VideoWorkoutScreen: View {
         ZStack {
             LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    player
-                        .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
-                        .frame(maxWidth: .infinity)
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                        .overlay {
-                            if model.hasSession, let readout = model.readout {
-                                DraggableHUD(placement: "compact",
-                                             avoiding: { VideoWorkoutLayout.controlStrip(in: $0) }) {
-                                    rings(readout, repControls: false)
-                                }
-                            }
-                        }
-                        .overlay(alignment: .topTrailing) {
-                            fullScreenButton(entering: true).padding(VideoWorkoutLayout.overlayInset)
-                        }
-                    openInYouTube
-                    details
-                    if model.hasSession || model.saved {
-                        if model.readout != nil {
-                            elapsedLine
-                            if model.selection.countsReps, model.hasSession { repControlsRow }
-                        }
-                        ActivityControls(model: model, onDone: { dismiss() })
-                    } else {
-                        startButton
+                if isWide {
+                    HStack(alignment: .top, spacing: 28) {
+                        playerCard.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 18) { portraitDetails }.frame(width: 360)
                     }
-                    if let error = model.error {
-                        Label(error, systemImage: "exclamationmark.circle")
-                            .font(LifeOSType.secondary)
-                            .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+                    .padding(20).padding(.bottom, 24)
+                } else {
+                    VStack(alignment: .leading, spacing: 18) {
+                        playerCard
+                        portraitDetails
+                    }
+                    .frame(maxWidth: 620).frame(maxWidth: .infinity)
+                    .padding(20).padding(.bottom, 24)
+                }
+            }
+        }
+    }
+
+    /// The player with its rings and the full-screen button.
+    private var playerCard: some View {
+        player
+            .aspectRatio(VideoWorkoutLayout.playerAspectRatio, contentMode: .fit)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                if model.hasSession, let readout = model.readout {
+                    DraggableHUD(placement: "compact",
+                                 avoiding: { VideoWorkoutLayout.controlStrip(in: $0) }) {
+                        rings(readout, repControls: false)
                     }
                 }
-                .frame(maxWidth: 620).frame(maxWidth: .infinity)
-                .padding(20)
-                .padding(.bottom, 24)
             }
+            .overlay(alignment: .topTrailing) {
+                fullScreenButton(entering: true).padding(VideoWorkoutLayout.overlayInset)
+            }
+    }
+
+    /// Everything under, or beside, the player.
+    @ViewBuilder private var portraitDetails: some View {
+        openInYouTube
+        details
+        if model.hasSession || model.saved {
+            if model.readout != nil {
+                elapsedLine
+                if model.selection.countsReps, model.hasSession { repControlsRow }
+            }
+            ActivityControls(model: model, onDone: { dismiss() })
+        } else {
+            startButton
+        }
+        if let error = model.error {
+            Label(error, systemImage: "exclamationmark.circle")
+                .font(LifeOSType.secondary)
+                .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
         }
     }
 
