@@ -176,8 +176,10 @@ import HealthKit
             stale.active = false
             await bail.value
             let bailed = !stale.hasSession && stale.pendingVideoID == "abcdefghijk"
+            let noRecentAfterBail = stale.recents.names.isEmpty
             stale.active = true; stale.saveToHealth = false; stale.selection = ActivityCatalog.walk
             await stale.start()
+            check(noRecentAfterBail && stale.recents.names == ["Walk"], "A bailed start records no recent; the next successful start records once")
             let staleID = "almanac:\(stale.timer?.id.uuidString ?? "none")"
             await stale.finish()
             var staleFetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == staleID })

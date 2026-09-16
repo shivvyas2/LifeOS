@@ -238,7 +238,7 @@ struct BeginActivityScreen: View {
             }
         }
         .sheet(isPresented: $showAllActivities) {
-            ActivityPickerSheet(selection: $model.selection, onChoose: { _ in })
+            ActivityPickerSheet(selection: $model.selection)
         }
     }
     private func pickerTile(_ title: String, symbol: String, selected: Bool, action: @escaping () -> Void) -> some View {

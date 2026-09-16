@@ -2,7 +2,14 @@ import SwiftUI
 import WidgetKit
 import WatchConnectivity
 import HealthKit
+import UIKit
 import AppSurfaces
+
+/// The catalog's symbol, or the generic figure when this OS lacks it, so a
+/// name that exists on the phone but not here never draws as nothing.
+func activitySymbol(_ name: String) -> Image {
+    UIImage(systemName: name) == nil ? Image(systemName: "figure.mixed.cardio") : Image(systemName: name)
+}
 
 @main
 struct AlmanacWatchApp: App {
@@ -155,7 +162,7 @@ struct WatchDashboard: View {
             isChoosingWorkout = false
             onStartWorkout(HKWorkoutActivityType(rawValue: type.healthRawValue) ?? .other)
         } label: {
-            Label(type.name, systemImage: type.symbol)
+            Label { Text(type.name) } icon: { activitySymbol(type.symbol) }
         }
     }
     private func reading(_ title: String, value: String, icon: String, tint: Color) -> some View {

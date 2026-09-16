@@ -5,7 +5,6 @@ import AppSurfaces
 /// Every activity, grouped, with a search field. A dialog on every device.
 struct ActivityPickerSheet: View {
     @Binding var selection: ActivityType
-    var onChoose: (ActivityType) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
@@ -29,7 +28,6 @@ struct ActivityPickerSheet: View {
                         ForEach(section.types) { type in
                             Button {
                                 selection = type
-                                onChoose(type)
                                 dismiss()
                             } label: {
                                 HStack {

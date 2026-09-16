@@ -1,8 +1,15 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
+import UIKit
 import AppSurfaces
 import DesignSystem
+
+/// The catalog's symbol, or the generic figure when this OS lacks it, so a
+/// name that exists on the phone but not here never draws as nothing.
+func activitySymbol(_ name: String) -> Image {
+    UIImage(systemName: name) == nil ? Image(systemName: "figure.mixed.cardio") : Image(systemName: name)
+}
 
 /// The lock screen and Dynamic Island for a running activity. Widget
 /// extensions cannot render materials, so the "glass" tiles are translucent
@@ -18,7 +25,7 @@ struct WorkoutLiveActivity: Widget {
             let readout = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(context.attributes.name, systemImage: context.attributes.icon)
+                    Label { Text(context.attributes.name) } icon: { activitySymbol(context.attributes.icon) }
                         .font(.headline).foregroundStyle(.white)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -49,7 +56,7 @@ struct WorkoutLiveActivity: Widget {
                         Text("\(bpm)").font(.caption.monospacedDigit().weight(.semibold))
                     }.foregroundStyle(readout.push.tint)
                 } else {
-                    Image(systemName: context.attributes.icon).foregroundStyle(readout.push.tint)
+                    activitySymbol(context.attributes.icon).foregroundStyle(readout.push.tint)
                 }
             } compactTrailing: {
                 if let reps = readout.repsText {
@@ -62,7 +69,7 @@ struct WorkoutLiveActivity: Widget {
                     Text("\(zone)").font(.caption2.bold()).foregroundStyle(.black)
                         .frame(width: 18, height: 18).background(readout.push.tint, in: Circle())
                 } else {
-                    Image(systemName: readout.isPaused ? "pause.fill" : context.attributes.icon).foregroundStyle(readout.push.tint)
+                    (readout.isPaused ? Image(systemName: "pause.fill") : activitySymbol(context.attributes.icon)).foregroundStyle(readout.push.tint)
                 }
             }
             .widgetURL(SurfaceRoute.activity.url)
@@ -86,7 +93,7 @@ private struct LockScreenView: View {
     var body: some View {
         VStack(spacing: 14) {
             HStack(spacing: 14) {
-                Image(systemName: icon).font(.title3.weight(.semibold))
+                activitySymbol(icon).font(.title3.weight(.semibold))
                     .frame(width: 44, height: 44).background(.white.opacity(0.22), in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(name).font(.headline)
