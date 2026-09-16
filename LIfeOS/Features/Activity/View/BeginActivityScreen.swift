@@ -13,41 +13,30 @@ struct BeginActivityScreen: View {
     var library: WorkoutLibraryViewModel?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSensors = false
     @State private var hudExpanded = true
     @State private var showAllActivities = false
+    @State private var width: CGFloat = 0
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if model.hasSession, let readout = model.readout {
-                        liveHero(readout)
-                        liveTiles(readout)
-                    } else {
-                        AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
-                            detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
-                        timerCard
-                        if !model.saved {
-                            if let library { followVideoLink(library) }
-                            activityPicker
-                        }
+                GeometryReader { _ in EmptyView() }.frame(height: 0)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+                if sizeClass == .regular, width >= 900 {
+                    HStack(alignment: .top, spacing: 28) {
+                        VStack(alignment: .leading, spacing: 22) { leading }.frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 22) { trailing }.frame(maxWidth: 420, alignment: .topLeading)
                     }
-                    if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
-                    if let error = model.error {
-                        Label(error, systemImage: "exclamationmark.circle")
-                            .font(LifeOSType.secondary).foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+                    .padding(22).padding(.bottom, 20)
+                } else {
+                    VStack(alignment: .leading, spacing: 22) {
+                        leading
+                        trailing
                     }
-                    ActivityControls(model: model, onDone: { dismiss() })
-                    if !model.saved { connections }
-                    if !model.hasSession && !model.saved {
-                        Button { dismiss(); onQuickLog() } label: {
-                            Label("Log steps, weight or a reflection", systemImage: "square.and.pencil")
-                                .font(LifeOSType.label).frame(maxWidth: .infinity, minHeight: 48)
-                        }.tint(LifeOSTokens.accent)
-                    }
+                    .frame(maxWidth: 620).frame(maxWidth: .infinity).padding(22).padding(.bottom, 20)
                 }
-                .frame(maxWidth: 620).frame(maxWidth: .infinity).padding(22).padding(.bottom, 20)
             }
             .background(alignment: .top) {
                 ZStack(alignment: .top) {
@@ -72,6 +61,39 @@ struct BeginActivityScreen: View {
         .tint(LifeOSTokens.accent)
         .onAppear { if startsCollapsed { hudExpanded = false } }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
+    }
+
+    /// The session itself: hero or timer, the tiles, the picker.
+    @ViewBuilder private var leading: some View {
+        if model.hasSession, let readout = model.readout {
+            liveHero(readout)
+            liveTiles(readout)
+        } else {
+            AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
+                detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
+            timerCard
+            if !model.saved {
+                if let library { followVideoLink(library) }
+                activityPicker
+            }
+        }
+        if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
+        if let error = model.error {
+            Label(error, systemImage: "exclamationmark.circle")
+                .font(LifeOSType.secondary).foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+        }
+    }
+    /// Controls, connections and the quick log: beside the session on a
+    /// wide screen, under it otherwise.
+    @ViewBuilder private var trailing: some View {
+        ActivityControls(model: model, onDone: { dismiss() })
+        if !model.saved { connections }
+        if !model.hasSession && !model.saved {
+            Button { dismiss(); onQuickLog() } label: {
+                Label("Log steps, weight or a reflection", systemImage: "square.and.pencil")
+                    .font(LifeOSType.label).frame(maxWidth: .infinity, minHeight: 48)
+            }.tint(LifeOSTokens.accent)
+        }
     }
 
     private var timerCard: some View {

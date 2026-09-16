@@ -52,6 +52,12 @@ struct RootView: View {
     @State private var recorder = ActivityRecorder()
     @State private var library = WorkoutLibraryViewModel()
     @State private var showActivity = false
+    private var activityScreen: some View {
+        BeginActivityScreen(model: recorder, onQuickLog: { quickLogAfterActivity = true }, library: library)
+    }
+    private func afterActivity() {
+        if quickLogAfterActivity { quickLogAfterActivity = false; showQuickLog = true }
+    }
     @State private var showNotifications = false
     @State private var coachAfterDismiss = false
     @State private var quickLogAfterActivity = false
@@ -136,11 +142,13 @@ struct RootView: View {
         )) { detail in
             DayDetailSheet(snapshot: detail) { today.toggleHabit(id: $0) }
         }
-        .sheet(isPresented: $showActivity, onDismiss: {
-            if quickLogAfterActivity { quickLogAfterActivity = false; showQuickLog = true }
-        }) {
-            BeginActivityScreen(model: recorder, onQuickLog: { quickLogAfterActivity = true }, library: library)
-        }
+        // A sheet on an iPad is a centered card, and the live session and
+        // the video it pushes would be stuck inside it. Regular width gets
+        // the cover Settings and the Coach already use.
+        .sheet(isPresented: Binding(get: { showActivity && sizeClass != .regular }, set: { showActivity = $0 }),
+               onDismiss: afterActivity) { activityScreen }
+        .fullScreenCover(isPresented: Binding(get: { showActivity && sizeClass == .regular }, set: { showActivity = $0 }),
+                         onDismiss: afterActivity) { activityScreen }
         .sheet(isPresented: $showNotifications, onDismiss: presentDeferredCoach) {
             NavigationStack {
                 NotificationInboxScreen().toolbar {
