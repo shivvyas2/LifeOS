@@ -1,0 +1,6 @@
+{
+  "name": "almanac-brand",
+  "private": true,
+  "scripts": { "build": "node gen.js && node export.js" },
+  "dependencies": { "opentype.js": "1.3.4" }
+}
