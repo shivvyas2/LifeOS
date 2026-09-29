@@ -37,10 +37,17 @@ jobs:
         run: cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
       - name: Build for the simulator
         run: |
+          set -o pipefail
           xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS \
             -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO \
-            -skipPackagePluginValidation build | tail -40; exit "${PIPESTATUS[0]}"
+            -configuration Debug CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            -skipPackagePluginValidation -quiet build 2>&1 | tee xcodebuild.log
+      - name: Keep the build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
 
   deno:
     name: Edge Function and catalog tests
