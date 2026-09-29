@@ -130,11 +130,12 @@ public struct TrendStatTile: View {
 }
 
 #Preview {
-    let week = (0..<7).map { offset in
-        TrendPoint(
-            date: Calendar.current.date(byAdding: .day, value: offset - 6, to: .now) ?? .now,
-            value: offset == 3 ? nil : Double(6_000 + offset * 900)
-        )
+    // Typed step by step: the one-expression form times out the type checker
+    // on slower machines.
+    let week: [TrendPoint] = (0..<7).map { (offset: Int) -> TrendPoint in
+        let date: Date = Calendar.current.date(byAdding: .day, value: offset - 6, to: .now) ?? .now
+        let value: Double? = offset == 3 ? nil : Double(6_000 + offset * 900)
+        return TrendPoint(date: date, value: value)
     }
     HStack(spacing: 12) {
         TrendStatTile(icon: "figure.walk", hue: .activity, label: "Steps",
