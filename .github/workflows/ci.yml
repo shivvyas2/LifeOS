@@ -15,8 +15,11 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      # Pinned to the Xcode the README documents. Xcode 26.6's Swift rejects a
+      # Live Activity send in ActivityRecorder.endStrayLiveActivities that 26.3
+      # accepts; bump this once that is fixed.
       - name: Select Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
       - name: Swift and Xcode versions
         run: swift --version && xcodebuild -version
       - name: Package tests
@@ -31,8 +34,11 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      # Pinned to the Xcode the README documents. Xcode 26.6's Swift rejects a
+      # Live Activity send in ActivityRecorder.endStrayLiveActivities that 26.3
+      # accepts; bump this once that is fixed.
       - name: Select Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
       - name: Blank secrets
         run: cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
       - name: Build for the simulator
