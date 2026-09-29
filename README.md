@@ -6,6 +6,8 @@
 
 <p align="center">A local-first life OS for iPhone and Apple Watch. Health, activity, money, notes, calendar, and a coach, joined on one row per day.</p>
 
+<p align="center"><a href="docs/handbook/Almanac-Engineering-Handbook.pdf">Read the engineering handbook</a> · <a href="https://github.com/shivvyas2/LifeOS/releases/latest">Latest release</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+
 <p align="center">
   <a href="https://github.com/shivvyas2/LifeOS/actions/workflows/ci.yml"><img src="https://github.com/shivvyas2/LifeOS/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
@@ -102,7 +104,17 @@ The module graph is compiler-enforced. `Persistence` knows nothing about the net
 
 ## The handbook
 
-`docs/handbook/Almanac-Engineering-Handbook.pdf` is the long-form description of the system: the architecture, every data source and the door it comes through, the coach, the widgets, the watch, money, and how releases go to TestFlight. Where the code and the handbook disagree, the code is right and the handbook has a bug. Please file it.
+<a href="docs/handbook/Almanac-Engineering-Handbook.pdf"><img src="docs/handbook/cover.jpg" width="160" align="right" alt="Almanac Engineering Handbook cover"></a>
+
+The Almanac Engineering Handbook is the long-form description of the system in 24 chapters: the architecture, every data source and the door it comes through, the coach, the widgets, the watch, money, and how releases go to TestFlight. Read it before a large change.
+
+- [PDF](docs/handbook/Almanac-Engineering-Handbook.pdf) and [EPUB](docs/handbook/Almanac-Engineering-Handbook.epub) in the repo
+- Downloads on the [latest release](https://github.com/shivvyas2/LifeOS/releases/latest)
+- Source chapters in `docs/handbook/src/chapters/`, built with `build.py`, `render-pdf.sh`, and `pack-epub.py`
+
+Where the code and the handbook disagree, the code is right and the handbook has a bug. Please file it.
+
+<br clear="all">
 
 ## Tests
 
