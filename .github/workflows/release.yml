@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Test, then publish the GitHub Release
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Package tests
+        run: swift test --parallel
+        working-directory: LifeOSKit
+      - name: Release notes from the changelog
+        id: notes
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## \[/{p=($0 ~ "\\["v"\\]")} p' CHANGELOG.md | tail -n +2 > notes.md
+          [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
+      - name: Create the release if it does not exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release exists"; exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Almanac $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            docs/handbook/Almanac-Engineering-Handbook.pdf \
+            docs/handbook/Almanac-Engineering-Handbook.epub

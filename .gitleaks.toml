@@ -1,0 +1,17 @@
+# gitleaks configuration. Extends the default rules and allowlists the
+# patterns that match by shape but are not secrets: a UserDefaults key name,
+# Swift properties that happen to be called `plaid`, and a test-only fake PEM.
+[extend]
+useDefault = true
+
+[allowlist]
+regexTarget = "line"
+regexes = [
+  '''storageKey = "''',
+  '''plaid: Plaid''',
+  '''@Bindable var plaid''',
+]
+paths = [
+  '''supabase/functions/_shared/apns_test\.ts''',
+  '''docs/superpowers/plans/.*\.md''',
+]

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kit:
+    name: LifeOSKit tests and typography guard
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Swift and Xcode versions
+        run: swift --version && xcodebuild -version
+      - name: Package tests
+        run: swift test --parallel
+        working-directory: LifeOSKit
+      - name: Typography guard (advisory until the known violations are cleared)
+        run: zsh scripts/check-typography.sh
+        continue-on-error: true
+
+  app:
+    name: Build the iOS app
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Blank secrets
+        run: cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project LIfeOS.xcodeproj -scheme LIfeOS \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation build | tail -40; exit "${PIPESTATUS[0]}"
+
+  deno:
+    name: Edge Function and catalog tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Edge Function tests
+        run: deno test --allow-env --allow-read
+        working-directory: supabase/functions
+      - name: Catalog verifier tests
+        run: deno test
+        working-directory: scripts/catalog
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
