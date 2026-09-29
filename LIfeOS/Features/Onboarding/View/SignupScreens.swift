@@ -63,7 +63,7 @@ struct SignupScaffold<Content: View, Action: View>: View {
                         .accessibilityAddTraits(.isHeader)
                         .padding(.top, Space.x2)
                     Text(subtitle)
-                        .font(.body)
+                        .font(LifeOSType.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
