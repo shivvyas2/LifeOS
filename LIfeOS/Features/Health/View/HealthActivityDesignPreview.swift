@@ -115,7 +115,13 @@ struct HealthActivityDesignPreview: View {
     let recovery = RecoverySnapshot(recoveryPct: 82, hrvMs: 62, restingHR: 54, sleepMinutes: 432,
         sleepPerformancePct: 89, sleepEfficiencyPct: 92, sleepConsistencyPct: 84, sleepDebtMinutes: 18,
         calories: 460, nights: [SleepComposition(date: .now, lightMinutes: 220, remMinutes: 112, swsMinutes: 100, awakeMinutes: 18)])
-    let weights = (0..<14).map { WeightPoint(id: Date.now.addingTimeInterval(Double($0 - 13) * 86400), weightKg: $0 == 5 ? nil : 77.2 + Double($0 % 4) / 10) }
+    // Typed step by step: the one-expression form times out the type checker
+    // on slower machines.
+    let weights: [WeightPoint] = (0..<14).map { (day: Int) -> WeightPoint in
+        let date: Date = Date.now.addingTimeInterval(Double(day - 13) * 86400)
+        let kg: Double? = day == 5 ? nil : 77.2 + Double(day % 4) / 10
+        return WeightPoint(id: date, weightKg: kg)
+    }
     /// The library reads the keychain for a token in the real app; the
     /// fixture hands it an empty in-memory store so a preview never reaches
     /// the network and the offline copy is what a capture shows.
