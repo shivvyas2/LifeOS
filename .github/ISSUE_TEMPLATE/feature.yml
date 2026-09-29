@@ -1,0 +1,22 @@
+name: Feature or change
+description: Propose something new or a change in behaviour
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard, slow, or missing today, and for whom.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+      description: What you would build. A sketch or a screenshot helps. Mention which module or feature folder it lives in if you know.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
