@@ -8,7 +8,8 @@ struct WatchWorkoutScreen: View {
     @State private var page = 0
     @State private var confirmingEnd = false
     @Environment(\.isLuminanceReduced) private var dimmed
-    private var accent: Color { WatchPalette.color(for: workout.activity ?? ActivityCatalog.other) }
+    private var theme: WatchActivityTheme { WatchPalette.theme(for: workout.activity ?? ActivityCatalog.other) }
+    private var accent: Color { theme.highlight }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: dimmed ? 60 : 5)) { _ in
@@ -69,6 +70,7 @@ struct WatchWorkoutScreen: View {
             }.tag(2)
         }
         .tabViewStyle(.page)
+        .background { WatchActivityBackdrop(theme: theme).ignoresSafeArea() }
         .navigationTitle(workout.activityName)
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Finish this workout?", isPresented: $confirmingEnd, titleVisibility: .visible) {
@@ -99,7 +101,7 @@ struct WatchWorkoutScreen: View {
             else { Text(workout.state == .paused ? "Paused" : "Active time").font(.caption2).foregroundStyle(.white.opacity(0.65)) }
         }
         .padding(9).frame(maxWidth: .infinity, alignment: .leading)
-        .background { WatchTileBackground(color: accent, dimmed: dimmed) }
+        .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
         .accessibilityElement(children: .combine)
     }
     private var heroLabel: String {
@@ -151,7 +153,7 @@ struct WatchWorkoutScreen: View {
             }
             Spacer(minLength: 2)
             Text("SET\n\(workout.setIndex ?? 1)").font(.caption2.bold()).multilineTextAlignment(.center).foregroundStyle(accent)
-        }.padding(10).background { WatchTileBackground(color: accent, dimmed: dimmed) }
+        }.padding(10).background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
     }
     private var repControls: some View {
         VStack(spacing: 8) {
@@ -175,7 +177,7 @@ struct WatchWorkoutScreen: View {
                 Text(paceLabel).font(.caption2).foregroundStyle(.secondary)
                 Text(pace).font(.headline).monospacedDigit()
             }
-        }.padding(10).background { WatchTileBackground(color: .blue, dimmed: dimmed) }
+        }.padding(10).background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
     }
     private var showsSpeed: Bool { ["Cycle", "Hand Cycling", "Downhill Skiing", "Snowboarding", "Skating"].contains(workout.activityName) }
     private var paceLabel: String {
@@ -203,7 +205,7 @@ struct WatchWorkoutScreen: View {
                 }
             }.accessibilityHidden(true)
             if workout.maxHeartRate == nil { Text("Add your birth date for estimated zones.").font(.system(size: 10)).foregroundStyle(.secondary) }
-        }.padding(10).background { WatchTileBackground(color: accent, dimmed: dimmed) }
+        }.padding(10).background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
             .accessibilityElement(children: .combine)
     }
     private var zoneValue: Int? {
@@ -235,25 +237,111 @@ struct WatchWorkoutScreen: View {
     }
 }
 
+/// Static gradients give the glass depth without running an animation or
+/// blur pass continuously during a workout.
 struct WatchTileBackground: View {
     let color: Color
+    var companion: Color? = nil
     var dimmed = false
     @Environment(\.accessibilityReduceTransparency) private var opaque
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isLuminanceReduced) private var alwaysOn
+    private var reduced: Bool { dimmed || alwaysOn }
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(LinearGradient(colors: [color.opacity(dimmed ? 0.08 : 0.32), Color(white: opaque ? 0.08 : 0.025)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(dimmed ? 0.05 : 0.13), lineWidth: 0.7) }
+        GeometryReader { proxy in
+            let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+            let radius = max(proxy.size.width, proxy.size.height)
+            ZStack {
+                // A dark optical base keeps white numerals readable over the
+                // lighter edge of the screen's ambient gradient.
+                shape.fill(Color(white: 0.025).opacity(opaque || reduced ? 1 : 0.86))
+                if !reduced {
+                    shape.fill(RadialGradient(colors: [color.opacity(0.55), .clear],
+                        center: .bottomTrailing, startRadius: 0, endRadius: radius * 1.05))
+                    shape.fill(RadialGradient(colors: [(companion ?? color).opacity(0.30), .clear],
+                        center: .bottomLeading, startRadius: 0, endRadius: radius * 0.78))
+                    if !opaque {
+                        shape.fill(LinearGradient(stops: [
+                            .init(color: .white.opacity(0.20), location: 0),
+                            .init(color: .white.opacity(0.035), location: 0.35),
+                            .init(color: .clear, location: 0.65)
+                        ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+                shape.strokeBorder(LinearGradient(colors: [
+                    .white.opacity(reduced ? 0.10 : contrast == .increased ? 0.7 : 0.44),
+                    .white.opacity(0.06),
+                    color.opacity(reduced ? 0.10 : 0.55),
+                    .white.opacity(reduced ? 0.08 : 0.24)
+                ], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: contrast == .increased ? 1.2 : 0.8)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+struct WatchActivityTheme {
+    let tint: Color
+    let glow: Color
+    let highlight: Color
+}
+
+/// A dark crown area flows into saturated color and a pale reflected edge,
+/// echoing the supplied gradient without placing white text on a white base.
+struct WatchActivityBackdrop: View {
+    let theme: WatchActivityTheme
+    @Environment(\.isLuminanceReduced) private var dimmed
+    @Environment(\.accessibilityReduceTransparency) private var opaque
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.black
+                if !dimmed && !opaque {
+                    LinearGradient(stops: [
+                        .init(color: .black, location: 0.08),
+                        .init(color: theme.tint.opacity(0.16), location: 0.44),
+                        .init(color: theme.tint.opacity(0.55), location: 0.82),
+                        .init(color: theme.glow.opacity(0.48), location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                    RadialGradient(colors: [theme.glow.opacity(0.42), .clear],
+                        center: UnitPoint(x: 1.1, y: 0.84), startRadius: 0, endRadius: proxy.size.width * 0.9)
+                    RadialGradient(colors: [.white.opacity(0.21), .clear],
+                        center: UnitPoint(x: -0.2, y: 1.2), startRadius: 0, endRadius: proxy.size.width * 0.9)
+                }
+            }
+        }.allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 
 enum WatchPalette {
-    static func color(for activity: ActivityType) -> Color {
-        switch WatchWorkoutLayout.forActivity(activity) {
-        case .court: return Color(red: 0.64, green: 0.95, blue: 0.28)
-        case .distance: return .cyan
-        case .strength: return .purple
-        case .mindful: return .mint
-        case .general: return .orange
+    static func color(for activity: ActivityType) -> Color { theme(for: activity).highlight }
+    static func theme(for activity: ActivityType) -> WatchActivityTheme {
+        switch activity.name {
+        case "Badminton", "Tennis", "Table Tennis", "Pickleball", "Squash", "Racquetball":
+            return .init(tint: Color(red: 0.10, green: 0.58, blue: 0.34), glow: Color(red: 0.72, green: 0.88, blue: 0.24), highlight: Color(red: 0.79, green: 1, blue: 0.55))
+        case "Run", "Wheelchair Run Pace":
+            return .init(tint: Color(red: 0.08, green: 0.24, blue: 0.95), glow: Color(red: 0.35, green: 0.71, blue: 1), highlight: Color(red: 0.68, green: 0.86, blue: 1))
+        case "Walk", "Hiking", "Wheelchair Walk Pace":
+            return .init(tint: Color(red: 0.03, green: 0.49, blue: 0.48), glow: Color(red: 0.36, green: 0.89, blue: 0.68), highlight: Color(red: 0.60, green: 1, blue: 0.82))
+        case "Cycle", "Hand Cycling":
+            return .init(tint: Color(red: 0.75, green: 0.29, blue: 0.07), glow: Color(red: 1, green: 0.65, blue: 0.27), highlight: Color(red: 1, green: 0.83, blue: 0.56))
+        default: break
+        }
+        switch activity.group {
+        case .strength:
+            return .init(tint: Color(red: 0.42, green: 0.16, blue: 0.85), glow: Color(red: 0.85, green: 0.36, blue: 0.81), highlight: Color(red: 0.88, green: 0.74, blue: 1))
+        case .mindAndBody:
+            return .init(tint: Color(red: 0.03, green: 0.47, blue: 0.38), glow: Color(red: 0.47, green: 0.79, blue: 0.70), highlight: Color(red: 0.70, green: 1, blue: 0.87))
+        case .water:
+            return .init(tint: Color(red: 0.02, green: 0.35, blue: 0.80), glow: Color(red: 0.13, green: 0.85, blue: 0.85), highlight: Color(red: 0.60, green: 0.95, blue: 1))
+        case .outdoor:
+            return .init(tint: Color(red: 0.21, green: 0.33, blue: 0.67), glow: Color(red: 0.57, green: 0.76, blue: 0.96), highlight: Color(red: 0.80, green: 0.90, blue: 1))
+        case .danceAndPlay:
+            return .init(tint: Color(red: 0.68, green: 0.14, blue: 0.44), glow: Color(red: 0.99, green: 0.44, blue: 0.61), highlight: Color(red: 1, green: 0.74, blue: 0.83))
+        default:
+            return .init(tint: Color(red: 0.75, green: 0.22, blue: 0.10), glow: Color(red: 1, green: 0.60, blue: 0.28), highlight: Color(red: 1, green: 0.79, blue: 0.60))
         }
     }
 }

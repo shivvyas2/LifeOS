@@ -190,7 +190,7 @@ struct WatchDashboard: View {
                             Spacer(minLength: 0)
                             Image(systemName: "play.fill").font(.caption2).foregroundStyle(.orange)
                         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                            .background { WatchTileBackground(color: WatchPalette.color(for: type)) }
+                            .background { WatchTileBackground(color: WatchPalette.theme(for: type).tint, companion: WatchPalette.theme(for: type).glow) }
                     }.buttonStyle(.plain).accessibilityLabel("Start \(type.name) workout")
                 }
                 Button { isChoosingWorkout = true } label: { Label("All activities", systemImage: "square.grid.2x2") }
@@ -211,6 +211,7 @@ struct WatchDashboard: View {
                 Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 2)
         }
+        .background { WatchActivityBackdrop(theme: WatchPalette.theme(for: ActivityCatalog.other)).ignoresSafeArea() }
         .navigationTitle("Almanac")
         .sheet(isPresented: $isChoosingWorkout) {
             NavigationStack {

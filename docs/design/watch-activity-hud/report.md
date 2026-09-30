@@ -69,3 +69,23 @@ in this change. The current main checkout's unrelated DI refactor was preserved.
 
 - [Apple: Building a multidevice workout app](https://developer.apple.com/documentation/healthkit/building-a-multidevice-workout-app)
 - [Apple: Creating independent watchOS apps](https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps)
+
+## Activity glass gradients (September 30 follow-up)
+
+Replaced the flat tint-to-black tiles with a dark translucent base, two colored
+reflections, a soft upper highlight and a directional glass rim. Workout pages
+now sit above a black-to-color ambient gradient with a pale reflected lower edge,
+inspired by the new blue gradient reference. The launcher uses the same glass
+surfaces with each activity's own palette.
+
+Running uses cobalt/ice blue; badminton and racket sports use jade/lime;
+walking uses teal/seafoam; cycling uses amber; strength uses violet/orchid;
+mind/body uses mint; water activities use blue/aqua; outdoor activities use
+slate/ice; dance uses rose. Orange action accents and existing typography remain.
+
+These are static SwiftUI gradients. Always On removes the bright reflections and
+ambient glow; Reduce Transparency uses an opaque card base and black screen
+backdrop; Increase Contrast strengthens the card edge. Workout/sync logic is
+unchanged. Watch simulator build passes, and `git diff --check` passes.
+New sample-data captures: `run-glass.png`, `badminton-glass.png`,
+`strength-glass.png`.
