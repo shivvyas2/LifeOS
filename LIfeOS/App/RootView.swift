@@ -27,11 +27,14 @@ extension NoteSync: NoteSyncing {}
 /// actions sit across the top of every one of them rather than in either
 /// shell's corner.
 struct RootView: View {
-    @Bindable var whoop: WhoopConnectionViewModel
-    @Bindable var fitbit: FitbitConnectionViewModel
-    @Bindable var plaid: PlaidConnectionViewModel
-    @Bindable var health: HealthConnectionViewModel
+    let integrations: IntegrationContainer
     var onSignOut: () -> Void = {}
+    
+    // Convenience accessors (keeps existing code working)
+    private var whoop: WhoopConnectionViewModel { integrations.whoop }
+    private var fitbit: FitbitConnectionViewModel { integrations.fitbit }
+    private var plaid: PlaidConnectionViewModel { integrations.plaid }
+    private var health: HealthConnectionViewModel { integrations.health }
 
     @Environment(\.accountSession) private var accountSession
     @Environment(\.modelContext) private var context

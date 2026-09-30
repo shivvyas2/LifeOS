@@ -33,3 +33,18 @@ supabase/.branches/
 ## Agent workspaces: worktrees and plan-execution scratch, never committed
 .claude/worktrees/
 .superpowers/
+
+## Local planning documents and notes
+/ARCHITECTURE_REVIEW.md
+/LIfeOS/App/ACTION_PLAN.md
+/LIfeOS/App/BUILD_CHECKLIST.md
+/LIfeOS/App/DI_REFACTORING_COMPLETE.md
+/LIfeOS/App/DO_NOT_COMMIT.md
+/LIfeOS/App/IMPLEMENTATION_COMPLETE.md
+/LIfeOS/App/OPEN_SOURCE_READINESS 2.md
+/LIfeOS/App/OPEN_SOURCE_READINESS.md
+/LIfeOS/App/VISUAL_SUMMARY.md
+/LIfeOS/App/WATCH_IMPROVEMENTS.md
+/LIfeOS/App/gitignore_additions.txt
+/LIfeOS/Components/Model/DI_IMPLEMENTATION_GUIDE.md
+/REFACTORING_GUIDE.md

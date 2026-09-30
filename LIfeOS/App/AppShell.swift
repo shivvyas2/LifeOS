@@ -31,10 +31,7 @@ struct AppShell: View {
     var accountID: String?
 
     @State private var onboarding = OnboardingViewModel()
-    @State private var whoop = WhoopConnectionViewModel()
-    @State private var fitbit = FitbitConnectionViewModel()
-    @State private var health = HealthConnectionViewModel()
-    @State private var plaid = PlaidConnectionViewModel()
+    @State private var integrations = IntegrationContainer()
     /// Persisted, but the win is narrower than the name suggests: `isSignedIn`
     /// resolves synchronously (a keychain read), so on a relaunch that restores
     /// a session this flag is already true on the first render, instead of
@@ -55,7 +52,7 @@ struct AppShell: View {
     var body: some View {
         Group {
             if onboarding.isSignedIn && hasFinishedOnboarding && hasStore {
-                RootView(whoop: whoop, fitbit: fitbit, plaid: plaid, health: health, onSignOut: {
+                RootView(integrations: integrations, onSignOut: {
                     // Before the session goes, not after: deleting this
                     // device's push row needs the access token of the account
                     // whose row it is. Left behind, that row would push one
@@ -66,10 +63,7 @@ struct AppShell: View {
                     if let accessToken = KeychainAuthSessionStore().load()?.accessToken {
                         Task { await PushService.shared.deregister(accessToken: accessToken) }
                     }
-                    whoop.deactivate()
-                    fitbit.deactivate()
-                    health.deactivate()
-                    plaid.deactivate()
+                    integrations.deactivateAll()
                     onboarding.signOut()
                 })
                 .overlay {
@@ -95,10 +89,10 @@ struct AppShell: View {
             } else {
                 OnboardingFlow(
                     model: onboarding,
-                    whoop: whoop,
-                    fitbit: fitbit,
-                    plaid: plaid,
-                    health: health,
+                    whoop: integrations.whoop,
+                    fitbit: integrations.fitbit,
+                    plaid: integrations.plaid,
+                    health: integrations.health,
                     onFinish: {
                         if let account = onboarding.account, let session = onboarding.session {
                             onSignedIn(account, session)
@@ -119,10 +113,7 @@ struct AppShell: View {
         .preferredColorScheme(appearance.colorScheme)
         .task {
             if hasStore {
-                whoop.attach(context)
-                health.attach(context)
-                fitbit.attach(context)
-                plaid.attach(context)
+                integrations.attach(context)
             }
             // A returning user has a session already; renew it and skip past
             // signup rather than making them prove themselves on every launch.
@@ -145,13 +136,7 @@ struct AppShell: View {
             // for a signed-out person's data to live that would not become
             // somebody else's the moment they signed in.
             guard hasStore, onboarding.isSignedIn else { return }
-            await whoop.syncIfStale()
-            // After Whoop, not before: Health fills the gaps Whoop leaves, so
-            // running it second means it sees the strap's numbers already in
-            // place and writes only where they are missing.
-            await health.syncIfConnected()
-            await fitbit.syncIfDue()
-            await plaid.syncIfDue()
+            await integrations.syncIfDue()
         }
         // Nothing awaits the sync: screens render local data immediately and
         // repaint through the ModelContext.didSave reload when it lands. The
@@ -206,12 +191,9 @@ struct AppShell: View {
                 // Before syncing: a sign-in abandoned in Safari leaves the
                 // card spinning, and coming back is the only moment we learn
                 // it was abandoned.
-                await whoop.resolveStalledConnect()
+                await integrations.resolveStalled()
                 guard hasStore, onboarding.isSignedIn else { return }
-                await whoop.syncIfStale()
-                await health.syncIfConnected()
-                await fitbit.syncIfDue()
-                await plaid.syncIfDue()
+                await integrations.syncIfDue()
             }
         }
         .onOpenURL { url in
@@ -244,9 +226,9 @@ struct AppShell: View {
         if FitbitOAuth.state(in: url).map({ returned in
             KeychainFitbitAuthStore().pendingAuths().contains { $0.state == returned }
         }) == true {
-            Task { await fitbit.handle(url) }
+            Task { await integrations.fitbit.handle(url) }
         } else {
-            whoop.handleCallback(url)
+            integrations.whoop.handleCallback(url)
         }
     }
 }
