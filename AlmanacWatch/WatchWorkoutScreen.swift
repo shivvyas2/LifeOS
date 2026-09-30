@@ -17,17 +17,19 @@ struct WatchWorkoutScreen: View {
             ScrollView {
                 VStack(spacing: 8) {
                     hero
-                    HStack(spacing: 7) {
-                        metric("Heart rate", value: workout.freshHeartRate.map(String.init) ?? "—", unit: "BPM", icon: "heart.fill", color: .pink)
-                        metric("Active energy", value: workout.energyKcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—", unit: "KCAL", icon: "flame.fill", color: .orange)
+                    HStack(spacing: 0) {
+                        metric("Heart rate", value: workout.freshHeartRate.map(String.init) ?? "—", unit: "BPM", icon: "heart.fill")
+                        Rectangle().fill(accent.opacity(0.18)).frame(width: 0.5, height: 42).accessibilityHidden(true)
+                        metric("Energy", value: workout.energyKcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—", unit: "kcal", icon: "flame.fill")
                     }
+                    .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
                     if workout.layout == .strength { strength }
                     else if workout.layout == .distance { distance }
                     else if workout.activity?.showsZones == true { zone }
                     Text(workout.mirroringFailed ? "Recording on Watch · sync later" : "Live with iPhone")
-                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .font(.system(size: 10)).foregroundStyle(accent.opacity(0.85))
                     Button { page = 2 } label: { Label("Controls", systemImage: "slider.horizontal.3") }
-                        .buttonStyle(.glass).tint(.orange)
+                        .buttonStyle(.glass).tint(accent.opacity(0.15))
                 }.padding(.horizontal, 2)
             }.tag(0)
             ScrollView {
@@ -42,10 +44,13 @@ struct WatchWorkoutScreen: View {
                 }.padding(.horizontal, 2)
             }.tag(1)
             ScrollView {
-                VStack(spacing: 10) {
-                    Label(workout.activityName, systemImage: workout.activity?.symbol ?? "figure.run")
-                        .font(.headline).foregroundStyle(accent)
-                    timer.font(.system(size: 32, weight: .semibold, design: .rounded))
+                VStack(spacing: 8) {
+                    VStack(spacing: 3) {
+                        Text(workout.state == .paused ? "Workout paused" : "Active time")
+                            .font(.system(size: 11, weight: .medium)).foregroundStyle(accent)
+                        timer.font(.system(size: 28, weight: .semibold, design: .rounded))
+                    }.frame(maxWidth: .infinity).padding(8)
+                        .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
                     if let error = workout.lastError {
                         Text(error).font(.caption2).foregroundStyle(.orange)
                     }
@@ -55,22 +60,21 @@ struct WatchWorkoutScreen: View {
                     } else {
                         Button { workout.state == .paused ? workout.resume() : workout.pause() } label: {
                             Label(workout.state == .paused ? "Resume" : "Pause", systemImage: workout.state == .paused ? "play.fill" : "pause.fill")
-                                .frame(maxWidth: .infinity, minHeight: 32)
+                                .frame(maxWidth: .infinity, minHeight: 24)
                         }.buttonStyle(.glassProminent).tint(.orange)
                         Button { confirmingEnd = true } label: {
-                            Label("Finish & save", systemImage: "stop.fill").frame(maxWidth: .infinity, minHeight: 32)
-                        }.buttonStyle(.glass)
+                            Label("Finish & save", systemImage: "stop.fill").frame(maxWidth: .infinity, minHeight: 24)
+                        }.buttonStyle(.glass).tint(accent.opacity(0.15))
                         if workout.isStrength { repControls }
                     }
-                    Label("Recorded on Apple Watch", systemImage: "applewatch")
-                        .font(.caption2).foregroundStyle(.secondary)
-                    Text("Keep going without your phone. Your workout is saved to Health on this Watch.")
-                        .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Label("Saves to Apple Health", systemImage: "applewatch")
+                        .font(.caption2).foregroundStyle(accent.opacity(0.85))
                 }.padding(.horizontal, 4)
             }.tag(2)
         }
         .tabViewStyle(.page)
         .containerBackground(for: .navigation) { WatchActivityBackdrop(theme: theme) }
+        .tint(accent)
         .navigationTitle(workout.activityName)
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Finish this workout?", isPresented: $confirmingEnd, titleVisibility: .visible) {
@@ -91,17 +95,19 @@ struct WatchWorkoutScreen: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
-                activitySymbol(workout.activity?.symbol ?? "figure.run").font(.system(size: 18))
-                Spacer()
+                HStack(spacing: 5) {
+                    activitySymbol(workout.activity?.symbol ?? "figure.run").font(.system(size: 14))
+                    Text("Active time").font(.system(size: 10, weight: .medium))
+                }
+                Spacer(minLength: 4)
                 Text(workout.state == .paused ? "Paused" : heroLabel).font(.system(size: 9, weight: .semibold)).textCase(.uppercase).tracking(1)
             }.foregroundStyle(accent)
-            timer.font(.system(size: 32, weight: .semibold, design: .rounded))
+            timer.font(.system(size: 36, weight: .semibold, design: .rounded))
                 .minimumScaleFactor(0.65).lineLimit(1)
             if workout.layout == .court { court.frame(height: 14).accessibilityHidden(true) }
-            else { Text(workout.state == .paused ? "Paused" : "Active time").font(.caption2).foregroundStyle(.white.opacity(0.65)) }
         }
-        .padding(9).frame(maxWidth: .infinity, alignment: .leading)
-        .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed, emphasized: true) }
         .accessibilityElement(children: .combine)
     }
     private var heroLabel: String {
@@ -134,15 +140,17 @@ struct WatchWorkoutScreen: View {
             }.stroke(accent.opacity(0.65), lineWidth: 1)
         }
     }
-    private func metric(_ title: String, value: String, unit: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 3) {
-                Image(systemName: icon).foregroundStyle(color)
-                Text(unit).foregroundStyle(.white.opacity(0.65))
-            }.font(.system(size: 9, weight: .medium))
-            Text(value).font(.system(size: 25, weight: .semibold, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(9)
-            .background { WatchTileBackground(color: color, dimmed: dimmed) }
+    private func metric(_ title: String, value: String, unit: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 9, weight: .medium)).foregroundStyle(accent)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(.system(size: 25, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(unit).font(.system(size: 8, weight: .medium)).foregroundStyle(.white.opacity(0.72))
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(11)
             .accessibilityElement(children: .ignore).accessibilityLabel("\(title), \(value) \(unit)")
     }
     private var strength: some View {
@@ -161,8 +169,8 @@ struct WatchWorkoutScreen: View {
             HStack {
                 Button("−1") { workout.removeRep() }.accessibilityLabel("Remove one rep")
                 Button("+1") { workout.addRep() }.accessibilityLabel("Add one rep")
-            }.buttonStyle(.glass)
-            Button("Next set") { workout.nextSet() }.buttonStyle(.glass)
+            }.buttonStyle(.glass).tint(accent.opacity(0.15))
+            Button("Next set") { workout.nextSet() }.buttonStyle(.glass).tint(accent.opacity(0.15))
         }
     }
     private var distance: some View {
@@ -201,7 +209,7 @@ struct WatchWorkoutScreen: View {
             }
             HStack(spacing: 4) {
                 ForEach(1...5, id: \.self) { index in
-                    Capsule().fill(zoneColor(index).opacity(zoneValue == index ? 1 : 0.22)).frame(height: 5)
+                    Capsule().fill(zoneValue == index ? accent : accent.opacity(0.18)).frame(height: 5)
                 }
             }.accessibilityHidden(true)
             if workout.maxHeartRate == nil { Text("Add your birth date for estimated zones.").font(.system(size: 10)).foregroundStyle(.secondary) }
@@ -212,10 +220,9 @@ struct WatchWorkoutScreen: View {
         guard let max = workout.maxHeartRate, max > 0, let bpm = workout.freshHeartRate else { return nil }
         return min(5, Swift.max(0, Int((Double(bpm) / Double(max) - 0.4) * 10)))
     }
-    private func zoneColor(_ zone: Int) -> Color { [.blue, .cyan, .green, .orange, .pink][zone - 1] }
     private var heartTrend: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Heart rate", systemImage: "heart.fill").font(.caption).foregroundStyle(.pink)
+            Label("Heart rate", systemImage: "heart.fill").font(.caption).foregroundStyle(accent)
             Text(workout.freshHeartRate.map { "\($0) BPM" } ?? "Waiting for a reading")
                 .font(.title3.bold()).monospacedDigit()
             if workout.heartHistory.count >= 2 {
@@ -228,12 +235,12 @@ struct WatchWorkoutScreen: View {
                             let point = CGPoint(x: geometry.size.width * Double(index) / Double(values.count - 1), y: geometry.size.height * (1 - (value - low) / span))
                             if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
                         }
-                    }.stroke(.pink.gradient, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                }.frame(height: 55).accessibilityHidden(true)
+                    }.stroke(accent.gradient, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                }.frame(height: 42).accessibilityHidden(true)
                 Text("Recent readings").font(.caption2).foregroundStyle(.secondary)
             } else { Text("Your trend appears as readings arrive.").font(.caption2).foregroundStyle(.secondary) }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background { WatchTileBackground(color: .pink, dimmed: dimmed) }
+            .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
     }
 }
 
@@ -243,6 +250,7 @@ struct WatchTileBackground: View {
     let color: Color
     var companion: Color? = nil
     var dimmed = false
+    var emphasized = false
     @Environment(\.accessibilityReduceTransparency) private var opaque
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.isLuminanceReduced) private var alwaysOn
@@ -255,25 +263,25 @@ struct WatchTileBackground: View {
             ZStack {
                 // A dark optical base keeps white numerals readable over the
                 // lighter edge of the screen's ambient gradient.
-                shape.fill(Color(white: 0.025).opacity(opaque || reduced ? 1 : 0.86))
+                shape.fill(Color(white: 0.025).opacity(opaque || reduced ? 1 : emphasized ? 0.58 : 0.48))
                 if !reduced {
-                    shape.fill(RadialGradient(colors: [color.opacity(0.55), .clear],
+                    shape.fill(RadialGradient(colors: [color.opacity(emphasized ? 0.32 : 0.18), .clear],
                         center: .bottomTrailing, startRadius: 0, endRadius: radius * 1.05))
-                    shape.fill(RadialGradient(colors: [(companion ?? color).opacity(0.30), .clear],
+                    shape.fill(RadialGradient(colors: [(companion ?? color).opacity(emphasized ? 0.16 : 0.08), .clear],
                         center: .bottomLeading, startRadius: 0, endRadius: radius * 0.78))
                     if !opaque {
                         shape.fill(LinearGradient(stops: [
-                            .init(color: .white.opacity(0.20), location: 0),
+                            .init(color: .white.opacity(emphasized ? 0.14 : 0.08), location: 0),
                             .init(color: .white.opacity(0.035), location: 0.35),
                             .init(color: .clear, location: 0.65)
                         ], startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
                 }
                 shape.strokeBorder(LinearGradient(colors: [
-                    .white.opacity(reduced ? 0.10 : contrast == .increased ? 0.7 : 0.44),
+                    .white.opacity(reduced ? 0.10 : contrast == .increased ? 0.7 : emphasized ? 0.34 : 0.23),
                     .white.opacity(0.06),
-                    color.opacity(reduced ? 0.10 : 0.55),
-                    .white.opacity(reduced ? 0.08 : 0.24)
+                    (companion ?? color).opacity(reduced ? 0.10 : 0.22),
+                    .white.opacity(reduced ? 0.08 : 0.12)
                 ], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: contrast == .increased ? 1.2 : 0.8)
             }
         }

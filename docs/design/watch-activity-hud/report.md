@@ -97,3 +97,20 @@ watchOS `.containerBackground(for: .navigation)`, so the same gradient fills the
 clock/title area. Replaced the pure-black top gradient stop with shaded activity
 color. `run-fullscreen.png` confirms blue extends to the top edge with legible
 clock and title. Watch simulator build and `git diff --check` passed.
+
+## Cohesive overlays and hierarchy
+
+Unified BPM and energy into one glass metric rail with a quiet divider. Supporting
+cards, metric icons, the heart-rate chart and the selected zone now derive from
+the activity palette rather than unrelated pink/red/amber fills. Surface tint,
+reflection and border opacity are reduced; the timer has slightly stronger glass
+emphasis. Zone numbers still explicitly identify the selected band.
+
+Removed the repeated paused label, made Active time the timer's eyebrow, and
+consolidated the controls-page heading into a compact timer card. Orange remains
+on the primary action and app navigation accent; secondary controls use a subtle
+activity tint. Reduced control spacing to keep Resume and Finish visible together
+on the small Watch display. Session, recording and sync behavior is unchanged.
+
+Watch build and `git diff --check` pass. New simulator fixture captures:
+`run-cohesive.png`, `badminton-cohesive.png`, and `controls-cohesive.png`.
