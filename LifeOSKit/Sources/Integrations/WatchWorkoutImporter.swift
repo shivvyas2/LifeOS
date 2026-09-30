@@ -29,6 +29,7 @@ public enum WatchWorkoutImporter {
         row.durationMinutes = Int(summary.elapsed / 60)
         row.energyKcal = summary.energyKcal; row.distanceMeters = summary.distanceMeters
         row.sets = summary.sets
+        if let analysis = summary.swingAnalysis { row.swingAnalysisData = try JSONEncoder().encode(analysis) }
         if existing == nil { context.insert(row) }
         try context.save()
         return true

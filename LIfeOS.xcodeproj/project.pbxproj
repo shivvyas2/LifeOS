@@ -568,7 +568,7 @@
 				INFOPLIST_FILE = AlmanacWatch/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads heart rate and energy during a workout you start on your watch.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac saves workouts you record on your watch to Health.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac counts reps from wrist motion during strength sessions.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac uses wrist motion for optional strength rep and badminton swing estimates.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -631,7 +631,7 @@
 				INFOPLIST_FILE = AlmanacWatch/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Almanac reads heart rate and energy during a workout you start on your watch.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Almanac saves workouts you record on your watch to Health.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac counts reps from wrist motion during strength sessions.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Almanac uses wrist motion for optional strength rep and badminton swing estimates.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

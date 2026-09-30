@@ -17,6 +17,8 @@ public struct WatchPacket: Codable, Equatable, Sendable {
     public var heartRate: Int?
     public var heartRateAt: Date?
     public var energyKcal: Double?
+    public var swingCount: Int?
+    public var peakWristRotation: Double?
     public var reps: Int?
     public var setIndex: Int?
     public var completedSets: [Int]?

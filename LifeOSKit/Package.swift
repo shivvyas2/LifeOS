@@ -29,7 +29,7 @@ let package = Package(
         .testTarget(name: "InsightsTests", dependencies: ["Insights"]),
         .testTarget(name: "SectorsTests", dependencies: ["Sectors"]),
         .testTarget(name: "AssistantTests", dependencies: ["Assistant"]),
-        .target(name: "Motion"),
+        .target(name: "Motion", dependencies: ["AppSurfaces"]),
         .testTarget(name: "MotionTests", dependencies: ["Motion"]),
     ]
 )

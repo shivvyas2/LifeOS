@@ -28,7 +28,7 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     }
     func adopt(ownerID: String?, context: ModelContext?) {
         self.ownerID = ownerID; self.context = context
-        workoutBinding = WatchAccountBinding(ownerID: ownerID)
+        workoutBinding = WatchAccountBinding(ownerID: ownerID, athlete: ActivityAthleteProfile.load(from: .currentAccount))
         if SurfaceSnapshot.read()?.ownerID != ownerID || ownerID == nil || !sharingEnabled { writeTombstones() }
         if WCSession.isSupported(), watchSession == nil {
             watchSession = WCSession.default
@@ -36,6 +36,11 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
             watchSession?.activate()
         }
         publish(); sendToWatch(); importWatchWorkouts()
+    }
+    func publishAthleteProfile() {
+        guard let ownerID else { return }
+        workoutBinding = WatchAccountBinding(ownerID: ownerID, athlete: ActivityAthleteProfile.load(from: .currentAccount))
+        sendToWatch()
     }
     func clear() {
         ownerID = nil; context = nil; pendingRoute = nil
@@ -125,7 +130,7 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
         persistWorkoutInbox()
     }
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        guard let data = userInfo["workoutSummary"] as? Data, data.count <= 64_000,
+        guard let data = userInfo["workoutSummary"] as? Data, data.count <= 2_000_000,
               let summary = try? JSONDecoder().decode(WatchWorkoutSummary.self, from: data) else { return }
         Task { @MainActor in
             guard self.ownerID == nil || summary.ownerID == self.ownerID else { return }

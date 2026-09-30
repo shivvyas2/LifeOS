@@ -4,9 +4,10 @@ import Foundation
 /// Contains no credentials and never authorizes access to a server.
 public struct WatchAccountBinding: Codable, Equatable, Sendable {
     public var ownerID: String?
+    public var athlete: ActivityAthleteProfile?
     public var updatedAt: Date
-    public init(ownerID: String?, updatedAt: Date = .now) {
-        self.ownerID = ownerID; self.updatedAt = updatedAt
+    public init(ownerID: String?, updatedAt: Date = .now, athlete: ActivityAthleteProfile? = nil) {
+        self.ownerID = ownerID; self.updatedAt = updatedAt; self.athlete = athlete
     }
     public func supersedes(_ previous: Self?) -> Bool {
         previous.map { updatedAt > $0.updatedAt } ?? true
@@ -24,13 +25,14 @@ public struct WatchWorkoutSummary: Codable, Equatable, Sendable, Identifiable {
     public var energyKcal: Double?
     public var distanceMeters: Double?
     public var sets: [Int]
+    public var swingAnalysis: SwingAnalysis?
     public var healthWorkoutID: UUID?
     public init(id: UUID, ownerID: String, activity: String, startedAt: Date, endedAt: Date,
-                elapsed: TimeInterval, energyKcal: Double?, distanceMeters: Double?, sets: [Int], healthWorkoutID: UUID?) {
+                elapsed: TimeInterval, energyKcal: Double?, distanceMeters: Double?, sets: [Int], healthWorkoutID: UUID?, swingAnalysis: SwingAnalysis? = nil) {
         self.id = id; self.ownerID = ownerID; self.activity = activity
         self.startedAt = startedAt; self.endedAt = endedAt; self.elapsed = elapsed
         self.energyKcal = energyKcal; self.distanceMeters = distanceMeters
-        self.sets = sets; self.healthWorkoutID = healthWorkoutID
+        self.sets = sets; self.healthWorkoutID = healthWorkoutID; self.swingAnalysis = swingAnalysis
     }
     public var recordID: String { "almanac-watch:\(id.uuidString)" }
     public func isValid(for owner: String, now: Date = .now) -> Bool {
@@ -40,6 +42,7 @@ public struct WatchWorkoutSummary: Codable, Equatable, Sendable, Identifiable {
         && elapsed <= 7 * 24 * 3600
         && (energyKcal.map { $0.isFinite && (0...100_000).contains($0) } ?? true)
         && (distanceMeters.map { $0.isFinite && (0...2_000_000).contains($0) } ?? true)
+        && (swingAnalysis.map { activity == "Badminton" && $0.isValid(elapsed: elapsed) } ?? true)
         && sets.count <= 1000 && sets.allSatisfy { (0...10000).contains($0) }
     }
 }

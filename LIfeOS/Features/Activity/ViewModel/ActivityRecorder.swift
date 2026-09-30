@@ -8,6 +8,14 @@ import AppSurfaces
 
 @MainActor @Observable
 final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
+    var athlete: ActivityAthleteProfile?
+    var swingCount: Int?
+    var peakWristRotation: Double?
+    func saveAthlete(_ profile: ActivityAthleteProfile) {
+        guard profile.isValid else { return }
+        athlete = profile; profile.save(to: defaults)
+        SurfaceCoordinator.shared.publishAthleteProfile()
+    }
     var selection: ActivityType = ActivityCatalog.walk
     /// The last six activities started on this account, for the picker.
     /// Same defaults as the draft, so the design preview's disposable suite
@@ -109,6 +117,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
         self.defaults = defaults
+        athlete = ActivityAthleteProfile.load(from: defaults)
         recents = ActivityRecents(defaults: defaults)
         self.liveActivitiesEnabled = liveActivitiesEnabled
         sensor = LiveHeartRateSensor(defaults: defaults)
@@ -218,7 +227,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         }
         // `!hasSession` means the timer is either nil or a finished, saved one
         // from the last workout; either way this start owns a fresh one.
-        watchSessionID = nil; lastWatchPacketAt = nil
+        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false; timer = nil
         zones = HeartRateZones(birthDate: birthDate())
         capacity = loadCapacity()
@@ -388,7 +397,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         sensor.stopStreaming(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
-        watchSessionID = nil; lastWatchPacketAt = nil
+        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
         source = .phone; reps = nil; setIndex = nil; completedSets = []
         pendingVideoID = nil; pendingSplit = nil; following = nil
         error = nil; notice = nil; busy = false

@@ -16,6 +16,7 @@ struct ActivityControls: View {
     var onDone: () -> Void
 
     @State private var confirmDiscard = false
+    @State private var showSetup = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -38,8 +39,14 @@ struct ActivityControls: View {
                 Toggle("Save to Apple Health", isOn: $model.saveToHealth).font(LifeOSType.rowTitle)
                     .disabled(model.busy)
                 primaryButton(model.busy ? "Starting…" : "Begin activity", icon: "play.fill") {
-                    Task { await model.start() }
+                    if model.athlete == nil { showSetup = true } else { Task { await model.start() } }
                 }
+            }
+        }
+        .sheet(isPresented: $showSetup) {
+            ActivityAthleteSetup(initial: model.athlete) { profile in
+                model.saveAthlete(profile)
+                Task { await model.start() }
             }
         }
         .confirmationDialog("Discard this activity?", isPresented: $confirmDiscard, titleVisibility: .visible) {

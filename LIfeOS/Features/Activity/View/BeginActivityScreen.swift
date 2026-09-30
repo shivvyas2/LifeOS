@@ -15,6 +15,7 @@ struct BeginActivityScreen: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showSensors = false
+    @State private var showAthleteSetup = false
     @State private var hudExpanded = true
     @State private var showAllActivities = false
     @State private var width: CGFloat = 0
@@ -60,6 +61,7 @@ struct BeginActivityScreen: View {
         }
         .tint(LifeOSTokens.accent)
         .onAppear { if startsCollapsed { hudExpanded = false } }
+        .sheet(isPresented: $showAthleteSetup) { ActivityAthleteSetup(initial: model.athlete, onSave: model.saveAthlete) }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
     }
 
@@ -75,6 +77,8 @@ struct BeginActivityScreen: View {
             if !model.saved {
                 if let library { followVideoLink(library) }
                 activityPicker
+                Button { showAthleteSetup = true } label: { Label("Your activity setup", systemImage: "figure.stand") }.frame(minHeight: 44)
+                NavigationLink { BadmintonHistoryScreen() } label: { Label("Badminton session reviews", systemImage: "figure.badminton") }.frame(minHeight: 44)
             }
         }
         if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
@@ -86,6 +90,9 @@ struct BeginActivityScreen: View {
     /// Controls, connections and the quick log: beside the session on a
     /// wide screen, under it otherwise.
     @ViewBuilder private var trailing: some View {
+        if model.saved && model.selection.name == "Badminton" {
+            NavigationLink { BadmintonHistoryScreen() } label: { Label("Review your session", systemImage: "chart.xyaxis.line") }.frame(minHeight: 48)
+        }
         ActivityControls(model: model, onDone: { dismiss() })
         if !model.saved { connections }
         if !model.hasSession && !model.saved {
@@ -160,6 +167,11 @@ struct BeginActivityScreen: View {
                     glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effortText,
                               unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
                               caption: capacityCaption(readout))
+                }
+                if model.selection.name == "Badminton" {
+                    glassTile(icon: "figure.badminton", label: "Swing candidates", value: model.swingCount.map(String.init), unit: nil,
+                              caption: model.swingCount == nil ? "Enable analysis on your racket wrist" : "Experimental · includes practice swings")
+                    glassTile(icon: "speedometer", label: "Peak wrist rotation", value: model.peakWristRotation.map { String(Int(($0 * 180 / .pi).rounded())) }, unit: "°/s", caption: "Measured at the wrist · not shuttle speed")
                 }
                 if model.selection.countsReps {
                     glassTile(icon: "repeat", label: readout.setText ?? "Reps", value: readout.repsText, unit: "reps",
