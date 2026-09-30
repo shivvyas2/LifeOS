@@ -30,6 +30,13 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var workoutID = UUID()
     private(set) var ownerID: String?
     var accountID: String?
+    var athlete: ActivityAthleteProfile?
+    var needsAthleteSetup = false
+    private var pendingStart: HKWorkoutConfiguration?
+    private var swingDetector = BadmintonSwingDetector()
+    private(set) var swingAnalysis: SwingAnalysis?
+    private(set) var motionStatus = "Swing analysis is off"
+    private var analyzesSwings: Bool { activityName == "Badminton" && swingAnalysis != nil }
     var onFinished: ((WatchWorkoutSummary) -> Void)?
     private var heartbeat: Task<Void, Never>?
     private var mirrorAttemptAt: Date = .distantPast
@@ -38,6 +45,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private struct Checkpoint: Codable {
         var id: UUID; var ownerID: String?; var startedAt: Date
         var reps: Int?; var setIndex: Int?; var completedSets: [Int]
+        var swingAnalysis: SwingAnalysis?
     }
     var elapsed: TimeInterval { accumulated + (runningSince.map { max(0, Date.now.timeIntervalSince($0)) } ?? 0) }
     var freshHeartRate: Int? {
@@ -87,6 +95,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
 
     func start(_ configuration: HKWorkoutConfiguration) {
         guard state == .idle else { return }
+        guard athlete != nil else { pendingStart = configuration; needsAthleteSetup = true; return }
         // Synchronous, before the Task: the authorization prompt can take a
         // while and a second Start tap must not open a second session.
         state = .starting
@@ -94,6 +103,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         workoutID = UUID(); ownerID = accountID
         activity = ActivityCatalog.type(healthRawValue: configuration.activityType.rawValue) ?? ActivityCatalog.other
         activityName = activity?.name ?? "Other"
+        swingAnalysis = activityName == "Badminton" && athlete?.canAnalyzeSwings == true ? SwingAnalysis(profile: athlete) : nil
+        swingDetector = BadmintonSwingDetector(profile: athlete)
         Task {
             do {
                 let quantities: [HKQuantityTypeIdentifier] = [.heartRate, .activeEnergyBurned, .distanceWalkingRunning, .distanceCycling, .distanceSwimming, .distanceWheelchair, .distanceRowing, .distancePaddleSports, .distanceSkatingSports, .distanceDownhillSnowSports]
@@ -127,6 +138,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 guard self.session === session else { return }
                 state = .running
                 if isStrength { reps = 0; setIndex = 1; completedSets = []; manualReps = 0; startMotion() }
+                if analyzesSwings { startMotion() }
                 persistCheckpoint(); startHeartbeat()
                 sendPacket(force: true)
             } catch {
@@ -175,6 +187,9 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         if let saved, abs(saved.startedAt.timeIntervalSince(started)) < 1 {
             workoutID = saved.id; ownerID = saved.ownerID
             reps = saved.reps; setIndex = saved.setIndex; completedSets = saved.completedSets
+            swingAnalysis = saved.swingAnalysis
+            swingAnalysis?.interrupted = true
+            swingDetector = BadmintonSwingDetector(restoring: swingAnalysis)
         } else { workoutID = UUID(); ownerID = accountID }
         if let ownerID, ownerID != accountID { discard(); return }
         if recovered.state == .stopped || recovered.state == .ended {
@@ -193,6 +208,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             setIndex = setIndex ?? 1; manualReps = reps ?? 0
             startMotion()
         }
+        if analyzesSwings { startMotion() }
         startHeartbeat(); sendPacket(force: true)
     }
 
@@ -220,7 +236,16 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         session.end()
         resetAfterEnd()
     }
+    func completeAthleteSetup(_ profile: ActivityAthleteProfile) {
+        guard profile.isValid else { return }
+        athlete = profile
+        if let accountID { profile.save(to: UserDefaults(suiteName: "watch.athlete.\(accountID)") ?? .standard) }
+        needsAthleteSetup = false
+        if let pendingStart { self.pendingStart = nil; start(pendingStart) }
+    }
     func accountChanged(to next: String?) {
+        athlete = next.flatMap { UserDefaults(suiteName: "watch.athlete.\($0)") }.flatMap { ActivityAthleteProfile.load(from: $0) }
+        needsAthleteSetup = false; pendingStart = nil
         accountID = next
         if let ownerID, ownerID != next, state != .idle { discard() }
     }
@@ -264,18 +289,30 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     #endif
 
     private func startMotion() {
-        guard motion.isDeviceMotionAvailable else { return }
+        guard motion.isDeviceMotionAvailable else { motionStatus = "Motion sensor unavailable"; swingAnalysis?.interrupted = true; return }
+        motionStatus = "Wrist motion · experimental"
         counter.reset()
         motion.deviceMotionUpdateInterval = 1.0 / 50.0
         // `.main` is the main-thread queue, so the handler is already on the
         // main actor: `assumeIsolated` keeps every sample in order rather than
         // scattering 50 hops a second through `Task`.
         motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
-            guard let self, let data else { return }
+            guard let self else { return }
             MainActor.assumeIsolated {
+                guard let data else { self.motionStatus = "Motion unavailable · check permission"; self.swingAnalysis?.interrupted = true; return }
                 guard self.state == .running else { return }
                 let acceleration = data.userAcceleration
-                if self.counter.add(RepCounter.Sample(t: data.timestamp, x: acceleration.x, y: acceleration.y, z: acceleration.z)) {
+                if self.analyzesSwings {
+                    let rotation = data.rotationRate; let q = data.attitude.quaternion
+                    let t = self.elapsed
+                    let sample = BadmintonSwingDetector.Sample(time: t,
+                        acceleration: sqrt(acceleration.x * acceleration.x + acceleration.y * acceleration.y + acceleration.z * acceleration.z),
+                        rotation: sqrt(rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z),
+                        frame: WristFrame(t: 0, x: q.x, y: q.y, z: q.z, w: q.w))
+                    let detected = self.swingDetector.add(sample)
+                    // Publish at event boundaries; the 5-second checkpoint also snapshots coverage.
+                    if detected { self.swingAnalysis = self.swingDetector.analysis; self.sendPacket(force: true) }
+                } else if self.counter.add(RepCounter.Sample(t: data.timestamp, x: acceleration.x, y: acceleration.y, z: acceleration.z)) {
                     self.reps = self.counter.reps + self.manualReps
                     self.sendPacket(force: true)
                 }
@@ -293,7 +330,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         startedAt = nil; accumulated = 0; runningSince = nil
         heartRate = nil; heartRateAt = nil; energyKcal = nil; distanceMeters = nil; heartHistory = []
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
-        counter.reset()
+        counter.reset(); swingAnalysis = nil; swingDetector = BadmintonSwingDetector(); motionStatus = "Swing analysis is off"
         activityName = ""; activity = nil; mirroringFailed = false; maxHeartRate = nil
         state = .idle
     }
@@ -310,6 +347,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         packet.distanceMeters = distanceMeters
         packet.heartRate = heartRate; packet.heartRateAt = heartRate == nil ? nil : heartRateAt
         packet.energyKcal = energyKcal
+        if let swingAnalysis { packet.swingCount = swingAnalysis.events.count; packet.peakWristRotation = swingAnalysis.peakRotation }
         if isStrength {
             packet.reps = reps; packet.setIndex = setIndex
             packet.completedSets = completedSets.isEmpty ? nil : completedSets
@@ -341,7 +379,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
 
     private func persistCheckpoint() {
         guard let startedAt else { return }
-        let value = Checkpoint(id: workoutID, ownerID: ownerID, startedAt: startedAt, reps: reps, setIndex: setIndex, completedSets: completedSets)
+        if analyzesSwings { swingAnalysis = swingDetector.analysis }
+        let value = Checkpoint(id: workoutID, ownerID: ownerID, startedAt: startedAt, reps: reps, setIndex: setIndex, completedSets: completedSets, swingAnalysis: swingAnalysis)
         if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: checkpointKey) }
     }
     private func startHeartbeat() {
@@ -381,7 +420,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 onFinished?(WatchWorkoutSummary(id: workoutID, ownerID: ownerID, activity: activityName,
                     startedAt: startedAt, endedAt: saved.endDate, elapsed: saved.duration,
                     energyKcal: energyKcal, distanceMeters: distanceMeters,
-                    sets: isStrength ? completedSets + [reps ?? 0] : [], healthWorkoutID: saved.uuid))
+                    sets: isStrength ? completedSets + [reps ?? 0] : [], healthWorkoutID: saved.uuid, swingAnalysis: swingAnalysis))
             }
             result = ownerID == nil ? "Workout saved to Apple Health." : "Workout saved. Your iPhone syncs when available."
             lastError = nil
@@ -422,6 +461,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 if self.runningSince == nil { self.runningSince = date }
             case .paused:
                 self.manualReps = self.reps ?? 0; self.counter.reset()
+                self.swingDetector.interrupt()
                 self.state = .paused
                 if let since = self.runningSince { self.accumulated += max(0, date.timeIntervalSince(since)) }
                 self.runningSince = nil

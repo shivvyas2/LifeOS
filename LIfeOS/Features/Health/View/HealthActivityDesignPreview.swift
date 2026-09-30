@@ -17,6 +17,19 @@ struct HealthActivityDesignPreview: View {
     @State private var checkResults = "Running checks…"
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var page: String { ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--page=") })?.dropFirst(7).description ?? "health" }
+    private static var badmintonFixture: WorkoutRecord {
+        let row = WorkoutRecord(externalID: "design-badminton", start: .now, durationMinutes: 32, activityName: "Badminton", energyKcal: 216)
+        var analysis = SwingAnalysis(); analysis.sampledSeconds = 1852
+        analysis.events = (0..<38).map { index in
+            let frames = (0..<12).map { i in
+                let angle = sin(Double(i) / 11 * .pi) * 1.8
+                return WristFrame(t: Double(i) * 0.08, x: sin(angle / 2), y: 0, z: 0, w: cos(angle / 2))
+            }
+            return SwingEvent(id: index, time: Double(index) * 47 + 10, duration: 0.96, peakRotation: 5.8 + Double(index % 7) * 0.6, peakAcceleration: 1.5 + Double(index % 5) * 0.3, frames: frames)
+        }
+        row.swingAnalysisData = try? JSONEncoder().encode(analysis)
+        return row
+    }
     var body: some View {
         Group {
             if page == "checks" {
@@ -41,6 +54,9 @@ struct HealthActivityDesignPreview: View {
                         fixture.recorder.sensor.onReading?(152, .now)
                         fixture.recorder.addRep(); fixture.recorder.addRep(); fixture.recorder.nextSet(); fixture.recorder.addRep()
                     }
+            }
+            else if page == "badminton" {
+                NavigationStack { BadmintonReviewScreen(workout: Self.badmintonFixture) }
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "library" || page == "library-empty" {

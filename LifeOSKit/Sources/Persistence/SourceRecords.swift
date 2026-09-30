@@ -32,6 +32,7 @@ public final class WorkoutRecord {
     public var zoneFiveMinutes: Int?
     /// Reps per set for a strength session, as JSON, so an existing store
     /// migrates without a plan. Empty sets are stored as nil, not `[]`.
+    public var swingAnalysisData: Data?
     public var setsData: Data?
     public var sets: [Int] {
         get { setsData.flatMap { try? JSONDecoder().decode([Int].self, from: $0) } ?? [] }

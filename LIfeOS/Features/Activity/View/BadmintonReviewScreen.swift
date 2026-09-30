@@ -1,0 +1,207 @@
+import SwiftUI
+import SwiftData
+import SceneKit
+import Charts
+import AppSurfaces
+import Persistence
+import DesignSystem
+
+struct BadmintonHistoryScreen: View {
+    @Query(filter: #Predicate<WorkoutRecord> { $0.activityName == "Badminton" }, sort: \WorkoutRecord.start, order: .reverse)
+    private var workouts: [WorkoutRecord]
+    var body: some View {
+        List {
+            Section {
+                Text("Your time on court").font(.title2.bold())
+                Text("Apple Watch motion reviews arrive when your saved workout syncs. WHOOP and Apple Health sessions without motion data still show their workout totals.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            if workouts.isEmpty {
+                ContentUnavailableView("Your next session starts here", systemImage: "figure.badminton", description: Text("Enable experimental swing analysis in Your activity setup, then record badminton on your racket wrist."))
+            }
+            ForEach(workouts) { workout in
+                NavigationLink {
+                    BadmintonReviewScreen(workout: workout)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(workout.start, format: .dateTime.month().day().hour().minute()).font(.headline)
+                        Text("\(workout.durationMinutes) min · \(workout.swingAnalysisData == nil ? "Workout summary" : "Motion review")").font(.caption).foregroundStyle(.secondary)
+                    }.padding(.vertical, 5)
+                }
+            }
+        }.navigationTitle("Badminton").tint(LifeOSTokens.accent)
+    }
+}
+
+struct BadmintonReviewScreen: View {
+    let workout: WorkoutRecord
+    @State private var selected = 0
+    @State private var playback = 0.0
+    @State private var playing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    private let jade = Color(red: 0.33, green: 0.91, blue: 0.72)
+    private var analysis: SwingAnalysis? {
+        workout.swingAnalysisData.flatMap { try? JSONDecoder().decode(SwingAnalysis.self, from: $0) }
+    }
+    private var event: SwingEvent? { analysis?.events.first(where: { $0.id == selected }) }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("YOUR COURT REVIEW").font(.caption.weight(.semibold)).tracking(2).foregroundStyle(jade)
+                    Text("Every movement,\na little clearer.").font(.system(.largeTitle, weight: .semibold))
+                    Text(workout.start, format: .dateTime.weekday().month().day()).font(.subheadline).foregroundStyle(.white.opacity(0.65))
+                }
+                HStack(spacing: 0) {
+                    metric("Court time", "\(workout.durationMinutes)", "min")
+                    metric("Energy", workout.energyKcal.map { String(Int($0.rounded())) } ?? "—", "kcal")
+                    metric("Candidates", analysis.map { String($0.events.count) } ?? "—", "estimated")
+                }.padding(.vertical, 18).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 24))
+                if let analysis {
+                    motionReview(analysis)
+                } else {
+                    panel("No wrist motion recorded", icon: "applewatch") {
+                        Text("This session contains workout totals only. For your next badminton session, enable swing analysis and wear Apple Watch on your racket wrist. WHOOP does not expose swing motion through its public API.")
+                    }
+                }
+                panel("What this session can tell you", icon: "scope") {
+                    LabeledContent("Wrist rotation & acceleration", value: analysis == nil ? "Not recorded" : "Measured")
+                    Divider().overlay(.white.opacity(0.1))
+                    LabeledContent("Swing count", value: analysis == nil ? "Not recorded" : "Experimental estimate")
+                    Divider().overlay(.white.opacity(0.1))
+                    LabeledContent("Court position", value: "Not measured")
+                    LabeledContent("Posture & impact angle", value: "Not measured")
+                    LabeledContent("Shuttle / racket speed", value: "Not measured")
+                }
+                panel("A useful next session", icon: "sparkle") {
+                    Text("Record a short drill and compare the candidates with a manual count. Practice swings and other quick arm movements can be included; gentle shots can be missed. Use video or a coach to review technique.")
+                    if let events = analysis?.events, events.count > 1 {
+                        let values = events.map(\.peakRotation).sorted()
+                        Text("Median candidate peak: \(Int((values[values.count / 2] * 180 / .pi).rounded()))°/s at the wrist. A higher value does not mean a better shot.")
+                    }
+                }
+            }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(22)
+        }
+        .background {
+            LinearGradient(colors: [Color(red: 0.07, green: 0.28, blue: 0.24), Color(red: 0.025, green: 0.055, blue: 0.065), .black], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
+        }
+        .foregroundStyle(.white).colorScheme(.dark)
+        .navigationTitle("Badminton").navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar).tint(jade)
+        .task(id: playing) {
+            guard playing, !reduceMotion, let duration = event?.duration else { return }
+            let start = Date.now.addingTimeInterval(-playback)
+            while !Task.isCancelled && playing {
+                playback = min(duration, Date.now.timeIntervalSince(start))
+                if playback >= duration { playing = false; break }
+                try? await Task.sleep(for: .milliseconds(40))
+            }
+        }
+        .onChange(of: selected) { _, _ in playing = false; playback = 0 }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { playing = false } }
+        .onDisappear { playing = false }
+    }
+    private func motionReview(_ analysis: SwingAnalysis) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack { Text("Motion replay").font(.title2.bold()); Spacer(); Text("EXPERIMENTAL").font(.caption2.bold()).foregroundStyle(jade) }
+            Text("Recorded wrist orientation. Court and wrist position are illustrative; body posture and shot trajectory are not reconstructed.").font(.caption).foregroundStyle(.white.opacity(0.7))
+            if analysis.events.isEmpty {
+                ContentUnavailableView("No swing candidates", systemImage: "waveform.path", description: Text("No qualifying motion bursts were recorded. This does not mean you made no shots."))
+            } else {
+                WristCourtReplay(event: event, time: playback)
+                    .frame(height: 280).clipShape(RoundedRectangle(cornerRadius: 24))
+                    .accessibilityLabel("3D view of measured wrist orientation. Court position is not tracked.")
+                HStack {
+                    Button { if playback >= (event?.duration ?? 0) { playback = 0 }; playing.toggle() } label: {
+                        Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
+                    }.buttonStyle(.glass).disabled(reduceMotion)
+                    Slider(value: $playback, in: 0...max(0.1, event?.duration ?? 0.1), onEditingChanged: { _ in playing = false })
+                        .accessibilityLabel("Scrub recorded wrist orientation")
+                }
+                if reduceMotion { Text("Use the slider to inspect motion with Reduce Motion enabled.").font(.caption).foregroundStyle(.secondary) }
+                HStack {
+                    Button { selected -= 1 } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(selected == 0)
+                    Spacer()
+                    VStack(spacing: 4) {
+                        Text("Candidate \(selected + 1) of \(analysis.events.count)").font(.headline)
+                        if let event { Text("\(Int(event.time) / 60):\(String(format: "%02d", Int(event.time) % 60)) active time").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    Spacer()
+                    Button { selected += 1 } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.disabled(selected + 1 >= analysis.events.count)
+                }
+                if let event {
+                    HStack {
+                        metric("Peak wrist rotation", String(Int((event.peakRotation * 180 / .pi).rounded())), "°/s")
+                        metric("Peak acceleration", String(format: "%.1f", event.peakAcceleration), "g · gravity removed")
+                    }
+                }
+                Chart(analysis.events) { event in
+                    BarMark(x: .value("Active time", event.time / 60), y: .value("Peak wrist rotation", event.peakRotation * 180 / .pi), width: 3)
+                        .foregroundStyle(event.id == selected ? .orange : jade.opacity(0.65))
+                }.frame(height: 110).chartXAxisLabel("Active minutes").chartYAxisLabel("°/s")
+                    .accessibilityLabel("Wrist rotation peaks for \(analysis.events.count) estimated swing candidates")
+            }
+            Text("Motion coverage: \(Int(analysis.sampledSeconds / 60))m \(Int(analysis.sampledSeconds) % 60)s sampled.\(analysis.interrupted ? " Sensor interruptions occurred." : "")\(analysis.truncated ? " Replay limit reached; later candidates were not retained." : "")")
+                .font(.caption).foregroundStyle(.white.opacity(0.65))
+        }
+    }
+    private func metric(_ title: String, _ value: String, _ unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption).foregroundStyle(.white.opacity(0.65))
+            Text(value).font(.system(.title, design: .rounded, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(unit).font(.caption2).foregroundStyle(jade)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
+    }
+    private func panel<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Label(title, systemImage: icon).font(.headline).foregroundStyle(jade)
+            content().font(.subheadline).foregroundStyle(.white.opacity(0.8))
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12)))
+    }
+}
+
+/// A fixed display position deliberately avoids inventing a player track.
+private struct WristCourtReplay: UIViewRepresentable {
+    var event: SwingEvent?
+    var time: Double
+    func makeUIView(context: Context) -> SCNView {
+        let view = SCNView(); let scene = SCNScene(); view.scene = scene
+        view.backgroundColor = UIColor(red: 0.015, green: 0.075, blue: 0.07, alpha: 1)
+        view.autoenablesDefaultLighting = true; view.allowsCameraControl = true
+        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(8, 11, 13)
+        camera.look(at: SCNVector3(0, 0, 0)); scene.rootNode.addChildNode(camera)
+        let floor = SCNBox(width: 6, height: 0.08, length: 12, chamferRadius: 0.06)
+        floor.firstMaterial?.diffuse.contents = UIColor(red: 0.025, green: 0.32, blue: 0.25, alpha: 1)
+        scene.rootNode.addChildNode(SCNNode(geometry: floor))
+        for x: Float in [-3, 3] { line(scene, x: x, z: 0, width: 0.04, length: 12) }
+        for z: Float in [-6, -2, 0, 2, 6] { line(scene, x: 0, z: z, width: 6, length: 0.04) }
+        line(scene, x: 0, z: -4, width: 0.04, length: 4); line(scene, x: 0, z: 4, width: 0.04, length: 4)
+        let net = SCNBox(width: 6.1, height: 0.7, length: 0.025, chamferRadius: 0)
+        net.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.18)
+        let netNode = SCNNode(geometry: net); netNode.position = SCNVector3(0, 0.9, 0); scene.rootNode.addChildNode(netNode)
+        let display = SCNNode(); display.position = SCNVector3(0, 2.3, 3.2); scene.rootNode.addChildNode(display)
+        let wrist = SCNNode(); wrist.name = "wrist"; display.addChildNode(wrist)
+        let arm = SCNCapsule(capRadius: 0.18, height: 1.8); arm.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.8)
+        let armNode = SCNNode(geometry: arm); armNode.position.y = -0.6; wrist.addChildNode(armNode)
+        let watch = SCNBox(width: 0.65, height: 0.48, length: 0.25, chamferRadius: 0.1)
+        watch.firstMaterial?.diffuse.contents = UIColor.systemMint; watch.firstMaterial?.metalness.contents = 0.6
+        wrist.addChildNode(SCNNode(geometry: watch))
+        return view
+    }
+    func updateUIView(_ view: SCNView, context: Context) {
+        guard let wrist = view.scene?.rootNode.childNode(withName: "wrist", recursively: true) else { return }
+        guard let frames = event?.frames, let first = frames.first else { wrist.orientation = SCNQuaternion(0, 0, 0, 1); return }
+        let frame = frames.last(where: { $0.t <= time }) ?? first
+        // Relative attitude removes the arbitrary session reference direction.
+        let start = simd_quatf(ix: Float(first.x), iy: Float(first.y), iz: Float(first.z), r: Float(first.w))
+        let current = simd_quatf(ix: Float(frame.x), iy: Float(frame.y), iz: Float(frame.z), r: Float(frame.w))
+        wrist.simdOrientation = start.inverse * current
+    }
+    private func line(_ scene: SCNScene, x: Float, z: Float, width: CGFloat, length: CGFloat) {
+        let box = SCNBox(width: width, height: 0.02, length: length, chamferRadius: 0)
+        box.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.55)
+        let node = SCNNode(geometry: box); node.position = SCNVector3(x, 0.06, z); scene.rootNode.addChildNode(node)
+    }
+}

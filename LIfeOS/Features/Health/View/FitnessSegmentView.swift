@@ -36,6 +36,9 @@ struct FitnessSegmentView: View {
                                value: recovery.maxHR.map { "\(Int($0))" }, unit: "bpm", hue: .habits)
             }
 
+            NavigationLink { BadmintonHistoryScreen() } label: {
+                Label("Badminton session reviews", systemImage: "figure.badminton").font(LifeOSType.rowTitle).frame(minHeight: 48)
+            }
             if !activity.workouts.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("WORKOUTS")

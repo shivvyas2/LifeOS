@@ -23,6 +23,7 @@ struct WatchWorkoutScreen: View {
                         metric("Energy", value: workout.energyKcal.map { $0.formatted(.number.precision(.fractionLength(0))) } ?? "—", unit: "kcal", icon: "flame.fill")
                     }
                     .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
+                    if workout.activityName == "Badminton" { swings }
                     if workout.layout == .strength { strength }
                     else if workout.layout == .distance { distance }
                     else if workout.activity?.showsZones == true { zone }
@@ -152,6 +153,16 @@ struct WatchWorkoutScreen: View {
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(11)
             .accessibilityElement(children: .ignore).accessibilityLabel("\(title), \(value) \(unit)")
+    }
+    private var swings: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(workout.swingAnalysis.map { "\($0.events.count) swing candidates" } ?? "Swing analysis off").font(.headline)
+            if let peak = workout.swingAnalysis?.peakRotation {
+                Text("Peak wrist \(Int((peak * 180 / .pi).rounded()))°/s").font(.caption2).foregroundStyle(accent)
+            }
+            Text(workout.swingAnalysis == nil ? "Enable in Your movement setup" : workout.motionStatus).font(.system(size: 10)).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
+            .background { WatchTileBackground(color: theme.tint, companion: theme.glow, dimmed: dimmed) }
     }
     private var strength: some View {
         HStack {

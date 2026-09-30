@@ -28,7 +28,12 @@ struct AlmanacWatchApp: App {
             }
             .task {
                 bridge.onAccountChanged = { workout.accountChanged(to: $0) }
-                workout.accountID = bridge.binding?.ownerID
+                workout.accountChanged(to: bridge.binding?.ownerID)
+                if let profile = bridge.binding?.athlete, profile.isValid { workout.athlete = profile }
+                bridge.onAthleteChanged = { profile in
+                    guard let profile, profile.isValid, workout.athlete.map({ profile.updatedAt > $0.updatedAt }) ?? true else { return }
+                    workout.athlete = profile
+                }
                 workout.onFinished = { bridge.enqueue($0) }
                 bridge.start()
                 #if DEBUG
@@ -52,6 +57,7 @@ struct AlmanacWatchApp: App {
                     await workout.recover()
                 }
             }
+            .sheet(isPresented: $workout.needsAthleteSetup) { WatchAthleteSetup(workout: workout) }
             .onOpenURL { _ in bridge.refresh() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { bridge.refresh() } }
         }
@@ -64,6 +70,7 @@ final class WatchBridge: NSObject, WCSessionDelegate {
     var status = "Ready to record on Watch"
     var binding: WatchAccountBinding? = UserDefaults.standard.data(forKey: "watch.account").flatMap { try? JSONDecoder().decode(WatchAccountBinding.self, from: $0) }
     var onAccountChanged: ((String?) -> Void)?
+    var onAthleteChanged: ((ActivityAthleteProfile?) -> Void)?
     var pending: [WatchWorkoutSummary] = UserDefaults.standard.data(forKey: "watch.outbox").flatMap { try? JSONDecoder().decode([WatchWorkoutSummary].self, from: $0) } ?? []
     func enqueue(_ summary: WatchWorkoutSummary) {
         guard summary.ownerID == binding?.ownerID else { return }
@@ -90,6 +97,7 @@ final class WatchBridge: NSObject, WCSessionDelegate {
             for transfer in session?.outstandingUserInfoTransfers ?? [] { transfer.cancel() }
             onAccountChanged?(next.ownerID)
         }
+        onAthleteChanged?(next.athlete)
         flush()
     }
     private var session: WCSession?
@@ -207,6 +215,7 @@ struct WatchDashboard: View {
                 if bridge.binding?.ownerID == nil {
                     Text("Workouts save to Apple Health. Open Almanac on iPhone to link your account for app syncing.").font(.caption2).foregroundStyle(.secondary)
                 }
+                Button("Your movement", systemImage: "figure.stand") { workout.needsAthleteSetup = true }.buttonStyle(.glass)
                 Button(action: bridge.refresh) { Label("Sync iPhone", systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.glass)
                 Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 2)
@@ -246,5 +255,44 @@ struct WatchDashboard: View {
             Spacer(minLength: 2)
             Text(value).font(.system(.body, weight: .semibold)).minimumScaleFactor(0.7)
         }.padding(12).background { WatchTileBackground(color: tint) }.privacySensitive()
+    }
+}
+
+/// Also works without the phone. Measurements are optional; motion is opt-in.
+private struct WatchAthleteSetup: View {
+    let workout: WatchWorkoutController
+    @State private var height = 170
+    @State private var weight = 70
+    @State private var includeMeasurements = false
+    @State private var hand: ActivityAthleteProfile.Side = .right
+    @State private var wrist: ActivityAthleteProfile.Side = .left
+    @State private var enabled = false
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text("One setup for every activity").font(.headline)
+                Toggle("Add measurements", isOn: $includeMeasurements)
+                if includeMeasurements {
+                    Picker("Height · cm", selection: $height) { ForEach(80...250, id: \.self) { Text("\($0)").tag($0) } }
+                    Picker("Weight · kg", selection: $weight) { ForEach(20...350, id: \.self) { Text("\($0)").tag($0) } }
+                }
+                Picker("Playing hand", selection: $hand) { ForEach(ActivityAthleteProfile.Side.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) } }
+                Picker("Watch wrist", selection: $wrist) { ForEach(ActivityAthleteProfile.Side.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) } }
+                Toggle("Swing analysis", isOn: $enabled)
+                Text("Badminton experiment. Wear Watch on your racket wrist; hold still for one second at start. Counts include practice swings. No contact, posture or court tracking.").font(.caption2)
+                if enabled && hand != wrist { Text("Move Watch to your playing wrist and update this setting to enable swings.").font(.caption2).foregroundStyle(.orange) }
+                Text("Optional measurements personalize your profile, not motion accuracy.").font(.caption2)
+                Button("Save & continue") {
+                    workout.completeAthleteSetup(.init(heightCM: includeMeasurements ? Double(height) : nil,
+                        weightKG: includeMeasurements ? Double(weight) : nil, playingHand: hand, watchWrist: wrist, motionEnabled: enabled))
+                }.tint(.orange)
+            }.navigationTitle("Your movement")
+            .onAppear {
+                guard let profile = workout.athlete else { return }
+                height = Int(profile.heightCM ?? 170); weight = Int(profile.weightKG ?? 70)
+                includeMeasurements = profile.heightCM != nil || profile.weightKG != nil
+                hand = profile.playingHand; wrist = profile.watchWrist; enabled = profile.motionEnabled
+            }
+        }
     }
 }

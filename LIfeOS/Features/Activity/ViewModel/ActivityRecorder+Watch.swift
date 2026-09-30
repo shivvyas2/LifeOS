@@ -64,7 +64,7 @@ extension ActivityRecorder {
             // Before the fresh timer, because the record this session
             // eventually saves reads these three.
             clearPendingVideoIfIdle()
-            watchSessionID = nil; lastWatchPacketAt = nil
+            watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
             saved = false; healthSaved = false
             selection = ActivityCatalog.type(healthRawValue: mirrored.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
             recents.record(selection)
@@ -124,6 +124,10 @@ extension ActivityRecorder {
             watchSessionID = id
         }
         lastWatchPacketAt = packet.sentAt
+        if selection.name == "Badminton" {
+            if let count = packet.swingCount, (0...SwingAnalysis.eventLimit).contains(count) { swingCount = count }
+            if let peak = packet.peakWristRotation, peak.isFinite, (0...100).contains(peak) { peakWristRotation = peak }
+        }
         if let elapsed = packet.elapsed, let paused = packet.paused {
             timer?.synchronize(elapsed: elapsed, paused: paused, at: packet.sentAt)
         }
