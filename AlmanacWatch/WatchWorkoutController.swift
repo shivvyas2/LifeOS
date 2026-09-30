@@ -3,6 +3,7 @@ import HealthKit
 import CoreMotion
 import AppSurfaces
 import Motion
+import WatchConnectivity
 
 /// Runs the workout on the wrist and mirrors it to the phone. Heart rate and
 /// energy come from the live builder; reps from `RepCounter` on device
@@ -23,6 +24,27 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var runningSince: Date?
     private(set) var heartRate: Int?
     private(set) var energyKcal: Double?
+    private(set) var distanceMeters: Double?
+    private(set) var heartHistory: [Double] = []
+    private(set) var result: String?
+    private(set) var workoutID = UUID()
+    private(set) var ownerID: String?
+    var accountID: String?
+    var onFinished: ((WatchWorkoutSummary) -> Void)?
+    private var heartbeat: Task<Void, Never>?
+    private var mirrorAttemptAt: Date = .distantPast
+    private var finishing = false
+    private var checkpointKey: String { "watch.workout.checkpoint.v1" }
+    private struct Checkpoint: Codable {
+        var id: UUID; var ownerID: String?; var startedAt: Date
+        var reps: Int?; var setIndex: Int?; var completedSets: [Int]
+    }
+    var elapsed: TimeInterval { accumulated + (runningSince.map { max(0, Date.now.timeIntervalSince($0)) } ?? 0) }
+    var freshHeartRate: Int? {
+        guard let heartRateAt, Date.now.timeIntervalSince(heartRateAt) <= 20 else { return nil }
+        return heartRate
+    }
+    var layout: WatchWorkoutLayout { .forActivity(activity ?? ActivityCatalog.other) }
     private(set) var reps: Int?
     private(set) var setIndex: Int?
     private(set) var completedSets: [Int] = []
@@ -45,6 +67,17 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private var heartRateAt: Date?
     private var lastPacketAt: Date = .distantPast
 
+    /// A first launch from iPhone can arrive before WatchConnectivity has
+    /// delivered the account binding. Give that handshake a short head start.
+    func startFromPhone(_ configuration: HKWorkoutConfiguration) {
+        Task {
+            for _ in 0..<15 where accountID == nil {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            start(configuration)
+        }
+    }
+
     func start(type: HKWorkoutActivityType) {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = type
@@ -57,14 +90,29 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         // Synchronous, before the Task: the authorization prompt can take a
         // while and a second Start tap must not open a second session.
         state = .starting
-        lastError = nil
+        lastError = nil; result = nil
+        workoutID = UUID(); ownerID = accountID
         activity = ActivityCatalog.type(healthRawValue: configuration.activityType.rawValue) ?? ActivityCatalog.other
         activityName = activity?.name ?? "Other"
         Task {
             do {
-                let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType.quantityType(forIdentifier: .heartRate)!, HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!]
-                let read: Set<HKObjectType> = [HKObjectType.workoutType(), HKQuantityType.quantityType(forIdentifier: .heartRate)!, HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!]
+                let quantities: [HKQuantityTypeIdentifier] = [.heartRate, .activeEnergyBurned, .distanceWalkingRunning, .distanceCycling, .distanceSwimming, .distanceWheelchair, .distanceRowing, .distancePaddleSports, .distanceSkatingSports, .distanceDownhillSnowSports]
+                let share: Set<HKSampleType> = Set(quantities.compactMap { HKQuantityType.quantityType(forIdentifier: $0) } + [HKObjectType.workoutType()])
+                var read = Set<HKObjectType>(share)
+                read.insert(HKObjectType.characteristicType(forIdentifier: .dateOfBirth)!)
                 try await healthStore.requestAuthorization(toShare: share, read: read)
+                // Recording has not begun yet. A first-time linking response
+                // that arrived during authorization can own this new session.
+                if ownerID == nil { ownerID = accountID }
+                guard ownerID == nil || ownerID == accountID else { throw CancellationError() }
+                guard healthStore.authorizationStatus(for: .workoutType()) == .sharingAuthorized else {
+                    throw NSError(domain: "Almanac", code: 1, userInfo: [NSLocalizedDescriptionKey: "Allow workout access in Health to start recording."])
+                }
+                if let birthday = try? healthStore.dateOfBirthComponents(),
+                   let birth = Calendar.current.date(from: birthday),
+                   let age = Calendar.current.dateComponents([.year], from: birth, to: .now).year, (13...100).contains(age) {
+                    maxHeartRate = Int((208 - 0.7 * Double(age)).rounded())
+                }
                 let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
                 let builder = session.associatedWorkoutBuilder()
                 builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
@@ -74,16 +122,15 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 startedAt = started; accumulated = 0; runningSince = started
                 session.startActivity(with: started)
                 try await builder.beginCollection(at: started)
-                mirroringFailed = false
-                do {
-                    try await session.startMirroringToCompanionDevice()
-                } catch {
-                    mirroringFailed = true
-                }
+                guard self.session === session else { return }
+                await connectMirror()
+                guard self.session === session else { return }
                 state = .running
                 if isStrength { reps = 0; setIndex = 1; completedSets = []; manualReps = 0; startMotion() }
+                persistCheckpoint(); startHeartbeat()
                 sendPacket(force: true)
             } catch {
+                lastError = error.localizedDescription
                 // A throw after `startActivity` leaves a live session behind.
                 // Detach it first so no late delegate callback can put this
                 // controller back into `.running` on a session that is gone.
@@ -122,52 +169,42 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         self.session = session; self.builder = builder
         activity = ActivityCatalog.type(healthRawValue: session.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
         activityName = activity?.name ?? "Other"
-        // A session that had already stopped or ended before the relaunch has
-        // nothing left to track, so it is settled before anything adopts it:
-        // no timer, no motion, no packet, and never a flash of `.running`.
-        // The reset is unconditional because an already-ended session sends
-        // no further `.ended` callback to run it for us.
-        if recovered.state == .stopped || recovered.state == .ended {
-            state = .ending
-            await finish(at: .now)
-            resetAfterEnd()
-            return
-        }
         let started = recovered.startDate ?? .now
         startedAt = started
-        mirroringFailed = false
-        do {
-            try await session.startMirroringToCompanionDevice()
-        } catch {
-            mirroringFailed = true
+        let saved = UserDefaults.standard.data(forKey: checkpointKey).flatMap { try? JSONDecoder().decode(Checkpoint.self, from: $0) }
+        if let saved, abs(saved.startedAt.timeIntervalSince(started)) < 1 {
+            workoutID = saved.id; ownerID = saved.ownerID
+            reps = saved.reps; setIndex = saved.setIndex; completedSets = saved.completedSets
+        } else { workoutID = UUID(); ownerID = accountID }
+        if let ownerID, ownerID != accountID { discard(); return }
+        if recovered.state == .stopped || recovered.state == .ended {
+            state = .ending
+            accumulated = max(0, builder.elapsedTime)
+            await finish(at: .now)
+            return
         }
-        // A recovered session did not just start on this launch, and there is
-        // no record of any pauses before the relaunch: everything from the
-        // original start to now is banked, which is as precise as `startDate`
-        // allows, and a paused session shows that elapsed time rather than
-        // zero. Only a running one has a live run to time from here.
-        accumulated = Date.now.timeIntervalSince(started)
+        await connectMirror()
+        // The builder restores active time without counting disconnected pauses.
+        accumulated = max(0, builder.elapsedTime)
         state = recovered.state == .paused ? .paused : .running
         if state == .running { runningSince = .now }
-        // Whichever state came back: the motion handler already no-ops while
-        // the session is not running, and a resume only flips `state`, so
-        // starting motion here is the only chance a session recovered paused
-        // ever gets to count automatically. The counter's own history did not
-        // survive the relaunch, so the count stays unknown rather than zero,
-        // which would claim no reps were done.
+        // Resume from the persisted rep tally; raw motion is never stored.
         if isStrength {
-            reps = nil; setIndex = 1; completedSets = []; manualReps = 0
+            setIndex = setIndex ?? 1; manualReps = reps ?? 0
             startMotion()
         }
-        sendPacket(force: true)
+        startHeartbeat(); sendPacket(force: true)
     }
 
     func pause() { session?.pause() }
     func resume() { session?.resume() }
     func end() {
         guard state != .ending, let session else { return }
+        if let since = runningSince { accumulated += max(0, Date.now.timeIntervalSince(since)) }
+        runningSince = nil
         state = .ending
         stopMotion()
+        sendPacket(force: true)
         session.stopActivity(with: .now)
     }
     /// The phone refused this session, or the person discarded it there:
@@ -183,6 +220,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         session.end()
         resetAfterEnd()
     }
+    func accountChanged(to next: String?) {
+        accountID = next
+        if let ownerID, ownerID != next, state != .idle { discard() }
+    }
+    func retrySave() { Task { await finish(at: .now) } }
     func addRep() {
         guard isStrength, state == .running || state == .paused else { return }
         manualReps += 1
@@ -209,6 +251,18 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         sendPacket(force: true)
     }
 
+    #if DEBUG
+    func loadPreview(_ name: String) {
+        activity = ActivityCatalog.type(named: name) ?? ActivityCatalog.other
+        activityName = activity!.name; state = .paused
+        accumulated = 32 * 60 + 20; startedAt = .now.addingTimeInterval(-accumulated)
+        heartRate = 142; heartRateAt = .now; energyKcal = 216; maxHeartRate = 190
+        heartHistory = [112, 118, 115, 124, 131, 129, 136, 145, 139, 142]
+        distanceMeters = activity?.tracksDistance == true ? 4820 : nil
+        if isStrength { reps = 8; setIndex = 3; completedSets = [12, 10] }
+    }
+    #endif
+
     private func startMotion() {
         guard motion.isDeviceMotionAvailable else { return }
         counter.reset()
@@ -233,9 +287,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     /// The one teardown path: everything the next workout must not inherit.
     private func resetAfterEnd() {
         stopMotion()
+        heartbeat?.cancel(); heartbeat = nil
+        UserDefaults.standard.removeObject(forKey: checkpointKey)
         session = nil; builder = nil
         startedAt = nil; accumulated = 0; runningSince = nil
-        heartRate = nil; heartRateAt = nil; energyKcal = nil
+        heartRate = nil; heartRateAt = nil; energyKcal = nil; distanceMeters = nil; heartHistory = []
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
         counter.reset()
         activityName = ""; activity = nil; mirroringFailed = false; maxHeartRate = nil
@@ -247,7 +303,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         let now = Date.now
         guard force || now.timeIntervalSince(lastPacketAt) >= 1 else { return }
         lastPacketAt = now
+        persistCheckpoint()
         var packet = WatchPacket(sentAt: now)
+        packet.sessionID = workoutID; packet.ownerID = ownerID
+        packet.elapsed = elapsed; packet.paused = state != .running
+        packet.distanceMeters = distanceMeters
         packet.heartRate = heartRate; packet.heartRateAt = heartRate == nil ? nil : heartRateAt
         packet.energyKcal = energyKcal
         if isStrength {
@@ -255,12 +315,20 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             packet.completedSets = completedSets.isEmpty ? nil : completedSets
         }
         guard let data = try? WatchWire.encode(packet) else { return }
-        session.sendToRemoteWorkoutSession(data: data) { _, _ in }
+        session.sendToRemoteWorkoutSession(data: data) { [weak self] success, _ in
+            Task { @MainActor in
+                guard let self, self.session === session else { return }
+                self.mirroringFailed = !success
+            }
+        }
     }
 
     private func handle(_ envelope: PhoneCommandEnvelope) {
+        guard Date.now.timeIntervalSince(envelope.sentAt) < 15,
+              envelope.sentAt <= Date.now.addingTimeInterval(60) else { return }
         switch envelope.command {
-        case .configure: maxHeartRate = envelope.maxHeartRate
+        case .configure:
+            if let value = envelope.maxHeartRate, (80...240).contains(value) { maxHeartRate = value }
         case .pause: pause()
         case .resume: resume()
         case .end: end()
@@ -271,7 +339,32 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         }
     }
 
+    private func persistCheckpoint() {
+        guard let startedAt else { return }
+        let value = Checkpoint(id: workoutID, ownerID: ownerID, startedAt: startedAt, reps: reps, setIndex: setIndex, completedSets: completedSets)
+        if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: checkpointKey) }
+    }
+    private func startHeartbeat() {
+        heartbeat?.cancel()
+        heartbeat = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled, let self, self.state != .idle else { return }
+                if self.mirroringFailed && Date.now.timeIntervalSince(self.mirrorAttemptAt) >= 20 { await self.connectMirror() }
+                self.sendPacket(force: true)
+            }
+        }
+    }
+    private func connectMirror() async {
+        guard let session, ownerID != nil else { mirroringFailed = true; return }
+        mirrorAttemptAt = .now
+        do { try await session.startMirroringToCompanionDevice(); mirroringFailed = false }
+        catch { mirroringFailed = true }
+    }
     private func finish(at date: Date) async {
+        guard !finishing else { return }
+        finishing = true
+        defer { finishing = false }
         // Captured before the first suspension: `self.builder` and
         // `self.session` can be nil by the time these awaits resume.
         let builder = self.builder
@@ -283,11 +376,21 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         // save itself is the one worth telling the person about.
         try? await builder.endCollection(at: date)
         do {
-            _ = try await builder.finishWorkout()
+            guard let saved = try await builder.finishWorkout() else { throw CocoaError(.fileWriteUnknown) }
+            if let ownerID, let startedAt {
+                onFinished?(WatchWorkoutSummary(id: workoutID, ownerID: ownerID, activity: activityName,
+                    startedAt: startedAt, endedAt: saved.endDate, elapsed: saved.duration,
+                    energyKcal: energyKcal, distanceMeters: distanceMeters,
+                    sets: isStrength ? completedSets + [reps ?? 0] : [], healthWorkoutID: saved.uuid))
+            }
+            result = ownerID == nil ? "Workout saved to Apple Health." : "Workout saved. Your iPhone syncs when available."
+            lastError = nil
+            session.end()
+            resetAfterEnd()
         } catch {
-            lastError = "Could not save to Health"
+            lastError = "Could not save to Health. Retry to keep this workout."
+            state = .ending
         }
-        session.end()
     }
 
     private func collect(_ identifiers: [HKQuantityTypeIdentifier]) {
@@ -297,9 +400,13 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             switch identifier {
             case .heartRate:
                 heartRate = stats.mostRecentQuantity().map { Int($0.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))) }
-                heartRateAt = heartRate == nil ? nil : stats.mostRecentQuantityDateInterval()?.end
+                let measuredAt = stats.mostRecentQuantityDateInterval()?.end
+                if measuredAt != heartRateAt, let heartRate { heartHistory.append(Double(heartRate)); heartHistory = Array(heartHistory.suffix(30)) }
+                heartRateAt = heartRate == nil ? nil : measuredAt
             case .activeEnergyBurned:
                 energyKcal = stats.sumQuantity()?.doubleValue(for: .kilocalorie())
+            case .distanceWalkingRunning, .distanceCycling, .distanceSwimming, .distanceWheelchair, .distanceRowing, .distancePaddleSports, .distanceSkatingSports, .distanceDownhillSnowSports:
+                distanceMeters = stats.sumQuantity()?.doubleValue(for: .meter())
             default: break
             }
         }
@@ -308,29 +415,43 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
         Task { @MainActor in
+            guard self.session === workoutSession else { return }
             switch toState {
             case .running:
                 self.state = .running
                 if self.runningSince == nil { self.runningSince = date }
             case .paused:
+                self.manualReps = self.reps ?? 0; self.counter.reset()
                 self.state = .paused
                 if let since = self.runningSince { self.accumulated += max(0, date.timeIntervalSince(since)) }
                 self.runningSince = nil
-            case .stopped: await self.finish(at: date)
+            case .stopped:
+                if let since = self.runningSince { self.accumulated += max(0, date.timeIntervalSince(since)) }
+                self.runningSince = nil; self.state = .ending; self.stopMotion()
+                await self.finish(at: date)
             case .ended: self.resetAfterEnd()
             default: break
             }
+            self.sendPacket(force: true)
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        Task { @MainActor in self.resetAfterEnd() }
+        Task { @MainActor in
+            guard self.session === workoutSession else { return }
+            self.lastError = error.localizedDescription; self.resetAfterEnd()
+        }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {
-        Task { @MainActor in for item in data { if let envelope = WatchWire.command(from: item) { self.handle(envelope) } } }
+        Task { @MainActor in
+            guard self.session === workoutSession else { return }
+            for item in data { if let envelope = WatchWire.command(from: item) { self.handle(envelope) } } }
     }
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
     nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
         let identifiers = collectedTypes.compactMap { ($0 as? HKQuantityType).map { HKQuantityTypeIdentifier(rawValue: $0.identifier) } }
-        Task { @MainActor in self.collect(identifiers) }
+        Task { @MainActor in
+            guard self.builder === workoutBuilder else { return }
+            self.collect(identifiers)
+        }
     }
 }

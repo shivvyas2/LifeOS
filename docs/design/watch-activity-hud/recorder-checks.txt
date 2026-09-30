@@ -1,0 +1,45 @@
+PASS: Timer starts without Health access
+PASS: Capacity comes from today's recovery at start
+PASS: Readings yield zone and effort
+PASS: A phone strength session starts at set 1 with zero reps
+PASS: Remove rep never goes below zero
+PASS: Manual reps and sets count on the phone
+PASS: A watch packet never reaches a phone session
+PASS: Finishing writes the sets, current set included
+PASS: The wait for the watch says so
+PASS: A watch that does not answer falls back to the phone
+PASS: A watch draft restores as a watch session
+PASS: A watch draft leaves Health saving on
+PASS: A packet with an unknown version changes nothing
+PASS: A current-version packet carries reps and heart rate through
+PASS: An older Watch packet cannot overwrite newer readings
+PASS: A disconnected phone cannot pretend to pause the Watch
+PASS: A disconnected finish waits for the Watch
+PASS: Finishing a watch session writes the local record and its sets
+PASS: Health saving off keeps the session on the phone
+PASS: Paused readings accrue nothing
+PASS: Paused time stays fixed
+PASS: Resume keeps the activity
+PASS: First reading after resume credits nothing, the second accrues
+PASS: Timer-only draft restores without Health recovery
+PASS: Draft restores capacity and effort
+PASS: Other account cannot see the draft
+PASS: Finish saves locally without claiming a Health save
+PASS: Repeated save creates one workout
+PASS: Saved draft is cleared
+PASS: Remembered sensor survives relaunch
+PASS: Other account has no remembered sensor
+PASS: Forget clears the remembered sensor
+PASS: Finishing stamps the video and split
+PASS: A bailed start records no recent; the next successful start records once
+PASS: A failed start does not stamp the next session
+PASS: A wrist-started session carries no stale video
+PASS: A restored draft keeps its video
+PASS: Account transition stops recording and rejects late starts
+PASS: Every catalog entry maps to HealthKit and an SF Symbol
+PASS: Recents lead with the latest start
+PASS: Starting an activity again does not duplicate it
+PASS: The seventh distinct start drops the oldest recent
+PASS: Recents persist across instances
+PASS: A restored Pilates draft selects Pilates with reps and zones off
+PASS: A draft with an unknown activity name selects Other

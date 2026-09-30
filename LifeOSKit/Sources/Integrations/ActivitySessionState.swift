@@ -21,6 +21,13 @@ public struct ActivitySessionState: Codable, Equatable, Sendable {
         self.id = id; startedAt = date; self.activity = activity
         phase = .running; accumulated = 0; runningSince = date
     }
+    /// Reconcile with the primary Watch clock after a disconnected pause.
+    public mutating func synchronize(elapsed: TimeInterval, paused: Bool, at date: Date) {
+        guard phase != .finished, elapsed.isFinite, elapsed >= 0 else { return }
+        accumulated = elapsed
+        runningSince = paused ? nil : date
+        phase = paused ? .paused : .running
+    }
     public func elapsed(at date: Date = .now) -> TimeInterval {
         accumulated + (runningSince.map { max(0, date.timeIntervalSince($0)) } ?? 0)
     }

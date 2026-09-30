@@ -4,6 +4,7 @@ import WidgetKit
 import WatchConnectivity
 import AppSurfaces
 import Persistence
+import Integrations
 
 @MainActor @Observable
 final class SurfaceCoordinator: NSObject, WCSessionDelegate {
@@ -12,6 +13,10 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     private(set) var snapshot: SurfaceSnapshot?
     private(set) var agenda: AgendaSnapshot?
     private var ownerID: String?
+    var workoutOwnerID: String? { ownerID }
+    private var workoutBinding = WatchAccountBinding(ownerID: nil)
+    private let inboxKey = "watch.workout.inbox.v1"
+    private var workoutInbox: [WatchWorkoutSummary] = UserDefaults.standard.data(forKey: "watch.workout.inbox.v1").flatMap { try? JSONDecoder().decode([WatchWorkoutSummary].self, from: $0) } ?? []
     private var context: ModelContext?
     private var watchSession: WCSession?
     var sharingEnabled: Bool {
@@ -23,19 +28,23 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     }
     func adopt(ownerID: String?, context: ModelContext?) {
         self.ownerID = ownerID; self.context = context
+        workoutBinding = WatchAccountBinding(ownerID: ownerID)
         if SurfaceSnapshot.read()?.ownerID != ownerID || ownerID == nil || !sharingEnabled { writeTombstones() }
         if WCSession.isSupported(), watchSession == nil {
             watchSession = WCSession.default
             watchSession?.delegate = self
             watchSession?.activate()
         }
-        publish()
+        publish(); sendToWatch(); importWatchWorkouts()
     }
     func clear() {
         ownerID = nil; context = nil; pendingRoute = nil
+        workoutBinding = WatchAccountBinding(ownerID: nil)
+        workoutInbox = []; persistWorkoutInbox()
         writeTombstones()
     }
     func publish() {
+        importWatchWorkouts()
         guard let ownerID, let context, sharingEnabled else { return }
         publishAgenda(ownerID: ownerID, context: context)
         let store = MetricsStore(context: context)
@@ -89,11 +98,43 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
         guard let watchSession, watchSession.activationState == .activated,
               watchSession.isPaired, watchSession.isWatchAppInstalled,
               let snapshot, let data = try? JSONEncoder().encode(snapshot) else { return }
-        try? watchSession.updateApplicationContext(["snapshot": data])
+        var context: [String: Any] = ["snapshot": data]
+        if let account = try? JSONEncoder().encode(workoutBinding) { context["workoutAccount"] = account }
+        try? watchSession.updateApplicationContext(context)
+        if watchSession.isReachable { watchSession.sendMessage(context, replyHandler: nil, errorHandler: nil) }
         if watchSession.isReachable { watchSession.sendMessageData(data, replyHandler: nil, errorHandler: nil) }
     }
+    private func persistWorkoutInbox() {
+        if let data = try? JSONEncoder().encode(workoutInbox) { UserDefaults.standard.set(data, forKey: inboxKey) }
+    }
+    /// Both mirrored and offline finishes use the same stable record ID.
+    private func importWatchWorkouts() {
+        guard !workoutInbox.isEmpty, let ownerID, let context else { return }
+        for summary in workoutInbox {
+            guard summary.isValid(for: ownerID) else {
+                workoutInbox.removeAll { $0.id == summary.id }; continue
+            }
+            do {
+                guard try WatchWorkoutImporter.save(summary, ownerID: ownerID, context: context) else { continue }
+                workoutInbox.removeAll { $0.id == summary.id }
+                if let watchSession, watchSession.activationState == .activated {
+                    watchSession.transferUserInfo(["workoutReceipt": summary.id.uuidString, "ownerID": ownerID])
+                }
+            } catch { break } // Keep the durable inbox for the next account adoption/refresh.
+        }
+        persistWorkoutInbox()
+    }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let data = userInfo["workoutSummary"] as? Data, data.count <= 64_000,
+              let summary = try? JSONDecoder().decode(WatchWorkoutSummary.self, from: data) else { return }
+        Task { @MainActor in
+            guard self.ownerID == nil || summary.ownerID == self.ownerID else { return }
+            self.workoutInbox.removeAll { $0.id == summary.id }
+            self.workoutInbox.append(summary); self.persistWorkoutInbox(); self.importWatchWorkouts()
+        }
+    }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        Task { @MainActor in self.sendToWatch() }
+        Task { @MainActor in self.sendToWatch(); self.importWatchWorkouts() }
     }
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
     nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }

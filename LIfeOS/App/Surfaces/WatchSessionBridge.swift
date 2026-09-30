@@ -23,6 +23,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     private var placeholderPending = false
     var onSession: ((HKWorkoutSession) -> Void)?
     var onPacket: ((Data) -> Void)?
+    var onControlFailure: ((String) -> Void)?
     var onStateChange: ((HKWorkoutSessionState, Date) -> Void)?
     var hasSession: Bool { session != nil && !dropping }
 
@@ -67,21 +68,28 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         onSession?(session)
     }
 
-    func send(_ command: PhoneCommand, maxHeartRate: Int? = nil) {
-        guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now, maxHeartRate: maxHeartRate)) else { return }
-        session.sendToRemoteWorkoutSession(data: data) { _, _ in }
+    func send(_ command: PhoneCommand, maxHeartRate: Int? = nil, completion: ((Bool) -> Void)? = nil) {
+        guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now, maxHeartRate: maxHeartRate)) else {
+            onControlFailure?("Apple Watch is unavailable. Use the controls on your Watch.")
+            completion?(false); return
+        }
+        if command == .discard { dropping = true }
+        session.sendToRemoteWorkoutSession(data: data) { success, _ in
+            Task { @MainActor in
+                guard self.session === session else { completion?(false); return }
+                if !success { self.dropping = false; self.onControlFailure?("The command did not reach Apple Watch. Your workout is still controlled on the Watch.") }
+                completion?(success)
+            }
+        }
     }
 
     /// Sends a last command and drops the session only once it has left, in
     /// the send's completion handler: releasing the session in the same
     /// run-loop turn can cancel the send before the watch ever hears it.
     func end(after command: PhoneCommand) {
-        guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now)) else {
-            end(); return
-        }
         dropping = true
-        session.sendToRemoteWorkoutSession(data: data) { _, _ in
-            Task { @MainActor in self.end() }
+        send(command) { success in
+            if success { self.end() } else { self.dropping = false }
         }
     }
 
@@ -133,6 +141,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
                                     from fromState: HKWorkoutSessionState, date: Date) {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
+            guard !self.dropping else { return }
             self.onStateChange?(toState, date)
             if toState == .ended { self.endPlaceholderActivity(); self.end() }
         }

@@ -9,6 +9,11 @@ public struct WatchPacket: Codable, Equatable, Sendable {
     public var kind: String = WatchWire.packetKind
     public var v: Int = WatchWire.version
     public var sentAt: Date
+    public var sessionID: UUID?
+    public var ownerID: String?
+    public var elapsed: TimeInterval?
+    public var paused: Bool?
+    public var distanceMeters: Double?
     public var heartRate: Int?
     public var heartRateAt: Date?
     public var energyKcal: Double?

@@ -91,7 +91,15 @@ import HealthKit
             mirrored.receiveWatchPacket(try WatchWire.encode(live))
             check(mirrored.reps == 3 && mirrored.heartRate == 130 && mirrored.readout?.reps == 3,
                   "A current-version packet carries reps and heart rate through")
+            var older = live; older.sentAt = live.sentAt.addingTimeInterval(-5); older.reps = 99
+            mirrored.receiveWatchPacket(try WatchWire.encode(older))
+            check(mirrored.reps == 3, "An older Watch packet cannot overwrite newer readings")
+            mirrored.togglePause()
+            check(mirrored.isRunning, "A disconnected phone cannot pretend to pause the Watch")
             await mirrored.finish()
+            check(!mirrored.saved && mirrored.timer?.phase != .finished, "A disconnected finish waits for the Watch")
+            mirrored.mirroredStateChanged(.stopped, at: .now)
+            await mirrored.saveFinished()
             let fromWatch = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Strength" }
             check(fromWatch?.sets == [3] && mirrored.saved && !mirrored.healthSaved,
                   "Finishing a watch session writes the local record and its sets")

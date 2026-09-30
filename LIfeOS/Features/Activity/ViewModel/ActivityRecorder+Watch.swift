@@ -59,10 +59,12 @@ extension ActivityRecorder {
         }
         // A finished, saved timer is the resting "Done" screen. A workout
         // started on the wrist now is a new one, not a continuation of it.
-        if timer == nil || saved {
+        let isDifferentWorkout = timer.map { abs($0.startedAt.timeIntervalSince(mirrored.startDate ?? $0.startedAt)) > 1 } ?? false
+        if timer == nil || saved || isDifferentWorkout {
             // Before the fresh timer, because the record this session
             // eventually saves reads these three.
             clearPendingVideoIfIdle()
+            watchSessionID = nil; lastWatchPacketAt = nil
             saved = false; healthSaved = false
             selection = ActivityCatalog.type(healthRawValue: mirrored.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
             recents.record(selection)
@@ -109,6 +111,23 @@ extension ActivityRecorder {
     /// packet is dropped without changing state.
     func receiveWatchPacket(_ data: Data) {
         guard active, hasSession, source == .watch, let packet = WatchWire.packet(from: data) else { return }
+        guard packet.sentAt >= Date.now.addingTimeInterval(-30), packet.sentAt <= Date.now.addingTimeInterval(60),
+              lastWatchPacketAt.map({ packet.sentAt > $0 }) ?? true else { return }
+        if let owner = packet.ownerID, owner != SurfaceCoordinator.shared.workoutOwnerID {
+            watch?.end()
+            source = .phone; discard()
+            notice = "This Watch workout belongs to another account."
+            return
+        }
+        if let id = packet.sessionID {
+            guard watchSessionID == nil || watchSessionID == id else { return }
+            watchSessionID = id
+        }
+        lastWatchPacketAt = packet.sentAt
+        if let elapsed = packet.elapsed, let paused = packet.paused {
+            timer?.synchronize(elapsed: elapsed, paused: paused, at: packet.sentAt)
+        }
+        if let distance = packet.distanceMeters, distance.isFinite, distance >= 0 { self.distance = distance }
         // A reading refreshes through `receiveHeartRate`; only a packet without
         // one has to refresh here, so each packet refreshes exactly once. The
         // counts are applied before that reading, so the one refresh carries

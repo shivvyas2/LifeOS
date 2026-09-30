@@ -23,18 +23,26 @@ struct AlmanacWatchApp: App {
                 if workout.state != .idle {
                     WatchWorkoutScreen(workout: workout)
                 } else {
-                    WatchDashboard(bridge: bridge, onStartWorkout: { type in workout.start(type: type) })
+                    WatchDashboard(bridge: bridge, workout: workout, onStartWorkout: { type in workout.start(type: type) })
                 }
             }
             .task {
+                bridge.onAccountChanged = { workout.accountChanged(to: $0) }
+                workout.accountID = bridge.binding?.ownerID
+                workout.onFinished = { bridge.enqueue($0) }
                 bridge.start()
+                #if DEBUG
+                if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--workout-preview=") }) {
+                    workout.loadPreview(String(argument.dropFirst("--workout-preview=".count)))
+                }
+                #endif
                 // Either order must reach `start`: the handler catches a
                 // configuration that arrives later, the pending one catches
                 // a configuration that arrived before this ran.
-                WatchAppDelegate.onConfiguration = { configuration in workout.start(configuration) }
+                WatchAppDelegate.onConfiguration = { configuration in workout.startFromPhone(configuration) }
                 if let pending = WatchAppDelegate.pendingConfiguration {
                     WatchAppDelegate.pendingConfiguration = nil
-                    workout.start(pending)
+                    workout.startFromPhone(pending)
                 }
                 // Same before/after ordering for a relaunch over a session
                 // that is still active in HealthKit.
@@ -53,7 +61,37 @@ struct AlmanacWatchApp: App {
 @MainActor @Observable
 final class WatchBridge: NSObject, WCSessionDelegate {
     var snapshot: SurfaceSnapshot? = .read()
-    var status = "Synced from iPhone"
+    var status = "Ready to record on Watch"
+    var binding: WatchAccountBinding? = UserDefaults.standard.data(forKey: "watch.account").flatMap { try? JSONDecoder().decode(WatchAccountBinding.self, from: $0) }
+    var onAccountChanged: ((String?) -> Void)?
+    var pending: [WatchWorkoutSummary] = UserDefaults.standard.data(forKey: "watch.outbox").flatMap { try? JSONDecoder().decode([WatchWorkoutSummary].self, from: $0) } ?? []
+    func enqueue(_ summary: WatchWorkoutSummary) {
+        guard summary.ownerID == binding?.ownerID else { return }
+        pending.removeAll { $0.id == summary.id }; pending.append(summary)
+        persistQueue(); flush()
+    }
+    private func persistQueue() {
+        if let data = try? JSONEncoder().encode(pending) { UserDefaults.standard.set(data, forKey: "watch.outbox") }
+    }
+    private func flush() {
+        guard let session, session.activationState == .activated else { return }
+        for summary in pending where summary.ownerID == binding?.ownerID {
+            guard !session.outstandingUserInfoTransfers.contains(where: { ($0.userInfo["workoutID"] as? String) == summary.id.uuidString }),
+                  let data = try? JSONEncoder().encode(summary) else { continue }
+            session.transferUserInfo(["workoutSummary": data, "workoutID": summary.id.uuidString])
+        }
+    }
+    private func receiveBinding(_ data: Data) {
+        guard let next = try? JSONDecoder().decode(WatchAccountBinding.self, from: data), next.supersedes(binding) else { return }
+        let changed = binding?.ownerID != next.ownerID
+        binding = next; UserDefaults.standard.set(data, forKey: "watch.account")
+        if changed {
+            pending.removeAll { $0.ownerID != next.ownerID }; persistQueue()
+            for transfer in session?.outstandingUserInfoTransfers ?? [] { transfer.cancel() }
+            onAccountChanged?(next.ownerID)
+        }
+        flush()
+    }
     private var session: WCSession?
     func start() {
         #if DEBUG
@@ -68,14 +106,15 @@ final class WatchBridge: NSObject, WCSessionDelegate {
     }
     func refresh() {
         guard let session, session.activationState == .activated, session.isReachable else {
-            status = "Open Almanac on your iPhone to sync."
+            status = "Phone away · workouts still record here"
             return
         }
+        flush()
         status = "Updating…"
         session.sendMessageData(Data(), replyHandler: { [weak self] data in
             Task { @MainActor in self?.receive(data) }
         }, errorHandler: { [weak self] _ in
-            Task { @MainActor in self?.status = "iPhone unavailable. Try again nearby." }
+            Task { @MainActor in self?.status = "Phone away · syncs when connected" }
         })
     }
     private func receive(_ data: Data) {
@@ -89,14 +128,38 @@ final class WatchBridge: NSObject, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let data = session.receivedApplicationContext["snapshot"] as? Data
+        let account = session.receivedApplicationContext["workoutAccount"] as? Data
         Task { @MainActor in
+            if let account { self.receiveBinding(account) }
             if let data { self.receive(data) }
-            self.refresh()
+            self.flush(); self.refresh()
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        guard let data = applicationContext["snapshot"] as? Data else { return }
-        Task { @MainActor in self.receive(data) }
+        let data = applicationContext["snapshot"] as? Data
+        let account = applicationContext["workoutAccount"] as? Data
+        Task { @MainActor in
+            if let account { self.receiveBinding(account) }
+            if let data { self.receive(data) }
+        }
+    }
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        let data = message["snapshot"] as? Data
+        let account = message["workoutAccount"] as? Data
+        Task { @MainActor in
+            if let account { self.receiveBinding(account) }
+            if let data { self.receive(data) }
+        }
+    }
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let id = userInfo["workoutReceipt"] as? String, let owner = userInfo["ownerID"] as? String else { return }
+        Task { @MainActor in
+            self.pending.removeAll { $0.id.uuidString == id && $0.ownerID == owner }
+            self.persistQueue()
+        }
+    }
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        Task { @MainActor in self.flush() }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
         Task { @MainActor in self.receive(messageData) }
@@ -105,64 +168,74 @@ final class WatchBridge: NSObject, WCSessionDelegate {
 
 struct WatchDashboard: View {
     @Bindable var bridge: WatchBridge
-    var onStartWorkout: (HKWorkoutActivityType) -> Void = { _ in }
+    let workout: WatchWorkoutController
+    var onStartWorkout: (HKWorkoutActivityType) -> Void
     @State private var isChoosingWorkout = false
+    private let featured = ["Badminton", "Run", "Strength", "Yoga"]
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 60)) { timeline in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("A little progress.").font(.title3.bold())
-                        if let data = bridge.snapshot, data.isAvailable(at: timeline.date) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Label("Steps", systemImage: "figure.walk").font(.caption)
-                                Text(data.steps.map { $0.formatted() } ?? "—").font(.system(size: 36, weight: .bold, design: .rounded)).minimumScaleFactor(0.7)
-                                ProgressView(value: data.stepProgress).tint(Color(white: 0.12))
-                                Text("of \(data.stepGoal.formatted()) today").font(.caption2)
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                                .foregroundStyle(Color(white: 0.1))
-                                .background(Color(red: 1, green: 0.8, blue: 0.66), in: RoundedRectangle(cornerRadius: 20))
-                                .privacySensitive()
-                            reading("Sleep", value: data.sleepText, icon: "moon.fill", tint: Color(red: 0.84, green: 0.81, blue: 0.97))
-                            reading("Movement", value: "\(data.exerciseMinutes.map(String.init) ?? "—") min", icon: "flame.fill", tint: Color(red: 0.82, green: 0.90, blue: 0.7))
-                            if let date = data.measuredAt {
-                                Text("Updated \(date, style: .time)").font(.caption2).foregroundStyle(.secondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Make your move.").font(.system(.title3, design: .rounded, weight: .bold))
+                Text("Start here. Take it anywhere.").font(.caption2).foregroundStyle(.secondary)
+                if let error = workout.lastError { Text(error).font(.caption2).foregroundStyle(.orange) }
+                if let result = workout.result { Label(result, systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(.mint) }
+                ForEach(featured.compactMap { ActivityCatalog.type(named: $0) }) { type in
+                    Button { start(type) } label: {
+                        HStack(spacing: 10) {
+                            activitySymbol(type.symbol).font(.system(size: 28)).foregroundStyle(WatchPalette.color(for: type)).frame(width: 32)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(type.name).font(.headline)
+                                Text(subtitle(type)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
                             }
-                        } else {
-                            Image(systemName: "sun.max.fill").font(.largeTitle).foregroundStyle(.orange).padding(.vertical, 8)
-                            Text("Your day, at a glance.").font(.headline)
-                            Text("Sign in to Almanac on your iPhone and sync your health data. Enable sharing in Settings → Widgets & Watch.")
-                                .font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Button { isChoosingWorkout = true } label: {
-                            Label("Start workout", systemImage: "figure.run")
-                        }.tint(.orange)
-                        Button(action: bridge.refresh) { Label("Refresh", systemImage: "arrow.clockwise") }.tint(.orange)
-                        Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
-                    }.padding(.horizontal, 4)
+                            Spacer(minLength: 0)
+                            Image(systemName: "play.fill").font(.caption2).foregroundStyle(.orange)
+                        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background { WatchTileBackground(color: WatchPalette.color(for: type)) }
+                    }.buttonStyle(.plain).accessibilityLabel("Start \(type.name) workout")
                 }
+                Button { isChoosingWorkout = true } label: { Label("All activities", systemImage: "square.grid.2x2") }
+                    .buttonStyle(.glass).tint(.orange)
+                if let data = bridge.snapshot, data.isAvailable() {
+                    Text("Your day").font(.headline).padding(.top, 6)
+                    reading("Steps", value: data.steps.map { $0.formatted() } ?? "—", icon: "figure.walk", tint: .cyan)
+                    reading("Sleep", value: data.sleepText, icon: "moon.fill", tint: .purple)
+                    reading("Movement", value: "\(data.exerciseMinutes.map(String.init) ?? "—") min", icon: "flame.fill", tint: .orange)
+                }
+                if !bridge.pending.isEmpty {
+                    Text("\(bridge.pending.count) workout(s) waiting to sync").font(.caption2).foregroundStyle(.orange)
+                }
+                if bridge.binding?.ownerID == nil {
+                    Text("Workouts save to Apple Health. Open Almanac on iPhone to link your account for app syncing.").font(.caption2).foregroundStyle(.secondary)
+                }
+                Button(action: bridge.refresh) { Label("Sync iPhone", systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.glass)
+                Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
+            }.padding(.horizontal, 2)
         }
         .navigationTitle("Almanac")
-        // watchOS has no `Menu`, so the Start list is a sheet.
         .sheet(isPresented: $isChoosingWorkout) {
-            List {
-                Section("Popular") {
-                    ForEach(ActivityCatalog.popular) { type in startRow(type) }
-                }
-                ForEach(ActivityCatalog.grouped(), id: \.group) { section in
-                    Section(section.group.rawValue) {
-                        ForEach(section.types) { type in startRow(type) }
+            NavigationStack {
+                List {
+                    ForEach(ActivityCatalog.grouped(), id: \.group) { section in
+                        Section(section.group.rawValue) {
+                            ForEach(section.types) { type in
+                                Button { isChoosingWorkout = false; start(type) } label: {
+                                    Label { Text(type.name) } icon: { activitySymbol(type.symbol).foregroundStyle(WatchPalette.color(for: type)) }
+                                }
+                            }
+                        }
                     }
-                }
+                }.navigationTitle("Activities")
             }
-            .navigationTitle("Start workout")
         }
     }
-    private func startRow(_ type: ActivityType) -> some View {
-        Button {
-            isChoosingWorkout = false
-            onStartWorkout(HKWorkoutActivityType(rawValue: type.healthRawValue) ?? .other)
-        } label: {
-            Label { Text(type.name) } icon: { activitySymbol(type.symbol) }
+    private func start(_ type: ActivityType) { onStartWorkout(HKWorkoutActivityType(rawValue: type.healthRawValue) ?? .other) }
+    private func subtitle(_ type: ActivityType) -> String {
+        switch WatchWorkoutLayout.forActivity(type) {
+        case .court: return "Court time · heart rate"
+        case .distance: return "Distance · pace · heart rate"
+        case .strength: return "Reps · sets · heart rate"
+        case .mindful: return "Time · heart rate"
+        case .general: return "Time · energy · heart rate"
         }
     }
     private func reading(_ title: String, value: String, icon: String, tint: Color) -> some View {
@@ -171,6 +244,6 @@ struct WatchDashboard: View {
             Text(title).font(.caption)
             Spacer(minLength: 2)
             Text(value).font(.system(.body, weight: .semibold)).minimumScaleFactor(0.7)
-        }.padding(12).background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16)).privacySensitive()
+        }.padding(12).background { WatchTileBackground(color: tint) }.privacySensitive()
     }
 }

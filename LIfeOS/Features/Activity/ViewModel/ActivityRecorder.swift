@@ -27,6 +27,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var heartRateDate: Date?
     var capacity: Capacity?
     private(set) var readout: LiveSessionReadout?
+    var watchSessionID: UUID?
+    var lastWatchPacketAt: Date?
     var source: SessionSource = .phone
     var reps: Int?
     var setIndex: Int?
@@ -102,6 +104,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         var split: String?
         var followingTitle: String?
         var followingChannel: String?
+        var watchSessionID: UUID?
     }
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
@@ -123,6 +126,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         // A throwaway instance from a re-render must not steal the callbacks
         // and then be deallocated, which would leave the live one deaf.
         watch?.onSession = { [weak self] session in self?.adoptMirroredSession(session) }
+        watch?.onControlFailure = { [weak self] message in self?.error = message }
         watch?.onPacket = { [weak self] data in self?.receiveWatchPacket(data) }
         watch?.onStateChange = { [weak self] state, date in self?.mirroredStateChanged(state, at: date) }
         // A session that arrived while HealthKit was launching the app in the
@@ -139,6 +143,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         timer = draft.timer; healthSaved = draft.healthSaved; energy = draft.energy; distance = draft.distance
         capacity = draft.capacity; effort = EffortAccumulator(load: draft.effortLoad ?? 0)
         source = draft.source ?? .phone; reps = draft.reps; setIndex = draft.setIndex; completedSets = draft.completedSets ?? []
+        watchSessionID = draft.watchSessionID
         pendingVideoID = draft.videoID; pendingSplit = draft.split
         if let title = draft.followingTitle, let channel = draft.followingChannel { following = (title, channel) }
         zones = HeartRateZones(birthDate: birthDate())
@@ -213,6 +218,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         }
         // `!hasSession` means the timer is either nil or a finished, saved one
         // from the last workout; either way this start owns a fresh one.
+        watchSessionID = nil; lastWatchPacketAt = nil
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false; timer = nil
         zones = HeartRateZones(birthDate: birthDate())
         capacity = loadCapacity()
@@ -265,22 +271,41 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     }
     func togglePause() {
         guard !busy else { return }
-        if isRunning { timer?.pause(); if source == .watch { watch?.send(.pause) } else { session?.pause() } }
-        else if isPaused { timer?.resume(); if source == .watch { watch?.send(.resume) } else { session?.resume() }; lastReadingAt = nil }
+        if source == .watch {
+            // The primary session confirms the state; an offline command
+            // must not pretend it paused the Watch.
+            if isRunning { watch?.send(.pause) }
+            else if isPaused { watch?.send(.resume) }
+            return
+        }
+        if isRunning { timer?.pause(); session?.pause() }
+        else if isPaused { timer?.resume(); session?.resume(); lastReadingAt = nil }
         persist()
     }
     func finish() async {
         guard active, !busy, timer != nil, !saved else { return }
         busy = true; error = nil
-        self.timer?.finish(); persist()
         if source == .watch {
-            watch?.end(after: .end)
-            await saveFinished()
+            if timer?.phase == .finished { await saveFinished(); return }
+            guard let watch else { busy = false; error = "Finish this workout on your Apple Watch."; return }
+            watch.send(.end) { [weak self] success in
+                guard let self else { return }
+                if !success { self.busy = false }
+            }
+            // State confirmation normally saves through mirroredStateChanged.
+            // Keep controls recoverable if the connection drops after sending.
+            let expectedID = timer?.id
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(10))
+                guard let self, self.active, self.timer?.id == expectedID, self.busy, !self.saved else { return }
+                self.busy = false
+                self.error = "Waiting for Apple Watch. Check the workout there; it will sync when connected."
+            }
             return
         }
+        self.timer?.finish(); persist()
         if let session, !healthSaved, session.state == .running || session.state == .paused {
             session.stopActivity(with: self.timer?.endedAt)
-            // The delegate completes collection after HealthKit reaches stopped.
             return
         }
         await saveFinished()
@@ -302,7 +327,13 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 healthSaved = true; persist(); session?.end()
             }
             guard active, let context, let timer else { return }
-            let id = "almanac:\(timer.id.uuidString)"
+            var id = watchSessionID.map { "almanac-watch:\($0.uuidString)" } ?? "almanac:\(timer.id.uuidString)"
+            if source == .watch, watchSessionID == nil {
+                let start = timer.startedAt
+                let activity = timer.activity
+                let candidates = try context.fetch(FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.start == start && $0.activityName == activity }))
+                if let synced = candidates.first(where: { $0.externalID.hasPrefix("almanac-watch:") }) { id = synced.externalID }
+            }
             var fetch = FetchDescriptor<WorkoutRecord>(predicate: #Predicate { $0.externalID == id })
             fetch.fetchLimit = 1
             if try context.fetch(fetch).isEmpty {
@@ -336,15 +367,28 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         pendingVideoID = nil; pendingSplit = nil; following = nil
     }
     func discard() {
+        if active, source == .watch, hasSession, let watch {
+            watch.send(.discard) { [weak self] success in
+                guard success, let self else { return }
+                self.clearDiscardedWorkout()
+            }
+            return
+        }
+        clearDiscardedWorkout()
+    }
+    private func clearDiscardedWorkout() {
         liveActivity.end()
         // `discard`, not `end`: on the wrist `end` means finish and save, so
         // ending here would write to Health the workout the person threw away.
-        if source == .watch { watch?.end(after: .discard) }
+        if source == .watch {
+            if active { watch?.end() } else { watch?.end(after: .discard) }
+        }
         session?.delegate = nil; builder?.delegate = nil
         session?.end(); builder?.discardWorkout(); session = nil; builder = nil
         sensor.stopStreaming(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
+        watchSessionID = nil; lastWatchPacketAt = nil
         source = .phone; reps = nil; setIndex = nil; completedSets = []
         pendingVideoID = nil; pendingSplit = nil; following = nil
         error = nil; notice = nil; busy = false
@@ -352,7 +396,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     }
     func deactivate() {
         active = false; discard(); context = nil; onSaved = nil
-        watch?.onSession = nil; watch?.onPacket = nil; watch?.onStateChange = nil
+        watch?.onSession = nil; watch?.onPacket = nil; watch?.onStateChange = nil; watch?.onControlFailure = nil
     }
     /// State changes: always write the draft and sync.
     func persist() {
@@ -375,7 +419,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                                                          energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load,
                                                          source: source, reps: reps, setIndex: setIndex, completedSets: completedSets,
                                                          videoID: pendingVideoID, split: pendingSplit,
-                                                         followingTitle: following?.title, followingChannel: following?.channel)) else { return }
+                                                         followingTitle: following?.title, followingChannel: following?.channel, watchSessionID: watchSessionID)) else { return }
         defaults.set(data, forKey: Self.draftKey)
         lastDraftWriteAt = date
     }
