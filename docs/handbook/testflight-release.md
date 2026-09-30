@@ -46,7 +46,7 @@ upload finishes, which wastes the whole round trip. Bump
 
 ```
 MARKETING_VERSION       1.0   → user-facing, bump for real releases
-CURRENT_PROJECT_VERSION 17    → bump for EVERY upload, even a re-upload
+CURRENT_PROJECT_VERSION 46    → bump for EVERY upload, even a re-upload
 ```
 
 Committing it is the part that was being skipped. Through build 15 the number
@@ -55,6 +55,12 @@ never committed, so nothing in the repository could answer "what did we upload
 last?" and every archive was a guess. The number here is the last build that
 reached App Store Connect. Raise it, commit, then archive, and the guess goes
 away.
+
+Every target carries the same number: the iPhone app, the widgets, the watch
+app and the watch widgets. The watch app is embedded in the iPhone app, and
+App Store Connect drops or rejects it when its build number differs from the
+parent's, so testers get the phone app with no companion. Bump all eight
+`CURRENT_PROJECT_VERSION` lines together.
 
 A rejected upload still burns the number. If a build fails validation, bump
 again rather than re-uploading the same one.
