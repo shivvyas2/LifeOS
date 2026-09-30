@@ -12,7 +12,7 @@
 		204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
 		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
-		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = D04A72741F9CF213015F7725 /* AppSurfaces */; };
 		65562F2ADB6E2321FAE9A9FB /* WorkoutLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */; };
 		68A03CA62FF558CFA54A53F7 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */; };
@@ -38,7 +38,7 @@
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
 		C1A644C6813581BB160BA976 /* HealthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B837A02BD3CD136DF62D37 /* HealthWidget.swift */; };
 		DE5380CEF71189FC734B69BC /* AlmanacWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */; };
-		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
@@ -67,26 +67,26 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		32BA62B6725C1A923EAD404F /* Embed App Extensions */ = {
+		32BA62B6725C1A923EAD404F /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed App Extensions */,
+				349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		344FCB2157AA3A35261F1173 /* Embed App Extensions */ = {
+		344FCB2157AA3A35261F1173 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed App Extensions */,
+				EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed Foundation Extensions */,
 			);
-			name = "Embed App Extensions";
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		83B63A8CD80C113A12E07FC2 /* Embed Watch Content */ = {
@@ -335,7 +335,7 @@
 				A985C66E302A34E0002272C5 /* Sources */,
 				A985C66F302A34E0002272C5 /* Frameworks */,
 				A985C670302A34E0002272C5 /* Resources */,
-				32BA62B6725C1A923EAD404F /* Embed App Extensions */,
+				32BA62B6725C1A923EAD404F /* Embed Foundation Extensions */,
 				83B63A8CD80C113A12E07FC2 /* Embed Watch Content */,
 			);
 			buildRules = (
@@ -369,7 +369,7 @@
 				BB17915AC31D1200D91D104A /* Sources */,
 				6451D592ADAB1D3434D501FF /* Frameworks */,
 				77651E7F2A2A5D9E39C0E7EE /* Resources */,
-				344FCB2157AA3A35261F1173 /* Embed App Extensions */,
+				344FCB2157AA3A35261F1173 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -740,6 +740,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -798,6 +799,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

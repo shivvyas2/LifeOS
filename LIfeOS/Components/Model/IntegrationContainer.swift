@@ -1,5 +1,7 @@
 import Foundation
 import SwiftData
+import Integrations
+import Persistence
 
 /// Dependency injection container for third-party integrations.
 ///
@@ -62,22 +64,11 @@ final class IntegrationContainer {
         self.userDefaults = userDefaults
     }
     
-    /// Test container with injectable mocks.
-    ///
-    /// Example:
-    /// ```swift
-    /// @Test func whoopConnection() async throws {
-    ///     let mockTokenStore = MockWhoopTokenStore()
-    ///     let container = IntegrationContainer.test(whoopTokenStore: mockTokenStore)
-    ///     
-    ///     container.whoop.connect()
-    ///     #expect(mockTokenStore.savedToken != nil)
-    /// }
-    /// ```
+    /// Test container with in-memory stores.
     static func test(
-        whoopTokenStore: any WhoopTokenStoring = MockWhoopTokenStore(),
-        fitbitAuthStore: any FitbitAuthStoring = MockFitbitAuthStore(),
-        authSessionStore: any AuthSessionStoring = MockAuthSessionStore(),
+        whoopTokenStore: any WhoopTokenStoring = InMemoryWhoopTokenStore(),
+        fitbitAuthStore: any FitbitAuthStoring = InMemoryFitbitAuthStore(),
+        authSessionStore: any AuthSessionStoring = InMemoryAuthSessionStore(),
         userDefaults: UserDefaults = UserDefaults(suiteName: "test")!
     ) -> IntegrationContainer {
         IntegrationContainer(

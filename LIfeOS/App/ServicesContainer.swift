@@ -3,6 +3,7 @@ import SwiftData
 import OSLog
 import HealthKit
 import AppSurfaces
+import Integrations
 
 /// Dependency injection container for all app services.
 ///

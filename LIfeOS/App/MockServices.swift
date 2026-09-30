@@ -1,6 +1,8 @@
 import Foundation
 import HealthKit
+import SwiftData
 import AppSurfaces
+import Integrations
 
 /// Mock implementations of app services for testing.
 ///
@@ -170,7 +172,8 @@ extension NudgePayload {
     /// Test fixture for push notifications
     static let fixture = NudgePayload(
         text: "Test nudge: You're doing great!",
-        route: .today
+        trigger: "test",
+        day: "2026-09-30"
     )
 }
 
