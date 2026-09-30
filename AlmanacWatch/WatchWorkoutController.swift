@@ -82,7 +82,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             for _ in 0..<15 where accountID == nil {
                 try? await Task.sleep(for: .milliseconds(200))
             }
-            start(configuration)
+            start(configuration, asksForSetup: false)
         }
     }
 
@@ -93,9 +93,14 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         start(configuration)
     }
 
-    func start(_ configuration: HKWorkoutConfiguration) {
+    /// Only swing analysis reads the athlete profile, so only a badminton
+    /// start tapped on the Watch pauses for setup. A start sent from the
+    /// phone never waits on a form nobody is looking at.
+    func start(_ configuration: HKWorkoutConfiguration, asksForSetup: Bool = true) {
         guard state == .idle else { return }
-        guard athlete != nil else { pendingStart = configuration; needsAthleteSetup = true; return }
+        if asksForSetup, athlete == nil, configuration.activityType == .badminton {
+            pendingStart = configuration; needsAthleteSetup = true; return
+        }
         // Synchronous, before the Task: the authorization prompt can take a
         // while and a second Start tap must not open a second session.
         state = .starting
@@ -242,6 +247,12 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         if let accountID { profile.save(to: UserDefaults(suiteName: "watch.athlete.\(accountID)") ?? .standard) }
         needsAthleteSetup = false
         if let pendingStart { self.pendingStart = nil; start(pendingStart) }
+    }
+    /// Dismissing setup still starts the workout, just without swings.
+    func skipAthleteSetup() {
+        guard let pendingStart else { return }
+        self.pendingStart = nil
+        start(pendingStart, asksForSetup: false)
     }
     func accountChanged(to next: String?) {
         athlete = next.flatMap { UserDefaults(suiteName: "watch.athlete.\($0)") }.flatMap { ActivityAthleteProfile.load(from: $0) }

@@ -57,7 +57,7 @@ struct AlmanacWatchApp: App {
                     await workout.recover()
                 }
             }
-            .sheet(isPresented: $workout.needsAthleteSetup) { WatchAthleteSetup(workout: workout) }
+            .sheet(isPresented: $workout.needsAthleteSetup, onDismiss: workout.skipAthleteSetup) { WatchAthleteSetup(workout: workout) }
             .onOpenURL { _ in bridge.refresh() }
             .onChange(of: scenePhase) { _, phase in if phase == .active { bridge.refresh() } }
         }
@@ -67,7 +67,8 @@ struct AlmanacWatchApp: App {
 @MainActor @Observable
 final class WatchBridge: NSObject, WCSessionDelegate {
     var snapshot: SurfaceSnapshot? = .read()
-    var status = "Ready to record on Watch"
+    /// Nil while things are in step; otherwise the one thing worth saying.
+    var notice: String?
     var binding: WatchAccountBinding? = UserDefaults.standard.data(forKey: "watch.account").flatMap { try? JSONDecoder().decode(WatchAccountBinding.self, from: $0) }
     var onAccountChanged: ((String?) -> Void)?
     var onAthleteChanged: ((ActivityAthleteProfile?) -> Void)?
@@ -105,7 +106,6 @@ final class WatchBridge: NSObject, WCSessionDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--design-preview") {
             snapshot = SurfaceSnapshot(ownerID: "watch-preview", measuredAt: .now, steps: 6240, sleepMinutes: 452, exerciseMinutes: 24)
-            status = "Design preview"
             return
         }
         #endif
@@ -114,25 +114,24 @@ final class WatchBridge: NSObject, WCSessionDelegate {
     }
     func refresh() {
         guard let session, session.activationState == .activated, session.isReachable else {
-            status = "Phone away · workouts still record here"
+            notice = pending.isEmpty ? nil : "iPhone away · syncs when nearby"
             return
         }
         flush()
-        status = "Updating…"
         session.sendMessageData(Data(), replyHandler: { [weak self] data in
             Task { @MainActor in self?.receive(data) }
         }, errorHandler: { [weak self] _ in
-            Task { @MainActor in self?.status = "Phone away · syncs when connected" }
+            Task { @MainActor in if self?.pending.isEmpty == false { self?.notice = "iPhone away · syncs when nearby" } }
         })
     }
     private func receive(_ data: Data) {
         guard let next = try? JSONDecoder().decode(SurfaceSnapshot.self, from: data) else {
-            status = "Open Almanac on your iPhone to sync."; return
+            notice = "Open Almanac on iPhone once to sync"; return
         }
         if next.supersedes(snapshot) {
             snapshot = next; next.write(); WidgetCenter.shared.reloadAllTimelines()
         }
-        status = "Synced from iPhone"
+        notice = nil
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let data = session.receivedApplicationContext["snapshot"] as? Data
@@ -164,10 +163,12 @@ final class WatchBridge: NSObject, WCSessionDelegate {
         Task { @MainActor in
             self.pending.removeAll { $0.id.uuidString == id && $0.ownerID == owner }
             self.persistQueue()
+            if self.pending.isEmpty { self.notice = nil }
         }
     }
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        Task { @MainActor in self.flush() }
+        let reachable = session.isReachable
+        Task { @MainActor in if reachable { self.refresh() } else { self.flush() } }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
         Task { @MainActor in self.receive(messageData) }
@@ -183,16 +184,19 @@ struct WatchDashboard: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Make your move.").font(.system(.title3, design: .rounded, weight: .bold))
-                Text("Start here. Take it anywhere.").font(.caption2).foregroundStyle(.secondary)
-                if let error = workout.lastError { Text(error).font(.caption2).foregroundStyle(.orange) }
-                if let result = workout.result { Label(result, systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(.mint) }
+                if let error = workout.lastError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange)
+                } else if let result = workout.result {
+                    Label(result, systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(.mint)
+                } else {
+                    Text("Make your move.").font(.system(.title3, design: .rounded, weight: .bold))
+                }
                 ForEach(featured.compactMap { ActivityCatalog.type(named: $0) }) { type in
                     Button { start(type) } label: {
                         HStack(spacing: 10) {
                             activitySymbol(type.symbol).font(.system(size: 28)).foregroundStyle(WatchPalette.color(for: type)).frame(width: 32)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(type.name).font(.headline)
+                                Text(type.name).font(.headline).lineLimit(1).minimumScaleFactor(0.7)
                                 Text(subtitle(type)).font(.system(size: 10)).foregroundStyle(.white.opacity(0.65))
                             }
                             Spacer(minLength: 0)
@@ -204,21 +208,34 @@ struct WatchDashboard: View {
                 Button { isChoosingWorkout = true } label: { Label("All activities", systemImage: "square.grid.2x2") }
                     .buttonStyle(.glass).tint(.orange)
                 if let data = bridge.snapshot, data.isAvailable() {
-                    Text("Your day").font(.headline).padding(.top, 6)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Your day").font(.headline)
+                        Spacer(minLength: 4)
+                        if let measured = data.measuredAt {
+                            Text(measured, format: .relative(presentation: .named, unitsStyle: .abbreviated)).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }.padding(.top, 6)
                     reading("Steps", value: data.steps.map { $0.formatted() } ?? "—", icon: "figure.walk", tint: .cyan)
                     reading("Sleep", value: data.sleepText, icon: "moon.fill", tint: .purple)
                     reading("Movement", value: "\(data.exerciseMinutes.map(String.init) ?? "—") min", icon: "flame.fill", tint: .orange)
                 }
                 if !bridge.pending.isEmpty {
-                    Text("\(bridge.pending.count) workout(s) waiting to sync").font(.caption2).foregroundStyle(.orange)
+                    Label("^[\(bridge.pending.count) workout](inflect: true) waiting to sync", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption2).foregroundStyle(.orange)
                 }
                 if bridge.binding?.ownerID == nil {
-                    Text("Workouts save to Apple Health. Open Almanac on iPhone to link your account for app syncing.").font(.caption2).foregroundStyle(.secondary)
+                    Label("Saving to Apple Health. Open Almanac on iPhone to link.", systemImage: "iphone")
+                        .font(.caption2).foregroundStyle(.secondary)
+                } else if let notice = bridge.notice {
+                    Button(action: bridge.refresh) { Label(notice, systemImage: "iphone.slash").font(.caption2) }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityHint("Tries to sync again")
                 }
-                Button("Your movement", systemImage: "figure.stand") { workout.needsAthleteSetup = true }.buttonStyle(.glass)
-                Button(action: bridge.refresh) { Label("Sync iPhone", systemImage: "arrow.triangle.2.circlepath") }.buttonStyle(.glass)
-                Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 2)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Your movement", systemImage: "figure.stand") { workout.needsAthleteSetup = true }
+            }
         }
         .containerBackground(for: .navigation) { WatchActivityBackdrop(theme: WatchPalette.theme(for: ActivityCatalog.other)) }
         .navigationTitle("Almanac")
