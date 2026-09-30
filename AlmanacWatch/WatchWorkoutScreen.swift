@@ -70,7 +70,7 @@ struct WatchWorkoutScreen: View {
             }.tag(2)
         }
         .tabViewStyle(.page)
-        .background { WatchActivityBackdrop(theme: theme).ignoresSafeArea() }
+        .containerBackground(for: .navigation) { WatchActivityBackdrop(theme: theme) }
         .navigationTitle(workout.activityName)
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Finish this workout?", isPresented: $confirmingEnd, titleVisibility: .visible) {
@@ -288,7 +288,7 @@ struct WatchActivityTheme {
     let highlight: Color
 }
 
-/// A dark crown area flows into saturated color and a pale reflected edge,
+/// A shaded activity color flows across the crown area into a pale reflected edge,
 /// echoing the supplied gradient without placing white text on a white base.
 struct WatchActivityBackdrop: View {
     let theme: WatchActivityTheme
@@ -300,8 +300,8 @@ struct WatchActivityBackdrop: View {
                 Color.black
                 if !dimmed && !opaque {
                     LinearGradient(stops: [
-                        .init(color: .black, location: 0.08),
-                        .init(color: theme.tint.opacity(0.16), location: 0.44),
+                        .init(color: theme.tint.opacity(0.48), location: 0),
+                        .init(color: theme.tint.opacity(0.36), location: 0.40),
                         .init(color: theme.tint.opacity(0.55), location: 0.82),
                         .init(color: theme.glow.opacity(0.48), location: 1)
                     ], startPoint: .top, endPoint: .bottom)

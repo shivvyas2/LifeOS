@@ -211,7 +211,7 @@ struct WatchDashboard: View {
                 Text(bridge.status).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 2)
         }
-        .background { WatchActivityBackdrop(theme: WatchPalette.theme(for: ActivityCatalog.other)).ignoresSafeArea() }
+        .containerBackground(for: .navigation) { WatchActivityBackdrop(theme: WatchPalette.theme(for: ActivityCatalog.other)) }
         .navigationTitle("Almanac")
         .sheet(isPresented: $isChoosingWorkout) {
             NavigationStack {

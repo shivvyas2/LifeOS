@@ -89,3 +89,11 @@ backdrop; Increase Contrast strengthens the card edge. Workout/sync logic is
 unchanged. Watch simulator build passes, and `git diff --check` passes.
 New sample-data captures: `run-glass.png`, `badminton-glass.png`,
 `strength-glass.png`.
+
+## Full-screen background correction
+
+Moved the workout and launcher backdrops from a content `.background` to
+watchOS `.containerBackground(for: .navigation)`, so the same gradient fills the
+clock/title area. Replaced the pure-black top gradient stop with shaded activity
+color. `run-fullscreen.png` confirms blue extends to the top edge with legible
+clock and title. Watch simulator build and `git diff --check` passed.
