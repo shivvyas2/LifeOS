@@ -34,14 +34,24 @@ struct BadmintonHistoryScreen: View {
 
 struct BadmintonReviewScreen: View {
     let workout: WorkoutRecord
+    /// Decoded once, here, rather than in a computed property: the body
+    /// re-runs on every selection change, and decoding the whole review each
+    /// time is work the screen does not need to repeat.
+    ///
+    /// Validated as well as decoded. The import path checks the same rules,
+    /// but this screen reads whatever is stored, and every figure below is a
+    /// conversion that traps on a value those rules exclude.
+    private let analysis: SwingAnalysis?
     @State private var selected = 0
-    @State private var playback = 0.0
-    @State private var playing = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     private let jade = Color(red: 0.33, green: 0.91, blue: 0.72)
-    private var analysis: SwingAnalysis? {
-        workout.swingAnalysisData.flatMap { try? JSONDecoder().decode(SwingAnalysis.self, from: $0) }
+    init(workout: WorkoutRecord) {
+        self.workout = workout
+        // The record keeps whole minutes, so the next minute up bounds the
+        // workout's real length.
+        let elapsed = Double(workout.durationMinutes + 1) * 60
+        analysis = workout.swingAnalysisData
+            .flatMap { try? JSONDecoder().decode(SwingAnalysis.self, from: $0) }
+            .flatMap { $0.isValid(elapsed: elapsed) ? $0 : nil }
     }
     private var event: SwingEvent? { analysis?.events.first(where: { $0.id == selected }) }
     var body: some View {
@@ -88,18 +98,6 @@ struct BadmintonReviewScreen: View {
         .foregroundStyle(.white).colorScheme(.dark)
         .navigationTitle("Badminton").navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar).tint(jade)
-        .task(id: playing) {
-            guard playing, !reduceMotion, let duration = event?.duration else { return }
-            let start = Date.now.addingTimeInterval(-playback)
-            while !Task.isCancelled && playing {
-                playback = min(duration, Date.now.timeIntervalSince(start))
-                if playback >= duration { playing = false; break }
-                try? await Task.sleep(for: .milliseconds(40))
-            }
-        }
-        .onChange(of: selected) { _, _ in playing = false; playback = 0 }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { playing = false } }
-        .onDisappear { playing = false }
     }
     private func motionReview(_ analysis: SwingAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -108,17 +106,9 @@ struct BadmintonReviewScreen: View {
             if analysis.events.isEmpty {
                 ContentUnavailableView("No swing candidates", systemImage: "waveform.path", description: Text("No qualifying motion bursts were recorded. This does not mean you made no shots."))
             } else {
-                WristCourtReplay(event: event, time: playback)
-                    .frame(height: 280).clipShape(RoundedRectangle(cornerRadius: 24))
-                    .accessibilityLabel("3D view of measured wrist orientation. Court position is not tracked.")
-                HStack {
-                    Button { if playback >= (event?.duration ?? 0) { playback = 0 }; playing.toggle() } label: {
-                        Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
-                    }.buttonStyle(.glass).disabled(reduceMotion)
-                    Slider(value: $playback, in: 0...max(0.1, event?.duration ?? 0.1), onEditingChanged: { _ in playing = false })
-                        .accessibilityLabel("Scrub recorded wrist orientation")
-                }
-                if reduceMotion { Text("Use the slider to inspect motion with Reduce Motion enabled.").font(.caption).foregroundStyle(.secondary) }
+                // Keyed by the candidate, so choosing another one starts its
+                // replay from the beginning, stopped.
+                SwingReplay(event: event, tint: jade).id(selected)
                 HStack {
                     Button { selected -= 1 } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(selected == 0)
                     Spacer()
@@ -162,6 +152,49 @@ struct BadmintonReviewScreen: View {
     }
 }
 
+/// The 3D replay and its controls, apart from the rest of the review.
+///
+/// Playback moves 25 times a second. Held by the review itself, every tick
+/// re-ran the whole screen, the chart of every candidate included; held here,
+/// a tick redraws the scene and the slider and nothing else.
+private struct SwingReplay: View {
+    let event: SwingEvent?
+    let tint: Color
+    @State private var playback = 0.0
+    @State private var playing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    private var duration: Double { event?.duration ?? 0 }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            WristCourtReplay(event: event, time: playback)
+                .frame(height: 280).clipShape(RoundedRectangle(cornerRadius: 24))
+                .accessibilityLabel("3D view of measured wrist orientation. Court position is not tracked.")
+            HStack {
+                Button { if playback >= duration { playback = 0 }; playing.toggle() } label: {
+                    Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
+                }.buttonStyle(.glass).disabled(reduceMotion || event == nil)
+                    .accessibilityLabel(playing ? "Pause replay" : "Play replay")
+                Slider(value: $playback, in: 0...max(0.1, duration), onEditingChanged: { _ in playing = false })
+                    .accessibilityLabel("Scrub recorded wrist orientation")
+            }
+            if reduceMotion { Text("Use the slider to inspect motion with Reduce Motion enabled.").font(.caption).foregroundStyle(.secondary) }
+        }
+        .tint(tint)
+        .task(id: playing) {
+            guard playing, !reduceMotion, duration > 0 else { playing = false; return }
+            let start = Date.now.addingTimeInterval(-playback)
+            while !Task.isCancelled && playing {
+                playback = min(duration, Date.now.timeIntervalSince(start))
+                if playback >= duration { playing = false; break }
+                try? await Task.sleep(for: .milliseconds(40))
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { playing = false } }
+        .onDisappear { playing = false }
+    }
+}
+
 /// A fixed display position deliberately avoids inventing a player track.
 private struct WristCourtReplay: UIViewRepresentable {
     var event: SwingEvent?
@@ -170,8 +203,11 @@ private struct WristCourtReplay: UIViewRepresentable {
         let view = SCNView(); let scene = SCNScene(); view.scene = scene
         view.backgroundColor = UIColor(red: 0.015, green: 0.075, blue: 0.07, alpha: 1)
         view.autoenablesDefaultLighting = true; view.allowsCameraControl = true
-        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(8, 11, 13)
-        camera.look(at: SCNVector3(0, 0, 0)); scene.rootNode.addChildNode(camera)
+        // Framed on the wrist, which is the only thing that moves, with the
+        // near half of the court and the net behind it for scale. From the
+        // whole-court view this used to start at, the watch was a few pixels.
+        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(3.2, 3.8, 8.2)
+        camera.look(at: SCNVector3(0, 1.4, 2.4)); scene.rootNode.addChildNode(camera)
         let floor = SCNBox(width: 6, height: 0.08, length: 12, chamferRadius: 0.06)
         floor.firstMaterial?.diffuse.contents = UIColor(red: 0.025, green: 0.32, blue: 0.25, alpha: 1)
         scene.rootNode.addChildNode(SCNNode(geometry: floor))
@@ -195,9 +231,20 @@ private struct WristCourtReplay: UIViewRepresentable {
         guard let frames = event?.frames, let first = frames.first else { wrist.orientation = SCNQuaternion(0, 0, 0, 1); return }
         let frame = frames.last(where: { $0.t <= time }) ?? first
         // Relative attitude removes the arbitrary session reference direction.
-        let start = simd_quatf(ix: Float(first.x), iy: Float(first.y), iz: Float(first.z), r: Float(first.w))
-        let current = simd_quatf(ix: Float(frame.x), iy: Float(frame.y), iz: Float(frame.z), r: Float(frame.w))
+        // Both ends are normalised first: the inverse of a quaternion that is
+        // not unit length is not its conjugate, and a zero one has no inverse
+        // at all, so an orientation built from either is NaN, which SceneKit
+        // does not survive. Import checks rule both out; this does not rely on it.
+        guard let start = Self.unit(first), let current = Self.unit(frame) else {
+            wrist.simdOrientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1); return
+        }
         wrist.simdOrientation = start.inverse * current
+    }
+    private static func unit(_ frame: WristFrame) -> simd_quatf? {
+        let q = simd_quatf(ix: Float(frame.x), iy: Float(frame.y), iz: Float(frame.z), r: Float(frame.w))
+        let length = q.length
+        guard length.isFinite, length > 0.5 else { return nil }
+        return q.normalized
     }
     private func line(_ scene: SCNScene, x: Float, z: Float, width: CGFloat, length: CGFloat) {
         let box = SCNBox(width: width, height: 0.02, length: length, chamferRadius: 0)

@@ -21,9 +21,11 @@ struct HealthActivityDesignPreview: View {
         let row = WorkoutRecord(externalID: "design-badminton", start: .now, durationMinutes: 32, activityName: "Badminton", energyKcal: 216)
         var analysis = SwingAnalysis(); analysis.sampledSeconds = 1852
         analysis.events = (0..<38).map { index in
-            let frames = (0..<12).map { i in
-                let angle = sin(Double(i) / 11 * .pi) * 1.8
-                return WristFrame(t: Double(i) * 0.08, x: sin(angle / 2), y: 0, z: 0, w: cos(angle / 2))
+            // Eight frames at least 0.12 s apart, as the watch keeps them: the
+            // review validates what it shows, and rejects anything denser.
+            let frames = (0..<8).map { i in
+                let angle = sin(Double(i) / 7 * .pi) * 1.8
+                return WristFrame(t: Double(i) * 0.12, x: sin(angle / 2), y: 0, z: 0, w: cos(angle / 2))
             }
             return SwingEvent(id: index, time: Double(index) * 47 + 10, duration: 0.96, peakRotation: 5.8 + Double(index % 7) * 0.6, peakAcceleration: 1.5 + Double(index % 5) * 0.3, frames: frames)
         }
