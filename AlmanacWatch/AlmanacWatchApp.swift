@@ -118,9 +118,14 @@ final class WatchBridge: NSObject, WCSessionDelegate {
             return
         }
         flush()
-        session.sendMessageData(Data(), replyHandler: { [weak self] data in
+        // `@Sendable` is the fix, not decoration. Written inside this
+        // @MainActor class, a plain closure inherits main-actor isolation,
+        // and WatchConnectivity calls these on its own background queue, so
+        // Swift 6's runtime isolation check traps before the first line runs.
+        // A @Sendable closure is nonisolated and hops to the main actor itself.
+        session.sendMessageData(Data(), replyHandler: { @Sendable [weak self] data in
             Task { @MainActor in self?.receive(data) }
-        }, errorHandler: { [weak self] _ in
+        }, errorHandler: { @Sendable [weak self] _ in
             Task { @MainActor in if self?.pending.isEmpty == false { self?.notice = "iPhone away · syncs when nearby" } }
         })
     }
