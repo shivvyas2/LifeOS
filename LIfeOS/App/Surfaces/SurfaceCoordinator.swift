@@ -115,9 +115,11 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
     /// Both mirrored and offline finishes use the same stable record ID.
     private func importWatchWorkouts() {
         guard !workoutInbox.isEmpty, let ownerID, let context else { return }
-        for summary in workoutInbox {
-            guard summary.isValid(for: ownerID) else {
-                workoutInbox.removeAll { $0.id == summary.id }; continue
+        for received in workoutInbox {
+            // A badminton review that fails its checks is dropped on its own;
+            // the workout it came with is still imported and receipted.
+            guard let summary = received.salvaged(for: ownerID) else {
+                workoutInbox.removeAll { $0.id == received.id }; continue
             }
             do {
                 guard try WatchWorkoutImporter.save(summary, ownerID: ownerID, context: context) else { continue }

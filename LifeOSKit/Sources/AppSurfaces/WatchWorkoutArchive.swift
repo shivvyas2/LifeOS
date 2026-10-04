@@ -45,6 +45,20 @@ public struct WatchWorkoutSummary: Codable, Equatable, Sendable, Identifiable {
         && (swingAnalysis.map { activity == "Badminton" && $0.isValid(elapsed: elapsed) } ?? true)
         && sets.count <= 1000 && sets.allSatisfy { (0...10000).contains($0) }
     }
+    /// The summary to import, or nil when nothing in it can be trusted.
+    ///
+    /// Swing analysis is experimental and validated strictly, so a review
+    /// that fails its checks costs the review, never the workout: the session
+    /// still counts, without the motion replay. Rejecting the whole summary
+    /// used to drop the workout on the phone while the watch, never receiving
+    /// a receipt, resent it forever.
+    public func salvaged(for owner: String, now: Date = .now) -> Self? {
+        if isValid(for: owner, now: now) { return self }
+        guard swingAnalysis != nil else { return nil }
+        var withoutReview = self
+        withoutReview.swingAnalysis = nil
+        return withoutReview.isValid(for: owner, now: now) ? withoutReview : nil
+    }
 }
 
 public enum WatchWorkoutLayout: String, Sendable {

@@ -47,6 +47,34 @@ struct WatchWorkoutArchiveTests {
             #expect(WatchWorkoutLayout.forActivity(activity) == layout)
         }
     }
+    func analysis(sampled: Double) -> SwingAnalysis {
+        var value = SwingAnalysis()
+        value.sampledSeconds = sampled
+        value.events = [SwingEvent(id: 0, time: 30, duration: 0.4, peakRotation: 6, peakAcceleration: 1.4,
+                                   frames: [WristFrame(t: 0, x: 0, y: 0, z: 0, w: 1)])]
+        return value
+    }
+    @Test func aValidReviewIsImportedWithItsWorkout() throws {
+        var value = summary(); value.swingAnalysis = analysis(sampled: 1100)
+        #expect(value.salvaged(for: "alice", now: now) == value)
+    }
+    @Test func aReviewThatFailsItsChecksCostsTheReviewNotTheWorkout() throws {
+        var value = summary()
+        // More motion sampled than the workout lasted: the review is wrong,
+        // the workout is not.
+        value.swingAnalysis = analysis(sampled: 5000)
+        #expect(!value.isValid(for: "alice", now: now))
+        let kept = try #require(value.salvaged(for: "alice", now: now))
+        #expect(kept.swingAnalysis == nil)
+        #expect(kept.id == value.id)
+        #expect(kept.elapsed == value.elapsed)
+    }
+    @Test func aWorkoutThatIsItselfInvalidIsStillRejected() {
+        var value = summary(); value.swingAnalysis = analysis(sampled: 5000)
+        #expect(value.salvaged(for: "bob", now: now) == nil)
+        value = summary(); value.energyKcal = .nan
+        #expect(value.salvaged(for: "alice", now: now) == nil)
+    }
     @Test func livePacketCarriesPrimaryClockAndAccount() throws {
         var packet = WatchPacket(sentAt: now)
         packet.sessionID = UUID(); packet.ownerID = "alice"
