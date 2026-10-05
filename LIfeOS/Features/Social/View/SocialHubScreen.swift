@@ -79,9 +79,9 @@ struct SocialHubScreen: View {
                                 if !group.description.isEmpty { Text(group.description).lifeOSText(.secondary).foregroundStyle(.secondary) }
                                 Text("Joining opens group chat. Health-score sharing starts off.").lifeOSText(.caption).foregroundStyle(.secondary)
                                 HStack {
-                                    Button("Decline") { Task { await model.answer(group, accept: false) } }.buttonStyle(.bordered)
+                                    Button("Decline") { Task { await model.answer(group, accept: false) } }.buttonStyle(.editorial(.secondary, size: .compact))
                                     Spacer()
-                                    Button("Join group") { Task { await model.answer(group, accept: true) } }.buttonStyle(SocialActionStyle())
+                                    Button("Join group") { Task { await model.answer(group, accept: true) } }.buttonStyle(.editorial(.primary, size: .compact))
                                 }.disabled(model.busy)
                             }
                         }
@@ -93,7 +93,7 @@ struct SocialHubScreen: View {
                                 detail: "Create a group and invite friends, or accept an invitation to get started.", icon: "person.3.sequence")
                     Button { creating = true } label: {
                         Label("Create a group", systemImage: "plus").font(.headline).frame(maxWidth: .infinity, minHeight: 52)
-                    }.buttonStyle(SocialActionStyle()).buttonBorderShape(.roundedRectangle(radius: 16))
+                    }.buttonStyle(.editorial(.primary, size: .compact))
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), alignment: .leading)], spacing: 16) {
                     ForEach(joined) { group in

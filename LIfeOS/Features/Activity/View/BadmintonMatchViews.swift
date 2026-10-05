@@ -97,8 +97,8 @@ struct BadmintonScoreCard: View {
             EditorialSectionHeader(index: 1, title: score.isOver ? "Final score" : "Score") {
                 Button { model.undoRally() } label: {
                     Label("Undo", systemImage: "arrow.uturn.backward")
-                        .font(LifeOSType.label.weight(.semibold)).frame(minHeight: 44)
                 }
+                .buttonStyle(.editorial(.secondary, size: .compact))
                 .disabled(score.rallies.isEmpty)
                 .accessibilityLabel("Undo last point")
             }

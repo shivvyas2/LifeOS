@@ -72,7 +72,7 @@ struct NoteShelfScreen: View {
                             Button("Clear search") { model.query = "" }
                         } else {
                             Button("Create a page") { open(model.createNote()) }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.editorial(.primary, size: .compact))
                         }
                     }
                 } else {

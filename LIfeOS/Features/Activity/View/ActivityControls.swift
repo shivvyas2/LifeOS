@@ -31,19 +31,17 @@ struct ActivityControls: View {
                 }
                 Button { Task { await model.finish() } } label: {
                     Label(model.busy ? "Saving…" : "Finish & save", systemImage: "checkmark")
-                        .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
-                }.buttonStyle(.bordered).disabled(model.busy)
+                }.buttonStyle(.editorial(.secondary, fullWidth: true)).disabled(model.busy)
                 // Offered only when the watch cannot be asked: disconnected,
                 // or a Finish that never got an answer. The workout keeps
                 // recording on the wrist and replaces this one when it syncs.
                 if model.source == .watch, model.watchUnreachable || model.error != nil {
                     Button { Task { await model.finishOnPhone() } } label: {
                         Label("End on iPhone", systemImage: "iphone")
-                            .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 48)
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(.editorial(.secondary, fullWidth: true))
                 }
                 Button("Discard activity", role: .destructive) { confirmDiscard = true }
-                    .font(LifeOSType.label).frame(minHeight: 44).disabled(model.busy)
+                    .buttonStyle(.editorial(.destructive, size: .compact)).disabled(model.busy)
             } else {
                 Toggle("Save to Apple Health", isOn: $model.saveToHealth).font(LifeOSType.rowTitle)
                     .disabled(model.busy)
@@ -65,9 +63,7 @@ struct ActivityControls: View {
 
     private func primaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack { Spacer(); if model.busy { ProgressView() } else { Image(systemName: icon) }; Text(title); Spacer() }
-                .font(LifeOSType.rowTitle).frame(minHeight: 56)
-                .foregroundStyle(.white).background(LifeOSTokens.accent, in: RoundedRectangle(cornerRadius: 18))
-        }.buttonStyle(.plain).disabled(model.busy)
+            HStack(spacing: Space.x1) { if model.busy { ProgressView() } else { Image(systemName: icon) }; Text(title) }
+        }.buttonStyle(.editorial(.primary, fullWidth: true)).disabled(model.busy)
     }
 }

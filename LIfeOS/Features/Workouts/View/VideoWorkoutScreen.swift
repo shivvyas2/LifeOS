@@ -204,17 +204,12 @@ struct VideoWorkoutScreen: View {
 
     private var startButton: some View {
         Button { Task { await start() } } label: {
-            HStack {
-                Spacer()
+            HStack(spacing: Space.x1) {
                 if model.busy { ProgressView() } else { Image(systemName: "play.fill") }
                 Text(model.busy ? "Starting…" : "Start this workout")
-                Spacer()
             }
-            .font(LifeOSType.rowTitle).frame(minHeight: 56)
-            .foregroundStyle(.white)
-            .background(LifeOSTokens.accent, in: RoundedRectangle(cornerRadius: 18))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.editorial(.primary, fullWidth: true))
         .disabled(model.busy)
     }
 
@@ -318,9 +313,7 @@ struct VideoWorkoutScreen: View {
             Button("+1") { model.addRep() }.accessibilityLabel("Add one rep")
             Button("Next set") { model.nextSet() }
         }
-        .font(LifeOSType.label)
-        .buttonStyle(.bordered)
-        .controlSize(.large)
+        .buttonStyle(.editorial(.secondary, size: .compact))
     }
 
     /// Pause, finish and discard live in a sheet in full screen, behind one

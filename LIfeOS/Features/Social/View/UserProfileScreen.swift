@@ -69,25 +69,26 @@ struct UserProfileScreen: View {
         if mine {
             Text("This is how your profile appears to others. Edit your details from your own profile.").lifeOSText(.secondary).foregroundStyle(.secondary)
         } else if relationship?.status == .accepted {
-            Button { chat = true } label: { Label("Message", systemImage: "bubble.left").font(.headline).frame(maxWidth: .infinity, minHeight: 48) }
-                .buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: 16))
-            Button("Remove friend", role: .destructive) { removing = true }.lifeOSText(.secondary).frame(minHeight: 44).disabled(busy)
+            Button { chat = true } label: { Label("Message", systemImage: "bubble.left") }
+                .buttonStyle(.editorial(.primary, fullWidth: true))
+            Button("Remove friend", role: .destructive) { removing = true }
+                .buttonStyle(.editorial(.destructive, size: .compact)).disabled(busy)
         } else if relationship != nil {
             if incoming {
                 HStack {
-                    Button("Decline") { Task { await change(.remove) } }.buttonStyle(.bordered)
+                    Button("Decline") { Task { await change(.remove) } }.buttonStyle(.editorial(.secondary, size: .compact))
                     Spacer()
-                    Button("Accept request") { Task { await change(.accept) } }.buttonStyle(.borderedProminent)
+                    Button("Accept request") { Task { await change(.accept) } }.buttonStyle(.editorial(.primary, size: .compact))
                 }.disabled(busy)
             } else {
                 SocialPanel {
-                    HStack { Label("Request sent", systemImage: "checkmark"); Spacer(); Button("Cancel") { Task { await change(.remove) } }.disabled(busy) }
+                    HStack { Label("Request sent", systemImage: "checkmark"); Spacer(); Button("Cancel") { Task { await change(.remove) } }.buttonStyle(.editorial(.secondary, size: .compact)).disabled(busy) }
                 }
             }
         } else {
             Button { Task { await change(.add) } } label: {
-                Label("Add friend", systemImage: "person.badge.plus").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
-            }.buttonStyle(.borderedProminent).buttonBorderShape(.roundedRectangle(radius: 16)).disabled(busy || error != nil)
+                Label("Add friend", systemImage: "person.badge.plus")
+            }.buttonStyle(.editorial(.primary, fullWidth: true)).disabled(busy || error != nil)
             Text("Once they accept, you can message and invite them to groups.").lifeOSText(.caption).foregroundStyle(.white.opacity(0.8))
         }
     }

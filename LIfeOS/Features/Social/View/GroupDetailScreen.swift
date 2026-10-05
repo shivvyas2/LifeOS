@@ -243,7 +243,7 @@ private struct GroupInviteScreen: View {
                                     Text("Added").lifeOSText(.caption).foregroundStyle(.secondary)
                                 } else {
                                     Button("Invite") { Task { await model.invite(entry.profile.id) } }
-                                        .buttonStyle(.bordered).disabled(model.busy)
+                                        .buttonStyle(.editorial(.secondary, size: .compact)).disabled(model.busy)
                                 }
                             }.frame(minHeight: 56)
                         }

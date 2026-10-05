@@ -49,13 +49,13 @@ public struct GlassPanel<Content: View>: View {
     }
 }
 
-/// The app's primary action. Solid, full width, one per screen.
+/// The app's primary action. Solid, full width, one per screen. Drawn by
+/// `EditorialButtonStyle` so it matches every other primary in the app.
 public struct PrimaryButton: View {
     private let title: String
     private let isLoading: Bool
     private let action: () -> Void
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.isEnabled) private var isEnabled
 
     public init(_ title: String, isLoading: Bool = false, action: @escaping () -> Void) {
         self.title = title
@@ -66,21 +66,11 @@ public struct PrimaryButton: View {
     public var body: some View {
         Button(action: action) {
             ZStack {
-                Text(title)
-                    .font(LifeOSType.body.weight(.semibold))
-                    .opacity(isLoading ? 0 : 1)
-                if isLoading {
-                    ProgressView().tint(LifeOSTokens.canvas.resolve(scheme))
-                }
+                Text(title).opacity(isLoading ? 0 : 1)
+                if isLoading { ProgressView().tint(LifeOSTokens.canvas.resolve(scheme)) }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: Space.x6 + Space.half)   // 52pt, a comfortable target
-            .background(
-                Capsule().fill(LifeOSTokens.primaryText.resolve(scheme))
-            )
-            .foregroundStyle(LifeOSTokens.canvas.resolve(scheme))
-            .opacity(isEnabled ? 1 : 0.35)
         }
+        .buttonStyle(.editorial(.primary, fullWidth: true))
         .disabled(isLoading)
     }
 }
@@ -89,7 +79,6 @@ public struct PrimaryButton: View {
 public struct SecondaryButton: View {
     private let title: String
     private let action: () -> Void
-    @Environment(\.colorScheme) private var scheme
 
     public init(_ title: String, action: @escaping () -> Void) {
         self.title = title
@@ -97,12 +86,6 @@ public struct SecondaryButton: View {
     }
 
     public var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                .frame(maxWidth: .infinity)
-                .frame(height: Space.x6)
-        }
+        Button(title, action: action).buttonStyle(.editorial(.secondary, fullWidth: true))
     }
 }

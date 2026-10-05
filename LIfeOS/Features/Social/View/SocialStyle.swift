@@ -44,18 +44,6 @@ struct SocialPanel<Content: View>: View {
     }
 }
 
-struct SocialActionStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var enabled
-    @Environment(\.colorScheme) private var scheme
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label.font(.subheadline.weight(.bold))
-            .padding(.horizontal, 18).frame(minHeight: 46)
-            .foregroundStyle(scheme == .dark ? SocialTheme.ink : .white)
-            .background(scheme == .dark ? Color.white : SocialTheme.ink, in: RoundedRectangle(cornerRadius: 15))
-            .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
-    }
-}
-
 struct SocialAvatar: View {
     let profile: SocialProfile
     var size: CGFloat = 44
@@ -143,7 +131,7 @@ struct SocialFriendRequest: View {
             }.frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 16) {
                 Button("Decline", action: decline).lifeOSText(.secondary).foregroundStyle(.secondary).frame(minHeight: 44)
-                Button("Accept", action: accept).buttonStyle(SocialActionStyle())
+                Button("Accept", action: accept).buttonStyle(.editorial(.primary, size: .compact))
             }
         }.padding(.vertical, 8)
     }

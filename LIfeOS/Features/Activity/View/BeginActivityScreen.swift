@@ -59,7 +59,9 @@ struct BeginActivityScreen: View {
                 }
             }
         }
-        .tint(LifeOSTokens.accent)
+        // Ink, not the accent: a screen-wide accent tint made every plain
+        // control orange, and the accent is kept for live and urgent things.
+        .tint(LifeOSTokens.primaryText.resolve(scheme))
         .onAppear { if startsCollapsed { hudExpanded = false } }
         .sheet(isPresented: $showAthleteSetup) { ActivityAthleteSetup(initial: model.athlete, onSave: model.saveAthlete) }
         .sheet(isPresented: $showSensors, onDismiss: { model.sensor.stopScan() }) { sensorSheet }
@@ -83,8 +85,12 @@ struct BeginActivityScreen: View {
                 if model.selection.name == ActivityRecorder.badminton {
                     BadmintonSetupCard(setup: $model.badmintonSetup)
                 }
-                Button { showAthleteSetup = true } label: { Label("Your activity setup", systemImage: "figure.stand") }.frame(minHeight: 44)
-                NavigationLink { BadmintonHistoryScreen() } label: { Label("Badminton session reviews", systemImage: "figure.badminton") }.frame(minHeight: 44)
+                VStack(spacing: 0) {
+                    Button { showAthleteSetup = true } label: { Label("Your activity setup", systemImage: "figure.stand") }
+                        .buttonStyle(.editorial(.quiet, fullWidth: true))
+                    NavigationLink { BadmintonHistoryScreen() } label: { Label("Badminton session reviews", systemImage: "figure.badminton") }
+                        .buttonStyle(.editorial(.quiet, fullWidth: true))
+                }
             }
         }
         if let notice = model.notice { Text(notice).font(LifeOSType.caption).foregroundStyle(.secondary) }
@@ -97,15 +103,15 @@ struct BeginActivityScreen: View {
     /// wide screen, under it otherwise.
     @ViewBuilder private var trailing: some View {
         if model.saved && model.selection.name == "Badminton" {
-            NavigationLink { BadmintonHistoryScreen() } label: { Label("Review your session", systemImage: "chart.xyaxis.line") }.frame(minHeight: 48)
+            NavigationLink { BadmintonHistoryScreen() } label: { Label("Review your session", systemImage: "chart.xyaxis.line") }
+                .buttonStyle(.editorial(.primary, fullWidth: true))
         }
         ActivityControls(model: model, onDone: { dismiss() })
         if !model.saved { connections }
         if !model.hasSession && !model.saved {
             Button { dismiss(); onQuickLog() } label: {
                 Label("Log steps, weight or a reflection", systemImage: "square.and.pencil")
-                    .font(LifeOSType.label).frame(maxWidth: .infinity, minHeight: 48)
-            }.tint(LifeOSTokens.accent)
+            }.buttonStyle(.editorial(.quiet, fullWidth: true))
         }
     }
 
@@ -226,9 +232,8 @@ struct BeginActivityScreen: View {
             WorkoutLibraryScreen(model: library, recorder: model)
         } label: {
             Label("Follow a video", systemImage: "play.rectangle")
-                .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.editorial(.secondary, fullWidth: true))
         .disabled(model.busy)
     }
 
@@ -269,8 +274,11 @@ struct BeginActivityScreen: View {
             }
             .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             .padding(16).frame(maxWidth: .infinity, minHeight: 58)
-            .background(selected ? LifeOSTokens.accentSoft.resolve(scheme) : LifeOSTokens.cardSurface.resolve(scheme),
-                        in: RoundedRectangle(cornerRadius: 18))
+            // Selected is an ink outline, not a tint: the editorial way to
+            // mark the chosen one, and legible in both schemes.
+            .background(LifeOSTokens.cardSurface.resolve(scheme), in: Capsule())
+            .overlay(Capsule().strokeBorder(selected ? LifeOSTokens.primaryText.resolve(scheme) : Editorial.rule(scheme),
+                                            lineWidth: selected ? 1.5 : 1))
         }
         .buttonStyle(.plain).disabled(model.busy)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -282,7 +290,7 @@ struct BeginActivityScreen: View {
                     Label("Live heart rate", systemImage: "waveform.path.ecg").font(LifeOSType.rowTitle)
                     Spacer()
                     Button(model.sensor.connectedName == nil ? "Connect" : "Manage") { showSensors = true }
-                        .font(LifeOSType.label).frame(minHeight: 44)
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                 }
                 Text(model.source == .watch ? "Apple Watch is recording this session." : WatchSessionBridge.watchAvailable ? "Apple Watch ready" : "Apple Watch not nearby")
                     .font(LifeOSType.caption).foregroundStyle(.secondary)

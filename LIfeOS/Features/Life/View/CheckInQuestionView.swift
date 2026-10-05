@@ -34,15 +34,9 @@ struct CheckInQuestionView: View {
                             onAnswer(option.label)
                         } label: {
                             Text(option.label)
-                                .font(LifeOSType.label)
-                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(
-                            answer == option.label
-                                ? LifeOSTokens.accent
-                                : LifeOSTokens.secondaryText.resolve(scheme)
-                        )
+                        .buttonStyle(.editorial(answer == option.label ? .primary : .secondary, fullWidth: true))
+                        .accessibilityAddTraits(answer == option.label ? .isSelected : [])
                     }
                 }
             }

@@ -255,7 +255,7 @@ struct FriendsScreen: View {
         } else {
             Button("Add") {
                 Task { await viewModel.add(profile) }
-            }.buttonStyle(SocialActionStyle())
+            }.buttonStyle(.editorial(.primary, size: .compact))
         }
     }
 

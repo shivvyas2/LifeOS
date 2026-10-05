@@ -74,16 +74,9 @@ struct MoneyScreen: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Money · \(snapshot.monthLabel)").editorialEyebrow()
                 Spacer(minLength: Space.x1)
-                Button(action: onAdd) {
-                    Label("Add", systemImage: "plus")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        .padding(.horizontal, 14).frame(minHeight: 36)
-                        .overlay(Capsule().stroke(LifeOSTokens.primaryText.resolve(scheme).opacity(0.5)))
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add a transaction")
+                Button(action: onAdd) { Label("Add", systemImage: "plus") }
+                    .buttonStyle(.editorial(.secondary, size: .compact))
+                    .accessibilityLabel("Add a transaction")
             }
             MoneyFigure(amount: snapshot.net, size: 64, showsSign: true)
             HStack(spacing: Space.x1) {
@@ -127,15 +120,10 @@ struct MoneyScreen: View {
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
 
             Button("Connect your bank", action: onConnect)
-                .font(LifeOSType.rowTitle)
-                .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
-                .padding(.vertical, 12)
-                .padding(.horizontal, Space.x3)
-                .background(Capsule().fill(LifeOSTokens.fabFill.resolve(scheme)))
+                .buttonStyle(.editorial(.primary))
 
             Button("Add a transaction", action: onAdd)
-                .font(LifeOSType.label.weight(.semibold))
-                .foregroundStyle(MoneyPalette.quietInk(scheme))
+                .buttonStyle(.editorial(.secondary, size: .compact))
             Spacer()
         }
         .padding(.horizontal, Space.x3)
@@ -157,8 +145,7 @@ struct MoneyScreen: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
             Button("Check again", action: onSync)
-                .font(LifeOSType.rowTitle)
-                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                .buttonStyle(.editorial(.secondary, size: .compact))
         }
         .padding(.horizontal, Space.x3)
     }
