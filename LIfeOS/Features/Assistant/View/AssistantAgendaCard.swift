@@ -206,7 +206,7 @@ struct AssistantAgendaCard: View {
             HStack(spacing: 12) {
                 Image(systemName: DayPart.of(event, calendar: calendar).icon)
                     .font(LifeOSType.label)
-                    .foregroundStyle(DayPart.of(event, calendar: calendar).hue.top)
+                    .foregroundStyle(primary)
                     .frame(width: 18)
 
                 Text(event.title)

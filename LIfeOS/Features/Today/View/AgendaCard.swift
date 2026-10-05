@@ -64,15 +64,6 @@ enum DayPart: Int, CaseIterable, Identifiable {
         }
     }
 
-    var hue: ModuleHue {
-        switch self {
-        case .allDay:    .habits
-        case .morning:   .activity
-        case .afternoon: .recovery
-        case .evening:   .nutrition
-        }
-    }
-
     static func of(_ event: CalendarEventSnapshot, calendar: Calendar) -> DayPart {
         guard !event.isAllDay else { return .allDay }
         let hour = calendar.component(.hour, from: event.startDate)
@@ -101,152 +92,102 @@ struct AgendaCard: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openURL) private var openURL
     private let calendar = Calendar.current
-
     private static let maxAgendaRows = 4
     private static let maxUpcomingRows = 5
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SoftCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    header
-                    body(for: access)
-                }
+        VStack(alignment: .leading, spacing: Space.x2) {
+            switch access {
+            case .authorized: field
+            case .notDetermined: teaching
+            case .denied: denied
             }
-
-            if access == .authorized, !upcoming.isEmpty {
-                SoftCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Upcoming")
-                            .font(LifeOSType.body.weight(.bold))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        upcomingRows
-                    }
-                }
-            }
+            if access == .authorized, !upcoming.isEmpty { upcomingCard }
         }
     }
 
-    // MARK: Header
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Today")
-                    .font(LifeOSType.body.weight(.bold))
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                if access == .authorized, !agenda.isEmpty {
-                    Text(agenda.count == 1 ? "1 event on your day" : "\(agenda.count) events on your day")
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-            }
-
-            Spacer()
-
-            if access == .authorized {
+    /// The screen's one field: what is next, then the rest of the day.
+    private var field: some View {
+        let next = agenda.first
+        let rest = Array(agenda.dropFirst().prefix(Self.maxAgendaRows))
+        return EditorialField(.dusk) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Next up").editorialEyebrow()
+                Spacer(minLength: Space.x1)
                 Button(action: onOpenToday) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: Space.half) {
                         Text(Date.now.formatted(.dateTime.month(.abbreviated).day()))
-                            .font(LifeOSType.label.weight(.semibold))
                         Image(systemName: "chevron.down")
-                            .font(LifeOSType.eyebrow)
                     }
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Capsule().fill(LifeOSTokens.accentSoft.resolve(scheme)))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.editorial(.quiet, size: .compact))
                 .accessibilityLabel("Open today's day view")
             }
-        }
-    }
-
-    // MARK: Agenda body, by access state
-
-    @ViewBuilder
-    private func body(for access: CalendarAccessState) -> some View {
-        switch access {
-        case .notDetermined:
-            VStack(alignment: .leading, spacing: 12) {
-                Text("See your day's schedule here.")
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                CapsuleButton(title: "Connect calendar", action: onConnect)
-            }
-            .padding(.vertical, 4)
-
-        case .denied:
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Calendar access is off.")
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                CapsuleButton(title: "Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        openURL(url)
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-
-        case .authorized:
-            VStack(alignment: .leading, spacing: 12) {
-                if agenda.isEmpty {
-                    Text("Nothing scheduled today.")
+            // The headline is the next event, and tapping it opens that event.
+            Button { if let next { onTapEvent(next) } } label: {
+                VStack(alignment: .leading, spacing: Space.half) {
+                    Text(next?.title ?? "Nothing scheduled")
+                        .font(Editorial.headline(28)).tracking(-0.6)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(next?.spanLabel ?? "Add a plan when you're ready.")
                         .font(LifeOSType.secondary)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .padding(.vertical, 2)
-                } else {
-                    agendaGroups
+                        .opacity(0.75)
                 }
-
-                Button("+ Add event", action: onAddEvent)
-                    .buttonStyle(.plain)
-                    .font(LifeOSType.secondary.weight(.medium))
-                    .foregroundStyle(LifeOSTokens.accent)
+                .contentShape(.rect)
             }
-        }
-    }
-
-    /// The first `maxAgendaRows` events, grouped by part of day in order.
-    /// Capped before grouping so the card's height budget stays the same
-    /// whatever shape the day has.
-    private var agendaGroups: some View {
-        let visible = Array(agenda.prefix(Self.maxAgendaRows))
-        let grouped = DayPart.allCases.compactMap { part -> (DayPart, [CalendarEventSnapshot])? in
-            let events = visible.filter { DayPart.of($0, calendar: calendar) == part }
-            return events.isEmpty ? nil : (part, events)
-        }
-
-        return VStack(alignment: .leading, spacing: 10) {
-            ForEach(grouped, id: \.0.id) { part, events in
-                VStack(alignment: .leading, spacing: 6) {
-                    eyebrow(part.title)
-                    ForEach(events) { event in
-                        EventJourneyRow(event: event, onTap: onTapEvent)
+            .buttonStyle(.plain)
+            .disabled(next == nil)
+            .accessibilityLabel(next.map { "\($0.title), \($0.spanLabel)" } ?? "Nothing scheduled")
+            ForEach(rest) { event in
+                Button { onTapEvent(event) } label: {
+                    EditorialRow(event.timeLabel) {
+                        HStack(spacing: Space.half) {
+                            Text(event.title).lineLimit(1)
+                            Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold))
+                        }
                     }
-                }
-            }
-
-            if agenda.count > Self.maxAgendaRows {
-                Button(action: onOpenToday) {
-                    Text("+\(agenda.count - Self.maxAgendaRows) more")
-                        .font(LifeOSType.label)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(event.title), \(event.spanLabel)")
+            }
+            if agenda.count > Self.maxAgendaRows + 1 {
+                Button("+\(agenda.count - Self.maxAgendaRows - 1) more", action: onOpenToday)
+                    .buttonStyle(.editorial(.quiet, size: .compact))
+            }
+            Button("Add", action: onAddEvent)
+                .buttonStyle(.editorial(.secondary, size: .compact))
+        }
+    }
+
+    /// Not connected: a ghost of the field and the one action that fills it.
+    private var teaching: some View {
+        EditorialEmptyState(
+            sentence: "Your day's events, with the next one first.",
+            action: "Connect calendar",
+            onAction: onConnect
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                EditorialRow("09:00", value: "Standup")
+                EditorialRow("12:30", value: "Lunch with Sam")
+                EditorialRow("16:00", value: "Design review")
             }
         }
     }
 
-    // MARK: Upcoming
+    private var denied: some View {
+        VStack(alignment: .leading, spacing: Space.x2) {
+            Text("Calendar access is off.")
+                .font(LifeOSType.secondary)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(.editorial(.secondary, size: .compact))
+        }
+        .editorialCard()
+    }
 
-    /// Rows grouped under their day label, consecutive runs preserved in
-    /// order, so a stacked week reads as short day sections rather than a
-    /// table of columns.
-    private var upcomingRows: some View {
+    private var upcomingCard: some View {
         let visible = Array(upcoming.prefix(Self.maxUpcomingRows))
         var groups: [(label: String, rows: [UpcomingEvent])] = []
         for row in visible {
@@ -256,87 +197,29 @@ struct AgendaCard: View {
                 groups.append((row.dayLabel, [row]))
             }
         }
-
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: Space.x2) {
+            EditorialSectionHeader(title: "Upcoming")
             ForEach(groups, id: \.label) { group in
-                VStack(alignment: .leading, spacing: 6) {
-                    eyebrow(group.label)
-                    ForEach(group.rows) { row in
-                        EventJourneyRow(event: row.event, onTap: onTapEvent)
+                Text(group.label).editorialEyebrow()
+                ForEach(group.rows) { row in
+                    Button { onTapEvent(row.event) } label: {
+                        EditorialRow(row.event.timeLabel) {
+                            HStack(spacing: Space.half) {
+                                Text(row.event.title).lineLimit(1)
+                                Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold))
+                            }
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(row.event.title), \(row.event.spanLabel)")
                 }
             }
-
             if upcoming.count > Self.maxUpcomingRows {
                 Text("+\(upcoming.count - Self.maxUpcomingRows) more")
                     .font(LifeOSType.label)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .foregroundStyle(Editorial.quietInk(scheme))
             }
         }
-    }
-
-    // MARK: Row building blocks
-
-    /// Small caps label above a run of rows: the same eyebrow vocabulary the
-    /// Money bands use, so every card's sections read alike.
-    private func eyebrow(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(LifeOSType.caption.weight(.semibold))
-            .tracking(0.8)
-            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-    }
-}
-
-/// One event in the journey vocabulary: a pastel icon bubble sized like
-/// `IconBubbleTile`'s, the title over its time span, and a quiet chevron
-/// when the row opens somewhere. Shared with `DayDetailSheet`'s schedule so
-/// an event looks the same wherever it appears.
-struct EventJourneyRow: View {
-    let event: CalendarEventSnapshot
-    var onTap: ((CalendarEventSnapshot) -> Void)?
-
-    @Environment(\.colorScheme) private var scheme
-    private let calendar = Calendar.current
-
-    var body: some View {
-        if let onTap {
-            Button { onTap(event) } label: { label }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(event.title), \(event.spanLabel)")
-        } else {
-            label
-                .accessibilityElement(children: .combine)
-        }
-    }
-
-    private var label: some View {
-        let part = DayPart.of(event, calendar: calendar)
-        return HStack(spacing: 12) {
-            Image(systemName: part.icon)
-                .font(LifeOSType.rowTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(scheme == .dark ? part.hue.pastelDark : part.hue.pastel))
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(event.title)
-                    .font(LifeOSType.rowTitle)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .lineLimit(1)
-                Text(event.spanLabel)
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            }
-
-            Spacer()
-
-            if onTap != nil {
-                Image(systemName: "chevron.right")
-                    .font(LifeOSType.caption.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme).opacity(0.6))
-            }
-        }
-        .contentShape(Rectangle())
-        .padding(.vertical, 4)
+        .editorialCard()
     }
 }
