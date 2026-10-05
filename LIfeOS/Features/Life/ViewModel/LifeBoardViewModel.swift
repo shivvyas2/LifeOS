@@ -27,8 +27,8 @@ final class LifeBoardViewModel {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .closed:   "Closed"
-            case .inFlight: "In flight"
+            case .closed:   "Last close"
+            case .inFlight: "This month"
             }
         }
     }
@@ -44,7 +44,12 @@ final class LifeBoardViewModel {
     private(set) var cards: [Card] = []
     private(set) var summary = BoardSummary(scores: [:], previous: [:])
     private(set) var monthAwaitingClose: Date?
-    var mode: BoardMode = .closed {
+    /// The month the board is looking at, for the masthead.
+    private(set) var month: Date = .now
+    /// The month the last close belongs to, or nil when nothing was ever closed.
+    private(set) var lastClosedMonth: Date?
+    /// Opens on the month in progress: it is the mode with something to do.
+    var mode: BoardMode = .inFlight {
         didSet { if mode != oldValue { load() } }
     }
     /// Nil in closed mode. Carries the days left the in-flight header shows.
@@ -60,6 +65,21 @@ final class LifeBoardViewModel {
         let decided = cards.compactMap { $0.band?.decided }
         guard !decided.isEmpty else { return nil }
         return decided.reduce(0, +) / Double(decided.count)
+    }
+
+    var headline: BoardHeadline {
+        switch mode {
+        case .closed:
+            BoardHeadline.closed(month: month, lastClosed: lastClosedMonth, summary: summary)
+        case .inFlight:
+            BoardHeadline.inFlight(month: month, remainingDays: progress?.remainingDays ?? 0,
+                                   meanDecided: meanDecided)
+        }
+    }
+
+    /// Nothing closed and nothing read: the deck would be nine dashes.
+    var isBlank: Bool {
+        lastClosedMonth == nil && cards.allSatisfy { $0.score == nil && $0.band?.floor == nil }
     }
 
     init(calendar: Calendar = .current) {
@@ -84,6 +104,8 @@ final class LifeBoardViewModel {
 
         let current = scoreMap(store: store, month: lastMonth)
         let previous = scoreMap(store: store, month: monthBefore)
+        month = thisMonth
+        lastClosedMonth = current.isEmpty ? nil : lastMonth
         summary = BoardSummary(scores: current, previous: previous)
 
         monthAwaitingClose = CloseSchedule.monthAwaitingClose(
