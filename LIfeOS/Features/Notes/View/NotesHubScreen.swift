@@ -252,7 +252,6 @@ struct NotesHubScreen: View {
     private var compactShell: some View {
         NavigationStack(path: $path) {
             shelf
-                .navigationTitle("Notes")
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { isLibraryPresented = true } label: {
@@ -321,6 +320,7 @@ struct NotesHubScreen: View {
             isSearchFocused: $isSearchFocused
         )
         .navigationBarTitleDisplayMode(.inline)
+        .shellToolbar()
     }
 
     /// What the hardware keyboard drives. Built here because only the shell

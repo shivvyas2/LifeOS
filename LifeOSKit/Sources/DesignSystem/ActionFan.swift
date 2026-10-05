@@ -203,6 +203,16 @@ public struct ActionFan: View {
                     .padding(.horizontal, 12)
                     .frame(height: size)
                     .background(Capsule().fill(LifeOSTokens.fabFill.resolve(scheme)))
+            } else if arrangement == .row, let word = action.shortLabel {
+                // A named action that is not the prominent one: an outlined
+                // word, the way EditorialTag draws an outlined word, so LIFO
+                // reads as LIFO rather than as a speech-bubble guess.
+                Text(word)
+                    .font(LifeOSType.label.weight(.semibold))
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .padding(.horizontal, 12)
+                    .frame(height: size)
+                    .overlay(Capsule().strokeBorder(LifeOSTokens.primaryText.resolve(scheme).opacity(0.5), lineWidth: 1))
             } else {
                 Image(systemName: action.systemImage)
                     .font(arrangement == .row ? LifeOSType.body.weight(.medium) : LifeOSType.sectionTitle)
