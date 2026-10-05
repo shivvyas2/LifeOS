@@ -44,6 +44,7 @@ struct SectorStack: View {
                 let isOpen = openSector == card.sector
 
                 SectorDeckCard(
+                    index: index + 1,
                     card: card,
                     peek: Self.peek,
                     height: isOpen ? Self.openHeight(for: card) : Self.closedHeight,
@@ -71,12 +72,59 @@ struct SectorStack: View {
     }
 }
 
+/// The band that survives being covered: index, sector, score, and the
+/// chevron that says it opens.
+///
+/// Shared with the board's teaching empty state, which ghosts three of these.
+struct SectorBandRow: View {
+    let index: Int
+    let title: String
+    let value: String
+    let unit: String?
+    let isOpen: Bool
+    /// Nil draws in the paper ink; the open card passes the dusk field's ink.
+    var ink: Color? = nil
+    var hasValue = true
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var primary: Color { ink ?? LifeOSTokens.primaryText.resolve(scheme) }
+    private var quiet: Color { ink.map { $0.opacity(0.6) } ?? Editorial.quietInk(scheme) }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
+            Text(Editorial.index(index))
+                .font(LifeOSType.label.monospacedDigit())
+                .foregroundStyle(quiet)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(Editorial.headline(22)).tracking(-0.4)
+                .foregroundStyle(primary)
+            Spacer(minLength: Space.x1)
+            HStack(alignment: .firstTextBaseline, spacing: Space.half) {
+                Text(value)
+                    .font(Editorial.figure(28)).tracking(Editorial.figureTracking(28))
+                    .monospacedDigit()
+                    .foregroundStyle(hasValue ? primary : quiet)
+                if let unit {
+                    Text(unit).font(LifeOSType.caption).foregroundStyle(quiet)
+                }
+            }
+            Image(systemName: "chevron.down")
+                .font(LifeOSType.caption.weight(.semibold))
+                .foregroundStyle(quiet)
+                .rotationEffect(.degrees(isOpen ? 180 : 0))
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 /// One card in the deck.
 ///
-/// The band across the top is the part that survives being covered, so it
-/// carries the two facts the board exists to deliver: which sector, and where
-/// it stands. Everything below the band belongs to the open card.
+/// Closed, it is paper with a hairline edge and only its band showing.
+/// Open, it is the screen's one dusk field, carrying the trend in ink.
 private struct SectorDeckCard: View {
+    let index: Int
     let card: LifeBoardViewModel.Card
     let peek: CGFloat
     let height: CGFloat
@@ -85,16 +133,17 @@ private struct SectorDeckCard: View {
 
     @Environment(\.colorScheme) private var scheme
 
-    private var ink: Color { SectorPalette.cardInk.resolve(scheme) }
+    private var fieldInk: Color { EditorialFieldTone.dusk.ink(scheme) }
+    private var radius: CGFloat { Radius.medium + 4 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x1) {
-            band
+            SectorBandRow(index: index, title: card.sector.title, value: scoreText, unit: scoreUnit,
+                          isOpen: isOpen, ink: isOpen ? fieldInk : nil, hasValue: hasValue)
+                .frame(height: peek - Space.x2 - Space.x1, alignment: .center)
 
-            // Nothing renders below the band while closed. A covered card has
-            // only `peek` points of room, and anything taller than that gets
-            // sliced in half by the card in front: the trend line showed as a
-            // clipped strip of letter-tops under every title.
+            // Nothing renders below the band while closed: a covered card has
+            // only `peek` points of room.
             if isOpen { openBody }
 
             Spacer(minLength: 0)
@@ -103,54 +152,32 @@ private struct SectorDeckCard: View {
         .padding(.vertical, Space.x2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height, alignment: .top)
-        .background(
-            RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-                .fill(fill)
-        )
+        .background {
+            if isOpen {
+                LinearGradient(colors: EditorialFieldTone.dusk.colors(scheme), startPoint: .top, endPoint: .bottom)
+                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            } else {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
+            }
+        }
+        .overlay {
+            if !isOpen {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Editorial.rule(scheme))
+            }
+        }
         .accessibilityElement(children: isOpen ? .contain : .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(isOpen ? "Collapse" : "Expand for the trend")
     }
 
-    /// No shadow on these cards: the deck separates neighbours by tone, and
-    /// an open card is sold as lifted by its raised z-order and the movement
-    /// of the cards below it. The wash brightening toward the top keeps the
-    /// deck light; in dark mode the whole tone steps up so nine stacked cards
-    /// never read as a black slab, while staying deep enough for the light ink.
-    private var fill: LinearGradient {
-        let lifted = SectorPalette.tone(card.sector).resolve(scheme)
-            .mix(with: .white, by: scheme == .dark ? 0.12 : 0)
-        return LinearGradient(
-            colors: [lifted.mix(with: .white, by: scheme == .dark ? 0.12 : 0.35), lifted],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    /// Title and score on one line, sized to fill the visible band.
-    private var band: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(card.sector.title)
-                .font(LifeOSType.display)
-                .tracking(-0.6)
-            Spacer(minLength: Space.x1)
-            Text(scoreText)
-                .font(LifeOSType.display)
-                .monospacedDigit()
-                .foregroundStyle(ink.opacity(hasValue ? 1 : 0.35))
-        }
-        .foregroundStyle(ink)
-        .frame(height: peek - Space.x2 - Space.x1, alignment: .center)
-    }
-
-    /// What the deck was hiding. Trend first, because the shape of six months
-    /// says more at a glance than any single number on the card.
     @ViewBuilder
     private var openBody: some View {
         Text(trendLine)
             .font(LifeOSType.secondary.weight(.medium))
-            .foregroundStyle(ink.opacity(0.65))
+            .foregroundStyle(fieldInk.opacity(0.7))
 
         if card.history.count > 1 {
             RoundedBarChart(
@@ -161,7 +188,7 @@ private struct SectorDeckCard: View {
                         value: $0.value
                     )
                 },
-                hue: SectorPalette.hue(card.sector),
+                style: .ink,
                 spacing: Space.half,
                 height: 64
             )
@@ -171,21 +198,15 @@ private struct SectorDeckCard: View {
 
         Button(action: onOpenDetail) {
             HStack(spacing: Space.half) {
-                Text("Open")
+                Text("Open \(card.sector.title)")
                 Image(systemName: "arrow.right")
             }
-            .font(LifeOSType.label.weight(.semibold))
-            .foregroundStyle(ink)
-            .padding(.horizontal, Space.x2)
-            .padding(.vertical, Space.x1)
-            .overlay(Capsule().strokeBorder(ink.opacity(0.45), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.editorial(.secondary, size: .compact))
     }
 
     /// A closed sector shows its score; one in flight shows the range it can
-    /// still close in. An em dash for either when there is nothing to say,
-    /// matching what the rest of the app shows for a missing value.
+    /// still close in. An em dash for either when there is nothing to say.
     private var scoreText: String {
         if let band = card.band {
             return band.rangeText ?? "—"
@@ -193,13 +214,16 @@ private struct SectorDeckCard: View {
         return card.score.map(String.init) ?? "—"
     }
 
+    private var scoreUnit: String? {
+        card.band == nil && card.score != nil ? "/10" : nil
+    }
+
     private var hasValue: Bool {
         card.band.map { $0.floor != nil } ?? (card.score != nil)
     }
 
-    /// Derived from what the card already carries. In flight the six month
-    /// trend is still the chart below, but the line above it answers the
-    /// question the mode exists for: how much of this month is left.
+    /// In flight the line answers how much of the month is left to decide;
+    /// closed, it is the change since last month.
     private var trendLine: String {
         if let band = card.band {
             guard band.floor != nil else { return "Not read yet" }
@@ -214,7 +238,7 @@ private struct SectorDeckCard: View {
         }
         let delta = latest - previous
         if delta == 0 { return "Level with last month" }
-        return "\(delta > 0 ? "Up" : "Down") \(abs(delta)) from last month"
+        return "\(delta > 0 ? "Up" : "Down") \(Int(abs(delta))) from last month"
     }
 
     /// The visual truncation must never truncate what VoiceOver reads: eight
