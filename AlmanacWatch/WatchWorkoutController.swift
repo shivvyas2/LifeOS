@@ -43,6 +43,16 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     /// stays nil until the first point is scored, so a session nobody scored
     /// is never saved as an unfinished match.
     private(set) var badminton: BadmintonSession?
+    /// A rally went quiet and has not been scored: the scoreboard comes
+    /// forward and asks who won. Only while a match is being scored.
+    private(set) var awaitingRallyResult = false
+    private var rallyDetector = RallyEndDetector()
+    /// Asking only makes sense in a match someone is scoring; practice and
+    /// an unscored wrist-started session are left alone.
+    private var promptsForRallies: Bool {
+        guard let badminton, badminton.kind == .match, let score = badminton.score else { return false }
+        return !score.isOver
+    }
     var onFinished: ((WatchWorkoutSummary) -> Void)?
     private var heartbeat: Task<Void, Never>?
     private var mirrorAttemptAt: Date = .distantPast
@@ -333,6 +343,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                         // rotation rate is the forehand or backhand twist.
                         twist: rotation.y)
                     let detected = self.swingDetector.add(sample)
+                    if detected { self.rallyDetector.swing(at: t); self.awaitingRallyResult = false }
+                    else if self.promptsForRallies, self.rallyDetector.shouldAsk(at: t) {
+                        self.awaitingRallyResult = true
+                        WKInterfaceDevice.current().play(.notification)
+                    }
                     // Publish at event boundaries; the 5-second checkpoint also snapshots coverage.
                     if detected { self.swingAnalysis = self.swingDetector.analysis; self.sendPacket(force: true) }
                 } else if self.counter.add(RepCounter.Sample(t: data.timestamp, x: acceleration.x, y: acceleration.y, z: acceleration.z)) {
@@ -354,7 +369,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         heartRate = nil; heartRateAt = nil; energyKcal = nil; distanceMeters = nil; heartHistory = []
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
         counter.reset(); swingAnalysis = nil; swingDetector = BadmintonSwingDetector(); motionStatus = "Swing analysis is off"
-        badminton = nil
+        badminton = nil; rallyDetector = RallyEndDetector(); awaitingRallyResult = false
         activityName = ""; activity = nil; mirroringFailed = false; maxHeartRate = nil
         state = .idle
     }
@@ -419,6 +434,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         guard session.kind == .match, !(session.score?.isOver ?? true) else { return }
         session.record(side)
         badminton = session
+        rallyDetector.scored(); awaitingRallyResult = false
         WKInterfaceDevice.current().play(session.score?.isOver == true ? .success : .click)
         sendPacket(force: true)
     }
@@ -514,6 +530,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             case .paused:
                 self.manualReps = self.reps ?? 0; self.counter.reset()
                 self.swingDetector.interrupt()
+                self.rallyDetector.interrupt(); self.awaitingRallyResult = false
                 self.state = .paused
                 if let since = self.runningSince { self.accumulated += max(0, date.timeIntervalSince(since)) }
                 self.runningSince = nil

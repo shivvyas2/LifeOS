@@ -86,6 +86,9 @@ struct WatchWorkoutScreen: View {
             Button("Keep going", role: .cancel) {}
         }
         .onChange(of: workout.state) { _, state in if state == .ending { page = 2 } }
+        // A rally went quiet: bring the scoreboard forward so the answer is
+        // one tap, wherever the crown was left.
+        .onChange(of: workout.awaitingRallyResult) { _, asking in if asking, scoresMatch { page = -1 } }
         .onAppear {
             if scoresMatch { page = -1 }
             #if DEBUG
@@ -436,13 +439,17 @@ struct WatchScoreboard: View {
         }
         .buttonStyle(.glass)
         .tint(side == .us ? accent.opacity(0.25) : .white.opacity(0.08))
+        // Double tap (thumb and finger, Series 9 and later) scores the
+        // player's own point without touching the screen.
+        .modifier(PrimaryGesture(enabled: side == .us))
         .accessibilityLabel("\(label) won the rally")
         .accessibilityValue("\(score.current.points(side)) points, \(score.gamesWon(by: side)) games\(serving ? ", serving" : "")")
     }
 
     private var status: some View {
         HStack(spacing: 6) {
-            Text(serveLine).font(.system(size: 10, weight: .medium)).foregroundStyle(accent)
+            Text(serveLine).font(.system(size: 10, weight: workout.awaitingRallyResult ? .bold : .medium))
+                .foregroundStyle(workout.awaitingRallyResult ? .white : accent)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 2)
             Button { workout.undoRally() } label: {
@@ -457,6 +464,7 @@ struct WatchScoreboard: View {
     }
 
     private var serveLine: String {
+        if workout.awaitingRallyResult { return "Rally over · who won?" }
         if score.changesEndsNow { return "11 · change ends" }
         let who = score.server == .us ? "You serve" : "They serve"
         return "\(who) · \(score.serviceCourt == .right ? "right" : "left")"
@@ -479,5 +487,14 @@ struct WatchScoreboard: View {
             .buttonStyle(.glass)
         }
         .padding(.horizontal, 6)
+    }
+}
+
+/// Attaches the double-tap hand gesture to one button only: the system
+/// allows a single primary action per screen.
+private struct PrimaryGesture: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled { content.handGestureShortcut(.primaryAction) } else { content }
     }
 }
