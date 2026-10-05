@@ -232,6 +232,7 @@ struct RootView: View {
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.
         .environment(\.quickActions, quickActions)
+        .environment(\.shellProfile, ShellProfile(photo: profilePhoto, open: { showSettings = true }))
         // Typing is the other way of working with the pane, and the one where
         // the rail is most in the way: on a landscape iPad the keyboard takes
         // half the height and the note being written is what is left.
@@ -411,19 +412,13 @@ struct RootView: View {
                     // Applied before the bar items below, so the actions sit
                     // inboard of the avatar rather than being pushed past it:
                     // toolbar items appear in the order their modifiers run.
-                    .quickActionsToolbar()
+                    .shellToolbar()
                     .toolbar {
                         ToolbarItem(placement: .topBarLeading) {
                             Button { showMonth = true } label: {
                                 Image(systemName: "calendar")
                             }
                             .accessibilityLabel("Month calendar")
-                        }
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button { showSettings = true } label: {
-                                ProfileAvatar(photo: profilePhoto)
-                            }
-                            .accessibilityLabel("Profile and settings")
                         }
                     }
                     .navigationDestination(isPresented: $showMonth) {
@@ -460,7 +455,7 @@ struct RootView: View {
                             set: { healthDate = $0; selectHealthDate($0) }
                         )
                     )
-                    .quickActionsToolbar()
+                    .shellToolbar()
                     .navigationDestination(item: $openMetric) { metric in
                         MetricDetailScreen(metric: metric, model: metricDetail, onManageConnections: { showSettings = true })
                     }
@@ -478,7 +473,7 @@ struct RootView: View {
                         onEditBudgets: { showBudgets = true },
                         onOpen: { openMoney = $0 }
                     )
-                    .quickActionsToolbar()
+                    .shellToolbar()
                     .navigationDestination(item: $openMoney) { filter in
                         MoneyDetailScreen(filter: filter, model: moneyDetail)
                     }
@@ -532,7 +527,7 @@ struct RootView: View {
             QuickAction(id: "assistant", systemImage: "calendar.badge.clock", label: "Calendar assistant") {
                 showAssistant = true
             },
-            QuickAction(id: "coach", systemImage: "message.fill", label: "LIFO") {
+            QuickAction(id: "coach", systemImage: "message.fill", label: "LIFO", shortLabel: "LIFO") {
                 showCoach = true
             },
             QuickAction(id: "beginActivity", systemImage: recorder.hasSession ? "timer" : "plus", label: recorder.hasSession ? "Current activity" : "Begin activity", isProminent: true, shortLabel: recorder.hasSession ? "Live" : "Start") {
