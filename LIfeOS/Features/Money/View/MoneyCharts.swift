@@ -21,12 +21,17 @@ struct MoneyWeekChart: View {
         Chart(days) { day in
             // An empty track for every day, so a day still to come is
             // visibly a slot and not a gap.
-            BarMark(x: .value("Day", day.date, unit: .day), y: .value("Track", peak))
+            //
+            // Both marks are unstacked: two bars at one x stack by default,
+            // which drew each day's spend on top of its own full-height
+            // track, ran the busiest day off the top of the chart, and laid
+            // it over the heading above.
+            BarMark(x: .value("Day", day.date, unit: .day), y: .value("Track", peak), stacking: .unstacked)
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.07))
                 .cornerRadius(4)
 
             if !day.isFuture {
-                BarMark(x: .value("Day", day.date, unit: .day), y: .value("Spent", day.amount))
+                BarMark(x: .value("Day", day.date, unit: .day), y: .value("Spent", day.amount), stacking: .unstacked)
                     .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(day.isToday ? 1 : 0.32))
                     .cornerRadius(4)
                     .annotation(position: .top, spacing: 4) {

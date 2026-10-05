@@ -61,6 +61,7 @@ struct HealthActivityDesignPreview: View {
                 NavigationStack { BadmintonReviewScreen(workout: Self.badmintonFixture) }
             }
             else if page == "profile" { ProfileDesignPreview() }
+            else if page == "money" || page == "nav" { EditorialDesignPreview(page: page) }
             else if page == "library" || page == "library-empty" {
                 NavigationStack {
                     WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder,

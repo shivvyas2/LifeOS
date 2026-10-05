@@ -178,7 +178,6 @@ struct MoneyDayCards: View {
     var body: some View {
         ForEach(MoneyDayGroup.group(rows)) { day in
             MoneyCard(
-                tone: MoneyPalette.stone,
                 collapsed: Binding(
                     get: { collapsedDays.contains(day.date) },
                     set: { collapsed in

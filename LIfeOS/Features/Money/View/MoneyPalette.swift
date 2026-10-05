@@ -2,60 +2,21 @@ import SwiftUI
 import DesignSystem
 import Persistence
 
-/// The Money tab's own palette.
+/// The Money tab's paper and ink.
 ///
-/// Separate from `LifeOSTokens` and from `ModuleHue` on purpose. Those carry
-/// the whole app's identity on a warm off-white canvas; this screen is built
-/// the other way round, as full-bleed pastel bands on pure white, and mixing
-/// the two vocabularies made every band look like a card that had lost its
-/// margins.
-///
-/// The pastels sit a step darker and a step more saturated than the reference
-/// screens this was drawn from. On a real phone at real brightness the paler
-/// versions washed out to grey, and the whole point of a band is that it reads
-/// as a block of colour rather than as a tint.
+/// These are the app's own canvas and text colours now, not a palette of
+/// their own. Money used to sit on pure white with six pastel band tints,
+/// and side by side with any other tab it looked like a different product.
+/// The names stay because forty call sites say `MoneyPalette.ink`, and what
+/// they mean has not changed.
 enum MoneyPalette {
-    /// Pure white, not the app's warm canvas: the bands supply all the colour
-    /// here, and a warm ground under a cool pastel reads as a printing error.
-    static let paper = AdaptiveColor(light: .white, dark: Color(white: 0.07))
+    static let paper = LifeOSTokens.canvas
+    static let ink = LifeOSTokens.primaryText
 
-    /// One ink across every band. Nine bands in nine inks would be nine
-    /// designs; a single near-black that clears contrast on all of them is
-    /// what holds the screen together.
-    static let ink = AdaptiveColor(
-        light: Color(red: 0.10, green: 0.11, blue: 0.09),
-        dark: Color(red: 0.95, green: 0.95, blue: 0.93)
-    )
-
-    /// Ink at reading weight for secondary lines inside a band.
+    /// Ink at reading weight for secondary lines.
     static func quietInk(_ scheme: ColorScheme) -> Color {
-        ink.resolve(scheme).opacity(scheme == .dark ? 0.62 : 0.55)
+        Editorial.quietInk(scheme)
     }
-
-    static let sage = AdaptiveColor(
-        light: Color(red: 0.71, green: 0.76, blue: 0.66),
-        dark:  Color(red: 0.26, green: 0.31, blue: 0.24)
-    )
-    static let butter = AdaptiveColor(
-        light: Color(red: 0.91, green: 0.82, blue: 0.42),
-        dark:  Color(red: 0.35, green: 0.31, blue: 0.13)
-    )
-    static let clay = AdaptiveColor(
-        light: Color(red: 0.89, green: 0.53, blue: 0.38),
-        dark:  Color(red: 0.40, green: 0.22, blue: 0.15)
-    )
-    static let mint = AdaptiveColor(
-        light: Color(red: 0.64, green: 0.81, blue: 0.72),
-        dark:  Color(red: 0.20, green: 0.32, blue: 0.27)
-    )
-    static let mist = AdaptiveColor(
-        light: Color(red: 0.68, green: 0.76, blue: 0.86),
-        dark:  Color(red: 0.21, green: 0.27, blue: 0.34)
-    )
-    static let stone = AdaptiveColor(
-        light: Color(red: 0.85, green: 0.84, blue: 0.80),
-        dark:  Color(red: 0.20, green: 0.20, blue: 0.19)
-    )
 }
 
 // MARK: - Type
@@ -94,7 +55,10 @@ struct MoneyFigure: View {
             Text(".\(parts.centsText)")
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme).opacity(0.35))
         }
-        .font(LifeOSType.numeral(size))
+        // Light at headline sizes, the editorial figure; medium below 28pt,
+        // where a light stroke on a row amount goes thin and grey.
+        .font(size >= 28 ? Editorial.figure(size) : .system(size: size, weight: .medium))
+        .tracking(size >= 28 ? Editorial.figureTracking(size) : 0)
         .monospacedDigit()
         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         .lineLimit(1)

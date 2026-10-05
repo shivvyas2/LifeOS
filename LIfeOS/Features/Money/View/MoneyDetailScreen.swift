@@ -16,13 +16,6 @@ struct MoneyDetailScreen: View {
 
     private var snapshot: MoneyDetailSnapshot { model.snapshot }
 
-    private var tone: AdaptiveColor {
-        switch filter {
-        case .category: MoneyPalette.mist
-        case .merchant: MoneyPalette.mint
-        }
-    }
-
     var body: some View {
         ScrollView {
             MoneyBandStack {
@@ -30,7 +23,6 @@ struct MoneyDetailScreen: View {
                 trend
                 transactions
             }
-            .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
             .frame(maxWidth: layout.maxContentWidth)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, layout.gutter)
@@ -46,7 +38,7 @@ struct MoneyDetailScreen: View {
     }
 
     private var headline: some View {
-        MoneyBand(tone: tone) {
+        MoneyBand {
             HStack(spacing: Space.x2 - 4) {
                 MerchantTile(logoURL: snapshot.logoURL,
                              glyph: MoneyLedgerSection.glyph(for: snapshot.category),
@@ -73,7 +65,7 @@ struct MoneyDetailScreen: View {
     }
 
     private var trend: some View {
-        PersistedMoneyCard(id: "trend", tone: MoneyPalette.stone, name: "Six months") {
+        PersistedMoneyCard(id: "trend", name: "Six months") {
             Text("Six months").moneyEyebrow(scheme)
         } content: {
             MoneyMonthsChart(months: snapshot.months, average: snapshot.average,
@@ -98,7 +90,7 @@ struct MoneyDetailScreen: View {
     @ViewBuilder
     private var transactions: some View {
         if snapshot.transactions.isEmpty {
-            MoneyEmptyBand(tone: MoneyPalette.stone, line: "Nothing this month.")
+            MoneyEmptyBand(line: "Nothing this month.")
         } else {
             // No tap on these rows: a merchant page opening a merchant page
             // is a loop, and two depths of the same list is one more than

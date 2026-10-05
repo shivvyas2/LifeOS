@@ -9,10 +9,12 @@ import DesignSystem
 /// visits, and stacking them into a single column made every one of them a
 /// scroll past the other five.
 ///
-/// Built as full-bleed colour bands on pure white rather than as cards on the
-/// app's warm canvas. That is a deliberate departure from the rest of the app:
-/// money is the one domain here that is mostly figures, and a figure wants a
-/// block of colour behind it, not a card with a margin.
+/// Laid out as a page rather than a panel: the month's net figure as the
+/// masthead, a numbered strip of the six questions under it, and the answer
+/// as ruled blocks on the app's own paper. It used to be pastel bands on pure
+/// white beside a vertical icon rail, a departure from every other tab that
+/// read as a second app, and the rail took a third of a phone's width to say
+/// six one-word labels.
 struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
@@ -43,66 +45,73 @@ struct MoneyScreen: View {
         }
     }
 
-    @ViewBuilder
     private var loaded: some View {
-        if layout.isRegular { wideLayout } else { narrowLayout }
-    }
-
-    /// iPad: the picker lies down above the content, because the app's own nav
-    /// rail already owns the left edge and two vertical bars side by side is
-    /// chrome competing with chrome.
-    private var wideLayout: some View {
-        VStack(spacing: Space.x2) {
-            MoneySectionRail(selection: $section)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            sections
-        }
-        .frame(maxWidth: layout.maxContentWidth)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, layout.gutter)
-        .padding(.leading, layout.railInset)
-        .padding(.top, Space.x2)
-    }
-
-    private var narrowLayout: some View {
-        HStack(alignment: .top, spacing: Space.x1) {
-            MoneySectionRail(selection: $section)
-                .padding(.leading, Space.x1)
-                .padding(.top, Space.x2)
-
-            sections
-                .padding(.top, Space.x2)
-                .padding(.trailing, Space.x2)
-        }
-        .frame(maxWidth: layout.maxContentWidth)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var sections: some View {
         ScrollView {
-                VStack(spacing: 0) {
-                    if snapshot.reconnectPrompt != nil { reconnectBanner }
-
-                    Group {
-                        switch section {
-                        case .flow:       MoneyFlowSection(snapshot: snapshot)
-                        case .categories: MoneyCategoriesSection(snapshot: snapshot, onOpen: onOpen)
-                        case .repeating:  MoneyRecurringSection(snapshot: snapshot, onOpen: onOpen)
-                        case .goal:       MoneyGoalSection(snapshot: snapshot, onEdit: onEditBudgets)
-                        case .pressure:   MoneyPressureSection(points: snapshot.pressurePoints,
-                                                               onEditBudgets: onEditBudgets)
-                        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd, onOpen: onOpen)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
-                }
-                .padding(.bottom, layout.contentBottomInset)
+            VStack(alignment: .leading, spacing: Space.x3) {
+                masthead
+                if snapshot.reconnectPrompt != nil { reconnectBanner }
+                IndexedTabStrip(selection: $section,
+                                options: MoneySection.allCases.map { ($0, $0.title) })
+                sections
+                    // A fresh identity per section, so switching tabs starts
+                    // the new answer from its own top rather than mid-way.
+                    .id(section)
+            }
+            .frame(maxWidth: layout.maxContentWidth)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, layout.gutter)
+            .padding(.leading, layout.railInset)
+            .padding(.top, Space.x2)
+            .padding(.bottom, layout.contentBottomInset)
         }
         .scrollIndicators(.hidden)
-        // A new scroll view per section, so switching tabs starts at the top
-        // of the new one rather than wherever the old one was left.
-        .id(section)
+    }
+
+    /// The month in one figure. Net is what every section below explains, so
+    /// it is said once, here, rather than as the first band of one tab.
+    private var masthead: some View {
+        VStack(alignment: .leading, spacing: Space.x1) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Money · \(snapshot.monthLabel)").editorialEyebrow()
+                Spacer(minLength: Space.x1)
+                Button(action: onAdd) {
+                    Label("Add", systemImage: "plus")
+                        .font(LifeOSType.label.weight(.semibold))
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                        .padding(.horizontal, 14).frame(minHeight: 36)
+                        .overlay(Capsule().stroke(LifeOSTokens.primaryText.resolve(scheme).opacity(0.5)))
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add a transaction")
+            }
+            MoneyFigure(amount: snapshot.net, size: 64, showsSign: true)
+            HStack(spacing: Space.x1) {
+                EditorialTag(snapshot.verdict, filled: snapshot.net < 0)
+                Text("kept this month")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(Editorial.quietInk(scheme))
+                Spacer(minLength: Space.x1)
+                if let synced = snapshot.lastSyncedAt {
+                    Text("Synced \(synced, format: .relative(presentation: .named))")
+                        .font(LifeOSType.caption)
+                        .foregroundStyle(Editorial.quietInk(scheme))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sections: some View {
+        switch section {
+        case .flow:       MoneyFlowSection(snapshot: snapshot)
+        case .categories: MoneyCategoriesSection(snapshot: snapshot, onOpen: onOpen)
+        case .repeating:  MoneyRecurringSection(snapshot: snapshot, onOpen: onOpen)
+        case .goal:       MoneyGoalSection(snapshot: snapshot, onEdit: onEditBudgets)
+        case .pressure:   MoneyPressureSection(points: snapshot.pressurePoints,
+                                               onEditBudgets: onEditBudgets)
+        case .ledger:     MoneyLedgerSection(snapshot: snapshot, onAdd: onAdd, onOpen: onOpen)
+        }
     }
 
     private var emptyState: some View {
@@ -119,10 +128,10 @@ struct MoneyScreen: View {
 
             Button("Connect your bank", action: onConnect)
                 .font(LifeOSType.rowTitle)
-                .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
                 .padding(.vertical, 12)
                 .padding(.horizontal, Space.x3)
-                .background(Capsule().fill(MoneyPalette.butter.resolve(scheme)))
+                .background(Capsule().fill(LifeOSTokens.fabFill.resolve(scheme)))
 
             Button("Add a transaction", action: onAdd)
                 .font(LifeOSType.label.weight(.semibold))
@@ -169,9 +178,8 @@ struct MoneyScreen: View {
         }
         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
         .padding(Space.x2)
-        .background(MoneyPalette.clay.resolve(scheme))
+        .background(LifeOSTokens.accentSoft.resolve(scheme))
         .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
-        .padding(.bottom, Space.x1)
     }
 
     static func money(_ value: Double) -> String? {

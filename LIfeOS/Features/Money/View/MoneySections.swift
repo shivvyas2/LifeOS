@@ -21,8 +21,14 @@ import DesignSystem
 // MARK: - Band
 
 /// The unit every section is built from.
+///
+/// On a phone a band is a ruled block on the paper, the way the references
+/// lay out a page: no fill, no margin, a hairline underneath. On a regular
+/// width it becomes a cell of the grid and needs its own edge, so it gets the
+/// card surface and an outline instead. The pastel band colours that used to
+/// fill it are gone; six tints were what made this tab look like a different
+/// app from the five beside it.
 struct MoneyBand<Content: View>: View {
-    let tone: AdaptiveColor
     var minHeight: CGFloat = 0
     @ViewBuilder let content: Content
     @Environment(\.colorScheme) private var scheme
@@ -34,14 +40,17 @@ struct MoneyBand<Content: View>: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(minHeight: minHeight, alignment: .top)
-        .padding(.horizontal, Space.x2)
-        .padding(.vertical, Space.x2)
-        .background(tone.resolve(scheme))
-        // In the grid each band is its own card and needs its own corners.
-        // Stacked, the section is clipped as one block and a rounded band
-        // inside it would show the paper through the gap.
-        .clipShape(RoundedRectangle(cornerRadius: layout.isRegular ? Radius.medium : 0,
-                                    style: .continuous))
+        .padding(.horizontal, layout.isRegular ? Space.x2 : 0)
+        .padding(.vertical, Space.x2 + 4)
+        .background {
+            if layout.isRegular {
+                RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                        .stroke(Editorial.rule(scheme)))
+            }
+        }
+        .overlay(alignment: .bottom) { if !layout.isRegular { Hairline() } }
     }
 }
 
@@ -76,7 +85,6 @@ struct MoneyBandStack<Content: View>: View {
 /// is dropped by collapsing; it is hidden until the header is tapped again,
 /// and every card starts open.
 struct MoneyCard<Header: View, Body: View>: View {
-    let tone: AdaptiveColor
     @Binding var collapsed: Bool
     var accessibilityName: String
     @ViewBuilder let header: Header
@@ -85,7 +93,7 @@ struct MoneyCard<Header: View, Body: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        MoneyBand(tone: tone) {
+        MoneyBand {
             Button(action: toggle) {
                 HStack(alignment: .top, spacing: Space.x1) {
                     VStack(alignment: .leading, spacing: Space.x1) {
@@ -128,15 +136,13 @@ struct MoneyCard<Header: View, Body: View>: View {
 /// uses transient state instead, since a key per day is a key per day
 /// forever.
 struct PersistedMoneyCard<Header: View, Body: View>: View {
-    let tone: AdaptiveColor
     let name: String
     @ViewBuilder let header: Header
     @ViewBuilder let content: Body
     @AppStorage private var collapsed: Bool
 
-    init(id: String, tone: AdaptiveColor, name: String,
+    init(id: String, name: String,
          @ViewBuilder header: () -> Header, @ViewBuilder content: () -> Body) {
-        self.tone = tone
         self.name = name
         self.header = header()
         self.content = content()
@@ -144,7 +150,7 @@ struct PersistedMoneyCard<Header: View, Body: View>: View {
     }
 
     var body: some View {
-        MoneyCard(tone: tone, collapsed: $collapsed, accessibilityName: name,
+        MoneyCard(collapsed: $collapsed, accessibilityName: name,
                   header: { header }, content: { content })
     }
 }
@@ -169,20 +175,12 @@ struct MoneyFlowSection: View {
 
     var body: some View {
         MoneyBandStack {
-            MoneyBand(tone: MoneyPalette.sage) {
-                Text("Net · \(snapshot.monthLabel)").moneyEyebrow(scheme)
-                MoneyFigure(amount: snapshot.net, size: 46, showsSign: snapshot.net < 0)
-                Text(snapshot.verdict)
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(MoneyPalette.quietInk(scheme))
-            }
-
-            MoneyBand(tone: MoneyPalette.mint) {
+            MoneyBand {
                 Text("Earned").moneyEyebrow(scheme)
                 MoneyFigure(amount: snapshot.income, size: 34)
             }
 
-            MoneyBand(tone: MoneyPalette.clay) {
+            MoneyBand {
                 Text("Spent").moneyEyebrow(scheme)
                 MoneyFigure(amount: snapshot.expenses, size: 34)
                 // The proportion, not a second number: how much of what came
@@ -198,7 +196,7 @@ struct MoneyFlowSection: View {
             }
 
             if !snapshot.week.isEmpty {
-                PersistedMoneyCard(id: "week", tone: MoneyPalette.stone, name: "This week") {
+                PersistedMoneyCard(id: "week", name: "This week") {
                     Text("This week").moneyEyebrow(scheme)
                     MoneyFigure(amount: snapshot.week.reduce(0) { $0 + $1.amount }, size: 28)
                 } content: {
@@ -208,11 +206,11 @@ struct MoneyFlowSection: View {
             }
 
             if let rate = snapshot.savingsRate {
-                MoneyBand(tone: MoneyPalette.butter) {
+                MoneyBand {
                     Text("Kept").moneyEyebrow(scheme)
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("\(Int((rate * 100).rounded()))")
-                            .font(LifeOSType.numeral(34))
+                            .font(Editorial.figure(34)).tracking(Editorial.figureTracking(34))
                             .monospacedDigit()
                         Text("%").font(LifeOSType.body.weight(.semibold))
                             .foregroundStyle(MoneyPalette.quietInk(scheme))
@@ -222,7 +220,7 @@ struct MoneyFlowSection: View {
             }
 
             if let netWorth = snapshot.netWorth {
-                MoneyBand(tone: MoneyPalette.mist) {
+                MoneyBand {
                     Text("Net worth").moneyEyebrow(scheme)
                     MoneyFigure(amount: netWorth, size: 34)
                 }
@@ -241,7 +239,7 @@ struct MoneyCategoriesSection: View {
 
     var body: some View {
         MoneyBandStack {
-            PersistedMoneyCard(id: "donut", tone: MoneyPalette.mist, name: "Spent by category") {
+            PersistedMoneyCard(id: "donut", name: "Spent by category") {
                 Text("Spent · \(snapshot.monthLabel)").moneyEyebrow(scheme)
                 MoneyFigure(amount: snapshot.expenses, size: 34)
                 Text("\(snapshot.spendCount) transaction\(snapshot.spendCount == 1 ? "" : "s")")
@@ -284,14 +282,12 @@ struct MoneyCategoriesSection: View {
             }
 
             if snapshot.categories.isEmpty {
-                MoneyEmptyBand(
-                    tone: MoneyPalette.stone,
-                    line: "Nothing categorised yet. Categories appear once transactions carry one."
+                MoneyEmptyBand(line: "Nothing categorised yet. Categories appear once transactions carry one."
                 )
             } else {
                 ForEach(snapshot.categories) { row in
                     Button { onOpen(.category(row.name)) } label: {
-                        MoneyBand(tone: MoneyPalette.stone) {
+                        MoneyBand {
                             HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
                                 if let opacity = swatchOpacity(for: row) {
                                     Circle()
@@ -354,7 +350,7 @@ struct MoneyRecurringSection: View {
 
     var body: some View {
         MoneyBandStack {
-            PersistedMoneyCard(id: "recurring", tone: MoneyPalette.mint, name: "Every month") {
+            PersistedMoneyCard(id: "recurring", name: "Every month") {
                 Text("Every month").moneyEyebrow(scheme)
                 MoneyFigure(amount: monthlyTotal, size: 40)
                 Text(snapshot.recurring.isEmpty
@@ -413,7 +409,7 @@ struct MoneyRecurringSection: View {
             }
 
             if !snapshot.recurring.isEmpty {
-                MoneyBand(tone: MoneyPalette.sage) {
+                MoneyBand {
                     Text("A year of these").moneyEyebrow(scheme)
                     MoneyFigure(amount: monthlyTotal * 12, size: 28)
                     // The annual figure is the argument for cancelling
@@ -438,7 +434,7 @@ struct MoneyGoalSection: View {
     var body: some View {
         MoneyBandStack {
             if let goal = snapshot.goal {
-                MoneyBand(tone: MoneyPalette.butter) {
+                MoneyBand {
                     Text(goal.name).moneyEyebrow(scheme)
                     MoneyFigure(amount: goal.saved, size: 46)
                     HStack(alignment: .firstTextBaseline) {
@@ -457,7 +453,7 @@ struct MoneyGoalSection: View {
                 }
 
                 if !goal.isMet {
-                    MoneyBand(tone: MoneyPalette.stone) {
+                    MoneyBand {
                         Text("Still to find").moneyEyebrow(scheme)
                         MoneyFigure(amount: goal.remaining, size: 34)
                         if snapshot.net > 0 {
@@ -477,10 +473,10 @@ struct MoneyGoalSection: View {
                     }
                 }
             } else {
-                MoneyBand(tone: MoneyPalette.butter, minHeight: 180) {
+                MoneyBand(minHeight: 180) {
                     Text("Saving for").moneyEyebrow(scheme)
                     Text("No goal set")
-                        .font(LifeOSType.numeral)
+                        .font(Editorial.headline(28))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     Text("Name a target and this becomes the month's scoreboard.")
                         .font(LifeOSType.label.weight(.regular))
@@ -510,10 +506,10 @@ struct MoneyPressureSection: View {
     var body: some View {
         MoneyBandStack {
             if points.isEmpty {
-                MoneyBand(tone: MoneyPalette.mint, minHeight: 200) {
+                MoneyBand(minHeight: 200) {
                     Text("What hurts").moneyEyebrow(scheme)
                     Text("Nothing right now")
-                        .font(LifeOSType.numeral)
+                        .font(Editorial.headline(28))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
                     Text("No bucket is over and nothing is quietly repeating. This band fills itself when that changes.")
                         .font(LifeOSType.label.weight(.regular))
@@ -521,7 +517,7 @@ struct MoneyPressureSection: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
-                MoneyBand(tone: MoneyPalette.clay) {
+                MoneyBand {
                     Text("What hurts").moneyEyebrow(scheme)
                     MoneyFigure(amount: points.reduce(0) { $0 + $1.amount }, size: 40)
                     Text("across \(points.count) thing\(points.count == 1 ? "" : "s")")
@@ -530,7 +526,7 @@ struct MoneyPressureSection: View {
                 }
 
                 ForEach(points) { point in
-                    MoneyBand(tone: MoneyPalette.stone) {
+                    MoneyBand {
                         HStack(alignment: .firstTextBaseline) {
                             Text(point.title)
                                 .font(LifeOSType.body.weight(.semibold))
@@ -548,7 +544,7 @@ struct MoneyPressureSection: View {
                     }
                 }
 
-                MoneyBand(tone: MoneyPalette.sage) {
+                MoneyBand {
                     Button("Edit budgets", action: onEditBudgets)
                         .font(LifeOSType.label.weight(.semibold))
                         .foregroundStyle(MoneyPalette.ink.resolve(scheme))
@@ -572,7 +568,7 @@ struct MoneyLedgerSection: View {
 
     var body: some View {
         MoneyBandStack {
-            MoneyBand(tone: MoneyPalette.stone) {
+            MoneyBand {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(snapshot.monthLabel).moneyEyebrow(scheme)
@@ -588,7 +584,7 @@ struct MoneyLedgerSection: View {
             }
 
             if snapshot.recent.isEmpty {
-                MoneyEmptyBand(tone: MoneyPalette.mist, line: "Nothing logged this month yet.")
+                MoneyEmptyBand(line: "Nothing logged this month yet.")
             } else {
                 // The whole month, a card per day. Eight undated rows was the
                 // old list, and "what did I spend" has no answer without dates.
@@ -618,12 +614,11 @@ struct MoneyLedgerSection: View {
 // MARK: - Shared empty band
 
 struct MoneyEmptyBand: View {
-    let tone: AdaptiveColor
     let line: String
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        MoneyBand(tone: tone, minHeight: 120) {
+        MoneyBand(minHeight: 120) {
             Text(line)
                 .font(LifeOSType.label.weight(.regular))
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
