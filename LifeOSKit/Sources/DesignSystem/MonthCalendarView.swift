@@ -4,11 +4,13 @@ import SwiftUI
 /// ordered by the calendar's `firstWeekday`, with today's column accented.
 public struct WeekdayHeader: View {
     private let calendar: Calendar
-    private let today: Date
+    private let today: Date?
     private let spacing: CGFloat
     @Environment(\.colorScheme) private var scheme
 
-    public init(calendar: Calendar = .current, today: Date = .now, spacing: CGFloat = 8) {
+    /// `today` nil paints no column in the accent: a month that is not this
+    /// one has no "today" to mark.
+    public init(calendar: Calendar = .current, today: Date? = .now, spacing: CGFloat = 8) {
         self.calendar = calendar
         self.today = today
         self.spacing = spacing
@@ -22,8 +24,9 @@ public struct WeekdayHeader: View {
         return (0..<7).map { raw[($0 + offset) % 7] }
     }
 
-    private var todayColumn: Int {
-        (calendar.component(.weekday, from: today) - calendar.firstWeekday + 7) % 7
+    private var todayColumn: Int? {
+        guard let today else { return nil }
+        return (calendar.component(.weekday, from: today) - calendar.firstWeekday + 7) % 7
     }
 
     public var body: some View {

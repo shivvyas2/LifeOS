@@ -67,12 +67,15 @@ public struct EditorialButtonStyle: ButtonStyle {
     /// goes somewhere, which is otherwise the one thing plain text cannot say.
     @ViewBuilder private func label(_ configuration: Configuration) -> some View {
         if role == .quiet {
+            // Only a full-width quiet button pushes its arrow to the edge; an
+            // inline one hugs its words, or it reads as the row beside it.
             HStack(spacing: Space.x1) {
                 configuration.label
-                Spacer(minLength: Space.x1)
+                if fullWidth { Spacer(minLength: Space.x1) }
                 Image(systemName: "arrow.right").font(LifeOSType.label.weight(.semibold))
                     .accessibilityHidden(true)
             }
+            .fixedSize(horizontal: !fullWidth, vertical: false)
         } else {
             configuration.label
         }

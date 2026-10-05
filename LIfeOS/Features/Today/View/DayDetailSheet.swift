@@ -113,13 +113,18 @@ struct DayDetailSheet: View {
     private func habitLabel(_ habit: HabitRow) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.x2) {
-                Image(systemName: habit.isDone ? "checkmark.square.fill" : "square")
+                // Today is a checkbox you can press. A past day is history:
+                // a plain mark, never a verdict on a day the habit may not
+                // have existed.
+                Image(systemName: snapshot.isToday
+                      ? (habit.isDone ? "checkmark.square.fill" : "square")
+                      : (habit.isDone ? "checkmark" : "minus"))
                     .font(LifeOSType.rowTitle)
-                    .foregroundStyle(habit.isDone ? LifeOSTokens.primaryText.resolve(scheme) : Editorial.quietInk(scheme))
+                    .foregroundStyle(habit.isDone && snapshot.isToday ? LifeOSTokens.primaryText.resolve(scheme) : Editorial.quietInk(scheme))
                 Text(habit.title)
                     .font(LifeOSType.secondary)
-                    .strikethrough(habit.isDone)
-                    .foregroundStyle(habit.isDone ? Editorial.quietInk(scheme) : LifeOSTokens.primaryText.resolve(scheme))
+                    .strikethrough(habit.isDone && snapshot.isToday)
+                    .foregroundStyle(habit.isDone && snapshot.isToday ? Editorial.quietInk(scheme) : LifeOSTokens.primaryText.resolve(scheme))
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 12)
