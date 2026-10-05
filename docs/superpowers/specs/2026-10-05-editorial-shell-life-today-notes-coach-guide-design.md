@@ -137,6 +137,36 @@ environment the way `quickActions` already is.
   `Connect Apple Health`. When Health has no data and nothing is connected,
   the tiles show ghosted sample figures at 35% ink behind that card.
 
+### Month and schedule (added 2026-10-05, from two references)
+
+The Today tab's own dot grid does not change. This covers the two screens
+behind it: the month screen the bar's calendar button opens, and the
+schedule a day opens onto.
+
+- **Month screen** (`MonthScreen`). Masthead eyebrow `MONTHLY · 2026`,
+  then one block per month, scrolling: the month name in `Editorial.headline(34)`
+  with the accent for the current month only, a weekday row in quiet ink, and
+  a seven-column grid of hairline cells. A past day is hatched: three thin
+  diagonal strokes in the accent at 45°, drawn by a `HatchedCell` shape.
+  Today is a filled accent cell with paper ink. A day with events carries a
+  2pt ink dot under its number. Tapping a day pushes the schedule at that
+  day. `Go back` is `.editorial(.secondary)` at the foot, in addition to the
+  system back button.
+- **Schedule** (`DayScheduleScreen`, replaces `DayDetailSheet` as a push).
+  Masthead eyebrow `WEEKLY · OCTOBER`. Then the seven days of the chosen
+  week stacked: each day is a band with its number in `Editorial.figure(64)`
+  (the accent for today, ink otherwise, quiet ink for past days) and, beside
+  it, the day's events as rows of `time · title · arrow.right` separated by
+  hairlines. A day with no events shows the number only. The bands are
+  separated by hairlines, as in the stacked-day reference, and the chosen
+  day's band is the one expanded with its `Add` text button; the others
+  show only their numbers and a count tag (`3 events`) until tapped.
+- Both screens are paper and ink with the accent for today and the hatch
+  only. No gradient field.
+- Preview pages `month` and `schedule`, with `--dark`.
+
+Delivered in PR 2 with Today and Notes.
+
 ## 4. Notes
 
 - Masthead. Eyebrow `NOTES · 24 PAGES` (`1 PAGE`, `NO PAGES`); headline
@@ -262,7 +292,8 @@ Four PRs, each rebased on the one before:
 
 1. `feat/editorial-shell-life`: this spec, the shell header, Life, the
    `ink` chart style, `EditorialEmptyState`.
-2. `feat/editorial-today-notes`: Today and Notes, the `ink` tile style.
+2. `feat/editorial-today-notes`: Today and Notes, the `ink` tile style, the
+   month screen and the day schedule.
 3. `feat/editorial-coach`: LIFO and the assistant, the shared chat views,
    deletion of the aura and orb.
 4. `feat/editorial-guide`: the guide, the tour, the routes, the Health and
