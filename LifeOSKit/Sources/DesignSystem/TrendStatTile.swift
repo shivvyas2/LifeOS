@@ -8,6 +8,11 @@ import SwiftUI
 /// The week is the point — a step count alone says nothing about whether it is
 /// a good day, and a bare progress bar could only ever say that about today.
 public struct TrendStatTile: View {
+    /// The module look keeps the icon circle and the hue; ink is the editorial
+    /// tile: an eyebrow, a light figure, bars in ink, and an arrow that says
+    /// the tile opens.
+    public enum Style: Sendable, Equatable { case module, ink }
+
     private let icon: String
     private let hue: ModuleHue
     private let label: String
@@ -16,6 +21,7 @@ public struct TrendStatTile: View {
     private let series: TrendSeries
     private let goal: Double?
     private let baseline: RoundedBarChart.Baseline
+    private let style: Style
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -32,7 +38,8 @@ public struct TrendStatTile: View {
         unit: String? = nil,
         series: TrendSeries,
         goal: Double? = nil,
-        baseline: RoundedBarChart.Baseline = .zero
+        baseline: RoundedBarChart.Baseline = .zero,
+        style: Style = .module
     ) {
         self.icon = icon
         self.hue = hue
@@ -42,12 +49,15 @@ public struct TrendStatTile: View {
         self.series = series
         self.goal = goal
         self.baseline = baseline
+        self.style = style
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            header
-            numeral
+            switch style {
+            case .module: header; numeral
+            case .ink: inkHeader; inkFigure
+            }
             // A week with no readings at all draws seven empty tracks and seven
             // gap markers, which is a lot of chart to say nothing. The card
             // falls back to the plain figure until there is a week to show —
@@ -82,6 +92,31 @@ public struct TrendStatTile: View {
         }
     }
 
+    private var inkHeader: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).editorialEyebrow()
+            Spacer(minLength: 4)
+            Image(systemName: "arrow.up.right")
+                .font(LifeOSType.caption.weight(.semibold))
+                .foregroundStyle(Editorial.quietInk(scheme))
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var inkFigure: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.half) {
+            Text(value ?? "—")
+                .font(Editorial.figure(34)).tracking(Editorial.figureTracking(34))
+                .monospacedDigit()
+                .foregroundStyle(value == nil ? Editorial.quietInk(scheme) : LifeOSTokens.primaryText.resolve(scheme))
+            if let unit, value != nil {
+                Text(unit).font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+    }
+
     private var numeral: some View {
         HStack(alignment: .lastTextBaseline, spacing: 4) {
             Text(value ?? "—")
@@ -106,7 +141,7 @@ public struct TrendStatTile: View {
             bars: series.points.map {
                 RoundedBarChart.Bar(id: $0.date, label: Self.initial(of: $0.date, calendar), value: $0.value)
             },
-            hue: hue,
+            style: style == .ink ? .ink : .hue(hue),
             goal: goal,
             baseline: baseline,
             spacing: layout.isRegular ? 8 : 5,
