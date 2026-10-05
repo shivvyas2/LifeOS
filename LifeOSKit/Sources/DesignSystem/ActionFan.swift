@@ -198,6 +198,9 @@ public struct ActionFan: View {
                 // The labelled form: an ink capsule rather than a circle, so
                 // the one action that matters reads as a button with a name.
                 Label(word, systemImage: action.systemImage)
+                    // A toolbar shows a Label icon-only unless told otherwise,
+                    // and the word is the point of this one.
+                    .labelStyle(.titleAndIcon)
                     .font(LifeOSType.label.weight(.semibold))
                     .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
                     .padding(.horizontal, 12)

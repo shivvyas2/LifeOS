@@ -41,16 +41,20 @@ public struct ShellToolbar: ViewModifier {
     public func body(content: Content) -> some View {
         paper(content)
             .toolbar {
+                // No shared glass capsule behind the items: the bar is paper
+                // and the items sit on it bare, the way the row is designed.
                 if !actions.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
                         ActionFan(actions: actions, arrangement: .row)
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
                 if let profile {
                     ToolbarItem(placement: .primaryAction) {
                         Button(action: profile.open) { ProfileAvatar(photo: profile.photo) }
                             .accessibilityLabel("Profile and settings")
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
             }
     }
