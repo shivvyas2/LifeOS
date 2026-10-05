@@ -27,9 +27,21 @@ struct HealthActivityDesignPreview: View {
                 let angle = sin(Double(i) / 7 * .pi) * 1.8
                 return WristFrame(t: Double(i) * 0.12, x: sin(angle / 2), y: 0, z: 0, w: cos(angle / 2))
             }
-            return SwingEvent(id: index, time: Double(index) * 47 + 10, duration: 0.96, peakRotation: 5.8 + Double(index % 7) * 0.6, peakAcceleration: 1.5 + Double(index % 5) * 0.3, frames: frames)
+            return SwingEvent(id: index, time: Double(index) * 47 + 10, duration: 0.96, peakRotation: 5.8 + Double(index % 7) * 0.6, peakAcceleration: 1.5 + Double(index % 5) * 0.3, frames: frames,
+                              twist: index % 3 == 0 ? -3.2 : 2.9)
         }
         row.swingAnalysisData = try? JSONEncoder().encode(analysis)
+        var tags = BadmintonShotTags()
+        tags[0] = BadmintonShotTag(stroke: .backhand, type: .drive)
+        tags[1] = BadmintonShotTag(stroke: .forehand, type: .smash)
+        tags[2] = BadmintonShotTag(stroke: .forehand, type: .clear)
+        row.shotTagsData = try? JSONEncoder().encode(tags)
+        var match = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
+        // Each game's loser's points first, so the game ends on the winner's 21st.
+        for side: BadmintonSide in Array(repeating: .them, count: 17) + Array(repeating: .us, count: 21) { match.record(side) }
+        for side: BadmintonSide in Array(repeating: .us, count: 18) + Array(repeating: .them, count: 21) { match.record(side) }
+        for side: BadmintonSide in Array(repeating: .them, count: 15) + Array(repeating: .us, count: 21) { match.record(side) }
+        row.badmintonData = try? JSONEncoder().encode(match)
         return row
     }
     var body: some View {
@@ -75,7 +87,11 @@ struct HealthActivityDesignPreview: View {
                     }
             }
             else if page == "badminton" {
+                // `--anchor=center|bottom` opens the review scrolled, so a
+                // capture can reach the lower panels without a swipe.
                 NavigationStack { BadmintonReviewScreen(workout: Self.badmintonFixture) }
+                    .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom
+                                         : ProcessInfo.processInfo.arguments.contains("--anchor=center") ? .center : nil)
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "money" || page == "nav" { EditorialDesignPreview(page: page) }

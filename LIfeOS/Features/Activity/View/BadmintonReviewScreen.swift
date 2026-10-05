@@ -56,6 +56,11 @@ struct BadmintonReviewScreen: View {
     /// conversion that traps on a value those rules exclude.
     private let analysis: SwingAnalysis?
     @State private var selected = 0
+    @State private var tags: BadmintonShotTags
+    @Environment(\.modelContext) private var context
+    /// The forehand sign learned from earlier sessions, used until this
+    /// session's own tags say otherwise. Per account, like the draft.
+    @AppStorage("badminton.strokeConvention", store: .currentAccount) private var savedConvention: Double = 0
     private let jade = Color(red: 0.33, green: 0.91, blue: 0.72)
     init(workout: WorkoutRecord) {
         self.workout = workout
@@ -65,6 +70,21 @@ struct BadmintonReviewScreen: View {
         analysis = workout.swingAnalysisData
             .flatMap { try? JSONDecoder().decode(SwingAnalysis.self, from: $0) }
             .flatMap { $0.isValid(elapsed: elapsed) ? $0 : nil }
+        _tags = State(initialValue: workout.shotTagsData
+            .flatMap { try? JSONDecoder().decode(BadmintonShotTags.self, from: $0) } ?? BadmintonShotTags())
+    }
+    /// This session's tags when they settle it, otherwise the account's.
+    private var convention: Double? {
+        StrokeClassifier.convention(events: analysis?.events ?? [], tags: tags)
+            ?? (savedConvention == 0 ? nil : savedConvention)
+    }
+    private func setTag(_ change: (inout BadmintonShotTag) -> Void) {
+        var tag = tags[selected] ?? BadmintonShotTag()
+        change(&tag)
+        tags[selected] = tag
+        workout.shotTagsData = try? JSONEncoder().encode(tags)
+        try? context.save()
+        if let learned = StrokeClassifier.convention(events: analysis?.events ?? [], tags: tags) { savedConvention = learned }
     }
     private var event: SwingEvent? { analysis?.events.first(where: { $0.id == selected }) }
     /// Decoded and validated the same way as the motion review.
@@ -91,6 +111,7 @@ struct BadmintonReviewScreen: View {
                 }
                 if let analysis {
                     motionReview(analysis)
+                    if !analysis.events.isEmpty { strokesPanel(analysis) }
                 } else {
                     panel("No wrist motion recorded", icon: "applewatch") {
                         Text("This session contains workout totals only. For your next badminton session, enable swing analysis and wear Apple Watch on your racket wrist. WHOOP does not expose swing motion through its public API.")
@@ -142,6 +163,7 @@ struct BadmintonReviewScreen: View {
                     Button { selected += 1 } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.disabled(selected + 1 >= analysis.events.count)
                 }
                 if let event {
+                    tagging(event)
                     HStack {
                         metric("Peak wrist rotation", String(Int((event.peakRotation * 180 / .pi).rounded())), "°/s")
                         metric("Peak acceleration", String(format: "%.1f", event.peakAcceleration), "g · gravity removed")
@@ -157,6 +179,80 @@ struct BadmintonReviewScreen: View {
                 .font(.caption).foregroundStyle(.white.opacity(0.65))
         }
     }
+    /// What the player says about the selected candidate. A side that has
+    /// not been tagged shows the call the learned convention makes, marked
+    /// as such, so a wrong call is one tap from corrected.
+    private func tagging(_ event: SwingEvent) -> some View {
+        let tag = tags[event.id] ?? BadmintonShotTag()
+        let called = StrokeClassifier.stroke(of: event, convention: convention, tags: BadmintonShotTags())
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ForEach(BadmintonStroke.allCases, id: \.self) { stroke in
+                    chip(stroke.title + (tag.stroke == nil && called == stroke ? " · auto" : ""),
+                         on: tag.stroke == stroke || (tag.stroke == nil && called == stroke),
+                         firm: tag.stroke == stroke) {
+                        setTag { $0.stroke = $0.stroke == stroke ? nil : stroke; $0.notAShot = false }
+                    }
+                }
+                Spacer(minLength: 0)
+                chip("Not a shot", on: tag.notAShot, firm: true) {
+                    setTag { $0.notAShot.toggle(); if $0.notAShot { $0.stroke = nil; $0.type = nil } }
+                }
+            }
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(BadmintonShotType.allCases, id: \.self) { type in
+                        chip(type.title, on: tag.type == type, firm: true) {
+                            setTag { $0.type = $0.type == type ? nil : type; $0.notAShot = false }
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+    private func chip(_ title: String, on: Bool, firm: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline.weight(on ? .semibold : .regular))
+                .padding(.horizontal, 12).frame(minHeight: 36)
+                .foregroundStyle(on && firm ? .black : .white)
+                .background { if on && firm { Capsule().fill(jade) } }
+                .overlay(Capsule().stroke(on ? jade : .white.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: on && !firm ? [4, 3] : [])))
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// Forehand against backhand, from tags and the learned convention.
+    private func strokesPanel(_ analysis: SwingAnalysis) -> some View {
+        let summary = StrokeClassifier.summary(events: analysis.events, convention: convention, tags: tags)
+        return panel("Your strokes", icon: "arrow.left.arrow.right") {
+            if convention == nil {
+                Text("Tag two or three swings as forehand or backhand in the replay above, and the rest of this session, and later ones, are called for you.")
+            }
+            LabeledContent("Forehand", value: sideLine(summary.forehand))
+            Divider().overlay(.white.opacity(0.1))
+            LabeledContent("Backhand", value: sideLine(summary.backhand))
+            if summary.unclear > 0 {
+                Divider().overlay(.white.opacity(0.1))
+                LabeledContent("Too close to call", value: "\(summary.unclear)")
+            }
+            if let stronger = summary.stronger {
+                Text("Your \(stronger.title.lowercased()) moves the wrist faster on average. Wrist speed is not shot quality; use it to see which side you commit to.")
+                    .font(.caption).foregroundStyle(.white.opacity(0.7))
+            }
+            if !summary.types.isEmpty {
+                Text(BadmintonShotType.allCases.compactMap { type in summary.types[type].map { "\($0) \(type.title.lowercased())" } }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(jade)
+            }
+        }
+    }
+    private func sideLine(_ side: StrokeClassifier.Side) -> String {
+        guard side.count > 0, let peak = side.averagePeak else { return "None yet" }
+        return "\(side.count) · avg \(Int((peak * 180 / .pi).rounded()))°/s"
+    }
+
     private func matchPanel(_ session: BadmintonSession) -> some View {
         panel(session.kind == .match ? "Match" : "Practice", icon: "trophy") {
             if let score = session.score {
@@ -247,15 +343,32 @@ private struct WristCourtReplay: UIViewRepresentable {
         // whole-court view this used to start at, the watch was a few pixels.
         let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(3.2, 3.8, 8.2)
         camera.look(at: SCNVector3(0, 1.4, 2.4)); scene.rootNode.addChildNode(camera)
-        let floor = SCNBox(width: 6, height: 0.08, length: 12, chamferRadius: 0.06)
+        // A regulation court in metres (BWF Laws, Appendix 1): 13.4 by 6.1
+        // for doubles, singles sidelines 0.46 inside, short service lines
+        // 1.98 from the net, doubles long service lines 0.76 inside the back
+        // line, centre lines from the short service line back.
+        let floor = SCNBox(width: 6.5, height: 0.06, length: 13.8, chamferRadius: 0.04)
         floor.firstMaterial?.diffuse.contents = UIColor(red: 0.025, green: 0.32, blue: 0.25, alpha: 1)
-        scene.rootNode.addChildNode(SCNNode(geometry: floor))
-        for x: Float in [-3, 3] { line(scene, x: x, z: 0, width: 0.04, length: 12) }
-        for z: Float in [-6, -2, 0, 2, 6] { line(scene, x: 0, z: z, width: 6, length: 0.04) }
-        line(scene, x: 0, z: -4, width: 0.04, length: 4); line(scene, x: 0, z: 4, width: 0.04, length: 4)
-        let net = SCNBox(width: 6.1, height: 0.7, length: 0.025, chamferRadius: 0)
+        let floorNode = SCNNode(geometry: floor); floorNode.position.y = -0.03
+        scene.rootNode.addChildNode(floorNode)
+        let halfWidth: Float = 3.05, singles: Float = 2.59, back: Float = 6.7
+        for x in [-halfWidth, halfWidth, -singles, singles] { line(scene, x: x, z: 0, width: 0.04, length: CGFloat(back * 2)) }
+        for z in [-back, back, -5.94, 5.94, -1.98, 1.98] { line(scene, x: 0, z: z, width: CGFloat(halfWidth * 2), length: 0.04) }
+        let centreLength: Float = back - 1.98
+        line(scene, x: 0, z: 1.98 + centreLength / 2, width: 0.04, length: CGFloat(centreLength))
+        line(scene, x: 0, z: -(1.98 + centreLength / 2), width: 0.04, length: CGFloat(centreLength))
+        // The net: 1.55 m at the posts, a 0.76 m deep mesh band below the top.
+        let net = SCNBox(width: CGFloat(halfWidth * 2), height: 0.76, length: 0.02, chamferRadius: 0)
         net.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.18)
-        let netNode = SCNNode(geometry: net); netNode.position = SCNVector3(0, 0.9, 0); scene.rootNode.addChildNode(netNode)
+        let netNode = SCNNode(geometry: net); netNode.position = SCNVector3(0, 1.55 - 0.38, 0); scene.rootNode.addChildNode(netNode)
+        let tape = SCNBox(width: CGFloat(halfWidth * 2), height: 0.04, length: 0.03, chamferRadius: 0)
+        tape.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.85)
+        let tapeNode = SCNNode(geometry: tape); tapeNode.position = SCNVector3(0, 1.55, 0); scene.rootNode.addChildNode(tapeNode)
+        for x in [-halfWidth, halfWidth] {
+            let post = SCNCylinder(radius: 0.03, height: 1.55)
+            post.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.7)
+            let postNode = SCNNode(geometry: post); postNode.position = SCNVector3(x, 0.775, 0); scene.rootNode.addChildNode(postNode)
+        }
         let display = SCNNode(); display.position = SCNVector3(0, 2.3, 3.2); scene.rootNode.addChildNode(display)
         let wrist = SCNNode(); wrist.name = "wrist"; display.addChildNode(wrist)
         let arm = SCNCapsule(capRadius: 0.18, height: 1.8); arm.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.8)
@@ -288,6 +401,6 @@ private struct WristCourtReplay: UIViewRepresentable {
     private func line(_ scene: SCNScene, x: Float, z: Float, width: CGFloat, length: CGFloat) {
         let box = SCNBox(width: width, height: 0.02, length: length, chamferRadius: 0)
         box.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.55)
-        let node = SCNNode(geometry: box); node.position = SCNVector3(x, 0.06, z); scene.rootNode.addChildNode(node)
+        let node = SCNNode(geometry: box); node.position = SCNVector3(x, 0.011, z); scene.rootNode.addChildNode(node)
     }
 }
