@@ -19,60 +19,73 @@ struct NoteShelfScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                HStack(alignment: .top, spacing: Space.x2) {
                     if let onToggleLibrary {
                         Button(action: onToggleLibrary) {
-                            Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
+                            Image(systemName: "sidebar.leading")
                         }
+                        .buttonStyle(.editorial(.quiet, size: .compact))
                         .accessibilityLabel(isLibraryVisible ? "Hide library" : "Show library")
                         .keyboardShortcut("s", modifiers: [.command, .control])
                     }
-                    Text(model.headerTitle).font(.largeTitle.bold()).tracking(-0.7)
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer(minLength: 4)
+                    EditorialMasthead(eyebrow: NotesHeadline.eyebrow(count: model.cards.count),
+                                      title: model.headerTitle)
                     creationMenu
                 }
+
                 searchField
-                HStack {
-                    Text("\(model.cards.count) \(model.cards.count == 1 ? "page" : "pages")")
-                        .font(.subheadline).foregroundStyle(secondary)
-                    Spacer()
-                    if model.selection.bucket != nil || model.selection.folderID != nil {
+
+                EditorialSectionHeader(title: "Pages") {
+                    HStack(spacing: Space.x1) {
+                        if model.selection.bucket != nil || model.selection.folderID != nil {
+                            Menu {
+                                Picker("Page type", selection: $model.filter) {
+                                    ForEach(NoteShelfFilter.allCases) { filter in
+                                        Label(filter.title, systemImage: filter.systemImage).tag(filter)
+                                    }
+                                }
+                            } label: {
+                                Text(model.filter.title)
+                            }
+                            .buttonStyle(.editorial(.quiet, size: .compact))
+                            .accessibilityLabel("Filter pages")
+                        }
                         Menu {
-                            Picker("Page type", selection: $model.filter) {
-                                ForEach(NoteShelfFilter.allCases) { filter in
-                                    Label(filter.title, systemImage: filter.systemImage).tag(filter)
+                            Picker("Sort pages", selection: $model.sort) {
+                                ForEach(NoteSort.allCases) { sort in
+                                    Label(sort.title, systemImage: sort.systemImage).tag(sort)
                                 }
                             }
                         } label: {
-                            Label(model.filter.title, systemImage: "line.3.horizontal.decrease")
-                                .font(.subheadline).frame(minHeight: 44)
+                            Text(model.sort.title)
                         }
-                        .accessibilityLabel("Filter pages")
+                        .buttonStyle(.editorial(.quiet, size: .compact))
+                        .accessibilityLabel("Sort: \(model.sort.title)")
                     }
-                    Menu {
-                        Picker("Sort pages", selection: $model.sort) {
-                            ForEach(NoteSort.allCases) { sort in
-                                Label(sort.title, systemImage: sort.systemImage).tag(sort)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down").frame(width: 44, height: 44)
-                    }
-                    .accessibilityLabel("Sort: \(model.sort.title)")
                 }
+
                 if model.cards.isEmpty {
-                    ContentUnavailableView {
-                        Label(model.isSearching ? "No matching pages" : "Room for your next idea", systemImage: "doc.text")
-                    } description: {
-                        Text(model.isSearching ? "Try another title or a word from your notes." : "Start a page, make a checklist, or sketch something out.")
-                    } actions: {
-                        if model.isSearching {
+                    if model.isSearching {
+                        VStack(alignment: .leading, spacing: Space.x2) {
+                            Text("No matching pages").font(LifeOSType.rowTitle)
+                            Text("Try another title or a word from your notes.")
+                                .font(LifeOSType.secondary).foregroundStyle(secondary)
                             Button("Clear search") { model.query = "" }
-                        } else {
-                            Button("Create a page") { open(model.createNote()) }
-                                .buttonStyle(.editorial(.primary, size: .compact))
+                                .buttonStyle(.editorial(.secondary, size: .compact))
+                        }
+                        .editorialCard()
+                    } else {
+                        EditorialEmptyState(
+                            sentence: "Pages, journals and task lists, all in one place.",
+                            action: "Create a page",
+                            onAction: { open(model.createNote()) }
+                        ) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                EditorialRow("Monday journal", value: "Today")
+                                EditorialRow("Groceries", value: "3 of 8")
+                                EditorialRow("Ideas for the trip", value: "Yesterday")
+                            }
                         }
                     }
                 } else {
@@ -85,20 +98,19 @@ struct NoteShelfScreen: View {
                                 onDelete: { model.delete(card.id) },
                                 moveTargets: moveTargets,
                                 onMove: { model.move(card.id, to: $0.bucket, folderID: $0.folderID) })
-                            if card.id != model.cards.last?.id { Divider().padding(.leading, 54) }
+                            Hairline()
                         }
                     }
-                    .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
                 }
+
                 Spacer(minLength: layout.contentBottomInset)
             }
-            .padding(.horizontal, layout.isRegular ? 24 : 20)
-            .padding(.top, 16)
+            .padding(.horizontal, layout.gutter)
+            .padding(.top, Space.x2)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(LifeOSTokens.canvas.resolve(scheme))
         .foregroundStyle(primary)
-        .tint(LifeOSTokens.accent)
         .onChange(of: isSearchFocused?.wrappedValue ?? false) { _, wanted in
             if wanted { searchFocused = true }
         }
@@ -108,21 +120,24 @@ struct NoteShelfScreen: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(secondary)
-            TextField("Search all pages", text: $model.query)
-                .textFieldStyle(.plain).focused($searchFocused).submitLabel(.search)
-                .autocorrectionDisabled()
-            if !model.query.isEmpty {
-                Button { model.query = "" } label: {
-                    Image(systemName: "xmark.circle.fill").frame(width: 32, height: 44)
-                }.accessibilityLabel("Clear search")
+        VStack(spacing: Space.half) {
+            HStack(spacing: Space.x1) {
+                Image(systemName: "magnifyingglass").foregroundStyle(secondary)
+                TextField("Search all pages", text: $model.query)
+                    .textFieldStyle(.plain).focused($searchFocused).submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .font(LifeOSType.body)
+                if !model.query.isEmpty {
+                    Button { model.query = "" } label: {
+                        Image(systemName: "xmark").frame(width: 32, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
             }
+            .frame(minHeight: 44)
+            Hairline()
         }
-        .font(.body)
-        .padding(.horizontal, 14)
-        .frame(minHeight: 48)
-        .background(primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var creationMenu: some View {
@@ -133,17 +148,12 @@ struct NoteShelfScreen: View {
             Divider()
             Button("New folder", systemImage: "folder.badge.plus") { onNewFolder(model.activeBucket) }
         } label: {
-            Image(systemName: "plus").font(.body.weight(.semibold))
-                .foregroundStyle(LifeOSTokens.accent)
-                .frame(width: 44, height: 44)
-                .background(primary, in: RoundedRectangle(cornerRadius: 12))
+            Text("New page")
         }
+        .buttonStyle(.editorial(.primary, size: .compact))
         .accessibilityLabel("Create a page or folder")
     }
 
-    /// Every shelf, and every folder on it, flattened for the move menu.
-    /// Nested folders are shown with their parent's name in front, since a menu
-    /// has no indentation to say what is inside what.
     private var moveTargets: [NoteMoveTarget] {
         var targets: [NoteMoveTarget] = []
 
