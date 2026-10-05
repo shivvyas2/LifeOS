@@ -86,8 +86,10 @@ final class MonthViewModel {
         let startOfMonth = calendar.date(
             from: calendar.dateComponents([.year, .month], from: month)
         ) ?? month
+        // Two months, not one: the screen shows this month and the next, the
+        // way the reference stacks October over November.
         guard let from = calendar.date(byAdding: .day, value: -7, to: startOfMonth),
-              let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth),
+              let endOfMonth = calendar.date(byAdding: .month, value: 2, to: startOfMonth),
               let to = calendar.date(byAdding: .day, value: 7, to: endOfMonth)
         else { return }
 
