@@ -43,7 +43,8 @@ struct MonthlyCloseScreen: View {
     private func sectorView(_ sector: LifeSector, model: MonthlyCloseViewModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
-                header(sector)
+                EditorialMasthead(eyebrow: "Close \(monthName) · \(model.position) of \(model.total)",
+                                  title: sector.title)
 
                 if !model.questions.isEmpty {
                     VStack(alignment: .leading, spacing: Space.x3) {
@@ -57,33 +58,20 @@ struct MonthlyCloseScreen: View {
                     }
                 }
 
-                // `value: nil` renders PastelFillCard's own em dash, which is
-                // exactly right for a sector with no evidence: not scored
-                // badly, not scored at all.
-                PastelFillCard(
-                    icon: SectorPalette.icon(sector),
-                    hue: SectorPalette.hue(sector),
-                    label: "Proposed",
-                    value: model.proposed.map(String.init),
-                    caption: model.evidence.isEmpty ? "NO EVIDENCE YET" : nil,
-                    captionColor: LifeOSTokens.secondaryText.resolve(scheme)
-                )
-
-                if !model.evidence.rows.isEmpty {
-                    VStack(alignment: .leading, spacing: Space.half) {
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    EditorialFigure(label: "Proposed",
+                                    value: model.proposed.map(String.init) ?? "—",
+                                    unit: model.proposed == nil ? nil : "/10",
+                                    size: 48)
+                    if model.evidence.rows.isEmpty {
+                        EditorialTag("No evidence yet")
+                    } else {
                         ForEach(model.evidence.rows, id: \.label) { row in
-                            HStack {
-                                Text(row.label.capitalized)
-                                    .font(LifeOSType.label)
-                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                                Spacer()
-                                Text(row.value)
-                                    .font(LifeOSType.label.weight(.semibold))
-                                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                            }
+                            EditorialRow(row.label.capitalized, value: row.value)
                         }
                     }
                 }
+                .editorialCard()
 
                 if let note = model.note {
                     Text(note)
@@ -115,7 +103,7 @@ struct MonthlyCloseScreen: View {
             .padding(Space.x3)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .navigationTitle("\(model.position) of \(model.total)")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -127,37 +115,22 @@ struct MonthlyCloseScreen: View {
         }
     }
 
-    @ViewBuilder
-    private func header(_ sector: LifeSector) -> some View {
-        HStack(spacing: Space.x2) {
-            Image(systemName: SectorPalette.icon(sector))
-                .font(LifeOSType.body.weight(.semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
-
-            Text(sector.title)
-                .font(LifeOSType.screenTitle.weight(.semibold))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-        }
-    }
+    private var monthName: String { month.formatted(.dateTime.month(.wide)) }
 
     private var doneView: some View {
-        VStack(spacing: Space.x2) {
-            Text("Month closed")
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            Text("Every sector you scored this pass is on the board.")
-                .font(LifeOSType.label.weight(.regular))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                .multilineTextAlignment(.center)
-            PrimaryButton("Done") {
+        VStack(alignment: .leading, spacing: Space.x3) {
+            EditorialMasthead(eyebrow: "Life",
+                              title: "Month closed",
+                              detail: "Every sector you scored this pass is on the board.")
+            Button("Done") {
                 onFinish()
                 dismiss()
             }
+            .buttonStyle(.editorial(.primary, fullWidth: true))
+            Spacer()
         }
         .padding(Space.x3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
     }
 }
