@@ -41,7 +41,7 @@ struct TodayScreen: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, layout.gutter)
                 .padding(.leading, layout.railInset)
-                .padding(.top, 24)
+                .padding(.top, Space.x3)
                 .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
@@ -57,94 +57,61 @@ struct TodayScreen: View {
     @ViewBuilder
     private var layoutBody: some View {
         if layout.isRegular {
-            HStack(alignment: .top, spacing: 32) {
-                VStack(alignment: .leading, spacing: 22) {
+            HStack(alignment: .top, spacing: Space.x4) {
+                VStack(alignment: .leading, spacing: Space.x3) {
+                    masthead
+                    agendaCard
                     month
                     scheduledWorkout
-                    agendaCard
-                    streakLine
                 }
                 .frame(maxWidth: 520)
-
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: Space.x3) {
                     if showsHealthPrompt { healthPrompt }
                     statGrid(columns: 2)
                 }
             }
         } else {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                masthead
+                agendaCard
                 month
                 scheduledWorkout
-                agendaCard
-                streakLine
                 if showsHealthPrompt { healthPrompt }
                 statGrid(columns: layout.statColumns)
             }
         }
     }
 
-    /// Only when there is nothing to show and nothing attached. A connected
-    /// strap that simply has not synced yet is a different situation, and
-    /// telling that person to connect something would be wrong.
+    private var masthead: some View {
+        let headline = TodayHeadline.make(date: snapshot.date, streak: snapshot.streak, calendar: calendar)
+        return EditorialMasthead(eyebrow: headline.eyebrow, title: headline.title, detail: headline.detail)
+    }
+
     private var showsHealthPrompt: Bool {
         snapshot.hasNoHealthData && !isHealthConnected
     }
 
     private var healthPrompt: some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("No health data yet", systemImage: "heart.text.square")
-                    .font(LifeOSType.rowTitle)
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
-                Text("Steps, sleep, weight and recovery come from Apple Health and Whoop. Connect one and this fills in.")
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button(action: onConnectHealth) {
-                    Text("Connect Apple Health")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
-                        .background(Capsule().fill(LifeOSTokens.accent))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: Space.x2) {
+            Text("No health data yet").font(LifeOSType.rowTitle)
+            Text("Steps, sleep, weight and recovery come from Apple Health and Whoop. Connect one and this fills in.")
+                .font(LifeOSType.secondary)
+                .foregroundStyle(Editorial.quietInk(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Connect Apple Health", action: onConnectHealth)
+                .buttonStyle(.editorial(.primary, size: .compact))
         }
+        .editorialCard()
     }
 
-    /// The workout the person scheduled from the library. Informational: the
-    /// library is where a workout is played, and a card that opened a video
-    /// would put the player two taps from a calendar grid.
     @ViewBuilder
     private var scheduledWorkout: some View {
         if let title = snapshot.scheduledWorkoutTitle {
-            SoftCard {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "dumbbell")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(LifeOSTokens.accent)
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Scheduled workout")
-                            .font(LifeOSType.rowTitle)
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                        Text(title)
-                            .font(LifeOSType.label.weight(.regular))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("In Workout library")
-                            .font(LifeOSType.caption)
-                            .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: Space.half) {
+                EditorialRow("Scheduled workout", value: title)
+                Text("In Workout library").font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
             }
+            .editorialCard()
             .accessibilityElement(children: .combine)
         }
     }
@@ -179,6 +146,8 @@ struct TodayScreen: View {
     /// from `TodayMetric` rather than written out four times. What each one
     /// looks like — icon, hue, unit, how the figure is written — belongs to the
     /// metric, which is what keeps the tile and the page it opens agreeing.
+    /// Ghosted sample figures while nothing is connected: the tiles show
+    /// what they will hold, and the card above says how to fill them.
     private func statGrid(columns: Int) -> some View {
         LazyVGrid(
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns),
@@ -188,13 +157,14 @@ struct TodayScreen: View {
                 Button { onSelectMetric(metric) } label: {
                     tile(metric)
                 }
-                // Plain, or the card takes the accent tint and the whole grid
-                // turns blue on press. The tile is already the affordance.
                 .buttonStyle(.plain)
                 .accessibilityLabel(accessibilityLabel(metric))
                 .accessibilityHint("Opens \(metric.title.lowercased()) history")
             }
         }
+        .opacity(showsHealthPrompt ? 0.35 : 1)
+        .allowsHitTesting(!showsHealthPrompt)
+        .accessibilityHidden(showsHealthPrompt)
     }
 
     private func tile(_ metric: TodayMetric) -> some View {
@@ -202,16 +172,31 @@ struct TodayScreen: View {
             icon: metric.icon,
             hue: metric.hue,
             label: metric.title,
-            value: latest(metric).map(metric.format),
+            value: (showsHealthPrompt ? sample(metric) : latest(metric)).map(metric.format),
             unit: metric.unit,
-            series: series(metric),
+            series: showsHealthPrompt ? sampleSeries : series(metric),
             goal: goal(metric),
-            baseline: metric.baseline
+            baseline: metric.baseline,
+            style: .ink
         )
     }
 
-    /// Today's figure for a metric. Held on the snapshot as separate fields
-    /// rather than a dictionary, so this is the one place they are matched up.
+    private func sample(_ metric: TodayMetric) -> Double {
+        switch metric {
+        case .steps: 8_240
+        case .sleep: 432
+        case .weight: 77.4
+        case .recovery: 82
+        }
+    }
+
+    private var sampleSeries: TrendSeries {
+        TrendSeries(points: (0..<7).map { offset in
+            TrendPoint(date: calendar.date(byAdding: .day, value: offset - 6, to: snapshot.date) ?? snapshot.date,
+                       value: Double(60 + (offset * 7) % 30))
+        })
+    }
+
     private func latest(_ metric: TodayMetric) -> Double? {
         switch metric {
         case .steps:    snapshot.steps.map(Double.init)
@@ -243,17 +228,6 @@ struct TodayScreen: View {
     private func accessibilityLabel(_ metric: TodayMetric) -> String {
         guard let value = latest(metric) else { return "\(metric.title), no reading" }
         return "\(metric.title), \(metric.format(value))\(metric.unit.map { " \($0)" } ?? "")"
-    }
-
-    private var streakLine: some View {
-        HStack(spacing: 6) {
-            Text("\(snapshot.streak)")
-                .font(LifeOSType.rowTitle.weight(.bold))
-                .foregroundStyle(LifeOSTokens.accent)
-            Text(snapshot.streak == 1 ? "day streak" : "day streak")
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-        }
     }
 
     static func duration(_ minutes: Int) -> String {
