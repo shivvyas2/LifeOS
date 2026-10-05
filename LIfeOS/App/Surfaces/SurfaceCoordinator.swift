@@ -26,6 +26,10 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
             if newValue { publish() } else { writeTombstones() }
         }
     }
+    /// Told when a watch workout has been imported, so a phone timer still
+    /// running for that same workout can close instead of counting forever.
+    var onWatchWorkoutImported: ((WatchWorkoutSummary) -> Void)?
+
     func adopt(ownerID: String?, context: ModelContext?) {
         self.ownerID = ownerID; self.context = context
         workoutBinding = WatchAccountBinding(ownerID: ownerID, athlete: ActivityAthleteProfile.load(from: .currentAccount))
@@ -124,6 +128,7 @@ final class SurfaceCoordinator: NSObject, WCSessionDelegate {
             do {
                 guard try WatchWorkoutImporter.save(summary, ownerID: ownerID, context: context) else { continue }
                 workoutInbox.removeAll { $0.id == summary.id }
+                onWatchWorkoutImported?(summary)
                 if let watchSession, watchSession.activationState == .activated {
                     watchSession.transferUserInfo(["workoutReceipt": summary.id.uuidString, "ownerID": ownerID])
                 }

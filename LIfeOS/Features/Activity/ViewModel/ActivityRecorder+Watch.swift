@@ -170,6 +170,53 @@ extension ActivityRecorder {
         if let current = reps { reps = max(0, current - 1) }
         persist()
     }
+    // MARK: - Staying in step with the watch
+
+    /// True while the phone is timing a watch workout it can no longer reach.
+    /// The controls switch to ending the workout here instead of asking the
+    /// watch, which would fail or wait forever.
+    var watchUnreachable: Bool { source == .watch && hasSession && !(watch?.hasSession ?? false) }
+
+    func watchDisconnected() {
+        guard active, source == .watch, hasSession else { return }
+        busy = false
+        notice = "Apple Watch disconnected. It keeps recording and syncs when it is back in range. You can also end the workout on iPhone."
+        persist()
+    }
+
+    /// Ends a watch workout on the phone alone, for when the watch cannot be
+    /// reached. The record is saved under the watch workout's own id, so the
+    /// watch's summary, whenever it arrives, enriches this row instead of
+    /// adding a second one.
+    func finishOnPhone() async {
+        guard active, source == .watch, hasSession, timer?.phase != .finished else { return }
+        timer?.finish()
+        watch?.end()
+        notice = "Ended on iPhone. Your watch's full workout replaces this one when it syncs."
+        persist()
+        await saveFinished()
+    }
+
+    /// The watch finished a workout and its summary was imported, perhaps
+    /// long after the mirrored session dropped. If that is the workout this
+    /// phone is still timing, close the timer: the row already exists, so
+    /// there is nothing left to save, only a stale clock to stop.
+    func watchWorkoutImported(_ summary: WatchWorkoutSummary) {
+        guard active, source == .watch, hasSession, let timer else { return }
+        let sameWorkout = watchSessionID == summary.id
+            || (watchSessionID == nil && abs(timer.startedAt.timeIntervalSince(summary.startedAt)) < 2)
+        guard sameWorkout else { return }
+        self.timer?.finish(at: summary.endedAt)
+        if let session = summary.badminton, session.isValid { badminton = session }
+        watch?.end()
+        liveActivity.end()
+        saved = true
+        defaults.removeObject(forKey: Self.draftKey)
+        busy = false; error = nil
+        notice = "Your watch workout synced."
+        onSaved?()
+    }
+
     /// One rally won, from the phone's scoreboard. On the watch source the
     /// tap goes to the wrist and comes back in the next packet, as `addRep`
     /// does, so the two devices never hold different scores.

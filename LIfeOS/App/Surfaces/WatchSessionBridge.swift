@@ -25,6 +25,10 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     var onPacket: ((Data) -> Void)?
     var onControlFailure: ((String) -> Void)?
     var onStateChange: ((HKWorkoutSessionState, Date) -> Void)?
+    /// The mirrored session stopped reaching the phone: the watch walked out
+    /// of range, or the session failed. The workout carries on on the wrist;
+    /// this only means the phone can no longer see or steer it.
+    var onDisconnect: (() -> Void)?
     var hasSession: Bool { session != nil && !dropping }
 
     /// Call once at launch, before any session can arrive.
@@ -149,7 +153,20 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
-        Task { @MainActor in if self.session === workoutSession { self.end() } }
+        Task { @MainActor in
+            guard self.session === workoutSession else { return }
+            // Dropped silently before: the recorder kept a running timer for
+            // a session that no longer existed, with every control failing.
+            self.end()
+            self.onDisconnect?()
+        }
+    }
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didDisconnectFromRemoteDeviceWithError error: Error?) {
+        Task { @MainActor in
+            guard self.session === workoutSession, !self.dropping else { return }
+            self.end()
+            self.onDisconnect?()
+        }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {
         Task { @MainActor in

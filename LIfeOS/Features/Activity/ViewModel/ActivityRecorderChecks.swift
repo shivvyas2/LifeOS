@@ -49,6 +49,66 @@ import HealthKit
             if let lifted { context.delete(lifted); try context.save() }
             lifter.deactivate()
             UserDefaults(suiteName: suite + ".lift")?.removePersistentDomain(forName: suite + ".lift")
+            // A badminton match scored on the phone: the setup is remembered,
+            // each start begins at love-all, and the score is saved.
+            let playerSuite = suite + ".badminton"
+            let player = ActivityRecorder(defaults: UserDefaults(suiteName: playerSuite)!, liveActivitiesEnabled: false)
+            player.attach(context); player.saveToHealth = false
+            player.selection = ActivityCatalog.type(named: "Badminton") ?? ActivityCatalog.other
+            player.badmintonSetup = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
+            await player.start()
+            for _ in 0..<21 { player.scoreRally(.us) }
+            player.scoreRally(.them); player.scoreRally(.them); player.undoRally()
+            check(player.badminton?.score?.games == [BadmintonGame(us: 21, them: 0)] && player.badminton?.score?.current == BadmintonGame(us: 0, them: 1),
+                  "Phone scoring counts games and undo removes one rally")
+            await player.finish()
+            let played = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Badminton" }
+            let stored = played?.badmintonData.flatMap { try? JSONDecoder().decode(BadmintonSession.self, from: $0) }
+            check(stored?.teammate == "Priya" && stored?.score?.games.count == 1, "A finished match saves its score and partner")
+            let rehydrated = ActivityRecorder(defaults: UserDefaults(suiteName: playerSuite)!, liveActivitiesEnabled: false)
+            check(rehydrated.badmintonSetup?.opponents == ["Sam", "Alex"] && rehydrated.badmintonSetup?.score?.rallies.isEmpty == true,
+                  "The match setup is remembered without last time's score")
+            if let played { context.delete(played); try context.save() }
+            player.deactivate()
+            UserDefaults(suiteName: playerSuite)?.removePersistentDomain(forName: playerSuite)
+
+            // A watch workout the phone can no longer reach can be ended here.
+            let strandedSuite = suite + ".stranded"
+            let strandedDefaults = UserDefaults(suiteName: strandedSuite)!
+            ActivityRecorder.seedWatchDraft(into: strandedDefaults, activity: "Run", at: .now.addingTimeInterval(-600))
+            let stranded = ActivityRecorder(defaults: strandedDefaults, liveActivitiesEnabled: false)
+            stranded.watch = nil
+            stranded.attach(context)
+            check(stranded.watchUnreachable, "A watch workout with no live session reads as unreachable")
+            await stranded.finishOnPhone()
+            let endedHere = try context.fetch(FetchDescriptor<WorkoutRecord>()).first { $0.activityName == "Run" }
+            check(stranded.saved && endedHere != nil && strandedDefaults.data(forKey: ActivityRecorder.draftKey) == nil,
+                  "End on iPhone saves the workout and clears the draft")
+            if let endedHere { context.delete(endedHere); try context.save() }
+            stranded.deactivate()
+            UserDefaults(suiteName: strandedSuite)?.removePersistentDomain(forName: strandedSuite)
+
+            // The watch finished offline; its summary arriving closes the
+            // phone's still-running timer for the same workout.
+            let closingSuite = suite + ".closing"
+            let closingDefaults = UserDefaults(suiteName: closingSuite)!
+            let startedAt = Date.now.addingTimeInterval(-900)
+            ActivityRecorder.seedWatchDraft(into: closingDefaults, activity: "Run", at: startedAt)
+            let closing = ActivityRecorder(defaults: closingDefaults, liveActivitiesEnabled: false)
+            closing.watch = nil
+            closing.attach(context)
+            let unrelated = WatchWorkoutSummary(id: UUID(), ownerID: "x", activity: "Run", startedAt: startedAt.addingTimeInterval(-3600),
+                                            endedAt: .now, elapsed: 600, energyKcal: nil, distanceMeters: nil, sets: [], healthWorkoutID: nil)
+            closing.watchWorkoutImported(unrelated)
+            check(closing.hasSession, "Another workout's summary leaves the timer alone")
+            let same = WatchWorkoutSummary(id: UUID(), ownerID: "x", activity: "Run", startedAt: startedAt,
+                                           endedAt: .now.addingTimeInterval(-60), elapsed: 840, energyKcal: nil, distanceMeters: nil, sets: [], healthWorkoutID: nil)
+            closing.watchWorkoutImported(same)
+            check(closing.saved && closing.timer?.phase == .finished && closingDefaults.data(forKey: ActivityRecorder.draftKey) == nil,
+                  "An offline watch finish closes the phone's timer")
+            closing.deactivate()
+            UserDefaults(suiteName: closingSuite)?.removePersistentDomain(forName: closingSuite)
+
             let waiter = ActivityRecorder(defaults: UserDefaults(suiteName: suite + ".watch")!, liveActivitiesEnabled: false)
             waiter.attach(context); waiter.saveToHealth = true
             waiter.watchAvailable = { true }; waiter.watchHandoffTimeout = 0.5

@@ -44,7 +44,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     // Swift has no setter that is internal to the module but closed to the
     // views, so these read as plain `var`. Only the recorder touches them.
     var timer: ActivitySessionState?
-    private(set) var busy = false
+    var busy = false
     var saved = false
     var healthSaved = false
     var energy: Double?
@@ -88,9 +88,9 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var context: ModelContext?
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
     var active = true
-    private let liveActivity = WorkoutLiveActivityController()
+    let liveActivity = WorkoutLiveActivityController()
     private let liveActivitiesEnabled: Bool
     private var collectionEnded = false
     private var finishing = false
@@ -160,6 +160,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         watch?.onControlFailure = { [weak self] message in self?.error = message }
         watch?.onPacket = { [weak self] data in self?.receiveWatchPacket(data) }
         watch?.onStateChange = { [weak self] state, date in self?.mirroredStateChanged(state, at: date) }
+        watch?.onDisconnect = { [weak self] in self?.watchDisconnected() }
+        SurfaceCoordinator.shared.onWatchWorkoutImported = { [weak self] summary in self?.watchWorkoutImported(summary) }
         // A session that arrived while HealthKit was launching the app in the
         // background is already held by the bridge: replay it once the draft
         // below has been restored, whichever way this returns.
@@ -431,6 +433,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     func deactivate() {
         active = false; discard(); context = nil; onSaved = nil
         watch?.onSession = nil; watch?.onPacket = nil; watch?.onStateChange = nil; watch?.onControlFailure = nil
+        watch?.onDisconnect = nil; SurfaceCoordinator.shared.onWatchWorkoutImported = nil
     }
     /// State changes: always write the draft and sync.
     func persist() {

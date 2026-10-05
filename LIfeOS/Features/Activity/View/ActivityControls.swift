@@ -33,6 +33,15 @@ struct ActivityControls: View {
                     Label(model.busy ? "Saving…" : "Finish & save", systemImage: "checkmark")
                         .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 54)
                 }.buttonStyle(.bordered).disabled(model.busy)
+                // Offered only when the watch cannot be asked: disconnected,
+                // or a Finish that never got an answer. The workout keeps
+                // recording on the wrist and replaces this one when it syncs.
+                if model.source == .watch, model.watchUnreachable || model.error != nil {
+                    Button { Task { await model.finishOnPhone() } } label: {
+                        Label("End on iPhone", systemImage: "iphone")
+                            .font(LifeOSType.rowTitle).frame(maxWidth: .infinity, minHeight: 48)
+                    }.buttonStyle(.bordered)
+                }
                 Button("Discard activity", role: .destructive) { confirmDiscard = true }
                     .font(LifeOSType.label).frame(minHeight: 44).disabled(model.busy)
             } else {
