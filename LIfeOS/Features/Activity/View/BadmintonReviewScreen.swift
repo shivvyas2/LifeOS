@@ -61,7 +61,11 @@ struct BadmintonReviewScreen: View {
     /// The forehand sign learned from earlier sessions, used until this
     /// session's own tags say otherwise. Per account, like the draft.
     @AppStorage("badminton.strokeConvention", store: .currentAccount) private var savedConvention: Double = 0
-    private let jade = Color(red: 0.33, green: 0.91, blue: 0.72)
+    /// Ink, not a fixed green: the review follows the system appearance like
+    /// the rest of the app instead of always being a dark screen of its own.
+    @Environment(\.colorScheme) private var scheme
+    private var jade: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var quiet: Color { Editorial.quietInk(scheme) }
     init(workout: WorkoutRecord) {
         self.workout = workout
         // The record keeps whole minutes, so the next minute up bounds the
@@ -97,15 +101,17 @@ struct BadmintonReviewScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("YOUR COURT REVIEW").font(.caption.weight(.semibold)).tracking(2).foregroundStyle(jade)
+                    Text("YOUR COURT REVIEW").font(.caption.weight(.semibold)).tracking(2).foregroundStyle(quiet)
                     Text("Every movement,\na little clearer.").font(.system(.largeTitle, weight: .semibold))
-                    Text(workout.start, format: .dateTime.weekday().month().day()).font(.subheadline).foregroundStyle(.white.opacity(0.65))
+                    Text(workout.start, format: .dateTime.weekday().month().day()).font(.subheadline).foregroundStyle(quiet)
                 }
                 HStack(spacing: 0) {
                     metric("Court time", "\(workout.durationMinutes)", "min")
                     metric("Energy", workout.energyKcal.map { String(Int($0.rounded())) } ?? "—", "kcal")
                     metric("Candidates", analysis.map { String($0.events.count) } ?? "—", "estimated")
-                }.padding(.vertical, 18).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 24))
+                }.padding(.vertical, 18).foregroundStyle(EditorialFieldTone.dusk.ink(scheme))
+                .background(LinearGradient(colors: EditorialFieldTone.dusk.colors(scheme), startPoint: .top, endPoint: .bottom),
+                            in: RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
                 if let session = Self.session(of: workout) {
                     matchPanel(session)
                 }
@@ -119,9 +125,9 @@ struct BadmintonReviewScreen: View {
                 }
                 panel("What this session can tell you", icon: "scope") {
                     LabeledContent("Wrist rotation & acceleration", value: analysis == nil ? "Not recorded" : "Measured")
-                    Divider().overlay(.white.opacity(0.1))
+                    Hairline()
                     LabeledContent("Swing count", value: analysis == nil ? "Not recorded" : "Experimental estimate")
-                    Divider().overlay(.white.opacity(0.1))
+                    Hairline()
                     LabeledContent("Court position", value: "Not measured")
                     LabeledContent("Posture & impact angle", value: "Not measured")
                     LabeledContent("Shuttle / racket speed", value: "Not measured")
@@ -135,17 +141,15 @@ struct BadmintonReviewScreen: View {
                 }
             }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(22)
         }
-        .background {
-            LinearGradient(colors: [Color(red: 0.07, green: 0.28, blue: 0.24), Color(red: 0.025, green: 0.055, blue: 0.065), .black], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea()
-        }
-        .foregroundStyle(.white).colorScheme(.dark)
+        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .foregroundStyle(jade)
         .navigationTitle("Badminton").navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar).tint(jade)
     }
     private func motionReview(_ analysis: SwingAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack { Text("Motion replay").font(.title2.bold()); Spacer(); Text("EXPERIMENTAL").font(.caption2.bold()).foregroundStyle(jade) }
-            Text("Recorded wrist orientation. Court and wrist position are illustrative; body posture and shot trajectory are not reconstructed.").font(.caption).foregroundStyle(.white.opacity(0.7))
+            Text("Recorded wrist orientation. Court and wrist position are illustrative; body posture and shot trajectory are not reconstructed.").font(.caption).foregroundStyle(quiet)
             if analysis.events.isEmpty {
                 ContentUnavailableView("No swing candidates", systemImage: "waveform.path", description: Text("No qualifying motion bursts were recorded. This does not mean you made no shots."))
             } else {
@@ -171,12 +175,12 @@ struct BadmintonReviewScreen: View {
                 }
                 Chart(analysis.events) { event in
                     BarMark(x: .value("Active time", event.time / 60), y: .value("Peak wrist rotation", event.peakRotation * 180 / .pi), width: 3)
-                        .foregroundStyle(event.id == selected ? .orange : jade.opacity(0.65))
+                        .foregroundStyle(event.id == selected ? LifeOSTokens.accent : jade.opacity(0.35))
                 }.frame(height: 110).chartXAxisLabel("Active minutes").chartYAxisLabel("°/s")
                     .accessibilityLabel("Wrist rotation peaks for \(analysis.events.count) estimated swing candidates")
             }
             Text("Motion coverage: \(Int(analysis.sampledSeconds / 60))m \(Int(analysis.sampledSeconds) % 60)s sampled.\(analysis.interrupted ? " Sensor interruptions occurred." : "")\(analysis.truncated ? " Replay limit reached; later candidates were not retained." : "")")
-                .font(.caption).foregroundStyle(.white.opacity(0.65))
+                .font(.caption).foregroundStyle(quiet)
         }
     }
     /// What the player says about the selected candidate. A side that has
@@ -215,9 +219,9 @@ struct BadmintonReviewScreen: View {
         Button(action: action) {
             Text(title).font(.subheadline.weight(on ? .semibold : .regular))
                 .padding(.horizontal, 12).frame(minHeight: 36)
-                .foregroundStyle(on && firm ? .black : .white)
+                .foregroundStyle(on && firm ? LifeOSTokens.canvas.resolve(scheme) : jade)
                 .background { if on && firm { Capsule().fill(jade) } }
-                .overlay(Capsule().stroke(on ? jade : .white.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: on && !firm ? [4, 3] : [])))
+                .overlay(Capsule().stroke(on ? jade : Editorial.rule(scheme), style: StrokeStyle(lineWidth: 1, dash: on && !firm ? [4, 3] : [])))
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -232,15 +236,15 @@ struct BadmintonReviewScreen: View {
                 Text("Tag two or three swings as forehand or backhand in the replay above, and the rest of this session, and later ones, are called for you.")
             }
             LabeledContent("Forehand", value: sideLine(summary.forehand))
-            Divider().overlay(.white.opacity(0.1))
+            Hairline()
             LabeledContent("Backhand", value: sideLine(summary.backhand))
             if summary.unclear > 0 {
-                Divider().overlay(.white.opacity(0.1))
+                Hairline()
                 LabeledContent("Too close to call", value: "\(summary.unclear)")
             }
             if let stronger = summary.stronger {
                 Text("Your \(stronger.title.lowercased()) moves the wrist faster on average. Wrist speed is not shot quality; use it to see which side you commit to.")
-                    .font(.caption).foregroundStyle(.white.opacity(0.7))
+                    .font(.caption).foregroundStyle(quiet)
             }
             if !summary.types.isEmpty {
                 Text(BadmintonShotType.allCases.compactMap { type in summary.types[type].map { "\($0) \(type.title.lowercased())" } }.joined(separator: " · "))
@@ -257,10 +261,10 @@ struct BadmintonReviewScreen: View {
         panel(session.kind == .match ? "Match" : "Practice", icon: "trophy") {
             if let score = session.score {
                 Text(score.winner.map { $0 == .us ? "Won" : "Lost" } ?? "Unfinished")
-                    .font(.system(.title, weight: .semibold)).foregroundStyle(.white)
+                    .font(Editorial.headline(28)).foregroundStyle(jade)
                 ForEach(Array((score.games + (score.current == BadmintonGame() ? [] : [score.current])).enumerated()), id: \.offset) { index, game in
                     LabeledContent("Game \(index + 1)", value: "\(game.us) – \(game.them)")
-                    Divider().overlay(.white.opacity(0.1))
+                    Hairline()
                 }
             } else if let focus = session.focus {
                 LabeledContent("Worked on", value: focus)
@@ -272,7 +276,7 @@ struct BadmintonReviewScreen: View {
     }
     private func metric(_ title: String, _ value: String, _ unit: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption).foregroundStyle(.white.opacity(0.65))
+            Text(title).font(.caption).foregroundStyle(quiet)
             Text(value).font(.system(.title, design: .rounded, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).font(.caption2).foregroundStyle(jade)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
@@ -280,10 +284,10 @@ struct BadmintonReviewScreen: View {
     private func panel<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Label(title, systemImage: icon).font(.headline).foregroundStyle(jade)
-            content().font(.subheadline).foregroundStyle(.white.opacity(0.8))
+            content().font(.subheadline).foregroundStyle(quiet)
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12)))
+            .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Editorial.rule(scheme)))
     }
 }
 
