@@ -26,6 +26,14 @@ struct TodayDesignPreview: View {
                 NavigationStack { DayScheduleScreen(model: fixture.month, day: .now) }.modelContainer(fixture.container)
             case "day":
                 DayDetailSheet(snapshot: fixture.day, onToggleHabit: { _ in })
+            case "day-past":
+                DayDetailSheet(snapshot: fixture.pastDay, onToggleHabit: { _ in })
+            case "today-done":
+                NavigationStack {
+                    TodayScreen(snapshot: fixture.doneSnapshot, onSelectDay: { _ in }, onConnectCalendar: {},
+                                onAddEvent: {}, onTapEvent: { _ in }, onOpenToday: {}, isHealthConnected: true)
+                        .shellToolbar()
+                }
             case "notes":
                 NavigationStack { NoteShelfScreen(model: fixture.notes, onOpen: { _ in }, onNewFolder: { _ in }).shellToolbar() }
                     .modelContainer(fixture.container)
@@ -60,7 +68,7 @@ struct TodayDesignPreview: View {
         func at(_ dayOffset: Int, _ hour: Int, _ minutes: Int, _ title: String) -> CalendarEventSnapshot {
             let day = Calendar.current.date(byAdding: .day, value: dayOffset, to: start)!
             let begins = Calendar.current.date(byAdding: .hour, value: hour, to: day)!
-            return CalendarEventSnapshot(id: UUID(), source: .eventKit, sourceID: title, calendarTitle: "Work", title: title,
+            return CalendarEventSnapshot(id: UUID(), source: .eventKit, sourceID: "\(title)-\(dayOffset)", calendarTitle: "Work", title: title,
                                          startDate: begins, endDate: begins.addingTimeInterval(Double(minutes) * 60),
                                          isAllDay: false, isRecurring: false, location: nil, notes: nil)
         }
@@ -94,6 +102,27 @@ struct TodayDesignPreview: View {
             .map { UpcomingEvent(id: $0.id, dayLabel: $0.startDate.formatted(.dateTime.weekday(.wide)), event: $0) }
         s.scheduledWorkoutTitle = "Lower body, 35 min"
         return s
+    }
+
+    /// Every event of the day already over: the field must not call one "next".
+    var doneSnapshot: TodaySnapshot {
+        var s = snapshot
+        s.agenda = [
+            events.first { $0.title == "Standup" && calendar.isDateInToday($0.startDate) }!,
+        ].map { event in
+            CalendarEventSnapshot(id: event.id, source: event.source, sourceID: event.sourceID, calendarTitle: event.calendarTitle,
+                                  title: event.title, startDate: today.addingTimeInterval(3600), endDate: today.addingTimeInterval(5400),
+                                  isAllDay: false, isRecurring: false, location: nil, notes: nil)
+        }
+        return s
+    }
+
+    var pastDay: DayDetailSnapshot {
+        DayDetailSnapshot(date: calendar.date(byAdding: .day, value: -3, to: today)!, isToday: false, steps: 6_120,
+                          stepsTarget: 10_000, sleepMinutes: 401, sleepTargetMinutes: 480, weightKg: 77.6, recoveryPct: 64,
+                          habits: [HabitRow(id: UUID(), title: "5km run", isDone: true),
+                                   HabitRow(id: UUID(), title: "Read 10 pages", isDone: false)],
+                          events: [])
     }
 
     var emptySnapshot: TodaySnapshot {

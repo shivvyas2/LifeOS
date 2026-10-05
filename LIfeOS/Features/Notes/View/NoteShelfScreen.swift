@@ -25,7 +25,7 @@ struct NoteShelfScreen: View {
                         Button(action: onToggleLibrary) {
                             Image(systemName: "sidebar.leading")
                         }
-                        .buttonStyle(.editorial(.quiet, size: .compact))
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                         .accessibilityLabel(isLibraryVisible ? "Hide library" : "Show library")
                         .keyboardShortcut("s", modifiers: [.command, .control])
                     }
@@ -48,7 +48,7 @@ struct NoteShelfScreen: View {
                             } label: {
                                 Text(model.filter.title)
                             }
-                            .buttonStyle(.editorial(.quiet, size: .compact))
+                            .buttonStyle(.editorial(.secondary, size: .compact))
                             .accessibilityLabel("Filter pages")
                         }
                         Menu {
@@ -60,7 +60,7 @@ struct NoteShelfScreen: View {
                         } label: {
                             Text(model.sort.title)
                         }
-                        .buttonStyle(.editorial(.quiet, size: .compact))
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                         .accessibilityLabel("Sort: \(model.sort.title)")
                     }
                 }

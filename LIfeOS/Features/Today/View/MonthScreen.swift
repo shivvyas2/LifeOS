@@ -143,7 +143,7 @@ struct MonthScreen: View {
                 .font(Editorial.headline(34)).tracking(-1)
                 .foregroundStyle(isCurrent ? LifeOSTokens.accent : ink)
                 .accessibilityAddTraits(.isHeader)
-            WeekdayHeader(calendar: calendar, today: month, spacing: 0)
+            WeekdayHeader(calendar: calendar, today: isCurrent ? .now : nil, spacing: 0)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
                 ForEach(MonthGridLayout.cells(monthContaining: month, calendar: calendar, today: .now, status: { _ in .noData })) { cell in
                     if let date = cell.date {
@@ -186,6 +186,7 @@ struct MonthScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(count) events")
+        .accessibilityHint("Opens the week's schedule")
         .accessibilityAddTraits(state == .today ? [.isSelected] : [])
     }
 }

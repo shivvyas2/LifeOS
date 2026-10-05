@@ -108,8 +108,12 @@ struct AgendaCard: View {
 
     /// The screen's one field: what is next, then the rest of the day.
     private var field: some View {
-        let next = agenda.first
-        let rest = Array(agenda.dropFirst().prefix(Self.maxAgendaRows))
+        // From now, not from midnight: a morning meeting is not "next up"
+        // all afternoon. What has ended is not listed.
+        let split = agenda.nextUp()
+        let next = split.next
+        let rest = Array(split.remaining.prefix(Self.maxAgendaRows))
+        let more = split.remaining.count - rest.count
         return EditorialField(.dusk) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Next up").editorialEyebrow()
@@ -121,21 +125,19 @@ struct AgendaCard: View {
                 .accessibilityLabel("Open today's day view")
             }
             // The headline is the next event, and tapping it opens that event.
-            Button { if let next { onTapEvent(next) } } label: {
-                VStack(alignment: .leading, spacing: Space.half) {
-                    Text(next?.title ?? "Nothing scheduled")
-                        .font(Editorial.headline(28)).tracking(-0.6)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(next?.spanLabel ?? "Add a plan when you're ready.")
-                        .font(LifeOSType.secondary)
-                        .opacity(0.75)
+            // With nothing ahead it is plain text: a disabled button dims.
+            if let next {
+                Button { onTapEvent(next) } label: {
+                    headline(next.title, detail: next.spanLabel)
+                        .contentShape(.rect)
                 }
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(next.title), \(next.spanLabel)")
+                .accessibilityHint("Opens the event")
+            } else {
+                headline(agenda.isEmpty ? "Nothing scheduled" : "Nothing more today",
+                         detail: "Add a plan when you're ready.")
             }
-            .buttonStyle(.plain)
-            .disabled(next == nil)
-            .accessibilityLabel(next.map { "\($0.title), \($0.spanLabel)" } ?? "Nothing scheduled")
             ForEach(rest) { event in
                 Button { onTapEvent(event) } label: {
                     EditorialRow(event.timeLabel) {
@@ -147,13 +149,26 @@ struct AgendaCard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(event.title), \(event.spanLabel)")
+                .accessibilityHint("Opens the event")
             }
-            if agenda.count > Self.maxAgendaRows + 1 {
-                Button("+\(agenda.count - Self.maxAgendaRows - 1) more", action: onOpenToday)
+            if more > 0 {
+                Button("+\(more) more", action: onOpenToday)
                     .buttonStyle(.editorial(.quiet, size: .compact))
             }
             Button("Add", action: onAddEvent)
                 .buttonStyle(.editorial(.secondary, size: .compact))
+        }
+    }
+
+    private func headline(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.half) {
+            Text(title)
+                .font(Editorial.headline(28)).tracking(-0.6)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(detail)
+                .font(LifeOSType.secondary)
+                .opacity(0.75)
         }
     }
 

@@ -121,3 +121,19 @@ public final class CalendarEvent {
         )
     }
 }
+
+// MARK: - Next up
+
+public extension Array where Element == CalendarEventSnapshot {
+    /// What is still ahead in a day's agenda: the next event (one in progress
+    /// counts, and an all-day event is next all day) and the ones after it.
+    /// What has ended is left out, so "next" always means from now.
+    func nextUp(now: Date = .now) -> (next: CalendarEventSnapshot?, remaining: [CalendarEventSnapshot]) {
+        let ahead = filter { $0.isAllDay || $0.endDate > now }
+            .sorted { lhs, rhs in
+                if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
+                return lhs.startDate < rhs.startDate
+            }
+        return (ahead.first, Array(ahead.dropFirst()))
+    }
+}
