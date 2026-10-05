@@ -64,7 +64,7 @@ extension ActivityRecorder {
             // Before the fresh timer, because the record this session
             // eventually saves reads these three.
             clearPendingVideoIfIdle()
-            watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
+            watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; swingMoments = []; peakWristRotation = nil
             // A hand-off in flight (`busy`) already set up this workout's
             // badminton session in `start()`; only a workout begun on the
             // wrist arrives without one, and the watch scores that itself.
@@ -129,7 +129,14 @@ extension ActivityRecorder {
         }
         lastWatchPacketAt = packet.sentAt
         if selection.name == "Badminton" {
-            if let count = packet.swingCount, (0...SwingAnalysis.eventLimit).contains(count) { swingCount = count }
+            if let count = packet.swingCount, (0...SwingAnalysis.eventLimit).contains(count) {
+                let added = count - (swingCount ?? 0)
+                if added > 0 {
+                    swingMoments += Array(repeating: packet.sentAt, count: min(added, 10))
+                    swingMoments.removeAll { packet.sentAt.timeIntervalSince($0) > 180 }
+                }
+                swingCount = count
+            }
             if let peak = packet.peakWristRotation, peak.isFinite, (0...100).contains(peak) { peakWristRotation = peak }
             if let session = packet.badminton, session.isValid { badminton = session }
         }

@@ -57,6 +57,7 @@ struct HealthActivityDesignPreview: View {
             else if page == "activity" {
                 BeginActivityScreen(model: fixture.recorder,
                                     startsCollapsed: ProcessInfo.processInfo.arguments.contains("--hud-collapsed"))
+                    .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom : nil)
                     .task {
                         guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
                         let arguments = ProcessInfo.processInfo.arguments

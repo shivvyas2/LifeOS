@@ -66,7 +66,9 @@ struct BeginActivityScreen: View {
             if model.selection.name == ActivityRecorder.badminton, model.badminton?.kind != .practice {
                 BadmintonScoreCard(model: model)
             }
-            liveTiles(readout)
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                LiveReadings(model: model, readout: readout, link: liveLink(at: timeline.date), now: timeline.date)
+            }
         } else {
             EditorialMasthead(eyebrow: model.saved ? "Activity · saved" : "Activity",
                 title: model.saved ? "Time well spent." : "Make time to move.",
@@ -144,6 +146,9 @@ struct BeginActivityScreen: View {
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(.white.opacity(0.22), in: Capsule())
             }
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                LiveLinkLine(link: liveLink(at: timeline.date))
+            }
             if let following = model.following {
                 Text("Following: \(following.title) · \(following.channel)")
                     .font(LifeOSType.caption).opacity(0.85).lineLimit(1)
@@ -165,61 +170,13 @@ struct BeginActivityScreen: View {
         }
     }
 
-    private func liveTiles(_ readout: LiveSessionReadout) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let fresh = model.isRunning && model.heartRateDate.map { timeline.date.timeIntervalSince($0) < 15 } == true
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
-                glassTile(icon: "heart.fill", label: readout.zone.map { "Heart rate · Z\($0)" } ?? "Heart rate",
-                          value: fresh ? readout.heartRateText : nil, unit: "bpm",
-                          caption: fresh ? (model.source == .watch ? "From Apple Watch" : "Live sensor reading") : model.isPaused ? "Activity paused" : model.sensor.status)
-                if model.zonesAvailable, model.selection.showsZones {
-                    glassTile(icon: "bolt.fill", label: "Effort, estimated", value: readout.effortText,
-                              unit: readout.ceilingTarget.map { "of \(Int($0.upperBound))" },
-                              caption: capacityCaption(readout))
-                }
-                if model.selection.name == "Badminton" {
-                    glassTile(icon: "figure.badminton", label: "Swing candidates", value: model.swingCount.map(String.init), unit: nil,
-                              caption: model.swingCount == nil ? "Enable analysis on your racket wrist" : "Experimental · includes practice swings")
-                    glassTile(icon: "speedometer", label: "Peak wrist rotation", value: model.peakWristRotation.map { String(Int(($0 * 180 / .pi).rounded())) }, unit: "°/s", caption: "Measured at the wrist · not shuttle speed")
-                }
-                if model.selection.countsReps {
-                    glassTile(icon: "repeat", label: readout.setText ?? "Reps", value: readout.repsText, unit: "reps",
-                              caption: model.completedSets.isEmpty
-                                ? (model.source == .watch ? "Counted from your wrist · auto" : "Tap +1 for each rep")
-                                : "Earlier sets: \(model.completedSets.map(String.init).joined(separator: ", ")) reps")
-                }
-                glassTile(icon: "flame.fill", label: "Calories", value: readout.caloriesText, unit: "kcal",
-                          caption: readout.calories == nil ? "No energy reading" : "From Apple Health")
-                if model.selection.tracksDistance {
-                    glassTile(icon: "point.bottomleft.forward.to.point.topright.scurvepath", label: "Distance",
-                              value: readout.distanceKilometresText, unit: "km",
-                              caption: readout.distanceMeters == nil ? "No distance reading" : "From Apple Health")
-                }
-                if !model.zonesAvailable {
-                    Text("Add your birth date in Profile for zones, effort and battery.")
-                        .font(LifeOSType.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
+    /// Where this session's readings come from and whether they are live.
+    private func liveLink(at date: Date) -> LiveLink {
+        LiveLink.assess(watchOwned: model.source == .watch, watchReachable: !model.watchUnreachable,
+                        lastWatchPacket: model.lastWatchPacketAt, sensorName: model.sensor.connectedName,
+                        lastHeartRate: model.heartRateDate, paused: model.isPaused, now: date)
     }
 
-    private func capacityCaption(_ readout: LiveSessionReadout) -> String {
-        readout.capacitySource == nil ? "Battery unknown · cautious target" : "Battery \(readout.batteryText ?? LiveSessionReadout.missing) · \(readout.capacitySourceName)"
-    }
-
-    private func glassTile(icon: String, label: String, value: String?, unit: String?, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(label, systemImage: icon).font(LifeOSType.label).opacity(0.75)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value ?? LiveSessionReadout.missing).font(Editorial.figure(34)).tracking(Editorial.figureTracking(34)).monospacedDigit()
-                if let unit, value != nil { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
-            }.lineLimit(1).minimumScaleFactor(0.7)
-            Text(caption).font(.caption.weight(.medium)).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-        }
-        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
-        .editorialCard(padding: 16)
-        .accessibilityElement(children: .combine)
-    }
     /// Above the picker, because choosing a video is choosing the activity
     /// too: the player maps the split onto the recorder's selection.
     private func followVideoLink(_ library: WorkoutLibraryViewModel) -> some View {

@@ -10,6 +10,9 @@ import AppSurfaces
 final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
     var athlete: ActivityAthleteProfile?
     var swingCount: Int?
+    /// When the swing count went up, for swings per minute. Kept for the
+    /// last few minutes only; pace is about now, not the session.
+    var swingMoments: [Date] = []
     var peakWristRotation: Double?
     /// How the next badminton workout is set up: match or practice, singles
     /// or doubles, who with. Remembered between sessions, because the same
@@ -252,7 +255,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         }
         // `!hasSession` means the timer is either nil or a finished, saved one
         // from the last workout; either way this start owns a fresh one.
-        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
+        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; swingMoments = []; peakWristRotation = nil
         busy = true; error = nil; saved = false; healthSaved = false; collectionEnded = false; timer = nil
         zones = HeartRateZones(birthDate: birthDate())
         capacity = loadCapacity()
@@ -424,7 +427,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         sensor.stopStreaming(); timer = nil; saved = false; healthSaved = false
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
-        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
+        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; swingMoments = []; peakWristRotation = nil
         source = .phone; reps = nil; setIndex = nil; completedSets = []; badminton = nil
         pendingVideoID = nil; pendingSplit = nil; following = nil
         error = nil; notice = nil; busy = false
