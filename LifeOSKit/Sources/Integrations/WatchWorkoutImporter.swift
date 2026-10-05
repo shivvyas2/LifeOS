@@ -30,6 +30,7 @@ public enum WatchWorkoutImporter {
         row.energyKcal = summary.energyKcal; row.distanceMeters = summary.distanceMeters
         row.sets = summary.sets
         if let analysis = summary.swingAnalysis { row.swingAnalysisData = try JSONEncoder().encode(analysis) }
+        if let session = summary.badminton { row.badmintonData = try JSONEncoder().encode(session) }
         if existing == nil { context.insert(row) }
         try context.save()
         return true

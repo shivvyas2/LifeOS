@@ -22,6 +22,9 @@ public struct WatchPacket: Codable, Equatable, Sendable {
     public var reps: Int?
     public var setIndex: Int?
     public var completedSets: [Int]?
+    /// The badminton session as the watch holds it, score included. The
+    /// watch owns the score while it owns the workout; the phone shows this.
+    public var badminton: BadmintonSession?
 
     public init(sentAt: Date) { self.sentAt = sentAt }
 }
@@ -31,8 +34,13 @@ public struct WatchPacket: Codable, Equatable, Sendable {
 /// `end` finishes the workout and saves it to Health on the wrist; `discard`
 /// throws it away. The phone sends `discard` when it refuses a mirrored
 /// session or the person discards, so nothing half-recorded reaches Health.
+///
+/// `scoreUs`, `scoreThem` and `undoRally` are the phone's scoreboard taps on a
+/// watch-owned badminton match. Like `addRep`, they echo back in the next
+/// packet rather than changing the phone's copy, so the two cannot disagree.
 public enum PhoneCommand: String, Codable, Sendable {
     case configure, pause, resume, end, nextSet, addRep, removeRep, discard
+    case scoreUs, scoreThem, undoRally
 }
 
 public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
@@ -41,9 +49,12 @@ public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
     public var command: PhoneCommand
     public var sentAt: Date
     public var maxHeartRate: Int?
+    /// Sent with `configure`: the match or practice set up on the phone
+    /// before the watch took the workout.
+    public var badminton: BadmintonSession?
 
-    public init(command: PhoneCommand, sentAt: Date, maxHeartRate: Int? = nil) {
-        self.command = command; self.sentAt = sentAt; self.maxHeartRate = maxHeartRate
+    public init(command: PhoneCommand, sentAt: Date, maxHeartRate: Int? = nil, badminton: BadmintonSession? = nil) {
+        self.command = command; self.sentAt = sentAt; self.maxHeartRate = maxHeartRate; self.badminton = badminton
     }
 }
 

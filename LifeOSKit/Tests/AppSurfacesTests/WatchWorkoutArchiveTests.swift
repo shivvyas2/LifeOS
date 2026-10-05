@@ -75,6 +75,43 @@ struct WatchWorkoutArchiveTests {
         value = summary(); value.energyKcal = .nan
         #expect(value.salvaged(for: "alice", now: now) == nil)
     }
+    @Test func aValidMatchTravelsWithItsWorkout() throws {
+        var value = summary()
+        var match = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
+        match.record(.us)
+        value.badminton = match
+        #expect(value.isValid(for: "alice", now: now))
+        let back = try JSONDecoder().decode(WatchWorkoutSummary.self, from: JSONEncoder().encode(value))
+        #expect(back.badminton == match)
+    }
+    @Test func aBadMatchCostsTheMatchAndABadReviewKeepsTheMatch() throws {
+        var value = summary()
+        var match = BadmintonSession(format: .singles)
+        match.teammate = "Smuggled"
+        value.badminton = match
+        let kept = try #require(value.salvaged(for: "alice", now: now))
+        #expect(kept.badminton == nil)
+
+        value = summary()
+        value.badminton = BadmintonSession()
+        value.swingAnalysis = analysis(sampled: 5000)
+        let trimmed = try #require(value.salvaged(for: "alice", now: now))
+        #expect(trimmed.swingAnalysis == nil)
+        #expect(trimmed.badminton == BadmintonSession())
+    }
+    @Test func aScoreOnlyBelongsToBadminton() {
+        var value = summary()
+        value.activity = "Run"
+        value.badminton = BadmintonSession()
+        #expect(!value.isValid(for: "alice", now: now))
+    }
+    @Test func thePhoneCanSendTheMatchSetupAndScoreTaps() throws {
+        let setup = BadmintonSession(format: .doubles, teammate: "Priya")
+        let envelope = PhoneCommandEnvelope(command: .configure, sentAt: now, maxHeartRate: 190, badminton: setup)
+        #expect(WatchWire.command(from: try WatchWire.encode(envelope)) == envelope)
+        let tap = PhoneCommandEnvelope(command: .scoreThem, sentAt: now)
+        #expect(WatchWire.command(from: try WatchWire.encode(tap))?.command == .scoreThem)
+    }
     @Test func livePacketCarriesPrimaryClockAndAccount() throws {
         var packet = WatchPacket(sentAt: now)
         packet.sessionID = UUID(); packet.ownerID = "alice"

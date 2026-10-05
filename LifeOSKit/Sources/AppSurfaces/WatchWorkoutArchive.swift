@@ -26,13 +26,16 @@ public struct WatchWorkoutSummary: Codable, Equatable, Sendable, Identifiable {
     public var distanceMeters: Double?
     public var sets: [Int]
     public var swingAnalysis: SwingAnalysis?
+    public var badminton: BadmintonSession?
     public var healthWorkoutID: UUID?
     public init(id: UUID, ownerID: String, activity: String, startedAt: Date, endedAt: Date,
-                elapsed: TimeInterval, energyKcal: Double?, distanceMeters: Double?, sets: [Int], healthWorkoutID: UUID?, swingAnalysis: SwingAnalysis? = nil) {
+                elapsed: TimeInterval, energyKcal: Double?, distanceMeters: Double?, sets: [Int], healthWorkoutID: UUID?, swingAnalysis: SwingAnalysis? = nil,
+                badminton: BadmintonSession? = nil) {
         self.id = id; self.ownerID = ownerID; self.activity = activity
         self.startedAt = startedAt; self.endedAt = endedAt; self.elapsed = elapsed
         self.energyKcal = energyKcal; self.distanceMeters = distanceMeters
         self.sets = sets; self.healthWorkoutID = healthWorkoutID; self.swingAnalysis = swingAnalysis
+        self.badminton = badminton
     }
     public var recordID: String { "almanac-watch:\(id.uuidString)" }
     public func isValid(for owner: String, now: Date = .now) -> Bool {
@@ -43,21 +46,27 @@ public struct WatchWorkoutSummary: Codable, Equatable, Sendable, Identifiable {
         && (energyKcal.map { $0.isFinite && (0...100_000).contains($0) } ?? true)
         && (distanceMeters.map { $0.isFinite && (0...2_000_000).contains($0) } ?? true)
         && (swingAnalysis.map { activity == "Badminton" && $0.isValid(elapsed: elapsed) } ?? true)
+        && (badminton.map { activity == "Badminton" && $0.isValid } ?? true)
         && sets.count <= 1000 && sets.allSatisfy { (0...10000).contains($0) }
     }
     /// The summary to import, or nil when nothing in it can be trusted.
     ///
-    /// Swing analysis is experimental and validated strictly, so a review
-    /// that fails its checks costs the review, never the workout: the session
-    /// still counts, without the motion replay. Rejecting the whole summary
-    /// used to drop the workout on the phone while the watch, never receiving
-    /// a receipt, resent it forever.
+    /// Swing analysis and the match score are validated strictly, so either
+    /// failing its checks costs that extra, never the workout: the session
+    /// still counts, without the motion replay or the score. Rejecting the
+    /// whole summary used to drop the workout on the phone while the watch,
+    /// never receiving a receipt, resent it forever.
     public func salvaged(for owner: String, now: Date = .now) -> Self? {
         if isValid(for: owner, now: now) { return self }
-        guard swingAnalysis != nil else { return nil }
-        var withoutReview = self
-        withoutReview.swingAnalysis = nil
-        return withoutReview.isValid(for: owner, now: now) ? withoutReview : nil
+        guard swingAnalysis != nil || badminton != nil else { return nil }
+        // The two badminton extras are dropped one at a time, the motion
+        // review first: it is the experimental one, and a valid score is
+        // worth keeping when only the review is wrong.
+        var trimmed = self
+        trimmed.swingAnalysis = nil
+        if trimmed.isValid(for: owner, now: now) { return trimmed }
+        trimmed.badminton = nil
+        return trimmed.isValid(for: owner, now: now) ? trimmed : nil
     }
 }
 
