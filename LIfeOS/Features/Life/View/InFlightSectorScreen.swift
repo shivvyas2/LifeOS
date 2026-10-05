@@ -51,6 +51,7 @@ struct InFlightSectorScreen: View {
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
         .navigationTitle(sector.title)
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             model.attach(context)
             model.load()

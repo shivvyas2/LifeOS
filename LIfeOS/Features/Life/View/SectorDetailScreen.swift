@@ -39,7 +39,7 @@ struct SectorDetailScreen: View {
                     if history.months.isEmpty { emptyState }
                     ForEach(Array(sections(history).enumerated()), id: \.element) { offset, section in
                         VStack(alignment: .leading, spacing: Space.x2) {
-                            EditorialSectionHeader(index: offset + 1, title: section.title)
+                            EditorialSectionHeader(index: offset + 1, title: title(section, history: history))
                             content(section, history: history)
                         }
                     }
@@ -57,6 +57,7 @@ struct SectorDetailScreen: View {
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
         .navigationTitle(sector.title)
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             model.attach(context)
             model.load(sector: sector)
@@ -87,6 +88,14 @@ struct SectorDetailScreen: View {
         }
     }
 
+    /// The reasoning section names its month, so it is not a bare "Why".
+    private func title(_ section: Section, history: SectorHistory) -> String {
+        if section == .reasoning, let latest = history.months.last {
+            return "Why \(latest.month.formatted(.dateTime.month(.wide)))"
+        }
+        return section.title
+    }
+
     private func sections(_ history: SectorHistory) -> [Section] {
         var list: [Section] = []
         if !history.observations.isEmpty { list.append(.observations) }
@@ -109,7 +118,6 @@ struct SectorDetailScreen: View {
             trend(history)
         case .reasoning:
             if let latest = history.months.last {
-                Text("Why \(latest.month.formatted(.dateTime.month(.wide)))").editorialEyebrow()
                 ForEach(latest.evidenceRows, id: \.label) { row in
                     EditorialRow(row.label, value: row.value)
                 }

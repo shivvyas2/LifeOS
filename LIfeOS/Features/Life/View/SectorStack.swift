@@ -22,6 +22,16 @@ struct SectorStack: View {
     let onOpenDetail: (LifeSector) -> Void
 
     @State private var openSector: LifeSector?
+
+    /// `initiallyOpen` mounts the deck with one card already lifted; the
+    /// design previews use it, since a tap is not something a screenshot
+    /// can make.
+    init(cards: [LifeBoardViewModel.Card], initiallyOpen: LifeSector? = nil,
+         onOpenDetail: @escaping (LifeSector) -> Void) {
+        self.cards = cards
+        self.onOpenDetail = onOpenDetail
+        _openSector = State(initialValue: initiallyOpen)
+    }
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -189,6 +199,9 @@ private struct SectorDeckCard: View {
                     )
                 },
                 style: .ink,
+                // A rating against the window's low, not nought: six months
+                // of 6 to 8 is a shape, not six full bars.
+                baseline: .windowMinimum,
                 spacing: Space.half,
                 height: 64
             )

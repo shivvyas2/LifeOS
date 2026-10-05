@@ -96,6 +96,7 @@ struct HealthActivityDesignPreview: View {
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "money" || page == "nav" { EditorialDesignPreview(page: page) }
+            else if page.hasPrefix("life") || page == "shell" { LifeDesignPreview(page: page) }
             else if page == "library" || page == "library-empty" {
                 NavigationStack {
                     WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder,

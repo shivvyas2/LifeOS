@@ -19,6 +19,8 @@ struct LifeBoardScreen: View {
     /// Called with the sector whose full tab should open. The board does not
     /// know how the tab bar works, and `AppTab` stays private to RootView.
     let onOpenTab: (LifeSector) -> Void
+    /// A card to mount open, for the design previews. Nil in the app.
+    var initiallyOpen: LifeSector? = nil
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -51,7 +53,7 @@ struct LifeBoardScreen: View {
                     if model.isBlank {
                         emptyState
                     } else {
-                        SectorStack(cards: model.cards) { sector in
+                        SectorStack(cards: model.cards, initiallyOpen: initiallyOpen) { sector in
                             openSector = sector
                         }
                     }
