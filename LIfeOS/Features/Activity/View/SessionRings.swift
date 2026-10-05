@@ -48,7 +48,9 @@ struct SessionRings: View {
             // A dark wash under the glass, so white reads over a bright frame
             // of video or the pale foot of the hero gradient alike.
             .background(shape.fill(.black.opacity(0.30)))
-            .glassEffect(.regular.tint(readout.push.tint.opacity(0.25)).interactive(), in: shape)
+            // Neutral glass: the rings carry the effort state in their own
+            // colours, and a green or amber tint fought the ember field.
+            .glassEffect(.regular.tint(.black.opacity(0.18)).interactive(), in: shape)
             .glassEffectID("rings", in: glass)
         }
         .animation(.spring(duration: 0.6, bounce: 0.25), value: readout.heartRate)

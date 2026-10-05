@@ -101,7 +101,7 @@ private struct LockScreenView: View {
                         .foregroundStyle(readout.push == .overLimit || readout.push == .nearLimit ? readout.push.tint : .white.opacity(0.85))
                 }
                 Spacer(minLength: 6)
-                WorkoutTimer(readout: readout).font(.system(.title, design: .rounded, weight: .bold))
+                WorkoutTimer(readout: readout).font(Editorial.figure(34))
                     .minimumScaleFactor(0.7).lineLimit(1)
             }
             .foregroundStyle(.white)
@@ -115,11 +115,9 @@ private struct LockScreenView: View {
         }
         .padding(18)
         .background {
-            ZStack {
-                LinearGradient(colors: [LifeOSTokens.liveGradientTop, LifeOSTokens.liveGradientBottom],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [.white.opacity(0.2), .clear], center: .topLeading, startRadius: 0, endRadius: 260)
-            }
+            // The ember field, as on the in-app live hero, so the Lock Screen
+            // card and the screen it opens are visibly the same session.
+            LinearGradient(colors: EditorialFieldTone.ember.colors(.light), startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 }
@@ -138,7 +136,7 @@ private struct Tile: View {
                 Text(eyebrow).font(.system(size: 10, weight: .semibold)).tracking(0.4).lineLimit(1)
             }.opacity(0.75)
             HStack(spacing: 6) {
-                Text(value ?? LiveSessionReadout.missing).font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
+                Text(value ?? LiveSessionReadout.missing).font(Editorial.figure(22)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 if let unit {
                     Text(unit).font(.caption2)
@@ -150,11 +148,11 @@ private struct Tile: View {
                 }
             }
         }
-        .foregroundStyle(Color(white: 0.12))
+        .foregroundStyle(.white)
         .padding(.horizontal, 10).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(.white.opacity(0.35), lineWidth: 0.5))
+        .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(.white.opacity(0.25), lineWidth: 0.5))
         .privacySensitive()
     }
 }

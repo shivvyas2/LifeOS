@@ -6,6 +6,7 @@ import AppSurfaces
 struct ActivityPickerSheet: View {
     @Binding var selection: ActivityType
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     @State private var query = ""
 
     private var sections: [(group: ActivityType.Group, types: [ActivityType])] {
@@ -24,7 +25,7 @@ struct ActivityPickerSheet: View {
                     ContentUnavailableView.search(text: query)
                 }
                 ForEach(sections, id: \.group) { section in
-                    Section(section.group.rawValue) {
+                    Section {
                         ForEach(section.types) { type in
                             Button {
                                 selection = type
@@ -39,16 +40,24 @@ struct ActivityPickerSheet: View {
                                 .frame(minHeight: 44)
                             }
                             .tint(.primary)
+                            .listRowBackground(Color.clear)
                             .accessibilityAddTraits(type == selection ? .isSelected : [])
                         }
+                    } header: {
+                        Text(section.group.rawValue).editorialEyebrow()
                     }
                 }
             }
+            // A plain list on the app's paper with tracked group headings,
+            // rather than the system's grey grouped inset list.
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search activities")
             .navigationTitle("All activities")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
-        .tint(LifeOSTokens.accent)
+        .tint(LifeOSTokens.primaryText.resolve(scheme))
     }
 }

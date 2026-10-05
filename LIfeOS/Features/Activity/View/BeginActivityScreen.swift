@@ -39,18 +39,10 @@ struct BeginActivityScreen: View {
                     .frame(maxWidth: 620).frame(maxWidth: .infinity).padding(22).padding(.bottom, 20)
                 }
             }
-            .background(alignment: .top) {
-                ZStack(alignment: .top) {
-                    LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea()
-                    if model.hasSession {
-                        LinearGradient(colors: [scheme == .dark ? ModuleHue.recovery.darkTop : LifeOSTokens.liveGradientTop,
-                                                LifeOSTokens.canvas.resolve(scheme)], startPoint: .top, endPoint: .bottom)
-                            .frame(height: 380).ignoresSafeArea(edges: .top)
-                    }
-                }
-            }
+            // Plain paper behind everything; the live state is the ember
+            // field in the hero now, not a blue wash across the top.
+            .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
             .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarColorScheme(model.hasSession ? .dark : nil, for: .navigationBar)
             .navigationTitle(model.hasSession ? "Activity" : "Begin activity")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -76,7 +68,8 @@ struct BeginActivityScreen: View {
             }
             liveTiles(readout)
         } else {
-            AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
+            EditorialMasthead(eyebrow: model.saved ? "Activity · saved" : "Activity",
+                title: model.saved ? "Time well spent." : "Make time to move.",
                 detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
             timerCard
             if !model.saved {
@@ -115,29 +108,34 @@ struct BeginActivityScreen: View {
         }
     }
 
+    /// The resting timer on the dusk field, the screen's one hero: the
+    /// orange pastel card it replaces was a fourth palette on one screen.
     private var timerCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Label(model.saved ? "Complete" : model.isPaused ? "Paused" : model.isRunning ? "In progress" : "Ready when you are",
-                      systemImage: model.saved ? "checkmark.circle" : "timer")
-                    .font(LifeOSType.label)
+        EditorialField(.dusk) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(model.saved ? "Complete" : model.isPaused ? "Paused" : model.isRunning ? "In progress" : "Ready when you are")
+                    .font(LifeOSType.eyebrow).tracking(1.2).textCase(.uppercase).opacity(0.75)
                 Spacer()
                 Image(systemName: model.selection.symbol).font(.title2).accessibilityHidden(true)
             }
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
-                    .font(.system(size: 64, weight: .medium, design: .rounded)).monospacedDigit()
+                    .font(Editorial.figure(88)).tracking(Editorial.figureTracking(88)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.45)
                     .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
             }
-            Text("Elapsed time").font(LifeOSType.caption)
+            HStack {
+                Text(model.selection.name).font(LifeOSType.rowTitle)
+                Spacer()
+                Text("Elapsed time").font(LifeOSType.caption).opacity(0.75)
+            }
         }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-        .padding(26).frame(maxWidth: .infinity, alignment: .leading)
-        .background(scheme == .dark ? ModuleHue.activity.pastelDark : ModuleHue.activity.pastel,
-                    in: RoundedRectangle(cornerRadius: 28))
     }
+    /// A session in progress, on the ember field: the one place in the app
+    /// the accent fills a whole block, because this is the one thing that is
+    /// happening right now.
     private func liveHero(_ readout: LiveSessionReadout) -> some View {
+        EditorialField(.ember) {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(model.selection.name, systemImage: model.selection.symbol).font(LifeOSType.rowTitle)
@@ -152,7 +150,7 @@ struct BeginActivityScreen: View {
             }
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(duration(model.timer?.elapsed(at: timeline.date) ?? 0))
-                    .font(.system(size: 72, weight: .medium, design: .rounded)).monospacedDigit()
+                    .font(Editorial.figure(88)).tracking(Editorial.figureTracking(88)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.45)
                     .accessibilityLabel("Elapsed time, \(duration(model.timer?.elapsed(at: timeline.date) ?? 0))")
             }
@@ -164,8 +162,7 @@ struct BeginActivityScreen: View {
                 .fixedSize()
                 .padding(.top, 10)
         }
-        .foregroundStyle(.white)
-        .padding(.top, 8)
+        }
     }
 
     private func liveTiles(_ readout: LiveSessionReadout) -> some View {
@@ -214,15 +211,13 @@ struct BeginActivityScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             Label(label, systemImage: icon).font(LifeOSType.label).opacity(0.75)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value ?? LiveSessionReadout.missing).font(.title.bold()).monospacedDigit()
+                Text(value ?? LiveSessionReadout.missing).font(Editorial.figure(34)).tracking(Editorial.figureTracking(34)).monospacedDigit()
                 if let unit, value != nil { Text(unit).font(.subheadline).foregroundStyle(.secondary) }
             }.lineLimit(1).minimumScaleFactor(0.7)
             Text(caption).font(.caption.weight(.medium)).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
         }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
         .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
-        .padding(16)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .editorialCard(padding: 16)
         .accessibilityElement(children: .combine)
     }
     /// Above the picker, because choosing a video is choosing the activity

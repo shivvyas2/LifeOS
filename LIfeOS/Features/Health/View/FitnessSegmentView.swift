@@ -104,7 +104,7 @@ struct FitnessSegmentView: View {
                     Spacer()
                     Text("\(wellness.workoutDays)/\(wellness.workoutTarget) days")
                         .font(LifeOSType.label)
-                        .foregroundStyle(LifeOSTokens.accent)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 }
                 if let avg = wellness.averageExerciseMinutes {
                     Text("Avg session \(avg) min").font(LifeOSType.label.weight(.regular))
@@ -189,7 +189,7 @@ struct WorkoutRow: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(format: "%.1f", strain))
                         .font(LifeOSType.rowTitle)
-                        .foregroundStyle(LifeOSTokens.accent)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     Text("strain")
                         .font(LifeOSType.eyebrow.weight(.medium))
                         .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))

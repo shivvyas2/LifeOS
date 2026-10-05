@@ -20,18 +20,23 @@ struct WhoopDetailScreen: View {
                     SleepCompositionChart(nights: snapshot.nights)
 
                     TrendChart(title: "Recovery", unit: "%", series: snapshot.recoveryTrend,
-                               color: LifeOSTokens.accent)
+                               color: LifeOSTokens.primaryText.resolve(scheme))
                     TrendChart(title: "Day strain", unit: nil, series: snapshot.strainTrend,
-                               color: LifeOSTokens.accent)
+                               color: LifeOSTokens.primaryText.resolve(scheme))
                     TrendChart(title: "Sleep", unit: "min", series: snapshot.sleepTrend,
                                color: SleepComposition.Stage.rem.color)
                     TrendChart(title: "HRV", unit: "ms", series: snapshot.hrvTrend,
-                               color: LifeOSTokens.accent)
+                               color: LifeOSTokens.primaryText.resolve(scheme))
                     TrendChart(title: "Resting heart rate", unit: "bpm",
-                               series: snapshot.restingHRTrend, color: LifeOSTokens.accent)
+                               series: snapshot.restingHRTrend, color: LifeOSTokens.primaryText.resolve(scheme))
                 }
                 .padding(20)
                 .padding(.bottom, 60)
+                .safeAreaInset(edge: .top) {
+                    EditorialMasthead(eyebrow: "WHOOP · last 14 days", title: "Your trends",
+                                      detail: "Each chart is one reading over the fortnight; gaps are days without data.")
+                        .padding(.horizontal, 20).padding(.top, 8)
+                }
             }
         }
         .navigationTitle("14 days")

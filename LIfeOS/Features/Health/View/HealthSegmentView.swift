@@ -24,9 +24,9 @@ struct HealthSegmentView: View {
                     HStack(spacing: 14) {
                         Image(systemName: "bolt.heart.fill")
                             .font(LifeOSType.body.weight(.semibold))
-                            .foregroundStyle(LifeOSTokens.accent)
+                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                             .frame(width: 44, height: 44)
-                            .background(Circle().fill(LifeOSTokens.accentSoft.resolve(scheme)))
+                            .overlay(Circle().strokeBorder(Editorial.rule(scheme)))
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Connect Whoop")
                                 .font(LifeOSType.rowTitle)
@@ -36,17 +36,9 @@ struct HealthSegmentView: View {
                                 .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
                         }
                         Spacer()
+                        Image(systemName: "arrow.right").font(LifeOSType.label.weight(.semibold))
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(LifeOSTokens.cardSurface.resolve(scheme))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .strokeBorder(Color.white.opacity(scheme == .dark ? 0.14 : 0.5),
-                                                  lineWidth: 1)
-                            }
-                    )
+                    .editorialCard(padding: 16)
                 }
                 .buttonStyle(.plain)
             }
@@ -100,15 +92,9 @@ struct HealthSegmentView: View {
                 NavigationLink {
                     WhoopDetailScreen(snapshot: recovery)
                 } label: {
-                    HStack(spacing: 6) {
-                        Text("14-day trends").font(LifeOSType.label.weight(.semibold))
-                        Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(LifeOSTokens.cardSurface.resolve(scheme)))
+                    Text("14-day trends")
                 }
+                .buttonStyle(.editorial(.quiet, fullWidth: true))
             }
 
             if let synced = recovery.syncedAt {
@@ -164,23 +150,13 @@ struct HealthSegmentView: View {
                         .font(LifeOSType.caption).foregroundStyle(.secondary)
                     Text(entry.text).font(LifeOSType.secondary).lineLimit(3)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                .background(LifeOSTokens.cardSurface.resolve(scheme).opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+                .overlay(alignment: .bottom) { Hairline() }
             }
-            Button(action: onAddJournal) {
-                HStack {
-                    Text(wellness.hasEntryToday ? "Add a reflection" : "Write a reflection")
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                }
-                .font(LifeOSType.rowTitle).padding(16)
-                .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
-                .background(LifeOSTokens.fabFill.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
-            }.buttonStyle(.plain)
+            Button(wellness.hasEntryToday ? "Add a reflection" : "Write a reflection", action: onAddJournal)
+                .buttonStyle(.editorial(.primary, fullWidth: true))
         }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-        .padding(22).background(scheme == .dark ? ModuleHue.activity.pastelDark : ModuleHue.activity.pastel,
-                               in: RoundedRectangle(cornerRadius: 26))
+        .editorialCard(padding: 22)
     }
 
     private func categoryStyle(_ title: String) -> (ModuleHue, String) {

@@ -23,13 +23,13 @@ struct StatGroup: View {
                 HStack(spacing: 10) {
                     Image(systemName: icon).font(.headline)
                         .frame(width: 38, height: 38)
-                        .background(LifeOSTokens.cardSurface.resolve(scheme).opacity(0.65), in: Circle())
+                        .overlay(Circle().strokeBorder(Editorial.rule(scheme)))
                     Text(title).font(LifeOSType.sectionTitle)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(featured.label).font(LifeOSType.label)
                         .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme).opacity(0.65))
-                    Text(featured.value ?? "—").font(.largeTitle.weight(.semibold)).monospacedDigit()
+                    Text(featured.value ?? "—").font(Editorial.figure(44)).tracking(Editorial.figureTracking(44)).monospacedDigit()
                         .fixedSize(horizontal: false, vertical: true)
                     if let delta = featured.delta {
                         Text("\(delta) from your baseline").font(LifeOSType.caption)
@@ -53,9 +53,7 @@ struct StatGroup: View {
                     }
                 }
             }
-            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            .padding(22).frame(maxWidth: .infinity, alignment: .leading)
-            .background(scheme == .dark ? hue.pastelDark : hue.pastel, in: RoundedRectangle(cornerRadius: 26))
+            .editorialCard(padding: 22)
         }
     }
 }

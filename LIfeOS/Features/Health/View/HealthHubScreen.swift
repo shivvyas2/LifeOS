@@ -31,9 +31,10 @@ struct HealthHubScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Your health").font(.largeTitle.bold()).tracking(-0.7)
+                        EditorialMasthead(eyebrow: "Health · \(selectedDate.formatted(.dateTime.weekday(.wide).month().day()))",
+                                          title: "Your health")
                         DatePicker("Viewing date", selection: $selectedDate, in: ...Date(), displayedComponents: .date)
-                            .tint(LifeOSTokens.accent)
+                            .tint(LifeOSTokens.primaryText.resolve(scheme))
                     }
                     WeekStrip(selection: $selectedDate)
                         .padding(.top, 4)
@@ -64,34 +65,59 @@ struct HealthHubScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
             }
         }
-        .tint(LifeOSTokens.accent)
+        .tint(LifeOSTokens.primaryText.resolve(scheme))
         .animation(.easeInOut(duration: 0.25), value: section)
     }
 
+    /// The four tracked readings on the screen's one gradient field, set
+    /// the way the reference sets its figures: the name small on the left,
+    /// the number large and light on the right, a rule between rows. Each
+    /// row opens that reading's history.
     private var trackingLinks: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
-            ForEach(TodayMetric.allCases) { metric in
-                Button { onSelectMetric(metric) } label: {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Image(systemName: metric.icon).foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                            Text(metric.title).font(.subheadline.weight(.medium))
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right").font(.caption2)
+        EditorialField(.dusk) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Your readings").font(LifeOSType.eyebrow).tracking(1.2).textCase(.uppercase).opacity(0.7)
+                Spacer()
+                IndexPill(1)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(TodayMetric.allCases.enumerated()), id: \.element.id) { index, metric in
+                    Button { onSelectMetric(metric) } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
+                            Label(metric.title, systemImage: metric.icon).font(LifeOSType.secondary)
+                            Spacer(minLength: Space.x1)
+                            let parts = figure(metric)
+                            Text(parts.value)
+                                .font(Editorial.figure(parts.isEmpty ? 20 : 40))
+                                .tracking(parts.isEmpty ? 0 : Editorial.figureTracking(40))
+                                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                            if let unit = parts.unit { Text(unit).font(LifeOSType.label).opacity(0.7) }
+                            Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold)).opacity(0.6)
                         }
-                        Text(value(metric)).font(.title2.bold()).monospacedDigit()
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Text("View history").font(.caption).foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .padding(.vertical, 14)
+                        .contentShape(.rect)
                     }
-                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(16)
-                    .background(scheme == .dark ? metric.hue.pastelDark : metric.hue.pastel, in: RoundedRectangle(cornerRadius: 20))
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .top) {
+                        if index > 0 { Rectangle().fill(.primary.opacity(0.18)).frame(height: 1) }
+                    }
+                    .accessibilityLabel("\(metric.title), \(value(metric)), \(selectedDate.formatted(date: .abbreviated, time: .omitted))")
+                    .accessibilityHint("Opens tracking history")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(metric.title), \(value(metric)), \(selectedDate.formatted(date: .abbreviated, time: .omitted))")
-                .accessibilityHint("Opens tracking history")
             }
         }
+    }
+
+    /// The reading split for setting large: the number and its unit apart.
+    private func figure(_ metric: TodayMetric) -> (value: String, unit: String?, isEmpty: Bool) {
+        let reading: Double? = switch metric {
+        case .steps: activity.steps.map(Double.init)
+        case .sleep: recovery.sleepMinutes.map(Double.init)
+        case .weight: weight.weightKg
+        case .recovery: recovery.recoveryPct
+        }
+        guard let reading else { return ("Not recorded", nil, true) }
+        return (metric.format(reading), metric.unit, false)
     }
 
     private func value(_ metric: TodayMetric) -> String {
