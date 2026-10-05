@@ -155,7 +155,7 @@ struct BadmintonReviewScreen: View {
             } else {
                 // Keyed by the candidate, so choosing another one starts its
                 // replay from the beginning, stopped.
-                SwingReplay(event: event, tint: jade).id(selected)
+                SwingReplay(event: event, tint: jade, leftHanded: analysis.profile?.playingHand == .left).id(selected)
                 HStack {
                     Button { selected -= 1 } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(selected == 0)
                     Spacer()
@@ -299,6 +299,7 @@ struct BadmintonReviewScreen: View {
 private struct SwingReplay: View {
     let event: SwingEvent?
     let tint: Color
+    var leftHanded = false
     @State private var playback = 0.0
     @State private var playing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -306,9 +307,9 @@ private struct SwingReplay: View {
     private var duration: Double { event?.duration ?? 0 }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WristCourtReplay(event: event, time: playback)
+            WristCourtReplay(event: event, time: playback, leftHanded: leftHanded)
                 .frame(height: 280).clipShape(RoundedRectangle(cornerRadius: 24))
-                .accessibilityLabel("3D view of measured wrist orientation. Court position is not tracked.")
+                .accessibilityLabel("3D player figure whose racket arm follows the measured wrist orientation. Court position and posture are not tracked.")
             HStack {
                 Button { if playback >= duration { playback = 0 }; playing.toggle() } label: {
                     Image(systemName: playing ? "pause.fill" : "play.fill").frame(width: 44, height: 44)
@@ -338,15 +339,17 @@ private struct SwingReplay: View {
 private struct WristCourtReplay: UIViewRepresentable {
     var event: SwingEvent?
     var time: Double
+    /// Mirrors the figure, so a left-hander sees the racket in the left hand.
+    var leftHanded = false
     func makeUIView(context: Context) -> SCNView {
         let view = SCNView(); let scene = SCNScene(); view.scene = scene
         view.backgroundColor = UIColor(red: 0.015, green: 0.075, blue: 0.07, alpha: 1)
         view.autoenablesDefaultLighting = true; view.allowsCameraControl = true
-        // Framed on the wrist, which is the only thing that moves, with the
-        // near half of the court and the net behind it for scale. From the
-        // whole-court view this used to start at, the watch was a few pixels.
-        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(3.2, 3.8, 8.2)
-        camera.look(at: SCNVector3(0, 1.4, 2.4)); scene.rootNode.addChildNode(camera)
+        // Framed on the player, whose racket arm is the only thing that
+        // moves, with the net behind for scale. From the whole-court view
+        // this used to start at, the figure was a few pixels.
+        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(2.1, 2.05, 6.5)
+        camera.look(at: SCNVector3(0, 1.15, 3.0)); scene.rootNode.addChildNode(camera)
         // A regulation court in metres (BWF Laws, Appendix 1): 13.4 by 6.1
         // for doubles, singles sidelines 0.46 inside, short service lines
         // 1.98 from the net, doubles long service lines 0.76 inside the back
@@ -373,13 +376,7 @@ private struct WristCourtReplay: UIViewRepresentable {
             post.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.7)
             let postNode = SCNNode(geometry: post); postNode.position = SCNVector3(x, 0.775, 0); scene.rootNode.addChildNode(postNode)
         }
-        let display = SCNNode(); display.position = SCNVector3(0, 2.3, 3.2); scene.rootNode.addChildNode(display)
-        let wrist = SCNNode(); wrist.name = "wrist"; display.addChildNode(wrist)
-        let arm = SCNCapsule(capRadius: 0.18, height: 1.8); arm.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.8)
-        let armNode = SCNNode(geometry: arm); armNode.position.y = -0.6; wrist.addChildNode(armNode)
-        let watch = SCNBox(width: 0.65, height: 0.48, length: 0.25, chamferRadius: 0.1)
-        watch.firstMaterial?.diffuse.contents = UIColor.systemMint; watch.firstMaterial?.metalness.contents = 0.6
-        wrist.addChildNode(SCNNode(geometry: watch))
+        scene.rootNode.addChildNode(Self.player(leftHanded: leftHanded))
         return view
     }
     func updateUIView(_ view: SCNView, context: Context) {
@@ -402,6 +399,105 @@ private struct WristCourtReplay: UIViewRepresentable {
         guard length.isFinite, length > 0.5 else { return nil }
         return q.normalized
     }
+    // MARK: - The player
+
+    /// A brutalist stick figure in the ready position on the near half: flat
+    /// concrete blocks for limbs, a box head with a glowing visor, a glowing
+    /// seam down the torso and a glowing racket frame.
+    ///
+    /// Only the forearm, hand and racket move. They hang from a pivot at the
+    /// elbow named "wrist", which `updateUIView` turns by the recorded wrist
+    /// orientation: the watch sits on the forearm, so its attitude is the
+    /// forearm's. The body is fixed on purpose, because posture is not
+    /// measured and the screen says so; animating it would invent a pose.
+    static func player(leftHanded: Bool) -> SCNNode {
+        let concrete = material(UIColor(white: 0.9, alpha: 1))
+        let shadowed = material(UIColor(white: 0.72, alpha: 1))
+        let glow = material(UIColor(red: 0.94, green: 0.34, blue: 0.18, alpha: 1), glows: true)
+        let root = SCNNode()
+        root.position = SCNVector3(0, 0, 3.4)
+        // Facing the net, which is towards -z.
+        if leftHanded { root.scale.x = -1 }
+
+        // Ground the figure with a soft footprint.
+        let footprint = SCNCylinder(radius: 0.42, height: 0.004)
+        footprint.firstMaterial = material(UIColor(white: 0, alpha: 0.35))
+        let print = SCNNode(geometry: footprint); print.position.y = 0.012; root.addChildNode(print)
+
+        // Legs in a split ready stance, knees soft.
+        root.addChildNode(segment(from: [-0.17, 0.0, 0.10], to: [-0.13, 0.48, 0.02], thickness: 0.1, material: shadowed))
+        root.addChildNode(segment(from: [-0.13, 0.48, 0.02], to: [-0.11, 0.95, 0.0], thickness: 0.11, material: concrete))
+        root.addChildNode(segment(from: [0.19, 0.0, -0.14], to: [0.15, 0.48, -0.05], thickness: 0.1, material: shadowed))
+        root.addChildNode(segment(from: [0.15, 0.48, -0.05], to: [0.11, 0.95, 0.0], thickness: 0.11, material: concrete))
+        // Pelvis, torso and the glowing seam.
+        root.addChildNode(box(0.34, 0.12, 0.18, at: [0, 0.98, 0], concrete))
+        let torso = box(0.36, 0.56, 0.18, at: [0, 1.32, -0.02], concrete)
+        torso.eulerAngles.x = 0.12
+        torso.addChildNode(box(0.025, 0.5, 0.01, at: [0, 0, -0.096], glow))
+        root.addChildNode(torso)
+        // Neck, head and visor.
+        root.addChildNode(box(0.08, 0.08, 0.08, at: [0, 1.64, -0.04], shadowed))
+        let head = box(0.22, 0.24, 0.22, at: [0, 1.79, -0.05], concrete)
+        head.addChildNode(box(0.19, 0.035, 0.012, at: [0, 0.02, -0.112], glow))
+        root.addChildNode(head)
+
+        // The free arm, bent and held up for balance.
+        let freeShoulder: SIMD3<Float> = [-0.22, 1.52, -0.02]
+        let freeElbow: SIMD3<Float> = [-0.36, 1.3, -0.18]
+        root.addChildNode(segment(from: freeShoulder, to: freeElbow, thickness: 0.08, material: concrete))
+        root.addChildNode(segment(from: freeElbow, to: [-0.3, 1.5, -0.36], thickness: 0.07, material: shadowed))
+
+        // The racket arm. The upper arm is fixed; everything from the elbow
+        // out hangs from the "wrist" pivot.
+        let shoulder: SIMD3<Float> = [0.22, 1.52, -0.02]
+        let elbow: SIMD3<Float> = [0.4, 1.32, -0.2]
+        root.addChildNode(segment(from: shoulder, to: elbow, thickness: 0.08, material: concrete))
+        let pivot = SCNNode(); pivot.name = "wrist"; pivot.simdPosition = elbow
+        root.addChildNode(pivot)
+        let hand: SIMD3<Float> = [0.02, 0.27, -0.12]
+        pivot.addChildNode(segment(from: [0, 0, 0], to: hand, thickness: 0.07, material: concrete))
+        pivot.addChildNode(box(0.07, 0.09, 0.07, at: hand + [0, 0.04, -0.01], shadowed))
+        // Racket: handle, shaft, and the glowing frame with faint strings.
+        let shaftEnd = hand + [0.0, 0.42, -0.16]
+        pivot.addChildNode(segment(from: hand, to: shaftEnd, thickness: 0.022, material: shadowed))
+        let headCentre = shaftEnd + [0, 0.14, -0.05]
+        let frame = SCNTorus(ringRadius: 0.11, pipeRadius: 0.009)
+        frame.firstMaterial = glow
+        let frameNode = SCNNode(geometry: frame)
+        frameNode.simdPosition = headCentre
+        frameNode.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize([0, 0.3, 0.95]))
+        frameNode.scale = SCNVector3(1, 1, 1.3)
+        let strings = SCNCylinder(radius: 0.105, height: 0.002)
+        strings.firstMaterial = material(UIColor(white: 1, alpha: 0.18))
+        frameNode.addChildNode(SCNNode(geometry: strings))
+        pivot.addChildNode(frameNode)
+        return root
+    }
+
+    private static func material(_ color: UIColor, glows: Bool = false) -> SCNMaterial {
+        let material = SCNMaterial()
+        material.diffuse.contents = color
+        material.lightingModel = glows ? .constant : .lambert
+        if glows { material.emission.contents = color }
+        if color.cgColor.alpha < 1 { material.transparency = color.cgColor.alpha; material.blendMode = .alpha }
+        return material
+    }
+
+    private static func box(_ width: CGFloat, _ height: CGFloat, _ length: CGFloat, at position: SIMD3<Float>, _ material: SCNMaterial) -> SCNNode {
+        let geometry = SCNBox(width: width, height: height, length: length, chamferRadius: min(width, length) * 0.12)
+        geometry.firstMaterial = material
+        let node = SCNNode(geometry: geometry); node.simdPosition = position
+        return node
+    }
+
+    /// A square-section limb from one joint to the next.
+    private static func segment(from a: SIMD3<Float>, to b: SIMD3<Float>, thickness: CGFloat, material: SCNMaterial) -> SCNNode {
+        let length = simd_length(b - a)
+        let node = box(thickness, CGFloat(length), thickness, at: (a + b) / 2, material)
+        node.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize(b - a))
+        return node
+    }
+
     private func line(_ scene: SCNScene, x: Float, z: Float, width: CGFloat, length: CGFloat) {
         let box = SCNBox(width: width, height: 0.02, length: length, chamferRadius: 0)
         box.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.55)
