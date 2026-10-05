@@ -105,11 +105,14 @@ final class LifeBoardViewModel {
         let current = scoreMap(store: store, month: lastMonth)
         let previous = scoreMap(store: store, month: monthBefore)
         month = thisMonth
-        lastClosedMonth = current.isEmpty ? nil : lastMonth
+        let scoredCounts = (try? store.scoredCounts(before: thisMonth)) ?? [:]
+        // The newest month with a score, not merely whether last month has
+        // one: a skipped month must not hide the history before it.
+        lastClosedMonth = CloseSchedule.lastClosedMonth(scoredCounts: scoredCounts)
         summary = BoardSummary(scores: current, previous: previous)
 
         monthAwaitingClose = CloseSchedule.monthAwaitingClose(
-            scoredCounts: (try? store.scoredCounts(before: thisMonth)) ?? [:],
+            scoredCounts: scoredCounts,
             previousMonth: lastMonth,
             scoredSectorsInPreviousMonth: current.count,
             calendar: calendar

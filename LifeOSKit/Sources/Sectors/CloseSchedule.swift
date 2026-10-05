@@ -12,6 +12,12 @@ import Persistence
 /// by falling back to the previous month whenever the store has nothing to
 /// report yet.
 public enum CloseSchedule {
+    /// The newest month with any sector scored, or nil when nothing was ever
+    /// closed. A month skipped since then does not erase the ones before it.
+    public static func lastClosedMonth(scoredCounts: [Date: Int]) -> Date? {
+        scoredCounts.filter { $0.value > 0 }.keys.max()
+    }
+
     /// Which month the board should offer to close, if any.
     ///
     /// `scoredCounts` is every month that has at least one `SectorScore` row,

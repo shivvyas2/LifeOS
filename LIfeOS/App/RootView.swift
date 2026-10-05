@@ -252,8 +252,11 @@ struct RootView: View {
             }
         }
         // A tab change is navigation, not content work, so the rail is wanted.
-        .onChange(of: tab) { _, _ in
+        .onChange(of: tab) { _, selected in
             showRail()
+            // Life loads when its tab comes up, not on every save elsewhere
+            // (see `reloadAll`).
+            if selected == .life { life.load() }
         }
         .task {
             attachAll()
@@ -827,7 +830,10 @@ struct RootView: View {
         }
         plan.load()
         notes.load()
-        life.load()
+        // Only while its tab is up. The month in progress is read from every
+        // input the app holds, and that is too much to redo on every save
+        // for a board nobody is looking at.
+        if tab == .life { life.load() }
         settings.load()
     }
 
