@@ -28,19 +28,19 @@ struct NoteCard: View {
                 Group {
                     if card.icon.isEmpty {
                         Image(systemName: card.hasInk ? "pencil.and.outline" : "doc.text")
-                            .foregroundStyle(LifeOSTokens.accent)
+                            .foregroundStyle(ink)
                     } else { Text(card.icon) }
                 }
-                .font(.title3).frame(width: 26, height: 28)
+                .font(LifeOSType.sectionTitle).frame(width: 26, height: 28)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(card.title).font(.body.weight(.semibold)).lineLimit(2)
+                        Text(card.title).font(LifeOSType.rowTitle).lineLimit(2)
                         if card.isFavorite {
-                            Image(systemName: "star.fill").font(.caption).foregroundStyle(LifeOSTokens.accent)
+                            Image(systemName: "star.fill").font(LifeOSType.caption).foregroundStyle(ink)
                         }
                     }
                     if !card.excerpt.isEmpty {
-                        Text(card.excerpt).font(.subheadline)
+                        Text(card.excerpt).font(LifeOSType.secondary)
                             .foregroundStyle(.secondary).lineLimit(2)
                     }
                     HStack(spacing: 8) {
@@ -51,15 +51,20 @@ struct NoteCard: View {
                         Spacer(minLength: 0)
                         Text(card.updatedAt, style: .date).lineLimit(1)
                     }
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(LifeOSType.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(LifeOSType.caption.weight(.semibold))
+                    .foregroundStyle(Editorial.quietInk(scheme))
+                    .padding(.top, Space.half)
+                    .accessibilityHidden(true)
             }
             .multilineTextAlignment(.leading)
             .foregroundStyle(ink)
             .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .padding(16)
-            .background(isOpen ? LifeOSTokens.accent.opacity(0.09) : .clear)
+            .padding(.vertical, Space.x2)
+            .background(isOpen ? LifeOSTokens.cardSurface.resolve(scheme) : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
