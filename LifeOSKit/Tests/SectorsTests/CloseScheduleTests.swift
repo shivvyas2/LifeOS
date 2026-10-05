@@ -101,4 +101,18 @@ import Foundation
         )
         #expect(offered == nil)
     }
+
+    // MARK: - Last closed month
+
+    /// A skipped month must not erase the ones before it: the board names the
+    /// newest month that has any score, not only the month just gone.
+    @Test func lastClosedMonthIsTheNewestWithAScore() {
+        let counts = [month(2026, 7): 9, month(2026, 8): 9, month(2026, 9): 0]
+        #expect(CloseSchedule.lastClosedMonth(scoredCounts: counts) == month(2026, 8))
+    }
+
+    @Test func lastClosedMonthIsNilWhenNothingWasEverScored() {
+        #expect(CloseSchedule.lastClosedMonth(scoredCounts: [:]) == nil)
+        #expect(CloseSchedule.lastClosedMonth(scoredCounts: [month(2026, 9): 0]) == nil)
+    }
 }
