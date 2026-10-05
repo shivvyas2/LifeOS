@@ -31,7 +31,7 @@ public struct IconBubbleTile: View {
                     .font(LifeOSType.rowTitle)
                     .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(scheme == .dark ? hue.pastelDark : hue.pastel))
+                    .overlay(Circle().strokeBorder(Editorial.rule(scheme)))
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
@@ -53,8 +53,8 @@ public struct IconBubbleTile: View {
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(LifeOSTokens.cardSurface.resolve(scheme))
-                .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 12, y: 4)
         )
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Editorial.rule(scheme)))
     }
 }
 

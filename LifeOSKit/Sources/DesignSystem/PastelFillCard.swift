@@ -93,10 +93,12 @@ public struct PastelFillCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, minHeight: 176)
+        // Paper and a hairline now; see `SoftCard` for why the pastel went.
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(scheme == .dark ? hue.pastelDark : hue.pastel)
+                .fill(LifeOSTokens.cardSurface.resolve(scheme))
         )
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(Editorial.rule(scheme)))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }

@@ -47,8 +47,8 @@ public struct MetricTile: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(LifeOSTokens.tileSurface.resolve(scheme))
-                .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow, radius: 8, y: 2)
         )
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Editorial.rule(scheme)))
     }
 }
 

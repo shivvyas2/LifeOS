@@ -17,7 +17,7 @@ public struct UnderlinePicker<Value: Hashable>: View {
             Picker("Section", selection: $selection) {
                 ForEach(options, id: \.0) { value, title in Text(title).tag(value) }
             }
-            .pickerStyle(.menu).tint(LifeOSTokens.accent)
+            .pickerStyle(.menu).tint(LifeOSTokens.primaryText.resolve(scheme))
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
         } else {
             tabs
@@ -33,7 +33,7 @@ public struct UnderlinePicker<Value: Hashable>: View {
                             .font(.subheadline.weight(selection == value ? .semibold : .regular))
                             .foregroundStyle(selection == value ? LifeOSTokens.primaryText.resolve(scheme) : LifeOSTokens.secondaryText.resolve(scheme))
                             .frame(maxWidth: .infinity, minHeight: 44)
-                        Rectangle().fill(selection == value ? LifeOSTokens.accent : .clear).frame(height: 2)
+                        Rectangle().fill(selection == value ? LifeOSTokens.primaryText.resolve(scheme) : .clear).frame(height: 2)
                     }
                     .contentShape(.rect)
                 }

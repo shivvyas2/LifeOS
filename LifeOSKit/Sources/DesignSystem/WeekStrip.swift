@@ -46,18 +46,20 @@ public struct WeekStrip: View {
                         if let ring, !isFuture {
                             Circle()
                                 .trim(from: 0, to: ring)
-                                .stroke(LifeOSTokens.accent,
+                                .stroke(isSelected ? LifeOSTokens.canvas.resolve(scheme) : LifeOSTokens.primaryText.resolve(scheme),
                                         style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                         }
                         Text(day.formatted(.dateTime.day()))
                             .font(LifeOSType.label.weight(isSelected ? .bold : .medium))
-                            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                            .foregroundStyle(isSelected ? LifeOSTokens.canvas.resolve(scheme) : LifeOSTokens.primaryText.resolve(scheme))
                     }
                     .frame(width: 36, height: 36)
                     .background {
+                        // The chosen day is a solid ink disc, as in the
+                        // editorial references; the accent is kept for live.
                         if isSelected {
-                            Circle().fill(LifeOSTokens.accentSoft.resolve(scheme))
+                            Circle().fill(LifeOSTokens.primaryText.resolve(scheme))
                         }
                     }
                 }

@@ -312,3 +312,84 @@ public struct IndexedTabStrip<Value: Hashable>: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
+
+// MARK: - Fields and cards
+
+/// The two gradient fields, drawn from the ConnectX reference: a cool grey
+/// light running into warm sand and peach, and a live ember that deepens
+/// from the accent to near black.
+public enum EditorialFieldTone: Sendable {
+    /// Readings and summaries: Health, recovery, a finished session. Ink text
+    /// in light mode, paper text in dark.
+    case dusk
+    /// Something happening now: a workout in progress, its Lock Screen card.
+    /// Dark enough throughout for white text in both schemes.
+    case ember
+
+    public func colors(_ scheme: ColorScheme) -> [Color] {
+        switch (self, scheme) {
+        case (.dusk, .dark):
+            [Color(red: 0.13, green: 0.17, blue: 0.19), Color(red: 0.24, green: 0.18, blue: 0.15), Color(red: 0.36, green: 0.18, blue: 0.11)]
+        case (.dusk, _):
+            [Color(red: 0.80, green: 0.84, blue: 0.86), Color(red: 0.93, green: 0.82, blue: 0.72), Color(red: 0.96, green: 0.66, blue: 0.48)]
+        case (.ember, _):
+            [Color(red: 0.93, green: 0.40, blue: 0.22), Color(red: 0.62, green: 0.16, blue: 0.08), Color(red: 0.10, green: 0.04, blue: 0.03)]
+        }
+    }
+
+    /// The ink that clears contrast on every stop of the field.
+    public func ink(_ scheme: ColorScheme) -> Color {
+        switch (self, scheme) {
+        case (.dusk, .dark), (.ember, _): Color(white: 0.97)
+        case (.dusk, _): LifeOSTokens.primaryText.resolve(.light)
+        }
+    }
+}
+
+/// A screen's one hero: content on a gradient field with large corners.
+///
+/// One per screen, the way the reference uses a single field per page.
+/// Everything else on the screen sits on paper, so the field reads as the
+/// headline rather than as one tint among six.
+public struct EditorialField<Content: View>: View {
+    let tone: EditorialFieldTone
+    let content: Content
+    @Environment(\.colorScheme) private var scheme
+
+    public init(_ tone: EditorialFieldTone = .dusk, @ViewBuilder content: () -> Content) {
+        self.tone = tone; self.content = content()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: Space.x2) { content }
+            .foregroundStyle(tone.ink(scheme))
+            .padding(Space.x3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(colors: tone.colors(scheme), startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+            )
+    }
+}
+
+extension View {
+    /// A card on paper: the card surface with a hairline edge, and no tint.
+    /// What every card that is not the screen's hero becomes.
+    public func editorialCard(padding: CGFloat = Space.x2 + 4, radius: CGFloat = Radius.medium + 4) -> some View {
+        modifier(EditorialCard(padding: padding, radius: radius))
+    }
+}
+
+private struct EditorialCard: ViewModifier {
+    let padding: CGFloat
+    let radius: CGFloat
+    @Environment(\.colorScheme) private var scheme
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Editorial.rule(scheme)))
+    }
+}

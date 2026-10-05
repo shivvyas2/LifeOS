@@ -18,12 +18,14 @@ public struct SoftCard<Content: View>: View {
     public var body: some View {
         content
             .padding(16)
+            // Paper with a hairline edge in the editorial style. `hue` no
+            // longer tints the card: a pastel per module was what made each
+            // screen look like its own app. It is kept so callers compile.
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(hue.map { scheme == .dark ? $0.pastelDark : $0.pastel } ?? LifeOSTokens.cardSurface.resolve(scheme))
-                    .shadow(color: scheme == .dark ? .clear : LifeOSTokens.cardShadow,
-                            radius: 12, y: 4)
+                    .fill(LifeOSTokens.cardSurface.resolve(scheme))
             )
+            .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Editorial.rule(scheme)))
     }
 }
 
