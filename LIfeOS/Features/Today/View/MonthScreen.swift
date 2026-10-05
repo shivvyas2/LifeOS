@@ -9,57 +9,77 @@ import Persistence
 /// day, and cannot leave the current month. This is the other question: what
 /// is on, across a month you can move through. The grid carries day numbers
 /// and up to three event dots per day; the agenda under it is the selected
-/// day, in the same row vocabulary the assistant's card and the Today tab use.
+/// Two months on hairlines: this one and the next. Past days are hatched,
+/// today is the accent, a dot marks a day with events, and a tap pushes the
+/// week's schedule at that day.
 struct MonthScreen: View {
     @State private var model = MonthViewModel()
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
+    @Environment(\.dismiss) private var dismiss
     @State private var showDatePicker = false
+    @State private var openDay: ScheduleDay?
 
-    /// Create and edit leave through the caller, which owns `CalendarSync`.
-    /// This screen never writes: it has no more business talking to EventKit
-    /// than `AgendaCard` does.
     var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
     var onAddEvent: (Date) -> Void = { _ in }
-
     var isCalendarConnected = true
     var onConnectCalendar: () -> Void = {}
 
     private let calendar = Calendar.current
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
 
-    private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
-    private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
+    /// A pushed day. `Date` is not `Identifiable`, and the push needs one.
+    struct ScheduleDay: Identifiable, Hashable {
+        let date: Date
+        var id: Date { date }
+    }
 
-    private var cells: [DotCell] {
-        // The states are ignored: this grid draws event dots, not habit
-        // status. `MonthGridLayout` is used for the part that is genuinely
-        // fiddly, which is how many blanks come before the first and after
-        // the last, given the locale's first weekday.
-        MonthGridLayout.cells(
-            monthContaining: model.month, calendar: calendar, today: .now, status: { _ in .noData }
-        )
+    private var months: [Date] {
+        [model.month, calendar.date(byAdding: .month, value: 1, to: model.month) ?? model.month]
     }
 
     var body: some View {
         ScrollView {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 28) {
-                    calendarPanel.frame(width: 400)
-                    agenda.frame(minWidth: 320, maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: Space.x4) {
+                header
+                if !isCalendarConnected { connectCard }
+                ForEach(months, id: \.self) { month in
+                    monthBlock(month)
                 }
-                VStack(alignment: .leading, spacing: 28) {
-                    calendarPanel
-                    agenda
-                }
+                Button("Go back") { dismiss() }
+                    .buttonStyle(.editorial(.secondary, fullWidth: true))
             }
+            .frame(maxWidth: layout.maxContentWidth)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, layout.gutter)
             .padding(.leading, layout.railInset)
-            .padding(.top, 16)
+            .padding(.top, Space.x2)
             .padding(.bottom, layout.contentBottomInset)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            model.step(value.translation.width < 0 ? 1 : -1)
+                        }
+                    }
+            )
         }
-        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .tint(LifeOSTokens.accent)
+        .background(paper.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Today") { model.goToToday() }
+                    .disabled(calendar.isDate(model.month, equalTo: .now, toGranularity: .month))
+            }
+        }
+        .navigationDestination(item: $openDay) { day in
+            DayScheduleScreen(model: model, day: day.date, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
+        }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
                 DatePicker("Go to date", selection: Binding(get: { model.selection }, set: {
@@ -75,53 +95,21 @@ struct MonthScreen: View {
                 } }
             }
             .presentationDetents([.medium, .large])
-            .tint(LifeOSTokens.accent)
-        }
-        .navigationTitle("Calendar")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Today") { model.goToToday() }
-                    .disabled(calendar.isDateInToday(model.selection))
-            }
         }
         .task { model.attach(context) }
-        // A write made from the sheet this screen opens lands in the store,
-        // not in this view model, so the month is re-read when the save
-        // notification arrives rather than left showing the old dots.
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
             model.load()
         }
     }
 
-    // MARK: - Month header
-
-    private var calendarPanel: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            header
-            grid
-        }
-        .padding(16)
-        .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 20))
-    }
-
     private var header: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .firstTextBaseline) {
             Button { showDatePicker = true } label: {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(model.month.formatted(.dateTime.month(.wide)))
-                        .font(LifeOSType.sectionTitle.weight(.bold))
-                        .foregroundStyle(primary)
-                    Text(model.month.formatted(.dateTime.year()))
-                        .font(LifeOSType.secondary)
-                        .foregroundStyle(secondary)
-                }
-
+                EditorialMasthead(eyebrow: "Monthly · \(model.month.formatted(.dateTime.year()))", title: "Calendar")
             }
             .buttonStyle(.plain)
             .accessibilityHint("Choose any date")
-            Spacer(minLength: 0)
-
+            Spacer(minLength: Space.x1)
             stepButton("chevron.left", months: -1, label: "Previous month")
             stepButton("chevron.right", months: 1, label: "Next month")
         }
@@ -132,150 +120,72 @@ struct MonthScreen: View {
             withAnimation(.easeOut(duration: 0.18)) { model.step(months) }
         } label: {
             Image(systemName: icon)
-                .font(LifeOSType.label.weight(.semibold))
-                .foregroundStyle(primary)
-                .frame(width: 44, height: 44)
-                .background(RoundedRectangle(cornerRadius: 12).fill(primary.opacity(0.045)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.editorial(.secondary, size: .compact))
         .accessibilityLabel(label)
     }
 
-    // MARK: - Grid
+    private var connectCard: some View {
+        VStack(alignment: .leading, spacing: Space.x2) {
+            Text("Connect your calendar to see and manage your events here.")
+                .font(LifeOSType.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Connect calendar", action: onConnectCalendar)
+                .buttonStyle(.editorial(.primary, size: .compact))
+        }
+        .editorialCard()
+    }
 
-    private var grid: some View {
-        VStack(spacing: 8) {
-            WeekdayHeader(calendar: calendar, today: model.month, spacing: 2)
-
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7),
-                spacing: 2
-            ) {
-                ForEach(cells) { cell in
+    private func monthBlock(_ month: Date) -> some View {
+        let isCurrent = calendar.isDate(month, equalTo: .now, toGranularity: .month)
+        return VStack(alignment: .leading, spacing: Space.x2) {
+            Text(month.formatted(.dateTime.month(.wide)))
+                .font(Editorial.headline(34)).tracking(-1)
+                .foregroundStyle(isCurrent ? LifeOSTokens.accent : ink)
+                .accessibilityAddTraits(.isHeader)
+            WeekdayHeader(calendar: calendar, today: month, spacing: 0)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
+                ForEach(MonthGridLayout.cells(monthContaining: month, calendar: calendar, today: .now, status: { _ in .noData })) { cell in
                     if let date = cell.date {
                         dayCell(date)
                     } else {
-                        // Keeps the row rectangular. `Color.clear` alone has
-                        // no intrinsic height and would collapse the row.
-                        Color.clear.frame(height: 46)
+                        Color.clear.frame(height: 48)
                     }
                 }
             }
+            .overlay(Rectangle().strokeBorder(Editorial.rule(scheme)))
         }
-        // A swipe is how people move through months everywhere else, and the
-        // chevrons stay for anyone who would rather aim than swipe.
-        .contentShape(.rect)
-        .gesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        model.step(value.translation.width < 0 ? 1 : -1)
-                    }
-                }
-        )
     }
 
     private func dayCell(_ date: Date) -> some View {
-        let events = model.events(on: date)
-        let isSelected = calendar.isDate(date, inSameDayAs: model.selection)
-        let isToday = calendar.isDateInToday(date)
-
+        let state = MonthDayState.of(date, calendar: calendar)
+        let count = model.events(on: date).count
         return Button {
-            model.select(date)
+            openDay = ScheduleDay(date: date)
         } label: {
-            VStack(spacing: 3) {
-                Text(date.formatted(.dateTime.day()))
-                    .font(LifeOSType.label.weight(isToday ? .bold : .medium))
-                    .foregroundStyle(isSelected ? Color.white : (isToday ? LifeOSTokens.accent : primary))
-
-                // Three at most. A day with nine events is a day with a lot
-                // on, which three dots and a heavier row in the agenda say
-                // better than nine dots two points wide.
-                HStack(spacing: 2) {
-                    ForEach(0..<min(events.count, 3), id: \.self) { _ in
-                        Circle()
-                            .fill(isSelected ? Color.white : LifeOSTokens.accent)
-                            .frame(width: 4, height: 4)
-                    }
+            ZStack {
+                if state == .today { Rectangle().fill(LifeOSTokens.accent) }
+                if state == .past {
+                    HatchedCell().stroke(LifeOSTokens.accent, lineWidth: 1).opacity(0.55)
                 }
-                .frame(height: 4)
+                VStack(spacing: 3) {
+                    Text(date.formatted(.dateTime.day()))
+                        .font(LifeOSType.label.weight(state == .today ? .semibold : .regular))
+                        .monospacedDigit()
+                        .foregroundStyle(state == .today ? paper : ink)
+                    Circle()
+                        .fill(state == .today ? paper : ink)
+                        .frame(width: 3, height: 3)
+                        .opacity(count > 0 ? 1 : 0)
+                }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 46)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(LifeOSTokens.accent)
-                }
-            }
+            .frame(height: 48)
+            .overlay(Rectangle().strokeBorder(Editorial.rule(scheme), lineWidth: 0.5))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-            "\(date.formatted(.dateTime.weekday(.wide).month().day())), \(events.count) events"
-        )
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    // MARK: - The selected day
-
-    private var agenda: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(calendar.isDateInToday(model.selection) ? "Today" : model.selection.formatted(.dateTime.weekday(.wide)))
-                        .font(.title2.bold()).foregroundStyle(primary)
-                    Text(model.selection.formatted(.dateTime.month(.wide).day()))
-                        .font(.subheadline).foregroundStyle(secondary)
-                }
-                Spacer()
-                Button {
-                    if isCalendarConnected { onAddEvent(model.selection) } else { onConnectCalendar() }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(LifeOSTokens.accent)
-                        .frame(width: 44, height: 44)
-                        .background(primary, in: RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add an event on this day")
-            }
-
-            if !isCalendarConnected {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Bring your plans together").font(.headline)
-                    Text("Connect your calendar to see and manage your events here.")
-                        .font(.subheadline).foregroundStyle(secondary)
-                    Button("Connect calendar", action: onConnectCalendar).frame(minHeight: 44)
-                }
-                .padding(16)
-                .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
-            }
-            let events = model.selectedEvents
-            if events.isEmpty && isCalendarConnected {
-                VStack(alignment: .leading, spacing: 12) {
-                    Image(systemName: "sun.horizon").font(.title).foregroundStyle(LifeOSTokens.accent)
-                    Text("A little room in your day").font(.headline)
-                    Text("Nothing scheduled. Add a plan when you’re ready.")
-                        .font(.subheadline).foregroundStyle(secondary)
-                    Button("Add an event") { onAddEvent(model.selection) }
-                        .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-                .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 16))
-            } else if !events.isEmpty {
-                Text("\(events.count) \(events.count == 1 ? "event" : "events")")
-                    .font(.subheadline).foregroundStyle(secondary)
-                ForEach(events.sorted { lhs, rhs in
-                    if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
-                    return lhs.startDate < rhs.startDate
-                }) { event in
-                    CalendarEventRow(event: event, onTap: onTapEvent)
-                }
-            }
-        }
+        .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(count) events")
+        .accessibilityAddTraits(state == .today ? [.isSelected] : [])
     }
 }
