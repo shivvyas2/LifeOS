@@ -56,6 +56,7 @@ struct BadmintonReviewScreen: View {
     /// conversion that traps on a value those rules exclude.
     private let analysis: SwingAnalysis?
     @State private var selected = 0
+    @State private var showInfo = false
     @State private var tags: BadmintonShotTags
     @Environment(\.modelContext) private var context
     /// The forehand sign learned from earlier sessions, used until this
@@ -100,18 +101,28 @@ struct BadmintonReviewScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("YOUR COURT REVIEW").font(.caption.weight(.semibold)).tracking(2).foregroundStyle(quiet)
-                    Text("Every movement,\na little clearer.").font(.system(.largeTitle, weight: .semibold))
-                    Text(workout.start, format: .dateTime.weekday().month().day()).font(.subheadline).foregroundStyle(quiet)
+                HStack(alignment: .top) {
+                    EditorialMasthead(eyebrow: "Badminton · \(workout.start.formatted(.dateTime.weekday().month().day()))",
+                                      title: "Court review")
+                    Button { showInfo = true } label: { Image(systemName: "info.circle").font(.title3) }
+                        .buttonStyle(.plain).frame(width: 44, height: 44)
+                        .accessibilityLabel("About this data")
                 }
                 HStack(spacing: 0) {
-                    metric("Court time", "\(workout.durationMinutes)", "min")
-                    metric("Energy", workout.energyKcal.map { String(Int($0.rounded())) } ?? "—", "kcal")
-                    metric("Candidates", analysis.map { String($0.events.count) } ?? "—", "estimated")
-                }.padding(.vertical, 18).foregroundStyle(EditorialFieldTone.dusk.ink(scheme))
-                .background(LinearGradient(colors: EditorialFieldTone.dusk.colors(scheme), startPoint: .top, endPoint: .bottom),
-                            in: RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
+                    metric("Court time", "\(workout.durationMinutes)", "min", onInk: solid)
+                    metric("Energy", workout.energyKcal.map { String(Int($0.rounded())) } ?? "—", "kcal", onInk: solid)
+                    metric("Swings", analysis.map { String($0.events.count) } ?? "—", "estimated", onInk: solid)
+                }.padding(.vertical, 18).foregroundStyle(solid ? .white : EditorialFieldTone.dusk.ink(scheme))
+                .background {
+                    // Solid ink in light mode, the session's numbers set like
+                    // a scoreboard; the dusk field in dark mode.
+                    if solid {
+                        RoundedRectangle(cornerRadius: Radius.large, style: .continuous).fill(LifeOSTokens.primaryText.resolve(.light))
+                    } else {
+                        RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+                            .fill(LinearGradient(colors: EditorialFieldTone.dusk.colors(scheme), startPoint: .top, endPoint: .bottom))
+                    }
+                }
                 if let session = Self.session(of: workout) {
                     matchPanel(session)
                 }
@@ -119,24 +130,8 @@ struct BadmintonReviewScreen: View {
                     motionReview(analysis)
                     if !analysis.events.isEmpty { strokesPanel(analysis) }
                 } else {
-                    panel("No wrist motion recorded", icon: "applewatch") {
-                        Text("This session contains workout totals only. For your next badminton session, enable swing analysis and wear Apple Watch on your racket wrist. WHOOP does not expose swing motion through its public API.")
-                    }
-                }
-                panel("What this session can tell you", icon: "scope") {
-                    LabeledContent("Wrist rotation & acceleration", value: analysis == nil ? "Not recorded" : "Measured")
-                    Hairline()
-                    LabeledContent("Swing count", value: analysis == nil ? "Not recorded" : "Experimental estimate")
-                    Hairline()
-                    LabeledContent("Court position", value: "Not measured")
-                    LabeledContent("Posture & impact angle", value: "Not measured")
-                    LabeledContent("Shuttle / racket speed", value: "Not measured")
-                }
-                panel("A useful next session", icon: "sparkle") {
-                    Text("Record a short drill and compare the candidates with a manual count. Practice swings and other quick arm movements can be included; gentle shots can be missed. Use video or a coach to review technique.")
-                    if let events = analysis?.events, events.count > 1 {
-                        let values = events.map(\.peakRotation).sorted()
-                        Text("Median candidate peak: \(Int((values[values.count / 2] * 180 / .pi).rounded()))°/s at the wrist. A higher value does not mean a better shot.")
+                    panel("No wrist data", icon: "applewatch") {
+                        Text("Turn on swing analysis and wear your watch on your racket wrist.")
                     }
                 }
             }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(22)
@@ -145,23 +140,57 @@ struct BadmintonReviewScreen: View {
         .foregroundStyle(jade)
         .navigationTitle("Badminton").navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar).tint(jade)
+        .sheet(isPresented: $showInfo) { infoSheet.presentationDetents([.medium, .large]) }
+    }
+
+    /// Everything the screen used to say in paragraphs, kept for whoever
+    /// wants it and out of the way of everyone else.
+    private var infoSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    EditorialSectionHeader(index: 1, title: "Measured")
+                    EditorialRow("Wrist rotation and acceleration", value: analysis == nil ? "Not recorded" : "Yes")
+                    EditorialRow("Swings", value: analysis == nil ? "Not recorded" : "Estimated")
+                    if let analysis {
+                        EditorialRow("Motion sampled", value: "\(Int(analysis.sampledSeconds / 60))m \(Int(analysis.sampledSeconds) % 60)s")
+                        if analysis.interrupted { EditorialRow("Sensor gaps", value: "Some") }
+                        if analysis.truncated { EditorialRow("Replay limit", value: "Reached") }
+                    }
+                    EditorialSectionHeader(index: 2, title: "Not measured").padding(.top, Space.x3)
+                    EditorialRow("Court position", value: "No")
+                    EditorialRow("Posture", value: "No")
+                    EditorialRow("Shuttle and racket speed", value: "No")
+                    EditorialSectionHeader(index: 3, title: "How to read it").padding(.top, Space.x3)
+                    Text("The figure plays the shot you tagged, or the side and serve the app estimated. Its body is an illustration; only the wrist is recorded. Wrist speed shows commitment, not shot quality. Practice swings can be counted, and gentle shots missed.")
+                        .font(LifeOSType.secondary).foregroundStyle(quiet).padding(.top, Space.x1)
+                }
+                .padding(22)
+            }
+            .navigationTitle("About this data").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showInfo = false } } }
+        }
     }
     private func motionReview(_ analysis: SwingAnalysis) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack { Text("Motion replay").font(.title2.bold()); Spacer(); Text("EXPERIMENTAL").font(.caption2.bold()).foregroundStyle(jade) }
-            Text("Recorded wrist orientation. Court and wrist position are illustrative; body posture and shot trajectory are not reconstructed.").font(.caption).foregroundStyle(quiet)
+            EditorialSectionHeader(index: 1, title: "Replay") { EditorialTag("Beta") }
             if analysis.events.isEmpty {
-                ContentUnavailableView("No swing candidates", systemImage: "waveform.path", description: Text("No qualifying motion bursts were recorded. This does not mean you made no shots."))
+                ContentUnavailableView("No swings found", systemImage: "waveform.path")
             } else {
                 // Keyed by the candidate, so choosing another one starts its
                 // replay from the beginning, stopped.
-                SwingReplay(event: event, tint: jade, leftHanded: analysis.profile?.playingHand == .left).id(selected)
+                SwingReplay(event: event, tint: jade, leftHanded: analysis.profile?.playingHand == .left,
+                            motion: event.flatMap { SwingMotion.choose(for: $0, in: analysis.events, tags: tags, convention: convention) })
+                    .id(selected)
                 HStack {
                     Button { selected -= 1 } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(selected == 0)
                     Spacer()
                     VStack(spacing: 4) {
-                        Text("Candidate \(selected + 1) of \(analysis.events.count)").font(.headline)
-                        if let event { Text("\(Int(event.time) / 60):\(String(format: "%02d", Int(event.time) % 60)) active time").font(.caption).foregroundStyle(.secondary) }
+                        Text("Swing \(selected + 1) of \(analysis.events.count)").font(.headline)
+                        if let event {
+                            Text("\(Int(event.time) / 60):\(String(format: "%02d", Int(event.time) % 60)) · \(replayLine(event, analysis))")
+                                .font(.caption).foregroundStyle(quiet)
+                        }
                     }
                     Spacer()
                     Button { selected += 1 } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.disabled(selected + 1 >= analysis.events.count)
@@ -169,20 +198,25 @@ struct BadmintonReviewScreen: View {
                 if let event {
                     tagging(event)
                     HStack {
-                        metric("Peak wrist rotation", String(Int((event.peakRotation * 180 / .pi).rounded())), "°/s")
-                        metric("Peak acceleration", String(format: "%.1f", event.peakAcceleration), "g · gravity removed")
+                        metric("Wrist speed", String(Int((event.peakRotation * 180 / .pi).rounded())), "°/s")
+                        metric("Acceleration", String(format: "%.1f", event.peakAcceleration), "g")
                     }
                 }
                 Chart(analysis.events) { event in
                     BarMark(x: .value("Active time", event.time / 60), y: .value("Peak wrist rotation", event.peakRotation * 180 / .pi), width: 3)
                         .foregroundStyle(event.id == selected ? LifeOSTokens.accent : jade.opacity(0.35))
-                }.frame(height: 110).chartXAxisLabel("Active minutes").chartYAxisLabel("°/s")
+                }.frame(height: 90).chartXAxisLabel("Minutes").chartYAxis(.hidden)
                     .accessibilityLabel("Wrist rotation peaks for \(analysis.events.count) estimated swing candidates")
             }
-            Text("Motion coverage: \(Int(analysis.sampledSeconds / 60))m \(Int(analysis.sampledSeconds) % 60)s sampled.\(analysis.interrupted ? " Sensor interruptions occurred." : "")\(analysis.truncated ? " Replay limit reached; later candidates were not retained." : "")")
-                .font(.caption).foregroundStyle(quiet)
         }
     }
+    /// What the replay is showing, in a few words.
+    private func replayLine(_ event: SwingEvent, _ analysis: SwingAnalysis) -> String {
+        guard let motion = SwingMotion.choose(for: event, in: analysis.events, tags: tags, convention: convention) else { return "wrist only" }
+        let tagged = tags[event.id]?.type != nil || tags[event.id]?.notAShot == true
+        return motion.title.capitalized + (tagged ? "" : " · auto")
+    }
+
     /// What the player says about the selected candidate. A side that has
     /// not been tagged shows the call the learned convention makes, marked
     /// as such, so a wrong call is one tap from corrected.
@@ -205,8 +239,13 @@ struct BadmintonReviewScreen: View {
             }
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
-                    ForEach(BadmintonShotType.allCases, id: \.self) { type in
-                        chip(type.title, on: tag.type == type, firm: true) {
+                    // An untagged rally opener shows its estimated serve the
+                    // way an untagged side shows its call: dashed, marked auto.
+                    let estimated = tag.type == nil
+                        ? StrokeClassifier.serve(of: event, in: analysis?.events ?? [], convention: convention, tags: tags) : nil
+                    ForEach(BadmintonShotType.taggable, id: \.self) { type in
+                        chip(type.title + (estimated == type ? " · auto" : ""), on: tag.type == type || estimated == type,
+                             firm: tag.type == type) {
                             setTag { $0.type = $0.type == type ? nil : type; $0.notAShot = false }
                         }
                     }
@@ -233,7 +272,7 @@ struct BadmintonReviewScreen: View {
         let summary = StrokeClassifier.summary(events: analysis.events, convention: convention, tags: tags)
         return panel("Your strokes", icon: "arrow.left.arrow.right") {
             if convention == nil {
-                Text("Tag two or three swings as forehand or backhand in the replay above, and the rest of this session, and later ones, are called for you.")
+                Text("Tag a few forehands and backhands; the rest are called for you.")
             }
             LabeledContent("Forehand", value: sideLine(summary.forehand))
             Hairline()
@@ -243,8 +282,7 @@ struct BadmintonReviewScreen: View {
                 LabeledContent("Too close to call", value: "\(summary.unclear)")
             }
             if let stronger = summary.stronger {
-                Text("Your \(stronger.title.lowercased()) moves the wrist faster on average. Wrist speed is not shot quality; use it to see which side you commit to.")
-                    .font(.caption).foregroundStyle(quiet)
+                Text("Faster side: \(stronger.title.lowercased())").font(.caption).foregroundStyle(quiet)
             }
             if !summary.types.isEmpty {
                 Text(BadmintonShotType.allCases.compactMap { type in summary.types[type].map { "\($0) \(type.title.lowercased())" } }.joined(separator: " · "))
@@ -258,10 +296,10 @@ struct BadmintonReviewScreen: View {
     }
 
     private func matchPanel(_ session: BadmintonSession) -> some View {
-        panel(session.kind == .match ? "Match" : "Practice", icon: "trophy") {
+        panel(session.kind == .match ? "Match" : "Practice", icon: "trophy", solid: solid) {
             if let score = session.score {
                 Text(score.winner.map { $0 == .us ? "Won" : "Lost" } ?? "Unfinished")
-                    .font(Editorial.headline(28)).foregroundStyle(jade)
+                    .font(Editorial.headline(28)).foregroundStyle(solid ? .white : jade)
                 ForEach(Array((score.games + (score.current == BadmintonGame() ? [] : [score.current])).enumerated()), id: \.offset) { index, game in
                     LabeledContent("Game \(index + 1)", value: "\(game.us) – \(game.them)")
                     Hairline()
@@ -274,20 +312,29 @@ struct BadmintonReviewScreen: View {
             if !session.opponents.isEmpty { LabeledContent("Against", value: session.opponents.joined(separator: " & ")) }
         }
     }
-    private func metric(_ title: String, _ value: String, _ unit: String) -> some View {
+    /// The summary strip and the match card are solid ink in light mode.
+    private var solid: Bool { scheme == .light }
+
+    private func metric(_ title: String, _ value: String, _ unit: String, onInk: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.caption).foregroundStyle(quiet)
+            Text(title).font(.caption).foregroundStyle(onInk ? .white.opacity(0.62) : quiet)
             Text(value).font(.system(.title, design: .rounded, weight: .semibold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            Text(unit).font(.caption2).foregroundStyle(jade)
+            Text(unit).font(.caption2).foregroundStyle(onInk ? .white.opacity(0.8) : jade)
         }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
     }
-    private func panel<Content: View>(_ title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+    /// A card on paper, or with `solid` in light mode, ink with white text:
+    /// the card is drawn in the dark scheme on the light ink, so its rules
+    /// and quiet text resolve light without a second set of colours.
+    private func panel<Content: View>(_ title: String, icon: String, solid: Bool = false,
+                                      @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(title, systemImage: icon).font(.headline).foregroundStyle(jade)
-            content().font(.subheadline).foregroundStyle(quiet)
+            Label(title, systemImage: icon).font(.headline).foregroundStyle(solid ? .white : jade)
+            content().font(.subheadline).foregroundStyle(solid ? .white.opacity(0.75) : quiet)
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(LifeOSTokens.cardSurface.resolve(scheme), in: RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Editorial.rule(scheme)))
+            .environment(\.colorScheme, solid ? .dark : scheme)
+            .background(solid ? LifeOSTokens.primaryText.resolve(.light) : LifeOSTokens.cardSurface.resolve(scheme),
+                        in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(solid ? .clear : Editorial.rule(scheme)))
     }
 }
 
@@ -300,15 +347,34 @@ private struct SwingReplay: View {
     let event: SwingEvent?
     let tint: Color
     var leftHanded = false
+    var motion: SwingMotion?
     @State private var playback = 0.0
     @State private var playing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var scheme
+    @State private var angle: ReplayAngle = .front
     private var duration: Double { event?.duration ?? 0 }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            WristCourtReplay(event: event, time: playback, leftHanded: leftHanded)
-                .frame(height: 280).clipShape(RoundedRectangle(cornerRadius: 24))
+            WristCourtReplay(event: event, time: playback, leftHanded: leftHanded, dark: scheme == .dark, motion: motion, angle: angle)
+                // Rebuilt when the appearance changes, since the court's
+                // colours are set when the scene is made.
+                .id(scheme)
+                .frame(height: 300).clipShape(RoundedRectangle(cornerRadius: 24))
+                .overlay(alignment: .topTrailing) {
+                    Label("Drag to turn", systemImage: "hand.draw").font(.caption2.weight(.medium))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule()).padding(10)
+                        .accessibilityHidden(true)
+                }
+            HStack(spacing: 6) {
+                ForEach(ReplayAngle.allCases, id: \.self) { option in
+                    Button(option.title) { angle = option }
+                        .buttonStyle(.editorial(angle == option ? .primary : .secondary, size: .compact))
+                        .accessibilityAddTraits(angle == option ? .isSelected : [])
+                }
+            }
                 .accessibilityLabel("3D player figure whose racket arm follows the measured wrist orientation. Court position and posture are not tracked.")
             HStack {
                 Button { if playback >= duration { playback = 0 }; playing.toggle() } label: {
@@ -341,46 +407,116 @@ private struct WristCourtReplay: UIViewRepresentable {
     var time: Double
     /// Mirrors the figure, so a left-hander sees the racket in the left hand.
     var leftHanded = false
+    /// Paper court and ink lines in light mode, the dark court in dark mode.
+    var dark = false
+    /// The shot to animate the whole figure through; nil replays the wrist
+    /// alone on a still figure.
+    var motion: SwingMotion?
+    var angle: ReplayAngle = .front
+
+    final class Coordinator { var angle: ReplayAngle? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// Where each preset puts the camera, all looking at the player.
+    static func place(_ camera: SCNNode, at angle: ReplayAngle) {
+        let target = SCNVector3(0.05, 1.05, 3.4)
+        switch angle {
+        case .front: camera.position = SCNVector3(1.5, 1.85, 0.9)
+        case .side: camera.position = SCNVector3(3.7, 1.55, 3.4)
+        case .behind: camera.position = SCNVector3(0.9, 2.2, 7.6)
+        case .above: camera.position = SCNVector3(0.02, 6.2, 3.45)
+        }
+        camera.look(at: target)
+    }
+    /// Where the player stands: on the near half, between the service line
+    /// and the back line.
+    static let base: SIMD3<Float> = [0, 0, 3.4]
+
+    /// The court's colours for the current appearance. The figure is drawn
+    /// the same way in both: white with ink outlines reads on either.
+    private struct CourtPalette {
+        let background, floor, line, net, tape: UIColor
+        static let light = CourtPalette(
+            background: UIColor(red: 0.953, green: 0.949, blue: 0.941, alpha: 1),
+            floor: UIColor(red: 0.89, green: 0.875, blue: 0.85, alpha: 1),
+            line: UIColor(white: 0.1, alpha: 0.85), net: UIColor(white: 0.1, alpha: 0.12),
+            tape: UIColor(white: 0.1, alpha: 1))
+        static let dark = CourtPalette(
+            background: UIColor(red: 0.015, green: 0.075, blue: 0.07, alpha: 1),
+            floor: UIColor(red: 0.03, green: 0.17, blue: 0.14, alpha: 1),
+            line: UIColor(white: 1, alpha: 0.55), net: UIColor(white: 1, alpha: 0.18),
+            tape: UIColor(white: 1, alpha: 0.85))
+    }
+
     func makeUIView(context: Context) -> SCNView {
+        let palette = dark ? CourtPalette.dark : CourtPalette.light
         let view = SCNView(); let scene = SCNScene(); view.scene = scene
-        view.backgroundColor = UIColor(red: 0.015, green: 0.075, blue: 0.07, alpha: 1)
+        view.backgroundColor = palette.background
         view.autoenablesDefaultLighting = true; view.allowsCameraControl = true
-        // Framed on the player, whose racket arm is the only thing that
-        // moves, with the net behind for scale. From the whole-court view
-        // this used to start at, the figure was a few pixels.
-        let camera = SCNNode(); camera.camera = SCNCamera(); camera.position = SCNVector3(2.1, 2.05, 6.5)
-        camera.look(at: SCNVector3(0, 1.15, 3.0)); scene.rootNode.addChildNode(camera)
+        // From the net side, looking back at the player: the face and the
+        // racket arm are towards the camera, and the court runs away behind
+        // them to the back line. From behind, the figure was its shirt.
+        let camera = SCNNode(); camera.name = "camera"; camera.camera = SCNCamera()
+        Self.place(camera, at: angle)
+        scene.rootNode.addChildNode(camera)
+        view.pointOfView = camera
+        context.coordinator.angle = angle
         // A regulation court in metres (BWF Laws, Appendix 1): 13.4 by 6.1
         // for doubles, singles sidelines 0.46 inside, short service lines
         // 1.98 from the net, doubles long service lines 0.76 inside the back
         // line, centre lines from the short service line back.
         let floor = SCNBox(width: 6.5, height: 0.06, length: 13.8, chamferRadius: 0.04)
-        floor.firstMaterial?.diffuse.contents = UIColor(red: 0.025, green: 0.32, blue: 0.25, alpha: 1)
+        floor.firstMaterial?.diffuse.contents = palette.floor
+        // Flat like the figure, so the light court reads as paper, not grey.
+        floor.firstMaterial?.lightingModel = .constant
         let floorNode = SCNNode(geometry: floor); floorNode.position.y = -0.03
         scene.rootNode.addChildNode(floorNode)
         let halfWidth: Float = 3.05, singles: Float = 2.59, back: Float = 6.7
-        for x in [-halfWidth, halfWidth, -singles, singles] { line(scene, x: x, z: 0, width: 0.04, length: CGFloat(back * 2)) }
-        for z in [-back, back, -5.94, 5.94, -1.98, 1.98] { line(scene, x: 0, z: z, width: CGFloat(halfWidth * 2), length: 0.04) }
+        for x in [-halfWidth, halfWidth, -singles, singles] { line(scene, palette.line, x: x, z: 0, width: 0.04, length: CGFloat(back * 2)) }
+        for z in [-back, back, -5.94, 5.94, -1.98, 1.98] { line(scene, palette.line, x: 0, z: z, width: CGFloat(halfWidth * 2), length: 0.04) }
         let centreLength: Float = back - 1.98
-        line(scene, x: 0, z: 1.98 + centreLength / 2, width: 0.04, length: CGFloat(centreLength))
-        line(scene, x: 0, z: -(1.98 + centreLength / 2), width: 0.04, length: CGFloat(centreLength))
+        line(scene, palette.line, x: 0, z: 1.98 + centreLength / 2, width: 0.04, length: CGFloat(centreLength))
+        line(scene, palette.line, x: 0, z: -(1.98 + centreLength / 2), width: 0.04, length: CGFloat(centreLength))
         // The net: 1.55 m at the posts, a 0.76 m deep mesh band below the top.
         let net = SCNBox(width: CGFloat(halfWidth * 2), height: 0.76, length: 0.02, chamferRadius: 0)
-        net.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.18)
+        net.firstMaterial?.diffuse.contents = palette.net
         let netNode = SCNNode(geometry: net); netNode.position = SCNVector3(0, 1.55 - 0.38, 0); scene.rootNode.addChildNode(netNode)
         let tape = SCNBox(width: CGFloat(halfWidth * 2), height: 0.04, length: 0.03, chamferRadius: 0)
-        tape.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.85)
+        tape.firstMaterial?.diffuse.contents = palette.tape
         let tapeNode = SCNNode(geometry: tape); tapeNode.position = SCNVector3(0, 1.55, 0); scene.rootNode.addChildNode(tapeNode)
         for x in [-halfWidth, halfWidth] {
             let post = SCNCylinder(radius: 0.03, height: 1.55)
-            post.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.7)
+            post.firstMaterial?.diffuse.contents = palette.tape
             let postNode = SCNNode(geometry: post); postNode.position = SCNVector3(x, 0.775, 0); scene.rootNode.addChildNode(postNode)
         }
-        scene.rootNode.addChildNode(Self.player(leftHanded: leftHanded))
+        let figure = BadmintonFigure.build(leftHanded: leftHanded)
+        BadmintonFigure.apply(.ready, to: figure, base: Self.base)
+        scene.rootNode.addChildNode(figure)
         return view
     }
     func updateUIView(_ view: SCNView, context: Context) {
-        guard let wrist = view.scene?.rootNode.childNode(withName: "wrist", recursively: true) else { return }
+        // A new preset moves the camera, eased; anything else leaves it where
+        // the person dragged it, since this runs on every playback tick.
+        if context.coordinator.angle != angle, let camera = view.scene?.rootNode.childNode(withName: "camera", recursively: false) {
+            context.coordinator.angle = angle
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = 0.6
+            view.pointOfView = camera
+            Self.place(camera, at: angle)
+            SCNTransaction.commit()
+        }
+        guard let figure = view.scene?.rootNode.childNode(withName: "figure", recursively: false),
+              let wrist = figure.childNode(withName: "wrist", recursively: true) else { return }
+        // A known shot: the whole figure plays it, timed over the recorded
+        // swing so the playback slider scrubs through it.
+        if let motion, let duration = event?.duration, duration > 0 {
+            BadmintonFigure.apply(motion.pose(at: Float(time / duration)), to: figure, base: Self.base)
+            wrist.simdOrientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+            return
+        }
+        // Otherwise the still figure in the ready position, with the
+        // forearm turned by the recorded wrist orientation.
+        BadmintonFigure.apply(.ready, to: figure, base: Self.base)
         guard let frames = event?.frames, let first = frames.first else { wrist.orientation = SCNQuaternion(0, 0, 0, 1); return }
         let frame = frames.last(where: { $0.t <= time }) ?? first
         // Relative attitude removes the arbitrary session reference direction.
@@ -399,108 +535,23 @@ private struct WristCourtReplay: UIViewRepresentable {
         guard length.isFinite, length > 0.5 else { return nil }
         return q.normalized
     }
-    // MARK: - The player
-
-    /// A brutalist stick figure in the ready position on the near half: flat
-    /// concrete blocks for limbs, a box head with a glowing visor, a glowing
-    /// seam down the torso and a glowing racket frame.
-    ///
-    /// Only the forearm, hand and racket move. They hang from a pivot at the
-    /// elbow named "wrist", which `updateUIView` turns by the recorded wrist
-    /// orientation: the watch sits on the forearm, so its attitude is the
-    /// forearm's. The body is fixed on purpose, because posture is not
-    /// measured and the screen says so; animating it would invent a pose.
-    static func player(leftHanded: Bool) -> SCNNode {
-        let concrete = material(UIColor(white: 0.9, alpha: 1))
-        let shadowed = material(UIColor(white: 0.72, alpha: 1))
-        let glow = material(UIColor(red: 0.94, green: 0.34, blue: 0.18, alpha: 1), glows: true)
-        let root = SCNNode()
-        root.position = SCNVector3(0, 0, 3.4)
-        // Facing the net, which is towards -z.
-        if leftHanded { root.scale.x = -1 }
-
-        // Ground the figure with a soft footprint.
-        let footprint = SCNCylinder(radius: 0.42, height: 0.004)
-        footprint.firstMaterial = material(UIColor(white: 0, alpha: 0.35))
-        let print = SCNNode(geometry: footprint); print.position.y = 0.012; root.addChildNode(print)
-
-        // Legs in a split ready stance, knees soft.
-        root.addChildNode(segment(from: [-0.17, 0.0, 0.10], to: [-0.13, 0.48, 0.02], thickness: 0.1, material: shadowed))
-        root.addChildNode(segment(from: [-0.13, 0.48, 0.02], to: [-0.11, 0.95, 0.0], thickness: 0.11, material: concrete))
-        root.addChildNode(segment(from: [0.19, 0.0, -0.14], to: [0.15, 0.48, -0.05], thickness: 0.1, material: shadowed))
-        root.addChildNode(segment(from: [0.15, 0.48, -0.05], to: [0.11, 0.95, 0.0], thickness: 0.11, material: concrete))
-        // Pelvis, torso and the glowing seam.
-        root.addChildNode(box(0.34, 0.12, 0.18, at: [0, 0.98, 0], concrete))
-        let torso = box(0.36, 0.56, 0.18, at: [0, 1.32, -0.02], concrete)
-        torso.eulerAngles.x = 0.12
-        torso.addChildNode(box(0.025, 0.5, 0.01, at: [0, 0, -0.096], glow))
-        root.addChildNode(torso)
-        // Neck, head and visor.
-        root.addChildNode(box(0.08, 0.08, 0.08, at: [0, 1.64, -0.04], shadowed))
-        let head = box(0.22, 0.24, 0.22, at: [0, 1.79, -0.05], concrete)
-        head.addChildNode(box(0.19, 0.035, 0.012, at: [0, 0.02, -0.112], glow))
-        root.addChildNode(head)
-
-        // The free arm, bent and held up for balance.
-        let freeShoulder: SIMD3<Float> = [-0.22, 1.52, -0.02]
-        let freeElbow: SIMD3<Float> = [-0.36, 1.3, -0.18]
-        root.addChildNode(segment(from: freeShoulder, to: freeElbow, thickness: 0.08, material: concrete))
-        root.addChildNode(segment(from: freeElbow, to: [-0.3, 1.5, -0.36], thickness: 0.07, material: shadowed))
-
-        // The racket arm. The upper arm is fixed; everything from the elbow
-        // out hangs from the "wrist" pivot.
-        let shoulder: SIMD3<Float> = [0.22, 1.52, -0.02]
-        let elbow: SIMD3<Float> = [0.4, 1.32, -0.2]
-        root.addChildNode(segment(from: shoulder, to: elbow, thickness: 0.08, material: concrete))
-        let pivot = SCNNode(); pivot.name = "wrist"; pivot.simdPosition = elbow
-        root.addChildNode(pivot)
-        let hand: SIMD3<Float> = [0.02, 0.27, -0.12]
-        pivot.addChildNode(segment(from: [0, 0, 0], to: hand, thickness: 0.07, material: concrete))
-        pivot.addChildNode(box(0.07, 0.09, 0.07, at: hand + [0, 0.04, -0.01], shadowed))
-        // Racket: handle, shaft, and the glowing frame with faint strings.
-        let shaftEnd = hand + [0.0, 0.42, -0.16]
-        pivot.addChildNode(segment(from: hand, to: shaftEnd, thickness: 0.022, material: shadowed))
-        let headCentre = shaftEnd + [0, 0.14, -0.05]
-        let frame = SCNTorus(ringRadius: 0.11, pipeRadius: 0.009)
-        frame.firstMaterial = glow
-        let frameNode = SCNNode(geometry: frame)
-        frameNode.simdPosition = headCentre
-        frameNode.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize([0, 0.3, 0.95]))
-        frameNode.scale = SCNVector3(1, 1, 1.3)
-        let strings = SCNCylinder(radius: 0.105, height: 0.002)
-        strings.firstMaterial = material(UIColor(white: 1, alpha: 0.18))
-        frameNode.addChildNode(SCNNode(geometry: strings))
-        pivot.addChildNode(frameNode)
-        return root
-    }
-
-    private static func material(_ color: UIColor, glows: Bool = false) -> SCNMaterial {
-        let material = SCNMaterial()
-        material.diffuse.contents = color
-        material.lightingModel = glows ? .constant : .lambert
-        if glows { material.emission.contents = color }
-        if color.cgColor.alpha < 1 { material.transparency = color.cgColor.alpha; material.blendMode = .alpha }
-        return material
-    }
-
-    private static func box(_ width: CGFloat, _ height: CGFloat, _ length: CGFloat, at position: SIMD3<Float>, _ material: SCNMaterial) -> SCNNode {
-        let geometry = SCNBox(width: width, height: height, length: length, chamferRadius: min(width, length) * 0.12)
-        geometry.firstMaterial = material
-        let node = SCNNode(geometry: geometry); node.simdPosition = position
-        return node
-    }
-
-    /// A square-section limb from one joint to the next.
-    private static func segment(from a: SIMD3<Float>, to b: SIMD3<Float>, thickness: CGFloat, material: SCNMaterial) -> SCNNode {
-        let length = simd_length(b - a)
-        let node = box(thickness, CGFloat(length), thickness, at: (a + b) / 2, material)
-        node.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize(b - a))
-        return node
-    }
-
-    private func line(_ scene: SCNScene, x: Float, z: Float, width: CGFloat, length: CGFloat) {
+    private func line(_ scene: SCNScene, _ color: UIColor, x: Float, z: Float, width: CGFloat, length: CGFloat) {
         let box = SCNBox(width: width, height: 0.02, length: length, chamferRadius: 0)
-        box.firstMaterial?.diffuse.contents = UIColor.white.withAlphaComponent(0.55)
+        box.firstMaterial?.diffuse.contents = color
+        box.firstMaterial?.lightingModel = .constant
         let node = SCNNode(geometry: box); node.position = SCNVector3(x, 0.011, z); scene.rootNode.addChildNode(node)
+    }
+}
+
+/// The replay's camera presets. The view can also be turned by dragging.
+enum ReplayAngle: CaseIterable {
+    case front, side, behind, above
+    var title: String {
+        switch self {
+        case .front: "Front"
+        case .side: "Side"
+        case .behind: "Behind"
+        case .above: "Above"
+        }
     }
 }
