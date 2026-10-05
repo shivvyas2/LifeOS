@@ -24,50 +24,27 @@ struct InFlightSectorScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
-                bandHeader
+                EditorialMasthead(eyebrow: "\(sector.title) · In flight",
+                                  title: rangeText,
+                                  detail: model.remainingDays == 1 ? "1 day left" : "\(model.remainingDays) days left")
 
-                if !model.levers.isEmpty {
-                    section("What moves it most") {
-                        ForEach(model.levers) { delta in
-                            HStack {
-                                Text(delta.lever.label)
-                                Spacer()
-                                Text(delta.delta < 0.05 ? "at target" : "+\(delta.delta, specifier: "%.1f")")
-                                    .monospacedDigit()
-                                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                            }
-                            .font(LifeOSType.secondary)
-                        }
-                    }
+                if model.band?.ceiling == nil, sector == .money {
+                    Text("No ceiling until you set budget buckets. Nothing in the data says what a good remaining spend would be.")
+                        .font(LifeOSType.caption)
+                        .foregroundStyle(Editorial.quietInk(scheme))
                 }
 
-                if !model.questions.isEmpty {
-                    section("Read it now") {
-                        ForEach(model.questions, id: \.id) { question in
-                            CheckInQuestionView(
-                                question: question,
-                                answer: model.answers[question.id],
-                                onAnswer: { model.answer(question, with: $0) }
-                            )
-                        }
-                    }
-                }
-
-                if let band = model.band, band.floorEvidence.isEmpty == false {
-                    section("If nothing changes") {
-                        evidenceRows(band.floorEvidence)
-                    }
-                    if band.ceiling != nil {
-                        section("If you finish at your targets") {
-                            evidenceRows(band.ceilingEvidence)
-                        }
+                ForEach(Array(sections.enumerated()), id: \.element) { offset, section in
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        EditorialSectionHeader(index: offset + 1, title: section.title)
+                        content(section)
                     }
                 }
 
                 if model.usesDefaultTargets {
                     Text("This ceiling uses the default targets. Set your own in Health to make it yours.")
                         .font(LifeOSType.caption)
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .foregroundStyle(Editorial.quietInk(scheme))
                 }
             }
             .padding(Space.x3)
@@ -81,48 +58,61 @@ struct InFlightSectorScreen: View {
         .onDisappear { model.flushPendingSaves() }
     }
 
-    @ViewBuilder
-    private var bandHeader: some View {
-        VStack(alignment: .leading, spacing: Space.half) {
-            Text(rangeText)
-                .font(LifeOSType.display)
-                .monospacedDigit()
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            Text(model.remainingDays == 1 ? "1 day left" : "\(model.remainingDays) days left")
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            if model.band?.ceiling == nil, sector == .money {
-                Text("No ceiling until you set budget buckets. Nothing in the data says what a good remaining spend would be.")
-                    .font(LifeOSType.caption)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            }
-        }
-    }
-
     private var rangeText: String {
         model.band?.rangeText ?? "Not read yet"
     }
 
+    private enum Section: Hashable {
+        case levers, questions, floor, ceiling
+
+        var title: String {
+            switch self {
+            case .levers: "What moves it most"
+            case .questions: "Read it now"
+            case .floor: "If nothing changes"
+            case .ceiling: "If you finish at your targets"
+            }
+        }
+    }
+
+    private var sections: [Section] {
+        var list: [Section] = []
+        if !model.levers.isEmpty { list.append(.levers) }
+        if !model.questions.isEmpty { list.append(.questions) }
+        if let band = model.band, !band.floorEvidence.isEmpty {
+            list.append(.floor)
+            if band.ceiling != nil { list.append(.ceiling) }
+        }
+        return list
+    }
+
     @ViewBuilder
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: Space.x1) {
-            Text(title)
-                .font(LifeOSType.sectionTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            content()
+    private func content(_ section: Section) -> some View {
+        switch section {
+        case .levers:
+            ForEach(model.levers) { delta in
+                EditorialRow(delta.lever.label,
+                             value: delta.delta < 0.05 ? "at target" : "+\(delta.delta.formatted(.number.precision(.fractionLength(1))))")
+            }
+        case .questions:
+            ForEach(model.questions, id: \.id) { question in
+                CheckInQuestionView(
+                    question: question,
+                    answer: model.answers[question.id],
+                    onAnswer: { model.answer(question, with: $0) }
+                )
+            }
+        case .floor:
+            if let band = model.band { evidenceRows(band.floorEvidence) }
+        case .ceiling:
+            if let band = model.band { evidenceRows(band.ceilingEvidence) }
         }
     }
 
     @ViewBuilder
     private func evidenceRows(_ evidence: Evidence) -> some View {
         ForEach(evidence.rows, id: \.label) { row in
-            HStack {
-                Text(row.label)
-                Spacer()
-                Text(row.value)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-            }
-            .font(LifeOSType.secondary)
+            EditorialRow(row.label, value: row.value)
         }
     }
 }
