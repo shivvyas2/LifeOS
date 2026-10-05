@@ -36,6 +36,9 @@ public final class WorkoutRecord {
     /// A badminton match or practice (`BadmintonSession`) as JSON. Optional,
     /// so an installed store opens without a migration.
     public var badmintonData: Data?
+    /// The player's tags on this session's swing candidates
+    /// (`BadmintonShotTags`) as JSON. Optional, like the column above.
+    public var shotTagsData: Data?
     public var setsData: Data?
     public var sets: [Int] {
         get { setsData.flatMap { try? JSONDecoder().decode([Int].self, from: $0) } ?? [] }

@@ -24,9 +24,17 @@ public struct SwingEvent: Codable, Equatable, Sendable, Identifiable {
     public var peakRotation: Double // rad/s, wrist, never racket-head speed
     public var peakAcceleration: Double // g, gravity removed
     public var frames: [WristFrame]
-    public init(id: Int, time: Double, duration: Double, peakRotation: Double, peakAcceleration: Double, frames: [WristFrame]) {
+    /// Mean rotation about the forearm during the swing, rad/s, signed. A
+    /// forehand turns the forearm one way and a backhand the other; which
+    /// sign is which depends on the wrist and the crown, so it is learned
+    /// from the player's own tags (`StrokeClassifier`), not assumed. Nil on
+    /// swings recorded before this was measured.
+    public var twist: Double?
+    public init(id: Int, time: Double, duration: Double, peakRotation: Double, peakAcceleration: Double,
+                frames: [WristFrame], twist: Double? = nil) {
         self.id = id; self.time = time; self.duration = duration
         self.peakRotation = peakRotation; self.peakAcceleration = peakAcceleration; self.frames = frames
+        self.twist = twist
     }
 }
 public struct SwingAnalysis: Codable, Equatable, Sendable {
@@ -50,7 +58,8 @@ public struct SwingAnalysis: Codable, Equatable, Sendable {
                   event.duration.isFinite, (0.08...2).contains(event.duration),
                   event.peakRotation.isFinite, (0...100).contains(event.peakRotation),
                   event.peakAcceleration.isFinite, (0...100).contains(event.peakAcceleration),
-                  event.frames.count <= 8 else { return false }
+                  event.frames.count <= 8,
+                  event.twist.map({ $0.isFinite && abs($0) <= 100 }) ?? true else { return false }
             var frameTime = -1.0
             for frame in event.frames {
                 guard frame.isValid, frame.t >= frameTime, frame.t <= event.duration + 0.05 else { return false }

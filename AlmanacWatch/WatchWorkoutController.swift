@@ -328,7 +328,10 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                     let sample = BadmintonSwingDetector.Sample(time: t,
                         acceleration: sqrt(acceleration.x * acceleration.x + acceleration.y * acceleration.y + acceleration.z * acceleration.z),
                         rotation: sqrt(rotation.x * rotation.x + rotation.y * rotation.y + rotation.z * rotation.z),
-                        frame: WristFrame(t: 0, x: q.x, y: q.y, z: q.z, w: q.w))
+                        frame: WristFrame(t: 0, x: q.x, y: q.y, z: q.z, w: q.w),
+                        // The watch's y axis runs along the forearm, so its
+                        // rotation rate is the forehand or backhand twist.
+                        twist: rotation.y)
                     let detected = self.swingDetector.add(sample)
                     // Publish at event boundaries; the 5-second checkpoint also snapshots coverage.
                     if detected { self.swingAnalysis = self.swingDetector.analysis; self.sendPacket(force: true) }
