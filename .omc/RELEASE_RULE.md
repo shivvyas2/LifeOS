@@ -1,5 +1,5 @@
 # Release Rules
-<!-- last-analyzed: 2026-09-28T21:30:00Z -->
+<!-- last-analyzed: 2026-10-05T18:00:00Z -->
 
 ## Version Sources
 - `LIfeOS.xcodeproj/project.pbxproj`: `MARKETING_VERSION = X.Y.Z;` (8 occurrences, one per target and configuration; bump all with one sed) and `CURRENT_PROJECT_VERSION = N;` (8 occurrences, the build number, bump by one per TestFlight upload).
@@ -27,6 +27,11 @@
 ## CI Workflow Files
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml`
+
+## TestFlight / App Store Connect Upload
+- Bump `CURRENT_PROJECT_VERSION` (all 8) before every upload; the number must match across the iPhone app, widgets, watch app and watch widgets, and `MARKETING_VERSION` must match too, or App Store Connect drops the watch app.
+- Archive and upload from the CLI: `xcodebuild archive -scheme LIfeOS -destination 'generic/platform=iOS' -archivePath <path> -allowProvisioningUpdates`, then `xcodebuild -exportArchive -archivePath <path> -exportOptionsPlist <plist with method app-store-connect, destination upload, teamID Z42YU5W6WY> -allowProvisioningUpdates`.
+- The checkout used to archive must be at origin/main; on 2026-10-05 a stale local main shipped build 48 without the 20 commits of UI work.
 
 ## Release Steps
 1. Move `## [Unreleased]` items into a new `## [X.Y.Z] - date` section and update the links.

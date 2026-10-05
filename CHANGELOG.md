@@ -4,6 +4,32 @@ All notable changes to Almanac are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-05
+
+The editorial redesign and badminton match tracking.
+
+### Added
+
+- **Badminton matches.** Score a match on the watch or the phone with a rules-exact scoring engine. When a rally goes quiet the watch asks who won, and a double tap scores the point. The match carries through sync and storage.
+- **Badminton review.** Tag shots in the session review and compare the two sides. The review measures forearm twist, learns your forehand from the tags, splits short and long serves and estimates them, and replays every swing on a player figure, animated shot by shot from any side.
+- **Live readings.** Activity shows where each live reading comes from and what it means.
+- **Watch.** Start a workout without setup and sync without a button, with activity HUDs and durable workout sync.
+
+### Changed
+
+- **Editorial design.** An editorial layer across the app: every tab labeled, a single accent, one button style, and gradient fields in place of the module pastels.
+- **Money.** The Money tab rebuilt as an editorial page.
+- **Health.** Health, activity and the Live Activity restyled as one.
+- **Badminton review** follows light and dark mode.
+- **Watch** glass overlays share the activity palettes, and activity gradients extend behind navigation.
+
+### Fixed
+
+- Watch sync reply handlers no longer trap off the main actor.
+- The phone keeps in step when the watch goes away.
+- A badminton workout is kept when its swing review fails checks, and the 3D replay is cheap and crash-safe.
+- Stray test files removed from the app target.
+
 ## [1.0.0] - 2026-09-28
 
 The first public release. Almanac started as Life OS on 10 August 2026 and reached this point in about seven weeks and 640 commits. Everything below is what the app does today.
@@ -26,5 +52,6 @@ The first public release. Almanac started as Life OS on 10 August 2026 and reach
 - **Handbook.** A 24-chapter engineering handbook as PDF, EPUB, and HTML.
 - **Open source.** MIT license, contributing guide, code of conduct, security policy, issue and pull request templates, and CI that runs the package tests, an app build, the Deno tests, and a secret scan.
 
-[Unreleased]: https://github.com/shivvyas2/LifeOS/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/shivvyas2/LifeOS/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/shivvyas2/LifeOS/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/shivvyas2/LifeOS/releases/tag/v1.0.0
