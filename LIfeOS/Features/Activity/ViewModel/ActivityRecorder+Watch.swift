@@ -65,6 +65,10 @@ extension ActivityRecorder {
             // eventually saves reads these three.
             clearPendingVideoIfIdle()
             watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
+            // A hand-off in flight (`busy`) already set up this workout's
+            // badminton session in `start()`; only a workout begun on the
+            // wrist arrives without one, and the watch scores that itself.
+            if !busy { badminton = nil }
             saved = false; healthSaved = false
             selection = ActivityCatalog.type(healthRawValue: mirrored.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
             recents.record(selection)
@@ -91,7 +95,7 @@ extension ActivityRecorder {
         // a Health session of the phone's own for a relaunch to recover.
         recordingHealth = false
         persist()
-        watch?.send(.configure, maxHeartRate: zones?.maxHeartRate)
+        watch?.send(.configure, maxHeartRate: zones?.maxHeartRate, badminton: badminton)
     }
 
     func mirroredStateChanged(_ state: HKWorkoutSessionState, at date: Date) {
@@ -127,6 +131,7 @@ extension ActivityRecorder {
         if selection.name == "Badminton" {
             if let count = packet.swingCount, (0...SwingAnalysis.eventLimit).contains(count) { swingCount = count }
             if let peak = packet.peakWristRotation, peak.isFinite, (0...100).contains(peak) { peakWristRotation = peak }
+            if let session = packet.badminton, session.isValid { badminton = session }
         }
         if let elapsed = packet.elapsed, let paused = packet.paused {
             timer?.synchronize(elapsed: elapsed, paused: paused, at: packet.sentAt)
@@ -165,6 +170,25 @@ extension ActivityRecorder {
         if let current = reps { reps = max(0, current - 1) }
         persist()
     }
+    /// One rally won, from the phone's scoreboard. On the watch source the
+    /// tap goes to the wrist and comes back in the next packet, as `addRep`
+    /// does, so the two devices never hold different scores.
+    func scoreRally(_ side: BadmintonSide) {
+        guard hasSession, selection.name == Self.badminton else { return }
+        if source == .watch { watch?.send(side == .us ? .scoreUs : .scoreThem); return }
+        var session = badminton ?? BadmintonSession()
+        guard session.kind == .match, !(session.score?.isOver ?? true) else { return }
+        session.record(side)
+        badminton = session
+        persist()
+    }
+    func undoRally() {
+        guard hasSession, badminton?.score?.rallies.isEmpty == false else { return }
+        if source == .watch { watch?.send(.undoRally); return }
+        badminton?.undo()
+        persist()
+    }
+
     func nextSet() {
         guard hasSession, selection.countsReps else { return }
         if source == .watch { watch?.send(.nextSet); return }

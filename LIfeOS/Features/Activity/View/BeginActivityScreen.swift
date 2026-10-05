@@ -69,6 +69,9 @@ struct BeginActivityScreen: View {
     @ViewBuilder private var leading: some View {
         if model.hasSession, let readout = model.readout {
             liveHero(readout)
+            if model.selection.name == ActivityRecorder.badminton, model.badminton?.kind != .practice {
+                BadmintonScoreCard(model: model)
+            }
             liveTiles(readout)
         } else {
             AccountPageHeading(title: model.saved ? "Time well spent." : "Make time to move.",
@@ -77,6 +80,9 @@ struct BeginActivityScreen: View {
             if !model.saved {
                 if let library { followVideoLink(library) }
                 activityPicker
+                if model.selection.name == ActivityRecorder.badminton {
+                    BadmintonSetupCard(setup: $model.badmintonSetup)
+                }
                 Button { showAthleteSetup = true } label: { Label("Your activity setup", systemImage: "figure.stand") }.frame(minHeight: 44)
                 NavigationLink { BadmintonHistoryScreen() } label: { Label("Badminton session reviews", systemImage: "figure.badminton") }.frame(minHeight: 44)
             }

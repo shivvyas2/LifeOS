@@ -24,11 +24,24 @@ struct BadmintonHistoryScreen: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(workout.start, format: .dateTime.month().day().hour().minute()).font(.headline)
-                        Text("\(workout.durationMinutes) min · \(workout.swingAnalysisData == nil ? "Workout summary" : "Motion review")").font(.caption).foregroundStyle(.secondary)
+                        Text(Self.subtitle(for: workout)).font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical, 5)
                 }
             }
         }.navigationTitle("Badminton").tint(LifeOSTokens.accent)
+    }
+
+    /// "32 min · Won 21-17 21-19 · with Priya", or the motion line when the
+    /// session was not scored.
+    static func subtitle(for workout: WorkoutRecord) -> String {
+        var parts = ["\(workout.durationMinutes) min"]
+        if let session = BadmintonReviewScreen.session(of: workout) {
+            parts.append(session.summary)
+            if let partner = session.teammate { parts.append("with \(partner)") }
+        } else {
+            parts.append(workout.swingAnalysisData == nil ? "Workout summary" : "Motion review")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -54,6 +67,12 @@ struct BadmintonReviewScreen: View {
             .flatMap { $0.isValid(elapsed: elapsed) ? $0 : nil }
     }
     private var event: SwingEvent? { analysis?.events.first(where: { $0.id == selected }) }
+    /// Decoded and validated the same way as the motion review.
+    static func session(of workout: WorkoutRecord) -> BadmintonSession? {
+        workout.badmintonData
+            .flatMap { try? JSONDecoder().decode(BadmintonSession.self, from: $0) }
+            .flatMap { $0.isValid ? $0 : nil }
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -67,6 +86,9 @@ struct BadmintonReviewScreen: View {
                     metric("Energy", workout.energyKcal.map { String(Int($0.rounded())) } ?? "—", "kcal")
                     metric("Candidates", analysis.map { String($0.events.count) } ?? "—", "estimated")
                 }.padding(.vertical, 18).background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 24))
+                if let session = Self.session(of: workout) {
+                    matchPanel(session)
+                }
                 if let analysis {
                     motionReview(analysis)
                 } else {
@@ -133,6 +155,23 @@ struct BadmintonReviewScreen: View {
             }
             Text("Motion coverage: \(Int(analysis.sampledSeconds / 60))m \(Int(analysis.sampledSeconds) % 60)s sampled.\(analysis.interrupted ? " Sensor interruptions occurred." : "")\(analysis.truncated ? " Replay limit reached; later candidates were not retained." : "")")
                 .font(.caption).foregroundStyle(.white.opacity(0.65))
+        }
+    }
+    private func matchPanel(_ session: BadmintonSession) -> some View {
+        panel(session.kind == .match ? "Match" : "Practice", icon: "trophy") {
+            if let score = session.score {
+                Text(score.winner.map { $0 == .us ? "Won" : "Lost" } ?? "Unfinished")
+                    .font(.system(.title, weight: .semibold)).foregroundStyle(.white)
+                ForEach(Array((score.games + (score.current == BadmintonGame() ? [] : [score.current])).enumerated()), id: \.offset) { index, game in
+                    LabeledContent("Game \(index + 1)", value: "\(game.us) – \(game.them)")
+                    Divider().overlay(.white.opacity(0.1))
+                }
+            } else if let focus = session.focus {
+                LabeledContent("Worked on", value: focus)
+            }
+            LabeledContent("Format", value: session.format == .doubles ? "Doubles" : "Singles")
+            if let partner = session.teammate { LabeledContent("Partner", value: partner) }
+            if !session.opponents.isEmpty { LabeledContent("Against", value: session.opponents.joined(separator: " & ")) }
         }
     }
     private func metric(_ title: String, _ value: String, _ unit: String) -> some View {

@@ -4,6 +4,7 @@ import CoreMotion
 import AppSurfaces
 import Motion
 import WatchConnectivity
+import WatchKit
 
 /// Runs the workout on the wrist and mirrors it to the phone. Heart rate and
 /// energy come from the live builder; reps from `RepCounter` on device
@@ -37,6 +38,11 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var swingAnalysis: SwingAnalysis?
     private(set) var motionStatus = "Swing analysis is off"
     private var analyzesSwings: Bool { activityName == "Badminton" && swingAnalysis != nil }
+    /// The match or practice this badminton workout is. Set by the phone's
+    /// setup when it starts the workout; on a workout started on the wrist it
+    /// stays nil until the first point is scored, so a session nobody scored
+    /// is never saved as an unfinished match.
+    private(set) var badminton: BadmintonSession?
     var onFinished: ((WatchWorkoutSummary) -> Void)?
     private var heartbeat: Task<Void, Never>?
     private var mirrorAttemptAt: Date = .distantPast
@@ -46,6 +52,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         var id: UUID; var ownerID: String?; var startedAt: Date
         var reps: Int?; var setIndex: Int?; var completedSets: [Int]
         var swingAnalysis: SwingAnalysis?
+        /// Optional, so a checkpoint written before scoring existed decodes.
+        var badminton: BadmintonSession?
     }
     var elapsed: TimeInterval { accumulated + (runningSince.map { max(0, Date.now.timeIntervalSince($0)) } ?? 0) }
     var freshHeartRate: Int? {
@@ -194,6 +202,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             reps = saved.reps; setIndex = saved.setIndex; completedSets = saved.completedSets
             swingAnalysis = saved.swingAnalysis
             swingAnalysis?.interrupted = true
+            badminton = saved.badminton.flatMap { $0.isValid ? $0 : nil }
             swingDetector = BadmintonSwingDetector(restoring: swingAnalysis)
         } else { workoutID = UUID(); ownerID = accountID }
         if let ownerID, ownerID != accountID { discard(); return }
@@ -342,6 +351,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         heartRate = nil; heartRateAt = nil; energyKcal = nil; distanceMeters = nil; heartHistory = []
         reps = nil; setIndex = nil; completedSets = []; manualReps = 0
         counter.reset(); swingAnalysis = nil; swingDetector = BadmintonSwingDetector(); motionStatus = "Swing analysis is off"
+        badminton = nil
         activityName = ""; activity = nil; mirroringFailed = false; maxHeartRate = nil
         state = .idle
     }
@@ -359,6 +369,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         packet.heartRate = heartRate; packet.heartRateAt = heartRate == nil ? nil : heartRateAt
         packet.energyKcal = energyKcal
         if let swingAnalysis { packet.swingCount = swingAnalysis.events.count; packet.peakWristRotation = swingAnalysis.peakRotation }
+        packet.badminton = badminton
         if isStrength {
             packet.reps = reps; packet.setIndex = setIndex
             packet.completedSets = completedSets.isEmpty ? nil : completedSets
@@ -378,6 +389,12 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         switch envelope.command {
         case .configure:
             if let value = envelope.maxHeartRate, (80...240).contains(value) { maxHeartRate = value }
+            // The phone's setup only lands on a badminton workout that has no
+            // score yet: a late configure must never wipe points already won.
+            if let setup = envelope.badminton, setup.isValid, activityName == "Badminton",
+               badminton?.score?.rallies.isEmpty ?? true {
+                badminton = setup; sendPacket(force: true)
+            }
         case .pause: pause()
         case .resume: resume()
         case .end: end()
@@ -385,13 +402,33 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         case .nextSet: nextSet()
         case .addRep: addRep()
         case .removeRep: removeRep()
+        case .scoreUs: score(.us)
+        case .scoreThem: score(.them)
+        case .undoRally: undoRally()
         }
+    }
+
+    /// One rally won. The first point on an unscored badminton workout makes
+    /// it a singles match; the phone's setup, when there was one, already did.
+    func score(_ side: BadmintonSide) {
+        guard activityName == "Badminton", state == .running || state == .paused else { return }
+        var session = badminton ?? BadmintonSession()
+        guard session.kind == .match, !(session.score?.isOver ?? true) else { return }
+        session.record(side)
+        badminton = session
+        WKInterfaceDevice.current().play(session.score?.isOver == true ? .success : .click)
+        sendPacket(force: true)
+    }
+    func undoRally() {
+        guard badminton?.score?.rallies.isEmpty == false else { return }
+        badminton?.undo()
+        sendPacket(force: true)
     }
 
     private func persistCheckpoint() {
         guard let startedAt else { return }
         if analyzesSwings { swingAnalysis = swingDetector.analysis }
-        let value = Checkpoint(id: workoutID, ownerID: ownerID, startedAt: startedAt, reps: reps, setIndex: setIndex, completedSets: completedSets, swingAnalysis: swingAnalysis)
+        let value = Checkpoint(id: workoutID, ownerID: ownerID, startedAt: startedAt, reps: reps, setIndex: setIndex, completedSets: completedSets, swingAnalysis: swingAnalysis, badminton: badminton)
         if let data = try? JSONEncoder().encode(value) { UserDefaults.standard.set(data, forKey: checkpointKey) }
     }
     private func startHeartbeat() {
@@ -431,7 +468,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
                 onFinished?(WatchWorkoutSummary(id: workoutID, ownerID: ownerID, activity: activityName,
                     startedAt: startedAt, endedAt: saved.endDate, elapsed: saved.duration,
                     energyKcal: energyKcal, distanceMeters: distanceMeters,
-                    sets: isStrength ? completedSets + [reps ?? 0] : [], healthWorkoutID: saved.uuid, swingAnalysis: swingAnalysis))
+                    sets: isStrength ? completedSets + [reps ?? 0] : [], healthWorkoutID: saved.uuid, swingAnalysis: swingAnalysis,
+                    badminton: badminton))
             }
             result = ownerID == nil ? "Workout saved to Apple Health." : "Workout saved. Your iPhone syncs when available."
             lastError = nil

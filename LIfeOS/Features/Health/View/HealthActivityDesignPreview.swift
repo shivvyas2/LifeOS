@@ -47,7 +47,13 @@ struct HealthActivityDesignPreview: View {
                                     startsCollapsed: ProcessInfo.processInfo.arguments.contains("--hud-collapsed"))
                     .task {
                         guard ProcessInfo.processInfo.arguments.contains("--live"), !fixture.recorder.hasSession else { return }
-                        fixture.recorder.selection = ProcessInfo.processInfo.arguments.contains("--strength") ? ActivityCatalog.strength : ActivityCatalog.run
+                        let arguments = ProcessInfo.processInfo.arguments
+                        fixture.recorder.selection = arguments.contains("--strength") ? ActivityCatalog.strength
+                            : arguments.contains("--badminton") ? (ActivityCatalog.type(named: "Badminton") ?? ActivityCatalog.run)
+                            : ActivityCatalog.run
+                        if arguments.contains("--badminton") {
+                            fixture.recorder.badmintonSetup = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
+                        }
                         let start = Date.now.addingTimeInterval(-724)
                         await fixture.recorder.start(backdatedTo: start)
                         for second in stride(from: 0, to: 720, by: 2) {
@@ -55,6 +61,17 @@ struct HealthActivityDesignPreview: View {
                         }
                         fixture.recorder.sensor.onReading?(152, .now)
                         fixture.recorder.addRep(); fixture.recorder.addRep(); fixture.recorder.nextSet(); fixture.recorder.addRep()
+                        if arguments.contains("--badminton") {
+                            for _ in 0..<21 { fixture.recorder.scoreRally(.us) }
+                            for side: BadmintonSide in [.them, .us, .us, .them, .us, .them, .them, .us, .us, .us] { fixture.recorder.scoreRally(side) }
+                        }
+                    }
+            }
+            else if page == "badminton-setup" {
+                BeginActivityScreen(model: fixture.recorder)
+                    .task {
+                        fixture.recorder.selection = ActivityCatalog.type(named: "Badminton") ?? ActivityCatalog.run
+                        fixture.recorder.badmintonSetup = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
                     }
             }
             else if page == "badminton" {

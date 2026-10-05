@@ -14,6 +14,9 @@ struct WatchWorkoutScreen: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: dimmed ? 60 : 5)) { _ in
         TabView(selection: $page) {
+            if scoresMatch {
+                WatchScoreboard(workout: workout, accent: accent).tag(-1)
+            }
             ScrollView {
                 VStack(spacing: 8) {
                     hero
@@ -84,10 +87,11 @@ struct WatchWorkoutScreen: View {
         }
         .onChange(of: workout.state) { _, state in if state == .ending { page = 2 } }
         .onAppear {
+            if scoresMatch { page = -1 }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--design-preview"),
                let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--watch-page=") }),
-               let requested = Int(argument.dropFirst("--watch-page=".count)), (0...2).contains(requested) { page = requested }
+               let requested = Int(argument.dropFirst("--watch-page=".count)), (-1...2).contains(requested) { page = requested }
             #endif
         }
         }
@@ -154,6 +158,13 @@ struct WatchWorkoutScreen: View {
         }.frame(maxWidth: .infinity, alignment: .leading).padding(11)
             .accessibilityElement(children: .ignore).accessibilityLabel("\(title), \(value) \(unit)")
     }
+    /// Badminton opens on the scoreboard unless it is a practice session:
+    /// scoring between rallies is the thing a player does most, and it has to
+    /// be one tap from the wrist, not a crown scroll away.
+    private var scoresMatch: Bool {
+        workout.activityName == "Badminton" && workout.badminton?.kind != .practice
+    }
+
     private var swings: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(workout.swingAnalysis.map { "\($0.events.count) swing candidates" } ?? "Swing analysis off").font(.headline)
@@ -362,5 +373,111 @@ enum WatchPalette {
         default:
             return .init(tint: Color(red: 0.75, green: 0.22, blue: 0.10), glow: Color(red: 1, green: 0.60, blue: 0.28), highlight: Color(red: 1, green: 0.79, blue: 0.60))
         }
+    }
+}
+
+/// The badminton scoreboard: two halves of the screen, the opponents on top
+/// and the player below, the way the court looks from the player's side.
+/// Each half is the button for that side winning the rally.
+///
+/// The halves are the whole of the target on purpose. Between rallies a
+/// player has a second, a racket in the other hand and a sweaty wrist; a
+/// control smaller than half the screen gets missed.
+struct WatchScoreboard: View {
+    let workout: WatchWorkoutController
+    let accent: Color
+
+    private var score: BadmintonScore { workout.badminton?.score ?? BadmintonScore() }
+    private var opponentsLabel: String {
+        let names = workout.badminton?.opponents ?? []
+        return names.isEmpty ? "Them" : names.joined(separator: " & ")
+    }
+    private var usLabel: String {
+        guard let partner = workout.badminton?.teammate else { return "You" }
+        return "You & \(partner)"
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if score.isOver {
+                finished
+            } else {
+                half(.them, label: opponentsLabel)
+                status
+                half(.us, label: usLabel)
+            }
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private func half(_ side: BadmintonSide, label: String) -> some View {
+        let serving = score.server == side
+        return Button { workout.score(side) } label: {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        if serving {
+                            Circle().fill(accent).frame(width: 6, height: 6)
+                                .accessibilityHidden(true)
+                        }
+                        Text(label).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    }
+                    Text("Games \(score.gamesWon(by: side))")
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 2)
+                Text("\(score.current.points(side))")
+                    .font(.system(size: 40, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .contentTransition(.numericText())
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.glass)
+        .tint(side == .us ? accent.opacity(0.25) : .white.opacity(0.08))
+        .accessibilityLabel("\(label) won the rally")
+        .accessibilityValue("\(score.current.points(side)) points, \(score.gamesWon(by: side)) games\(serving ? ", serving" : "")")
+    }
+
+    private var status: some View {
+        HStack(spacing: 6) {
+            Text(serveLine).font(.system(size: 10, weight: .medium)).foregroundStyle(accent)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 2)
+            Button { workout.undoRally() } label: {
+                Image(systemName: "arrow.uturn.backward").font(.system(size: 12, weight: .semibold))
+                    .frame(width: 32, height: 24)
+            }
+            .buttonStyle(.plain)
+            .disabled(score.rallies.isEmpty)
+            .accessibilityLabel("Undo last point")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var serveLine: String {
+        if score.changesEndsNow { return "11 · change ends" }
+        let who = score.server == .us ? "You serve" : "They serve"
+        return "\(who) · \(score.serviceCourt == .right ? "right" : "left")"
+    }
+
+    private var finished: some View {
+        VStack(spacing: 6) {
+            Text(score.winner == .us ? "Match won" : "Match lost")
+                .font(.system(size: 18, weight: .semibold)).foregroundStyle(accent)
+            ForEach(Array(score.games.enumerated()), id: \.offset) { index, game in
+                HStack {
+                    Text("Game \(index + 1)").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(game.us) – \(game.them)").font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+                }
+            }
+            Button { workout.undoRally() } label: {
+                Label("Undo last point", systemImage: "arrow.uturn.backward").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+        }
+        .padding(.horizontal, 6)
     }
 }

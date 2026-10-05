@@ -11,6 +11,24 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var athlete: ActivityAthleteProfile?
     var swingCount: Int?
     var peakWristRotation: Double?
+    /// How the next badminton workout is set up: match or practice, singles
+    /// or doubles, who with. Remembered between sessions, because the same
+    /// partner and opponents turn up week after week.
+    var badmintonSetup: BadmintonSession? {
+        didSet {
+            if let badmintonSetup, badmintonSetup.isValid, let data = try? JSONEncoder().encode(badmintonSetup) {
+                defaults.set(data, forKey: Self.badmintonSetupKey)
+            } else if badmintonSetup == nil {
+                defaults.removeObject(forKey: Self.badmintonSetupKey)
+            }
+        }
+    }
+    /// The badminton session being recorded, score included. Whoever owns the
+    /// workout owns this: the phone for its own session, the watch for a
+    /// mirrored one, which reports it back in every packet.
+    var badminton: BadmintonSession?
+    static let badminton = "Badminton"
+    private static let badmintonSetupKey = "activity.badminton.setup"
     func saveAthlete(_ profile: ActivityAthleteProfile) {
         guard profile.isValid else { return }
         athlete = profile; profile.save(to: defaults)
@@ -113,11 +131,15 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         var followingTitle: String?
         var followingChannel: String?
         var watchSessionID: UUID?
+        var badminton: BadmintonSession?
     }
 
     init(defaults: UserDefaults = .currentAccount, liveActivitiesEnabled: Bool = true) {
         self.defaults = defaults
         athlete = ActivityAthleteProfile.load(from: defaults)
+        badmintonSetup = defaults.data(forKey: Self.badmintonSetupKey)
+            .flatMap { try? JSONDecoder().decode(BadmintonSession.self, from: $0) }
+            .flatMap { $0.isValid ? $0 : nil }
         recents = ActivityRecents(defaults: defaults)
         self.liveActivitiesEnabled = liveActivitiesEnabled
         sensor = LiveHeartRateSensor(defaults: defaults)
@@ -153,6 +175,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         capacity = draft.capacity; effort = EffortAccumulator(load: draft.effortLoad ?? 0)
         source = draft.source ?? .phone; reps = draft.reps; setIndex = draft.setIndex; completedSets = draft.completedSets ?? []
         watchSessionID = draft.watchSessionID
+        badminton = draft.badminton.flatMap { $0.isValid ? $0 : nil }
         pendingVideoID = draft.videoID; pendingSplit = draft.split
         if let title = draft.followingTitle, let channel = draft.followingChannel { following = (title, channel) }
         zones = HeartRateZones(birthDate: birthDate())
@@ -234,6 +257,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         effort = EffortAccumulator(); lastReadingAt = nil
         source = .phone
         if selection.countsReps { reps = 0; setIndex = 1; completedSets = [] } else { reps = nil; setIndex = nil; completedSets = [] }
+        badminton = selection.name == Self.badminton ? badmintonSetup?.fresh : nil
         recordingHealth = saveToHealth
         defer { busy = false }
         if await handOffToWatch() { return }
@@ -351,6 +375,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 row.distanceMeters = distance
                 row.videoID = pendingVideoID; row.split = pendingSplit
                 if selection.countsReps { row.sets = completedSets + [reps ?? 0] }
+                if let badminton, badminton.isValid { row.badmintonData = try? JSONEncoder().encode(badminton) }
                 context.insert(row)
             }
             try context.save()
@@ -398,7 +423,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         energy = nil; distance = nil; heartRate = nil; heartRateDate = nil
         capacity = nil; readout = nil; effort = EffortAccumulator(); lastReadingAt = nil; zones = nil; lastDraftWriteAt = nil
         watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; peakWristRotation = nil
-        source = .phone; reps = nil; setIndex = nil; completedSets = []
+        source = .phone; reps = nil; setIndex = nil; completedSets = []; badminton = nil
         pendingVideoID = nil; pendingSplit = nil; following = nil
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
@@ -428,7 +453,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                                                          energy: energy, distance: distance, capacity: capacity, effortLoad: effort.load,
                                                          source: source, reps: reps, setIndex: setIndex, completedSets: completedSets,
                                                          videoID: pendingVideoID, split: pendingSplit,
-                                                         followingTitle: following?.title, followingChannel: following?.channel, watchSessionID: watchSessionID)) else { return }
+                                                         followingTitle: following?.title, followingChannel: following?.channel, watchSessionID: watchSessionID,
+                                                         badminton: badminton)) else { return }
         defaults.set(data, forKey: Self.draftKey)
         lastDraftWriteAt = date
     }
