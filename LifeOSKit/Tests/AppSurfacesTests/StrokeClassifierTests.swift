@@ -62,6 +62,45 @@ struct StrokeClassifierTests {
         #expect(summary.types[.smash] == 1)
     }
 
+    @Test func theFirstSwingAfterAPauseIsTheServe() {
+        let events = [event(0, twist: 3, peak: 9), event(1, twist: 3, peak: 9)]
+        // Ten seconds apart, so each opens its own rally.
+        #expect(StrokeClassifier.opensRally(events[0], in: events))
+        #expect(StrokeClassifier.opensRally(events[1], in: events))
+        let rally = [SwingEvent(id: 0, time: 10, duration: 0.4, peakRotation: 9, peakAcceleration: 1.4, frames: [], twist: 3),
+                     SwingEvent(id: 1, time: 11.5, duration: 0.4, peakRotation: 9, peakAcceleration: 1.4, frames: [], twist: 3)]
+        #expect(StrokeClassifier.opensRally(rally[0], in: rally))
+        #expect(!StrokeClassifier.opensRally(rally[1], in: rally))
+        #expect(StrokeClassifier.serve(of: rally[1], in: rally, convention: 1, tags: BadmintonShotTags()) == nil)
+    }
+
+    @Test func aGentleOrBackhandOpenerIsShortAndAFastForehandIsLong() {
+        let gentle = event(0, twist: 3, peak: 4.8)
+        let backhand = event(0, twist: -3, peak: 9)
+        let fast = event(0, twist: 3, peak: 9)
+        #expect(StrokeClassifier.serve(of: gentle, in: [gentle], convention: 1, tags: BadmintonShotTags()) == .shortServe)
+        #expect(StrokeClassifier.serve(of: backhand, in: [backhand], convention: 1, tags: BadmintonShotTags()) == .shortServe)
+        #expect(StrokeClassifier.serve(of: fast, in: [fast], convention: 1, tags: BadmintonShotTags()) == .longServe)
+    }
+
+    @Test func aTagDecidesTheServe() {
+        let fast = event(0, twist: 3, peak: 9)
+        var tags = BadmintonShotTags()
+        tags[0] = BadmintonShotTag(type: .shortServe)
+        #expect(StrokeClassifier.serve(of: fast, in: [fast], convention: 1, tags: tags) == .shortServe)
+        tags[0] = BadmintonShotTag(type: .smash)
+        #expect(StrokeClassifier.serve(of: fast, in: [fast], convention: 1, tags: tags) == nil)
+        tags[0] = BadmintonShotTag(notAShot: true)
+        #expect(StrokeClassifier.serve(of: fast, in: [fast], convention: 1, tags: tags) == nil)
+    }
+
+    @Test func anOldServeTagStillDecodes() throws {
+        let data = Data(#"{"byEvent":{"0":{"type":"serve","notAShot":false}}}"#.utf8)
+        let tags = try JSONDecoder().decode(BadmintonShotTags.self, from: data)
+        #expect(tags[0]?.type == .serve)
+        #expect(!BadmintonShotType.taggable.contains(.serve))
+    }
+
     @Test func tagsSurviveStorage() throws {
         var tags = BadmintonShotTags()
         tags[3] = BadmintonShotTag(stroke: .backhand, type: .drop)

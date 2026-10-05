@@ -9,8 +9,24 @@ public enum BadmintonStroke: String, Codable, Sendable, CaseIterable {
 /// from a drop without labelled examples, so these come only from the
 /// player, and those tags are what a classifier would later learn from.
 public enum BadmintonShotType: String, Codable, Sendable, CaseIterable {
-    case serve, clear, drop, smash, drive, net, lift
-    public var title: String { rawValue.capitalized }
+    /// Kept so tags made before the two serves were split still decode; it
+    /// is no longer offered, and reads as a long serve.
+    case serve
+    /// The backhand serve with the elbow up, pushed just over the tape.
+    case shortServe
+    /// The forehand underarm serve, swung high to the back of the court.
+    case longServe
+    case clear, drop, smash, drive, net, lift
+    public var title: String {
+        switch self {
+        case .serve: "Serve"
+        case .shortServe: "Short serve"
+        case .longServe: "Long serve"
+        default: rawValue.capitalized
+        }
+    }
+    /// The types offered as tags, in the order a rally runs.
+    public static let taggable: [BadmintonShotType] = [.shortServe, .longServe, .clear, .drop, .smash, .drive, .net, .lift]
 }
 
 /// What the player said about one swing candidate.
@@ -60,6 +76,34 @@ public enum StrokeClassifier {
         if let tagged = tags[event.id]?.stroke { return tagged }
         guard let convention, let twist = event.twist, abs(twist) >= threshold else { return nil }
         return twist * convention > 0 ? .forehand : .backhand
+    }
+
+    /// Quiet before a swing that makes it the serve opening a rally: the
+    /// same pause that ends one, so the two detectors agree.
+    public static let rallyGap: Double = 4
+    /// Peak wrist speed (rad/s, about 340°/s) below which an opening swing
+    /// reads as a short serve. An estimate: a short serve is a push, a long
+    /// serve a full swing, but the line between them differs by player,
+    /// which is why the call is marked automatic and a tag overrides it.
+    public static let shortServePeak: Double = 6
+
+    /// Whether this swing opens a rally: the first of the session, or the
+    /// first after a pause.
+    public static func opensRally(_ event: SwingEvent, in events: [SwingEvent]) -> Bool {
+        guard let previous = events.last(where: { $0.time < event.time }) else { return true }
+        return event.time - (previous.time + previous.duration) >= rallyGap
+    }
+
+    /// Short or long serve, for a swing that opens a rally and has no type
+    /// tagged: a backhand or a gentle push is short, a fast forehand long.
+    public static func serve(of event: SwingEvent, in events: [SwingEvent], convention: Double?,
+                             tags: BadmintonShotTags) -> BadmintonShotType? {
+        if let tagged = tags[event.id]?.type { return [.serve, .shortServe, .longServe].contains(tagged) ? tagged : nil }
+        guard tags[event.id]?.notAShot != true, opensRally(event, in: events) else { return nil }
+        if stroke(of: event, convention: convention, tags: tags) == .backhand || event.peakRotation < shortServePeak {
+            return .shortServe
+        }
+        return .longServe
     }
 
     public struct Side: Equatable, Sendable {
