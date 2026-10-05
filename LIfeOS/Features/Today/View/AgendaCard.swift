@@ -114,13 +114,10 @@ struct AgendaCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Next up").editorialEyebrow()
                 Spacer(minLength: Space.x1)
-                Button(action: onOpenToday) {
-                    HStack(spacing: Space.half) {
-                        Text(Date.now.formatted(.dateTime.month(.abbreviated).day()))
-                        Image(systemName: "chevron.down")
-                    }
-                }
-                .buttonStyle(.editorial(.quiet, size: .compact))
+                // The quiet style draws the arrow; a chevron beside it read
+                // as two affordances for one tap.
+                Button(Date.now.formatted(.dateTime.month(.abbreviated).day()), action: onOpenToday)
+                    .buttonStyle(.editorial(.quiet, size: .compact))
                 .accessibilityLabel("Open today's day view")
             }
             // The headline is the next event, and tapping it opens that event.
