@@ -376,11 +376,11 @@ struct RootView: View {
 
     private var navItems: [PillNavItem<AppTab>] {
         [
-            PillNavItem(value: AppTab.today, systemImage: "circle.grid.3x3.fill", label: "Today"),
+            PillNavItem(value: AppTab.today, systemImage: "sun.max.fill", label: "Today"),
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
             PillNavItem(value: AppTab.notes, systemImage: "text.book.closed.fill", label: "Notes"),
-            PillNavItem(value: AppTab.life, systemImage: "square.grid.3x3.fill", label: "Life"),
+            PillNavItem(value: AppTab.life, systemImage: "square.grid.2x2.fill", label: "Life"),
         ]
     }
 
@@ -535,7 +535,7 @@ struct RootView: View {
             QuickAction(id: "coach", systemImage: "message.fill", label: "LIFO") {
                 showCoach = true
             },
-            QuickAction(id: "beginActivity", systemImage: recorder.hasSession ? "timer" : "plus", label: recorder.hasSession ? "Current activity" : "Begin activity", isProminent: true) {
+            QuickAction(id: "beginActivity", systemImage: recorder.hasSession ? "timer" : "plus", label: recorder.hasSession ? "Current activity" : "Begin activity", isProminent: true, shortLabel: recorder.hasSession ? "Live" : "Start") {
                 showActivity = true
             },
         ]

@@ -51,11 +51,13 @@ public struct LayoutMetrics: Sendable, Equatable {
     /// rail ended up drawn over the first column of the month.
     ///
     /// It has to cover the rail's real footprint, which is the gutter it is
-    /// padded by plus its own width: 32 + 64. At 80 it was 16pt short, so
+    /// padded by plus its own width: 32 + 76 since the tabs carry labels (a
+    /// 56pt minimum per tab, 4pt either side, 6pt of capsule padding each
+    /// side; 64 when they were bare icons). At 80 it was 16pt short, so
     /// every regular-width screen had its leading edge tucked under the rail,
     /// and the Notes sidebar, being a real column rather than a wide canvas,
     /// showed it plainly with its folder rows disappearing behind the pill.
-    /// The extra beyond 96 is breathing room, and the rail's shadow needs it.
+    /// The extra beyond 108 is breathing room, and the rail's shadow needs it.
     public let railInset: CGFloat
     /// Columns for a grid of stat tiles, and for the denser rows of small
     /// metric tiles. Derived from the width class rather than measured, because
@@ -82,7 +84,7 @@ public struct LayoutMetrics: Sendable, Equatable {
             LayoutMetrics(gutter: 32, sectionSpacing: 30,
                           maxContentWidth: 1060, heroScale: 1.3,
                           fabBottomInset: 28, contentBottomInset: 32,
-                          railInset: 112,
+                          railInset: 124,
                           statColumns: 4, tileColumns: 6, isRegular: true)
         }
     }

@@ -15,9 +15,14 @@ public struct PillNavItem<Tab: Hashable>: Identifiable {
     }
 }
 
-/// The app's navigation: a floating capsule of circular icon buttons, the
-/// selected one a dark filled circle. Replaces the system tab bar, so it owns
-/// what the system gave free: 44pt+ targets, labels, and selection traits.
+/// The app's navigation: a floating ink capsule in which every tab shows its
+/// icon and its name, the selected one on a paper pill. Replaces the system
+/// tab bar, so it owns what the system gave free: 44pt+ targets, labels, and
+/// selection traits.
+///
+/// Labels are visible, not only spoken. The bar used to be icon circles alone,
+/// and two of its glyphs were near-identical grids: a person had to tap to
+/// find out where a tab went, which is the one thing a tab bar must never ask.
 ///
 /// One component in two orientations rather than two components: a phone gets
 /// the horizontal bar along the bottom, a wide pane gets the same capsule stood
@@ -47,8 +52,11 @@ public struct PillNavBar<Tab: Hashable>: View {
         }
         .padding(6)
         .background(
-            Capsule().fill(LifeOSTokens.cardSurface.resolve(scheme))
-                .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.12), radius: 16, y: 6)
+            // Ink in light mode, a raised charcoal in dark: the bar is always
+            // the darkest thing on screen, so the paper pill inside it is
+            // always the brightest, whichever scheme is on.
+            Capsule().fill(scheme == .dark ? Color(white: 0.16) : LifeOSTokens.primaryText.resolve(.light))
+                .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.18), radius: 16, y: 6)
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
     }
@@ -63,21 +71,29 @@ public struct PillNavBar<Tab: Hashable>: View {
 
     private func button(for item: PillNavItem<Tab>) -> some View {
         let isSelected = item.value == selection
+        let paper = LifeOSTokens.canvas.resolve(.light)
+        let ink = LifeOSTokens.primaryText.resolve(.light)
         return Button {
             selection = item.value
         } label: {
-            Image(systemName: item.systemImage)
-                .font(LifeOSType.body.weight(.semibold))
-                .foregroundStyle(isSelected
-                    ? LifeOSTokens.canvas.resolve(scheme)
-                    : LifeOSTokens.secondaryText.resolve(scheme))
-                .frame(width: 52, height: 52)
-                .background {
-                    if isSelected {
-                        Circle().fill(LifeOSTokens.primaryText.resolve(scheme))
-                    }
+            VStack(spacing: 3) {
+                Image(systemName: item.systemImage)
+                    .font(LifeOSType.label.weight(.semibold))
+                    .frame(height: 18)
+                Text(item.label)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(isSelected ? ink : paper.opacity(0.62))
+            .frame(minWidth: 56, minHeight: 52)
+            .padding(.horizontal, 4)
+            .background {
+                if isSelected {
+                    Capsule().fill(paper)
                 }
-                .contentShape(.circle)
+            }
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.label)

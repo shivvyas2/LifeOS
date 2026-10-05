@@ -10,6 +10,10 @@ public struct QuickAction: Identifiable {
     /// in a set should carry it, the same way one tab in the pill bar is
     /// selected: it is what the eye lands on first.
     public let isProminent: Bool
+    /// A word or two drawn beside the prominent action's glyph in the row.
+    /// The glyph alone was a guess: a plus could mean add a note, a habit or
+    /// a transaction, and only the label says it starts an activity.
+    public let shortLabel: String?
     public let action: () -> Void
 
     public init(
@@ -17,12 +21,14 @@ public struct QuickAction: Identifiable {
         systemImage: String,
         label: String,
         isProminent: Bool = false,
+        shortLabel: String? = nil,
         action: @escaping () -> Void
     ) {
         self.id = id
         self.systemImage = systemImage
         self.label = label
         self.isProminent = isProminent
+        self.shortLabel = shortLabel
         self.action = action
     }
 }
@@ -188,15 +194,26 @@ public struct ActionFan: View {
             onTap()
             action.action()
         } label: {
-            Image(systemName: action.systemImage)
-                .font(arrangement == .row ? LifeOSType.body.weight(.medium) : LifeOSType.sectionTitle)
-                .foregroundStyle(
-                    filled
-                    ? LifeOSTokens.fabGlyph.resolve(scheme)
-                    : LifeOSTokens.primaryText.resolve(scheme)
-                )
-                .frame(width: size, height: size)
-                .background(background(prominent: filled))
+            if filled, let word = action.shortLabel {
+                // The labelled form: an ink capsule rather than a circle, so
+                // the one action that matters reads as a button with a name.
+                Label(word, systemImage: action.systemImage)
+                    .font(LifeOSType.label.weight(.semibold))
+                    .foregroundStyle(LifeOSTokens.fabGlyph.resolve(scheme))
+                    .padding(.horizontal, 12)
+                    .frame(height: size)
+                    .background(Capsule().fill(LifeOSTokens.fabFill.resolve(scheme)))
+            } else {
+                Image(systemName: action.systemImage)
+                    .font(arrangement == .row ? LifeOSType.body.weight(.medium) : LifeOSType.sectionTitle)
+                    .foregroundStyle(
+                        filled
+                        ? LifeOSTokens.fabGlyph.resolve(scheme)
+                        : LifeOSTokens.primaryText.resolve(scheme)
+                    )
+                    .frame(width: size, height: size)
+                    .background(background(prominent: filled))
+            }
         }
         .accessibilityLabel(action.label)
     }
