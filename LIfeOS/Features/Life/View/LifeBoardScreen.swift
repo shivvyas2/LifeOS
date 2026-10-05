@@ -31,6 +31,16 @@ struct LifeBoardScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x3) {
+                    EditorialMasthead(eyebrow: model.headline.eyebrow,
+                                      title: model.headline.title,
+                                      detail: model.headline.detail)
+
+                    UnderlinePicker(
+                        selection: Binding(get: { model.mode }, set: { model.mode = $0 }),
+                        options: [(.inFlight, LifeBoardViewModel.BoardMode.inFlight.title),
+                                  (.closed, LifeBoardViewModel.BoardMode.closed.title)]
+                    )
+
                     if let month = model.monthAwaitingClose {
                         CloseBanner(month: month) {
                             closeMonth = month
@@ -38,20 +48,12 @@ struct LifeBoardScreen: View {
                         }
                     }
 
-                    Picker("Month", selection: Binding(
-                        get: { model.mode },
-                        set: { model.mode = $0 }
-                    )) {
-                        ForEach(LifeBoardViewModel.BoardMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                    if model.isBlank {
+                        emptyState
+                    } else {
+                        SectorStack(cards: model.cards) { sector in
+                            openSector = sector
                         }
-                    }
-                    .pickerStyle(.segmented)
-
-                    header
-
-                    SectorStack(cards: model.cards) { sector in
-                        openSector = sector
                     }
                 }
                 .frame(maxWidth: layout.maxContentWidth)
@@ -89,36 +91,21 @@ struct LifeBoardScreen: View {
         sector.ownsTab ? { onOpenTab(sector) } : nil
     }
 
-    /// Closed mode carries the two `BoardSummary` facts. In flight there is
-    /// no previous month to compare against and no closed score to compare,
-    /// so it answers the only question that mode has: how much is left.
-    @ViewBuilder
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Space.half) {
-            switch model.mode {
-            case .closed:
-                if let lowest = model.summary.lowest {
-                    Text("Lowest: \(lowest.title)")
-                        .font(LifeOSType.sectionTitle)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                }
-                if let mover = model.summary.biggestMover {
-                    Text("Biggest move: \(mover.sector.title) \(mover.delta > 0 ? "+" : "")\(mover.delta)")
-                        .font(LifeOSType.secondary.weight(.medium))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
-
-            case .inFlight:
-                if let progress = model.progress {
-                    Text(progress.remainingDays == 1 ? "1 day left" : "\(progress.remainingDays) days left")
-                        .font(LifeOSType.sectionTitle)
-                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-                }
-                if let decided = model.meanDecided {
-                    Text("\(Int((decided * 100).rounded()))% of this month is decided")
-                        .font(LifeOSType.secondary.weight(.medium))
-                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-                }
+    /// The board before anything is on it: a ghost of three bands and the one
+    /// thing to do.
+    private var emptyState: some View {
+        EditorialEmptyState(
+            sentence: "Nine sectors, scored once a month. The board shows where life stands.",
+            action: "Score this month",
+            onAction: {
+                closeMonth = model.monthAwaitingClose ?? model.month
+                showClose = true
+            }
+        ) {
+            VStack(spacing: Space.x1) {
+                SectorBandRow(index: 1, title: "Family", value: "7", unit: "/10", isOpen: false)
+                SectorBandRow(index: 2, title: "Body", value: "8", unit: "/10", isOpen: false)
+                SectorBandRow(index: 3, title: "Money", value: "6", unit: "/10", isOpen: false)
             }
         }
     }

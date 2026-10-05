@@ -47,28 +47,11 @@ struct CloseBanner: View {
                     .font(LifeOSType.label.weight(.regular))
                     .foregroundStyle(ink.opacity(0.7))
 
-                Button(action: onScore) {
-                    Text("Score now")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(ink)
-                        .padding(.horizontal, Space.x2)
-                        .padding(.vertical, Space.x1)
-                        .overlay(
-                            Capsule().strokeBorder(ink, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
+                Button("Score now", action: onScore)
+                    .buttonStyle(.editorial(.primary, size: .compact))
             }
         }
-        .padding(Space.x2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
-                .strokeBorder(
-                    ink,
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 4])
-                )
-        )
+        .editorialCard()
         .accessibilityElement(children: .contain)
         .accessibilityHint(isExpanded ? "Collapse" : "Expand to score the month")
     }
