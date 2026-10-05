@@ -16,19 +16,25 @@ struct DayDetailSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if !snapshot.events.isEmpty {
-                        schedule
+                VStack(alignment: .leading, spacing: Space.x3) {
+                    EditorialMasthead(
+                        eyebrow: snapshot.isToday ? "Today" : "Day",
+                        title: snapshot.date.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+                        detail: habitsLine
+                    )
+                    ForEach(Array(sections.enumerated()), id: \.element) { offset, section in
+                        VStack(alignment: .leading, spacing: Space.x2) {
+                            EditorialSectionHeader(index: offset + 1, title: section.title)
+                            content(section)
+                        }
                     }
-                    metrics
-                    habits
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 40)
+                .padding(.horizontal, Space.x3)
+                .padding(.top, Space.x2)
+                .padding(.bottom, Space.x5)
             }
             .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-            .navigationTitle(snapshot.date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -38,76 +44,51 @@ struct DayDetailSheet: View {
         }
     }
 
-    private var schedule: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Schedule")
-                .font(LifeOSType.label.weight(.semibold))
-                .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-
-            SoftCard {
-                VStack(spacing: 6) {
-                    // The same journey rows the agenda card draws, so an
-                    // event looks identical wherever it appears. No tap:
-                    // this sheet is a reading surface, edits live on Today.
-                    ForEach(snapshot.events) { event in
-                        EventJourneyRow(event: event)
-                    }
-                }
+    private enum Section: Hashable {
+        case schedule, readings, habits
+        var title: String {
+            switch self {
+            case .schedule: "Schedule"
+            case .readings: "Readings"
+            case .habits: "Habits"
             }
         }
     }
 
-    private var metrics: some View {
-        SoftCard {
-            VStack(spacing: 0) {
-                MetricRow(
-                    label: "Steps",
-                    value: snapshot.steps.map { $0.formatted() },
-                    detail: "of \(snapshot.stepsTarget.formatted())"
-                )
-                Divider()
-                MetricRow(
-                    label: "Sleep",
-                    value: snapshot.sleepMinutes.map(TodayScreen.duration),
-                    detail: "of \(TodayScreen.duration(snapshot.sleepTargetMinutes))"
-                )
-                Divider()
-                MetricRow(
-                    label: "Weight",
-                    value: snapshot.weightKg.map { String(format: "%.1f kg", $0) }
-                )
-                Divider()
-                MetricRow(
-                    label: "Recovery",
-                    value: snapshot.recoveryPct.map { "\(Int($0))%" }
-                )
-            }
-        }
+    private var sections: [Section] {
+        var list: [Section] = []
+        if !snapshot.events.isEmpty { list.append(.schedule) }
+        list.append(.readings)
+        list.append(.habits)
+        return list
     }
 
-    private var habits: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var habitsLine: String? {
+        guard !snapshot.habits.isEmpty else { return nil }
+        let done = snapshot.habits.filter(\.isDone).count
+        return "\(done) of \(snapshot.habits.count) \(snapshot.habits.count == 1 ? "habit" : "habits")"
+    }
+
+    @ViewBuilder
+    private func content(_ section: Section) -> some View {
+        switch section {
+        case .schedule:
+            ForEach(snapshot.events) { event in
+                EditorialRow(event.timeLabel, value: event.title)
+            }
+        case .readings:
+            EditorialRow("Steps", value: snapshot.steps.map { "\($0.formatted()) of \(snapshot.stepsTarget.formatted())" } ?? "—")
+            EditorialRow("Sleep", value: snapshot.sleepMinutes.map { "\(TodayScreen.duration($0)) of \(TodayScreen.duration(snapshot.sleepTargetMinutes))" } ?? "—")
+            EditorialRow("Weight", value: snapshot.weightKg.map { String(format: "%.1f kg", $0) } ?? "—")
+            EditorialRow("Recovery", value: snapshot.recoveryPct.map { "\(Int($0))%" } ?? "—")
+        case .habits:
             if snapshot.habits.isEmpty {
-                Text("No habits yet. Add one on the Plan tab.")
+                Text("No habits yet. Add one on the Notes tab.")
                     .font(LifeOSType.secondary)
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                    .foregroundStyle(Editorial.quietInk(scheme))
             } else {
-                // A bare count, never a percentage or a grade. This list
-                // includes habits that may not have existed on an older day,
-                // so it must not read as a verdict on that day. Suppressed
-                // entirely above when there are no habits — "0 of 0 habits"
-                // is noise above "No habits yet."
-                Text("\(snapshot.habits.filter(\.isDone).count) of \(snapshot.habits.count) \(snapshot.habits.count == 1 ? "habit" : "habits")")
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
-
-                SoftCard {
-                    VStack(spacing: 0) {
-                        ForEach(Array(snapshot.habits.enumerated()), id: \.element.id) { index, habit in
-                            if index > 0 { Divider() }
-                            habitRow(habit)
-                        }
-                    }
+                ForEach(snapshot.habits) { habit in
+                    habitRow(habit)
                 }
             }
         }
@@ -130,105 +111,20 @@ struct DayDetailSheet: View {
     }
 
     private func habitLabel(_ habit: HabitRow) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon(for: habit))
-                .font(snapshot.isToday ? LifeOSType.sectionTitle : LifeOSType.rowTitle)
-                .foregroundStyle(
-                    habit.isDone
-                        ? LifeOSTokens.accent
-                        : LifeOSTokens.secondaryText.resolve(scheme)
-                )
-                .frame(width: 24)
-
-            Text(habit.title)
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .padding(.vertical, 12)
-    }
-
-    /// Today gets the tappable circle vocabulary used on the Plan tab. A past
-    /// day gets a plain mark, because there is nothing there to press.
-    ///
-    /// Not-done on a past day is a dash, not an `xmark`. This list includes
-    /// habits that may not have existed on that date (see `DayDetailSnapshot`),
-    /// so a ✗ once per row would read as a verdict the sheet does not have the
-    /// standing to make. A dash says "not done" without asserting failure.
-    private func icon(for habit: HabitRow) -> String {
-        if snapshot.isToday {
-            habit.isDone ? "checkmark.circle.fill" : "circle"
-        } else {
-            habit.isDone ? "checkmark" : "minus"
-        }
-    }
-}
-
-/// One metric line. A missing value renders as an em dash rather than hiding the
-/// row, so the sheet's height does not jump as you move between days.
-private struct MetricRow: View {
-    let label: String
-    let value: String?
-    var detail: String? = nil
-
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(label)
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
-            Spacer()
-
-            Text(value ?? "—")
-                .font(LifeOSType.rowTitle)
-                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-
-            // The target is context for a number. With no number it is noise.
-            if let detail, value != nil {
-                Text(detail)
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+        VStack(spacing: 0) {
+            HStack(spacing: Space.x2) {
+                Image(systemName: habit.isDone ? "checkmark.square.fill" : "square")
+                    .font(LifeOSType.rowTitle)
+                    .foregroundStyle(habit.isDone ? LifeOSTokens.primaryText.resolve(scheme) : Editorial.quietInk(scheme))
+                Text(habit.title)
+                    .font(LifeOSType.secondary)
+                    .strikethrough(habit.isDone)
+                    .foregroundStyle(habit.isDone ? Editorial.quietInk(scheme) : LifeOSTokens.primaryText.resolve(scheme))
+                Spacer(minLength: 0)
             }
+            .padding(.vertical, 12)
+            Hairline()
         }
-        .padding(.vertical, 12)
+        .contentShape(.rect)
     }
-}
-
-private let previewHabits = [
-    HabitRow(id: UUID(), title: "Read 20 min", isDone: true),
-    HabitRow(id: UUID(), title: "Gym", isDone: true),
-    HabitRow(id: UUID(), title: "Water 2.5L", isDone: false),
-    HabitRow(id: UUID(), title: "Journal", isDone: false),
-]
-
-#Preview("Today") {
-    DayDetailSheet(
-        snapshot: DayDetailSnapshot(
-            date: Calendar.current.startOfDay(for: .now),
-            isToday: true,
-            steps: 3102, stepsTarget: 8000,
-            sleepMinutes: 440, sleepTargetMinutes: 420,
-            weightKg: 77.4, recoveryPct: 62,
-            habits: previewHabits
-        ),
-        onToggleHabit: { _ in }
-    )
-}
-
-#Preview("Past day, partial data") {
-    DayDetailSheet(
-        snapshot: DayDetailSnapshot(
-            date: Calendar.current.date(byAdding: .day, value: -7, to: .now)!,
-            isToday: false,
-            steps: 6204, stepsTarget: 8000,
-            sleepMinutes: nil, sleepTargetMinutes: 420,
-            weightKg: nil, recoveryPct: nil,
-            habits: previewHabits
-        ),
-        onToggleHabit: { _ in }
-    )
 }
