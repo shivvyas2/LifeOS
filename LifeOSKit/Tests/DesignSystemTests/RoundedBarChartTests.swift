@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import DesignSystem
 
 @Suite struct RoundedBarChartTests {
@@ -69,5 +70,26 @@ import Foundation
         #expect(fraction >= 0)
         #expect(fraction <= 1)
         #expect(Chart.fraction(of: 500, in: [], baseline: .windowMinimum) == 0.5)
+    }
+
+    // MARK: - Styles
+
+    /// Life draws its trends on the dusk field, where the only colours are ink
+    /// and the rule.
+    @Test func inkStyleDrawsBarsInInkAndTracksAsRules() {
+        #expect(Chart.barFill(.ink, scheme: .light) == LifeOSTokens.primaryText.resolve(.light))
+        #expect(Chart.barFill(.ink, scheme: .dark) == LifeOSTokens.primaryText.resolve(.dark))
+        #expect(Chart.trackFill(.ink, scheme: .light) == Editorial.rule(.light))
+    }
+
+    @Test func hueStyleKeepsTheModuleColour() {
+        #expect(Chart.barFill(.hue(.activity), scheme: .light) == ModuleHue.activity.top)
+        #expect(Chart.trackFill(.hue(.activity), scheme: .dark) == ModuleHue.activity.pastelDark)
+    }
+
+    /// Nothing asked for is the accent, as every chart has been so far.
+    @Test func accentIsTheDefault() {
+        #expect(Chart.barFill(.accent, scheme: .light) == LifeOSTokens.accent)
+        #expect(Chart.trackFill(.accent, scheme: .light) == LifeOSTokens.accentSoft.resolve(.light))
     }
 }

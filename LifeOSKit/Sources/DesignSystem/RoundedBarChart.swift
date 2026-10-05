@@ -27,41 +27,53 @@ public struct RoundedBarChart: View {
         case windowMinimum
     }
 
+    /// What colours the bars. The accent is the app-wide default; a module hue
+    /// is for the metric screens that still carry one; ink is for a chart on
+    /// the editorial dusk field, where the only colours are ink and the rule.
+    public enum Style: Sendable, Equatable {
+        case accent
+        case hue(ModuleHue)
+        case ink
+    }
+
     private let bars: [Bar]
-    private let hue: ModuleHue?
+    private let style: Style
     private let goal: Double?
     private let baseline: Baseline
     private let spacing: CGFloat
     private let height: CGFloat
     @Environment(\.colorScheme) private var scheme
 
-    /// - Parameters:
-    ///   - hue: Colours the bars as the module's own. Nil keeps the app accent.
-    ///   - goal: Readings below it draw faded, so a week of hits and misses is
-    ///     legible without a second progress control saying the same thing.
-    ///   - baseline: See `Baseline`.
     public init(
         bars: [Bar],
-        hue: ModuleHue? = nil,
+        style: Style = .accent,
         goal: Double? = nil,
         baseline: Baseline = .zero,
         spacing: CGFloat = 10,
         height: CGFloat = 150
     ) {
         self.bars = bars
-        self.hue = hue
+        self.style = style
         self.goal = goal
         self.baseline = baseline
         self.spacing = spacing
         self.height = height
     }
 
-    /// How tall a bar stands, as a fraction of the track, given the week around
-    /// it. Pure and static so the scaling can be tested without a renderer.
-    ///
-    /// A flat window returns a half bar rather than a full or empty one: every
-    /// reading is simultaneously the high and the low, and half reads as
-    /// "steady" where the extremes read as claims the data does not make.
+    /// The older spelling. `hue` has no default here on purpose: with one,
+    /// `RoundedBarChart(bars:)` would match both initialisers.
+    public init(
+        bars: [Bar],
+        hue: ModuleHue?,
+        goal: Double? = nil,
+        baseline: Baseline = .zero,
+        spacing: CGFloat = 10,
+        height: CGFloat = 150
+    ) {
+        self.init(bars: bars, style: hue.map(Style.hue) ?? .accent, goal: goal,
+                  baseline: baseline, spacing: spacing, height: height)
+    }
+
     public static func fraction(
         of value: Double,
         in readings: [Double],
@@ -123,14 +135,24 @@ public struct RoundedBarChart: View {
         return value >= goal
     }
 
-    private var barFill: Color {
-        hue?.top ?? LifeOSTokens.accent
+    static func barFill(_ style: Style, scheme: ColorScheme) -> Color {
+        switch style {
+        case .accent: LifeOSTokens.accent
+        case .hue(let hue): hue.top
+        case .ink: LifeOSTokens.primaryText.resolve(scheme)
+        }
     }
 
-    private var trackFill: Color {
-        guard let hue else { return LifeOSTokens.accentSoft.resolve(scheme) }
-        return scheme == .dark ? hue.pastelDark : hue.pastel
+    static func trackFill(_ style: Style, scheme: ColorScheme) -> Color {
+        switch style {
+        case .accent: LifeOSTokens.accentSoft.resolve(scheme)
+        case .hue(let hue): scheme == .dark ? hue.pastelDark : hue.pastel
+        case .ink: Editorial.rule(scheme)
+        }
     }
+
+    private var barFill: Color { Self.barFill(style, scheme: scheme) }
+    private var trackFill: Color { Self.trackFill(style, scheme: scheme) }
 }
 
 #Preview {
