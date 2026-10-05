@@ -37,13 +37,12 @@ struct SectorDetailScreen: View {
                 if let history = model.history {
                     header(history)
                     if history.months.isEmpty { emptyState }
-                    if !history.observations.isEmpty { observations(history) }
-                    if !history.months.isEmpty { trend(history) }
-                    if let latest = history.months.last, !latest.evidenceRows.isEmpty {
-                        reasoning(latest)
+                    ForEach(Array(sections(history).enumerated()), id: \.element) { offset, section in
+                        VStack(alignment: .leading, spacing: Space.x2) {
+                            EditorialSectionHeader(index: offset + 1, title: section.title)
+                            content(section, history: history)
+                        }
                     }
-                    if !visibleTracks(history).isEmpty { answers(history) }
-                    if !history.notes.isEmpty { notes(history) }
                     if let onOpenTab { openTabRow(onOpenTab) }
                 } else {
                     ProgressView()
@@ -70,114 +69,118 @@ struct SectorDetailScreen: View {
         }
     }
 
-    // MARK: - Bands
+    // MARK: - Sections
 
-    /// `value: nil` renders `PastelFillCard`'s own em dash, so a sector never
-    /// closed reads the same here as it does on the board.
-    private func header(_ history: SectorHistory) -> some View {
-        PastelFillCard(
-            icon: SectorPalette.icon(sector),
-            hue: SectorPalette.hue(sector),
-            label: sector.title,
-            value: history.months.last.map { String($0.userScore) },
-            unit: history.months.last == nil ? nil : "/10",
-            caption: history.months.last.map {
-                $0.month.formatted(.dateTime.month(.wide).year())
+    /// The bands in order, only those with something to show, so the index
+    /// numbers run without gaps.
+    private enum Section: Hashable {
+        case observations, trend, reasoning, answers, notes
+
+        var title: String {
+            switch self {
+            case .observations: "Observations"
+            case .trend: "Trend"
+            case .reasoning: "Why"
+            case .answers: "Answers over time"
+            case .notes: "Notes"
             }
-        )
+        }
+    }
+
+    private func sections(_ history: SectorHistory) -> [Section] {
+        var list: [Section] = []
+        if !history.observations.isEmpty { list.append(.observations) }
+        if !history.months.isEmpty { list.append(.trend) }
+        if let latest = history.months.last, !latest.evidenceRows.isEmpty { list.append(.reasoning) }
+        if !visibleTracks(history).isEmpty { list.append(.answers) }
+        if !history.notes.isEmpty { list.append(.notes) }
+        return list
+    }
+
+    @ViewBuilder
+    private func content(_ section: Section, history: SectorHistory) -> some View {
+        switch section {
+        case .observations:
+            ForEach(history.observations, id: \.self) { observation in
+                Text(observation).font(LifeOSType.secondary)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            }
+        case .trend:
+            trend(history)
+        case .reasoning:
+            if let latest = history.months.last {
+                Text("Why \(latest.month.formatted(.dateTime.month(.wide)))").editorialEyebrow()
+                ForEach(latest.evidenceRows, id: \.label) { row in
+                    EditorialRow(row.label, value: row.value)
+                }
+            }
+        case .answers:
+            ForEach(visibleTracks(history), id: \.questionID) { track in
+                questionTrackRow(track, months: history.months)
+            }
+        case .notes:
+            ForEach(Array(history.notes.enumerated()), id: \.offset) { _, note in
+                VStack(alignment: .leading, spacing: Space.half) {
+                    Text(note.month.formatted(.dateTime.month(.wide).year())).editorialEyebrow()
+                    Text(note.text).font(LifeOSType.secondary)
+                        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    Hairline()
+                }
+            }
+        }
+    }
+
+    /// The screen's one field: the score, the month it belongs to, the icon.
+    private func header(_ history: SectorHistory) -> some View {
+        let latest = history.months.last
+        return EditorialField(.dusk) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    Text(latest.map { "\(sector.title) · \($0.month.formatted(.dateTime.month(.wide).year()))" } ?? sector.title)
+                        .editorialEyebrow()
+                    EditorialFigure(label: "Score",
+                                    value: latest.map { String($0.userScore) } ?? "—",
+                                    unit: latest == nil ? nil : "/10")
+                }
+                Spacer(minLength: Space.x1)
+                Image(systemName: SectorPalette.icon(sector))
+                    .font(LifeOSType.sectionTitle)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     /// The state every sector starts in on a fresh install: no month closed
     /// yet, so there is nothing to plot, reason about, or list answers for.
     private var emptyState: some View {
-        SoftCard {
-            Text("Close a month on the board to start this sector's history.")
-                .font(LifeOSType.secondary)
-                .foregroundStyle(.secondary)
-        }
+        Text("Close a month on the board to start this sector's history.")
+            .font(LifeOSType.secondary)
+            .editorialCard()
     }
 
-    private func observations(_ history: SectorHistory) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Observations").font(LifeOSType.secondary).foregroundStyle(.secondary)
-                ForEach(history.observations, id: \.self) { observation in
-                    Text(observation).font(LifeOSType.secondary)
-                }
-            }
-        }
-    }
-
-    /// `baseline: .windowMinimum` is correct here, not `.zero`: a sector
-    /// score is a rating on a 0...10 scale, never a count building up from
-    /// nought, which is exactly the case `Baseline.windowMinimum`'s own doc
-    /// describes for body weight. Under it a flat year draws as steady
-    /// half-height bars and a real swing draws as one; under `.zero`,
-    /// `RoundedBarChart.fraction` divides by the window's own peak, so a
-    /// flat year of 4s and a flat year of 9s both draw as full-height bars,
-    /// indistinguishable from each other. The absolute value is carried by
-    /// the header numeral, not by bar height.
+    /// `baseline: .windowMinimum`, not `.zero`: a sector score is a rating on
+    /// a 0...10 scale, never a count building up from nought. The absolute
+    /// value is carried by the header figure, not by bar height.
     private func trend(_ history: SectorHistory) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Trend").font(LifeOSType.secondary).foregroundStyle(.secondary)
-                RoundedBarChart(
-                    bars: history.months.map {
-                        RoundedBarChart.Bar(
-                            id: $0.month,
-                            label: $0.month.formatted(.dateTime.month(.narrow)),
-                            value: Double($0.userScore)
-                        )
-                    },
-                    hue: SectorPalette.hue(sector),
-                    baseline: .windowMinimum,
-                    height: 120
+        RoundedBarChart(
+            bars: history.months.map {
+                RoundedBarChart.Bar(
+                    id: $0.month,
+                    label: $0.month.formatted(.dateTime.month(.narrow)),
+                    value: Double($0.userScore)
                 )
-            }
-        }
-    }
-
-    /// Renders the archived rows verbatim, label left, value right. Frozen at
-    /// close time, so a goal changed later cannot rewrite what an earlier
-    /// month's reasoning said.
-    private func reasoning(_ entry: MonthEntry) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text("Why \(entry.month.formatted(.dateTime.month(.wide)))")
-                    .font(LifeOSType.secondary).foregroundStyle(.secondary)
-                ForEach(entry.evidenceRows, id: \.label) { row in
-                    HStack {
-                        Text(row.label)
-                        Spacer()
-                        Text(row.value).foregroundStyle(.secondary)
-                    }
-                    .font(LifeOSType.secondary)
-                }
-            }
-        }
+            },
+            style: .ink,
+            baseline: .windowMinimum,
+            height: 120
+        )
     }
 
     /// A track qualifies for `history.questions` on any answer across all
     /// twelve fetched months, but this band only ever renders the last
-    /// `answerWindow` of them, so a track last answered outside that window
-    /// is filtered here rather than rendering its prompt over bare em dashes.
+    /// `answerWindow` of them.
     private func visibleTracks(_ history: SectorHistory) -> [QuestionTrack] {
         history.questions.filter { $0.hasAnswer(inLastMonths: answerWindow) }
-    }
-
-    /// One row per question, the last six months across it, oldest to newest,
-    /// horizontally scrollable. An unanswered month renders an em dash,
-    /// matching how the board shows an unscored sector: never a blank or a
-    /// zero.
-    private func answers(_ history: SectorHistory) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: Space.x2) {
-                Text("Answers over time").font(LifeOSType.secondary).foregroundStyle(.secondary)
-                ForEach(visibleTracks(history), id: \.questionID) { track in
-                    questionTrackRow(track, months: history.months)
-                }
-            }
-        }
     }
 
     private func questionTrackRow(_ track: QuestionTrack, months: [MonthEntry]) -> some View {
@@ -185,17 +188,19 @@ struct SectorDetailScreen: View {
             .map { MonthAnswer(month: $0.0.month, answer: $0.1) }
         return VStack(alignment: .leading, spacing: Space.half) {
             Text(track.prompt).font(LifeOSType.label.weight(.regular))
+                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Space.x1) {
+                HStack(spacing: Space.x2) {
                     ForEach(entries) { entry in
                         VStack(spacing: Space.half) {
-                            Text(entry.month.formatted(.dateTime.month(.narrow)))
-                                .font(LifeOSType.caption).foregroundStyle(.secondary)
+                            Text(entry.month.formatted(.dateTime.month(.narrow))).editorialEyebrow()
                             Text(entry.answer ?? "—").font(LifeOSType.secondary)
+                                .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                         }
                     }
                 }
             }
+            Hairline()
         }
     }
 
@@ -207,28 +212,14 @@ struct SectorDetailScreen: View {
         var id: Date { month }
     }
 
-    private func notes(_ history: SectorHistory) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: Space.x2) {
-                Text("Notes").font(LifeOSType.secondary).foregroundStyle(.secondary)
-                ForEach(Array(history.notes.enumerated()), id: \.offset) { _, note in
-                    VStack(alignment: .leading, spacing: Space.half) {
-                        Text(note.month.formatted(.dateTime.month(.wide).year()))
-                            .font(LifeOSType.caption).foregroundStyle(.secondary)
-                        Text(note.text).font(LifeOSType.secondary)
-                    }
-                }
-            }
-        }
-    }
-
     private func openTabRow(_ action: @escaping () -> Void) -> some View {
-        SoftCard {
-            Button(action: action) {
+        Button(action: action) {
+            HStack {
                 Text("Open \(sector.title)")
-                    .font(LifeOSType.secondary.weight(.medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer()
+                Image(systemName: "arrow.right")
             }
         }
+        .buttonStyle(.editorial(.secondary, fullWidth: true))
     }
 }
