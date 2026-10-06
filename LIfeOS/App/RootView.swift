@@ -183,7 +183,10 @@ struct RootView: View {
         .fullScreenCover(isPresented: $showCoach) {
             LifoCoachScreen(model: coach, onDismiss: { showCoach = false })
         }
-        .sheet(isPresented: $showAssistant) {
+        // A full screen, not a sheet: the assistant is a place to work in,
+        // with a calendar behind its Schedule link, and a bottom sheet left
+        // it feeling like a quick errand over the tab underneath.
+        .fullScreenCover(isPresented: $showAssistant) {
             if let assistantModel {
                 AssistantSheet(model: assistantModel)
             }
