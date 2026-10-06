@@ -41,7 +41,13 @@ nonisolated enum ElevenLabsVoiceClient {
             // three seconds after the text has already been read is not
             // answering, it is repeating.
             "model_id": "eleven_flash_v2_5",
-            "voice_settings": ["stability": 0.4, "similarity_boost": 0.75],
+            // Lower stability and a little style let the delivery move the
+            // way a person's does; a flat, perfectly stable read is the sound
+            // of text to speech. Speaker boost keeps the voice present at
+            // phone volume, and text normalisation says a number out loud
+            // rather than spelling it.
+            "voice_settings": ["stability": 0.35, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": true],
+            "apply_text_normalization": "auto",
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -180,6 +186,13 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             guard let self, self.player.map(ObjectIdentifier.init) == finished else { return }
             self.player = nil
             self.level = 0
+            if !self.queue.isEmpty {
+                // A breath between passages, the pause a person takes before
+                // the next thought. Back to back, two passages run together
+                // into one long sentence.
+                try? await Task.sleep(for: .milliseconds(350))
+                guard self.player == nil else { return }
+            }
             self.playNext()
         }
     }

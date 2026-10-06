@@ -94,7 +94,7 @@ import Testing
 
     @Test func thePrefixIsMatchedLooselyAndPassagesAreCleaned() {
         let track = SpokenTrack(parsing: "\n say: \"**Nice** work - 7h 24m tonight.\"\n\nDetail here.")
-        #expect(track.opening == "Nice work, 7h 24m tonight.")
+        #expect(track.opening == "Nice work, 7 hours 24 minutes tonight.")
         #expect(track.shownText == "Detail here.")
     }
 
