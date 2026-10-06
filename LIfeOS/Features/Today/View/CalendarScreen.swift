@@ -3,50 +3,87 @@ import SwiftData
 import DesignSystem
 import Persistence
 
-/// A whole month of the calendar, and the selected day's schedule beneath it.
+/// The calendar behind the header's calendar button: one screen, two faces.
 ///
-/// Today's month grid shows how the habit streak has been going, one dot per
-/// day, and cannot leave the current month. This is the other question: what
-/// is on, across a month you can move through. The grid carries day numbers
-/// and up to three event dots per day; the agenda under it is the selected
-/// Two months on hairlines: this one and the next. Past days are hatched,
-/// today is the accent, a dot marks a day with events, and a tap pushes the
-/// week's schedule at that day.
-struct MonthScreen: View {
+/// Monthly is this month and the next on hairline grids, past days hatched,
+/// today in the accent, a dot on days with events. Weekly is the seven days
+/// around the selected day as stacked bands. The switch moves between them
+/// in place, and a tapped day in Monthly opens its week; nothing is pushed,
+/// so the way back is always the one Back button.
+struct CalendarScreen: View {
     @State private var model = MonthViewModel()
+    @State private var mode: CalendarMode
     @Environment(\.modelContext) private var context
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
     @Environment(\.dismiss) private var dismiss
     @State private var showDatePicker = false
-    @State private var openDay: ScheduleDay?
 
-    var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
-    var onAddEvent: (Date) -> Void = { _ in }
-    var isCalendarConnected = true
-    var onConnectCalendar: () -> Void = {}
+    /// A day to open on instead of today. For previews and deep links; the
+    /// header button passes nothing.
+    private let initialSelection: Date?
+    var onTapEvent: (CalendarEventSnapshot) -> Void
+    var onAddEvent: (Date) -> Void
+    var isCalendarConnected: Bool
+    var onConnectCalendar: () -> Void
+
+    init(
+        initialMode: CalendarMode = .monthly,
+        initialSelection: Date? = nil,
+        onTapEvent: @escaping (CalendarEventSnapshot) -> Void = { _ in },
+        onAddEvent: @escaping (Date) -> Void = { _ in },
+        isCalendarConnected: Bool = true,
+        onConnectCalendar: @escaping () -> Void = {}
+    ) {
+        _mode = State(initialValue: initialMode)
+        self.initialSelection = initialSelection
+        self.onTapEvent = onTapEvent
+        self.onAddEvent = onAddEvent
+        self.isCalendarConnected = isCalendarConnected
+        self.onConnectCalendar = onConnectCalendar
+    }
 
     private let calendar = Calendar.current
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
 
-    /// A pushed day. `Date` is not `Identifiable`, and the push needs one.
-    struct ScheduleDay: Identifiable, Hashable {
-        let date: Date
-        var id: Date { date }
-    }
-
     private var months: [Date] {
         [model.month, calendar.date(byAdding: .month, value: 1, to: model.month) ?? model.month]
     }
 
+    private var headline: CalendarHeadline {
+        CalendarHeadline.make(mode: mode, month: model.month, selection: model.selection, calendar: calendar)
+    }
+
+    /// Nothing to go back to: the shown month is this month, or the shown
+    /// week holds today.
+    private var isOnToday: Bool {
+        switch mode {
+        case .monthly:
+            calendar.isDate(model.month, equalTo: .now, toGranularity: .month)
+        case .weekly:
+            WeekSpan.days(containing: model.selection, calendar: calendar).contains { calendar.isDateInToday($0) }
+        }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.x4) {
+            VStack(alignment: .leading, spacing: Space.x3) {
                 header
+                UnderlinePicker(
+                    selection: $mode.animation(.snappy(duration: 0.22)),
+                    options: [(.monthly, "Monthly"), (.weekly, "Weekly")]
+                )
                 if !isCalendarConnected { connectCard }
-                ForEach(months, id: \.self) { month in
-                    monthBlock(month)
+                switch mode {
+                case .monthly:
+                    VStack(alignment: .leading, spacing: Space.x4) {
+                        ForEach(months, id: \.self) { month in
+                            monthBlock(month)
+                        }
+                    }
+                case .weekly:
+                    WeekBands(model: model, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
                 }
                 Button("Go back") { dismiss() }
                     .buttonStyle(.editorial(.secondary, fullWidth: true))
@@ -62,24 +99,13 @@ struct MonthScreen: View {
                 DragGesture(minimumDistance: 24)
                     .onEnded { value in
                         guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        withAnimation(.easeOut(duration: 0.18)) {
-                            model.step(value.translation.width < 0 ? 1 : -1)
-                        }
+                        step(value.translation.width < 0 ? 1 : -1)
                     }
             )
         }
         .background(paper.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Today") { model.goToToday() }
-                    .disabled(calendar.isDate(model.month, equalTo: .now, toGranularity: .month))
-            }
-        }
-        .navigationDestination(item: $openDay) { day in
-            DayScheduleScreen(model: model, day: day.date, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
-        }
         .sheet(isPresented: $showDatePicker) {
             NavigationStack {
                 DatePicker("Go to date", selection: Binding(get: { model.selection }, set: {
@@ -96,29 +122,47 @@ struct MonthScreen: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .task { model.attach(context) }
+        .task {
+            model.attach(context)
+            if let initialSelection { model.goTo(initialSelection) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
             model.load()
         }
     }
 
+    /// One step in whichever unit the mode shows: a month on the grids, a
+    /// week on the bands.
+    private func step(_ direction: Int) {
+        withAnimation(.easeOut(duration: 0.18)) {
+            switch mode {
+            case .monthly: model.step(direction)
+            case .weekly: model.stepWeek(direction)
+            }
+        }
+    }
+
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
             Button { showDatePicker = true } label: {
-                EditorialMasthead(eyebrow: "Monthly · \(model.month.formatted(.dateTime.year()))", title: "Calendar")
+                EditorialMasthead(eyebrow: headline.eyebrow, title: headline.title, detail: headline.detail)
             }
             .buttonStyle(.plain)
             .accessibilityHint("Choose any date")
             Spacer(minLength: Space.x1)
-            stepButton("chevron.left", months: -1, label: "Previous month")
-            stepButton("chevron.right", months: 1, label: "Next month")
+            Button("Today") {
+                withAnimation(.easeOut(duration: 0.18)) { model.goToToday() }
+            }
+            .buttonStyle(.editorial(.secondary, size: .compact))
+            .disabled(isOnToday)
+            .accessibilityHint(mode == .monthly ? "Shows this month" : "Shows this week")
+            stepButton("chevron.left", direction: -1, label: mode == .monthly ? "Previous month" : "Previous week")
+            stepButton("chevron.right", direction: 1, label: mode == .monthly ? "Next month" : "Next week")
         }
     }
 
-    private func stepButton(_ icon: String, months: Int, label: String) -> some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.18)) { model.step(months) }
-        } label: {
+    private func stepButton(_ icon: String, direction: Int, label: String) -> some View {
+        Button { step(direction) } label: {
             Image(systemName: icon)
         }
         .buttonStyle(.editorial(.secondary, size: .compact))
@@ -157,11 +201,15 @@ struct MonthScreen: View {
         }
     }
 
+    /// A tap selects the day and turns the screen to its week. Nothing is
+    /// pushed: the week appears under the same masthead, with this day's
+    /// band open.
     private func dayCell(_ date: Date) -> some View {
         let state = MonthDayState.of(date, calendar: calendar)
         let count = model.events(on: date).count
         return Button {
-            openDay = ScheduleDay(date: date)
+            model.select(date)
+            withAnimation(.snappy(duration: 0.22)) { mode = .weekly }
         } label: {
             ZStack {
                 if state == .today { Rectangle().fill(LifeOSTokens.accent) }
@@ -186,7 +234,7 @@ struct MonthScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(count) events")
-        .accessibilityHint("Opens the week's schedule")
+        .accessibilityHint("Shows its week")
         .accessibilityAddTraits(state == .today ? [.isSelected] : [])
     }
 }
