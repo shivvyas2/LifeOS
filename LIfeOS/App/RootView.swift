@@ -421,7 +421,7 @@ struct RootView: View {
                             Button { showMonth = true } label: {
                                 Image(systemName: "calendar")
                             }
-                            .accessibilityLabel("Month calendar")
+                            .accessibilityLabel("Calendar")
                         }
                     }
                     .navigationDestination(isPresented: $showMonth) {

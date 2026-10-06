@@ -43,6 +43,7 @@ struct CalendarScreen: View {
         self.onConnectCalendar = onConnectCalendar
     }
 
+    private static let topID = "calendar-top"
     private let calendar = Calendar.current
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
@@ -67,67 +68,75 @@ struct CalendarScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.x3) {
-                header
-                UnderlinePicker(
-                    selection: $mode.animation(.snappy(duration: 0.22)),
-                    options: [(.monthly, "Monthly"), (.weekly, "Weekly")]
-                )
-                if !isCalendarConnected { connectCard }
-                switch mode {
-                case .monthly:
-                    VStack(alignment: .leading, spacing: Space.x4) {
-                        ForEach(months, id: \.self) { month in
-                            monthBlock(month)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.x3) {
+                    header
+                    UnderlinePicker(
+                        selection: $mode.animation(.snappy(duration: 0.22)),
+                        options: [(.monthly, "Monthly"), (.weekly, "Weekly")]
+                    )
+                    if !isCalendarConnected { connectCard }
+                    switch mode {
+                    case .monthly:
+                        VStack(alignment: .leading, spacing: Space.x4) {
+                            ForEach(months, id: \.self) { month in
+                                monthBlock(month)
+                            }
                         }
+                    case .weekly:
+                        WeekBands(model: model, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
                     }
-                case .weekly:
-                    WeekBands(model: model, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
+                    Button("Go back") { dismiss() }
+                        .buttonStyle(.editorial(.secondary, fullWidth: true))
                 }
-                Button("Go back") { dismiss() }
-                    .buttonStyle(.editorial(.secondary, fullWidth: true))
+                .frame(maxWidth: layout.maxContentWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, layout.gutter)
+                .padding(.leading, layout.railInset)
+                .padding(.top, Space.x2)
+                .padding(.bottom, layout.contentBottomInset)
+                .contentShape(.rect)
+                .gesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            step(value.translation.width < 0 ? 1 : -1)
+                        }
+                )
             }
-            .frame(maxWidth: layout.maxContentWidth)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, layout.gutter)
-            .padding(.leading, layout.railInset)
-            .padding(.top, Space.x2)
-            .padding(.bottom, layout.contentBottomInset)
-            .contentShape(.rect)
-            .gesture(
-                DragGesture(minimumDistance: 24)
-                    .onEnded { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        step(value.translation.width < 0 ? 1 : -1)
-                    }
-            )
-        }
-        .background(paper.ignoresSafeArea())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showDatePicker) {
-            NavigationStack {
-                DatePicker("Go to date", selection: Binding(get: { model.selection }, set: {
-                    model.goTo($0)
-                    showDatePicker = false
-                }), displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .padding()
-                .navigationTitle("Go to date")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { showDatePicker = false }
-                } }
+            .background(paper.ignoresSafeArea())
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showDatePicker) {
+                NavigationStack {
+                    DatePicker("Go to date", selection: Binding(get: { model.selection }, set: {
+                        model.goTo($0)
+                        showDatePicker = false
+                    }), displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .padding()
+                    .navigationTitle("Go to date")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showDatePicker = false }
+                    } }
+                }
+                .presentationDetents([.medium, .large])
             }
-            .presentationDetents([.medium, .large])
-        }
-        .task {
-            model.attach(context)
-            if let initialSelection { model.goTo(initialSelection) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
-            model.load()
+            .task {
+                model.attach(context)
+                if let initialSelection { model.goTo(initialSelection) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+                model.load()
+            }
+            .onChange(of: mode) { _, _ in
+                // The grids can be scrolled a long way down when a day in the
+                // second month is tapped; the week that opens must arrive with
+                // the line that names it, not mid-list.
+                withAnimation(.snappy(duration: 0.22)) { proxy.scrollTo(Self.topID, anchor: .top) }
+            }
         }
     }
 
