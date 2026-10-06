@@ -40,6 +40,13 @@ public struct CalendarStore {
         try row(id: id)?.snapshot()
     }
 
+    /// The cached row for a provider's event, by its natural key. The id a
+    /// source hands back from a write is provisional; this is how a caller
+    /// finds the id the rest of the app can look the event up by.
+    public func snapshot(source: CalendarEventSource, sourceID: String) throws -> CalendarEventSnapshot? {
+        try rowByKey(sourceRaw: source.rawValue, sourceID: sourceID)?.snapshot()
+    }
+
     /// Reconciles one provider fetch into the cache.
     ///
     /// Matches on the natural key `(source, sourceID)`: an existing row is

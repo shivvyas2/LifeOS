@@ -17,7 +17,10 @@ extension CalendarStore: CalendarReading {}
 /// it with CalendarSync, so every write goes through the provider and a
 /// re-sync, exactly like a tap in the UI would.
 public protocol CalendarWriting: Sendable {
-    func create(_ draft: CalendarEventDraft) async throws
+    /// The event as the cache holds it after the write, so a caller can show
+    /// it and find it again by id.
+    @discardableResult
+    func create(_ draft: CalendarEventDraft) async throws -> CalendarEventSnapshot
     func update(id: UUID, with draft: CalendarEventDraft) async throws
     func delete(id: UUID) async throws
 }

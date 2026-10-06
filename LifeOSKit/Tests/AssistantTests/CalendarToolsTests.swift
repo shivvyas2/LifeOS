@@ -25,8 +25,17 @@ private final class FakeCalendar: CalendarReading, CalendarWriting, @unchecked S
     func freeSlots(from: Date, to: Date, durationMinutes: Int) throws -> [DateInterval] {
         slots
     }
-    nonisolated func create(_ draft: CalendarEventDraft) async throws {
-        await MainActor.run { created.append(draft) }
+    nonisolated func create(_ draft: CalendarEventDraft) async throws -> CalendarEventSnapshot {
+        await MainActor.run {
+            created.append(draft)
+            return CalendarEventSnapshot(
+                id: UUID(), source: .eventKit, sourceID: "ek-created-\(created.count)",
+                calendarTitle: "Cal", title: draft.title,
+                startDate: draft.startDate, endDate: draft.endDate,
+                isAllDay: draft.isAllDay, isRecurring: false,
+                location: draft.location, notes: draft.notes
+            )
+        }
     }
     nonisolated func update(id: UUID, with draft: CalendarEventDraft) async throws {
         await MainActor.run { updated.append((id, draft)) }
