@@ -15,7 +15,8 @@ import Persistence
 ///
 /// Reads come straight through `events`; writes leave by `onTapEvent` and
 /// `onAddEvent`. The card owns no store and no calendar, so it previews and
-/// composes like every other view in the app.
+/// composes like every other view in the app. On paper: a hairline card, the
+/// chosen day as an ink-filled square, rows ruled by hairlines.
 struct AssistantAgendaCard: View {
     /// The events this reply was about. Only their days are used, for the
     /// dots on the strip; the rows come from `events` so a day always reads
@@ -74,99 +75,64 @@ struct AssistantAgendaCard: View {
             rows.padding(.top, 4)
             addButton
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(primary.opacity(scheme == .dark ? 0.14 : 0.07), lineWidth: 1)
-                )
-        )
+        .editorialCard()
     }
 
     // MARK: - Header
 
-    /// Weekday large on the left with the accent dot beside it, date stacked
-    /// small on the right. The dot is filled on today and hollow on any other
-    /// day, so the card says whether you are looking at now without spending
-    /// a word on it.
+    /// Weekday large on the left, the date stacked small on the right. The
+    /// filled accent dot beside the weekday says this is today; a hollow one
+    /// says it is another day.
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             HStack(spacing: 7) {
-                Text(selection.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(LifeOSType.sectionTitle.weight(.bold))
+                Text(selection.formatted(.dateTime.weekday(.wide)))
+                    .font(LifeOSType.sectionTitle)
                     .foregroundStyle(primary)
                 Circle()
                     .strokeBorder(LifeOSTokens.accent, lineWidth: 2)
-                    .background(
-                        Circle().fill(
-                            calendar.isDateInToday(selection) ? LifeOSTokens.accent : .clear
-                        )
-                    )
+                    .background(Circle().fill(calendar.isDateInToday(selection) ? LifeOSTokens.accent : .clear))
                     .frame(width: 8, height: 8)
             }
-
             Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: -2) {
-                Text(selection.formatted(.dateTime.month(.wide).day()))
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(primary)
-                Text(selection.formatted(.dateTime.year()))
-                    .font(LifeOSType.label.weight(.regular))
-                    .foregroundStyle(secondary)
-            }
+            Text(selection.formatted(.dateTime.month(.abbreviated).day().year())).editorialEyebrow()
         }
     }
 
     // MARK: - Week strip
 
     private var strip: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(week, id: \.self) { date in
                 let isSelected = calendar.isDate(date, inSameDayAs: selection)
-
-                VStack(spacing: 1) {
+                VStack(spacing: 2) {
                     Text(date.formatted(.dateTime.day()))
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(isSelected ? primary : secondary)
-                    Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased())
-                        .font(LifeOSType.eyebrow.weight(.semibold))
-                        .foregroundStyle(isSelected ? LifeOSTokens.accent : secondary.opacity(0.8))
+                        .font(LifeOSType.label.weight(isSelected ? .semibold : .regular))
+                        .monospacedDigit()
+                        .foregroundStyle(isSelected ? LifeOSTokens.canvas.resolve(scheme) : primary)
+                    Text(date.formatted(.dateTime.weekday(.narrow)))
+                        .font(LifeOSType.caption)
+                        .foregroundStyle(isSelected ? LifeOSTokens.canvas.resolve(scheme).opacity(0.8) : secondary)
                     // Always laid out, coloured only when the day carries an
-                    // event from this reply. Hiding it entirely would shift
-                    // every other column by three points as the selection moves.
+                    // event from this reply, so columns never shift.
                     Circle()
                         .fill(touchedDays.contains(calendar.startOfDay(for: date))
-                              ? LifeOSTokens.accent : .clear)
+                              ? (isSelected ? LifeOSTokens.canvas.resolve(scheme) : LifeOSTokens.accent) : .clear)
                         .frame(width: 3, height: 3)
-                        .padding(.top, 1)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(primary.opacity(scheme == .dark ? 0.10 : 0.05))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .strokeBorder(primary.opacity(scheme == .dark ? 0.18 : 0.10),
-                                                  lineWidth: 1)
-                            )
-                    }
-                }
+                .padding(.vertical, 8)
+                .background { if isSelected { Rectangle().fill(primary) } }
                 .contentShape(.rect)
                 .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        selection = calendar.startOfDay(for: date)
-                    }
+                    withAnimation(.easeOut(duration: 0.18)) { selection = calendar.startOfDay(for: date) }
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).month().day()))
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
+        .overlay(Rectangle().strokeBorder(Editorial.rule(scheme)))
     }
 
     // MARK: - Rows
@@ -176,57 +142,34 @@ struct AssistantAgendaCard: View {
         let events = day
         if events.isEmpty {
             HStack {
-                Text("Nothing scheduled.")
-                    .font(LifeOSType.secondary)
-                    .foregroundStyle(secondary)
+                Text("Nothing scheduled.").font(LifeOSType.secondary).foregroundStyle(secondary)
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 18)
         } else {
             VStack(spacing: 0) {
                 ForEach(events) { event in
-                    dottedRule
                     row(event)
+                    Hairline()
                 }
-                dottedRule
             }
         }
     }
 
-    /// A row is a glyph, a title and a time, with nothing between them but
-    /// space. The events already form a list; boxing each one restates that.
+    /// A row is a time, a title and an arrow, with nothing between them but
+    /// space. Past events recede rather than disappear.
     private func row(_ event: CalendarEventSnapshot) -> some View {
-        // Past events recede rather than disappear: the day is still the day,
-        // but what is left of it is what you are being asked about.
         let isPast = event.endDate < .now
-
-        return Button {
-            onTapEvent(event)
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: DayPart.of(event, calendar: calendar).icon)
-                    .font(LifeOSType.label)
-                    .foregroundStyle(primary)
-                    .frame(width: 18)
-
-                Text(event.title)
-                    .font(LifeOSType.rowTitle)
-                    .foregroundStyle(primary)
-                    .lineLimit(1)
-
-                Spacer(minLength: 8)
-
-                // All-day events say so on the strip's dot and by having no
-                // hour; printing "all day" in the time column would make the
-                // one row without a time the loudest thing in the list.
-                if !event.isAllDay {
-                    Text(event.startDate.formatted(date: .omitted, time: .shortened))
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(secondary)
-                        .monospacedDigit()
-                }
+        return Button { onTapEvent(event) } label: {
+            HStack(spacing: Space.x2) {
+                Text(event.isAllDay ? "All day" : event.startDate.formatted(date: .omitted, time: .shortened))
+                    .font(LifeOSType.secondary).foregroundStyle(secondary).monospacedDigit()
+                    .frame(width: 72, alignment: .leading)
+                Text(event.title).font(LifeOSType.secondary.weight(.medium)).foregroundStyle(primary).lineLimit(1)
+                Spacer(minLength: Space.x1)
+                Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold)).foregroundStyle(primary)
             }
-            .padding(.vertical, 11)
+            .padding(.vertical, 12)
             .opacity(isPast ? 0.42 : 1)
             .contentShape(.rect)
         }
@@ -234,52 +177,12 @@ struct AssistantAgendaCard: View {
         .accessibilityLabel("\(event.title), \(event.spanLabel)")
     }
 
-    /// The reference's hairline between rows. Dotted rather than solid so it
-    /// separates without ruling the list into a table.
-    private var dottedRule: some View {
-        Rectangle()
-            .fill(.clear)
-            .frame(height: 1)
-            .overlay(
-                Line()
-                    .stroke(
-                        primary.opacity(scheme == .dark ? 0.16 : 0.10),
-                        style: StrokeStyle(lineWidth: 1, dash: [1, 3])
-                    )
-            )
-    }
-
-    /// The reference's floating plus, centred under the day. It creates on
-    /// the day being looked at, not on today, which is the only reading that
-    /// makes sense directly below that day's events.
+    /// Creates on the day being looked at, not on today.
     private var addButton: some View {
-        HStack {
-            Spacer()
-            Button {
-                onAddEvent(selection)
-            } label: {
-                Image(systemName: "plus")
-                    .font(LifeOSType.label.weight(.semibold))
-                    .foregroundStyle(primary)
-                    .frame(width: 40, height: 28)
-                    .background(Capsule().fill(primary.opacity(scheme == .dark ? 0.12 : 0.06)))
-            }
-            .buttonStyle(.plain)
+        Button("Add") { onAddEvent(selection) }
+            .buttonStyle(.editorial(.secondary, size: .compact))
+            .padding(.top, Space.x2)
             .accessibilityLabel("Add an event on \(selection.formatted(.dateTime.month().day()))")
-            Spacer()
-        }
-        .padding(.top, 12)
-    }
-}
-
-/// A horizontal rule as a shape, so it can take a dash pattern. `Divider`
-/// cannot be stroked.
-private struct Line: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        return path
     }
 }
 
