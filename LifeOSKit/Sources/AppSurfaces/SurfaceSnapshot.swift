@@ -50,13 +50,51 @@ public struct SurfaceSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-public enum SurfaceRoute: String, CaseIterable, Sendable {
+/// Where a tap outside the app lands inside it. The four fixed routes are
+/// hosts alone; `day` carries a calendar date as its only query.
+public enum SurfaceRoute: Equatable, Sendable {
     case today, health, activity, notifications
-    public var url: URL { URL(string: "almanac://\(rawValue)")! }
+    case day(Date)
+
+    public static let fixed: [SurfaceRoute] = [.today, .health, .activity, .notifications]
+
+    public var url: URL {
+        switch self {
+        case .today: URL(string: "almanac://today")!
+        case .health: URL(string: "almanac://health")!
+        case .activity: URL(string: "almanac://activity")!
+        case .notifications: URL(string: "almanac://notifications")!
+        case .day(let date): URL(string: "almanac://day?date=\(Self.dayFormatter().string(from: date))")!
+        }
+    }
+
     public init?(url: URL) {
         guard url.scheme == "almanac", url.user == nil, url.password == nil,
-              url.port == nil, url.path.isEmpty, url.query == nil, url.fragment == nil,
-              let host = url.host, let route = Self(rawValue: host) else { return nil }
-        self = route
+              url.port == nil, url.path.isEmpty, url.fragment == nil, let host = url.host else { return nil }
+        if host == "day" {
+            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                  items.count == 1, items[0].name == "date", let raw = items[0].value,
+                  // Exactly `YYYY-MM-DD`: the ISO formatter would otherwise swallow a trailing time.
+                  raw.count == 10, raw.allSatisfy({ $0.isNumber || $0 == "-" }),
+                  let date = Self.dayFormatter().date(from: raw) else { return nil }
+            self = .day(date)
+            return
+        }
+        guard url.query == nil else { return nil }
+        switch host {
+        case "today": self = .today
+        case "health": self = .health
+        case "activity": self = .activity
+        case "notifications": self = .notifications
+        default: return nil
+        }
+    }
+
+    /// A calendar date in the device's zone, the same shape the inbox's `day` uses.
+    private static func dayFormatter() -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        formatter.timeZone = .current
+        return formatter
     }
 }
