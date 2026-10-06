@@ -120,24 +120,7 @@ struct NoteShelfScreen: View {
     }
 
     private var searchField: some View {
-        VStack(spacing: Space.half) {
-            HStack(spacing: Space.x1) {
-                Image(systemName: "magnifyingglass").foregroundStyle(secondary)
-                TextField("Search all pages", text: $model.query)
-                    .textFieldStyle(.plain).focused($searchFocused).submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .font(LifeOSType.body)
-                if !model.query.isEmpty {
-                    Button { model.query = "" } label: {
-                        Image(systemName: "xmark").frame(width: 32, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .frame(minHeight: 44)
-            Hairline()
-        }
+        HairlineField(text: $model.query, placeholder: "Search all pages", focus: $searchFocused)
     }
 
     private var creationMenu: some View {
