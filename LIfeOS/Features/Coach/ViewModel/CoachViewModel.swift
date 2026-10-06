@@ -65,7 +65,6 @@ final class CoachViewModel {
     /// is deallocated, which is how a spoken reply becomes a tenth of a second
     /// of noise.
     let voicePlayer = VoicePlayer()
-    private var voiceTask: Task<Void, Never>?
 
     var phase: LifoPhase = .idle
     var liveTranscript = ""
@@ -111,6 +110,32 @@ final class CoachViewModel {
     private var revealTimeout: Task<Void, Never>?
     /// Set once per turn so a spoken line is read once, not once per chunk.
     private var spokeThisTurn = false
+    /// How many rendered blocks of the answer in flight may be on screen:
+    /// nil is all of them. Set from the voice as each passage starts, so a
+    /// section arrives with the sentence about it rather than before it.
+    var revealedBlocks: Int?
+    /// One quiet line for the voice screen: `Premium voice resumes on the 1st`
+    /// while the month's allowance is spent, otherwise nil.
+    var voiceNotice: String?
+    /// The track of the turn in flight, as parsed so far, so a passage that
+    /// starts can be mapped to its blocks and the count can grow with the stream.
+    private var currentTrack: SpokenTrack?
+    /// The last passage the player began, so a stream still arriving can
+    /// keep that passage's sections filling in.
+    private var lastStartedSegment: Int?
+    private var narrationStarted = false
+    private var narrationTask: Task<Void, Never>?
+    private let voiceBudget = VoiceBudget(defaults: .currentAccount)
+    /// The premium synthesiser. A closure so a design preview can hand in a
+    /// stub that returns a moment of silence and the staged reveal can be
+    /// captured without a key or a network.
+    var synthesize: @Sendable (_ text: String, _ voice: AssistantVoice, _ apiKey: String) async throws -> Data = {
+        try await ElevenLabsVoiceClient.speech(for: $0, voice: $1, apiKey: $2)
+    }
+    #if DEBUG
+    /// Lets a design preview satisfy `voiceAvailable` without a real key.
+    var previewVoiceKey: String?
+    #endif
     private var turnID = UUID()
     private let accountSessions = KeychainAuthSessionStore()
 
@@ -278,54 +303,98 @@ final class CoachViewModel {
     private var voiceAvailable: Bool {
         isVisible && voiceScreenActive
             && UserDefaults.standard.bool(forKey: AssistantVoice.enabledKey)
-            && AppConfig.elevenLabsAPIKey != nil
+            && voiceKey != nil
     }
 
-    /// Reads the spoken line aloud, and lets the answer onto the screen the
-    /// moment playback starts.
+    /// The ElevenLabs key, or a preview's stand-in.
+    private var voiceKey: String? {
+        #if DEBUG
+        if let previewVoiceKey { return previewVoiceKey }
+        #endif
+        return AppConfig.elevenLabsAPIKey
+    }
+
+    /// Reads passages aloud in order and lets each one's sections onto the
+    /// screen as it starts.
     ///
-    /// Fire and forget, and deliberately not awaited by `send`: the rest of
-    /// the answer is still streaming while the audio is fetched. Whatever
-    /// happens to the audio, a failure, a cancellation or a voice switched off
-    /// between asking and answering, the held answer is revealed on the way
-    /// out, because silence is acceptable and a blank screen is not. The turn
-    /// id keeps a late exit from an old reply from revealing a new one early.
-    private func speak(_ text: String, turn: UUID) {
-        let defaults = UserDefaults.standard
-        guard voiceAvailable, let key = AppConfig.elevenLabsAPIKey else {
-            reveal(turn)
+    /// Fire and forget, and deliberately not awaited by `send`. Passages are
+    /// fetched in order, the next while the current plays, so there is never
+    /// a gap longer than one fetch. Every passage is debited against the
+    /// month's allowance before it is sent; once the allowance is spent the
+    /// device voice takes over for the rest of the month. A fetch that fails
+    /// is skipped and its sections reveal with the next start, or at once if
+    /// nothing else follows. Whatever happens to the audio, the whole answer
+    /// is on screen by the end, because silence is acceptable and a blank
+    /// screen is not. The turn id keeps a late exit from an old reply from
+    /// touching a new one.
+    private func queuePassages(_ passages: [(index: Int, text: String)], turn: UUID) {
+        guard voiceAvailable, let key = voiceKey, !passages.isEmpty else {
+            completeNarration(turn)
             return
         }
+        let voice = AssistantVoice(rawValue: UserDefaults.standard.string(forKey: AssistantVoice.voiceKey) ?? "") ?? .default
+        let player = voicePlayer
+        player.onSegmentStart = { [weak self] index in
+            guard let self, turn == self.turnID else { return }
+            self.reveal(turn)
+            self.lastStartedSegment = index
+            if self.revealedBlocks != nil {
+                self.revealedBlocks = self.currentTrack?.revealedBlocks(throughSegment: index)
+            }
+        }
+        player.onFinish = { [weak self] in
+            self?.completeNarration(turn)
+        }
+        let synthesize = self.synthesize
+        let budget = voiceBudget
+        let previous = narrationTask
+        narrationTask = Task { [weak self] in
+            await previous?.value
+            for passage in passages {
+                guard !Task.isCancelled, let self, turn == self.turnID else { return }
+                let audio: Data?
+                if budget.remaining() >= passage.text.count {
+                    budget.debit(passage.text.count)
+                    audio = try? await synthesize(passage.text, voice, key)
+                } else {
+                    self.voiceNotice = "Premium voice resumes on the 1st"
+                    audio = try? await DeviceVoiceClient.speech(for: passage.text)
+                }
+                guard !Task.isCancelled, turn == self.turnID else { return }
+                guard let audio else { continue }
+                let segment = VoiceSegment(index: passage.index, audio: audio)
+                if self.narrationStarted { player.append([segment]) } else { player.play([segment]); self.narrationStarted = true }
+            }
+            // Nothing played at all (every fetch failed): show everything.
+            if let self, turn == self.turnID, !self.narrationStarted {
+                self.completeNarration(turn)
+            }
+        }
+    }
 
-        let voice = AssistantVoice(
-            rawValue: defaults.string(forKey: AssistantVoice.voiceKey) ?? ""
-        ) ?? .default
-
-        voiceTask?.cancel()
-        voiceTask = Task { [voicePlayer] in
-            defer { reveal(turn) }
-            guard let audio = try? await ElevenLabsVoiceClient.speech(
-                for: text, voice: voice, apiKey: key
-            ) else { return }
-            guard !Task.isCancelled else { return }
-            voicePlayer.play(audio)
+    /// The narration is over, one way or another: the whole answer is on
+    /// screen and the turn, if its reply has finished, joins the transcript.
+    private func completeNarration(_ turn: UUID) {
+        guard turn == turnID else { return }
+        reveal(turn)
+        revealedBlocks = nil
+        if let heldTurn {
+            finish(heldTurn)
+            self.heldTurn = nil
         }
     }
 
     /// Puts the held answer on screen. Idempotent, and a no-op for any turn
-    /// but the current one.
+    /// but the current one. The turn itself joins the transcript only when
+    /// the narration ends (`completeNarration`), because the voice now
+    /// outlives the reply and a turn in history reveals all at once.
     private func reveal(_ turn: UUID) {
         guard turn == turnID, holdingAnswer else { return }
         holdingAnswer = false
         revealTimeout?.cancel()
         revealTimeout = nil
         withAnimation(.easeOut(duration: 0.35)) {
-            if let heldTurn {
-                finish(heldTurn)
-                self.heldTurn = nil
-            } else {
-                answer = latestShown
-            }
+            answer = heldTurn?.answer ?? latestShown
         }
     }
 
@@ -333,31 +402,45 @@ final class CoachViewModel {
     /// question comes down.
     private func finish(_ turn: LifoTurn) {
         answer = turn.answer
+        revealedBlocks = nil
         history.append(turn)
         pendingQuestion = ""
         pendingSent = nil
     }
 
     /// A chunk of the answer as written so far.
+    ///
+    /// The opening is read the moment its line lands, while the sections are
+    /// still arriving; the later passages are queued when the reply is whole,
+    /// in `send`, since a passage is only a passage once its newline has.
+    /// While the stream grows, the passage already playing keeps letting its
+    /// own sections in.
     private func received(_ text: String) {
-        let reply = SpokenReply(parsing: text)
-        latestShown = reply.shown
+        let track = SpokenTrack(parsing: text)
+        latestShown = track.shownText
         if holdingAnswer {
-            if !spokeThisTurn, let spoken = reply.spoken {
+            currentTrack = track
+            if !spokeThisTurn, let opening = track.opening {
                 spokeThisTurn = true
-                speak(spoken, turn: turnID)
+                queuePassages([(index: 0, text: opening)], turn: turnID)
             }
         } else {
-            answer = reply.shown
+            answer = track.shownText
+        }
+        if let started = lastStartedSegment, revealedBlocks != nil {
+            currentTrack = track
+            revealedBlocks = track.revealedBlocks(throughSegment: started)
         }
     }
 
-    /// What to say when the model was asked for a spoken line and did not
-    /// write one: the first plain sentence or two of the answer, never a
+    /// What to say when the model was asked for a track and wrote no passage
+    /// at all: the first plain sentence or two of the answer, once, never a
     /// table read aloud.
-    private static func fallbackSpokenLine(_ shown: String) -> String? {
+    private static func fallbackTrack(for shown: String) -> SpokenTrack? {
         for block in CoachResponse(shown).blocks {
-            if case .paragraph(let text) = block { return ResponseStyle.clean(text) }
+            if case .paragraph(let text) = block {
+                return SpokenTrack(parsing: "\(SpokenTrack.prefix) \(ResponseStyle.clean(text))\n\n\(shown)", final: true)
+            }
         }
         return nil
     }
@@ -365,9 +448,10 @@ final class CoachViewModel {
     /// Stops whatever is being said. Asking a new question while the last
     /// answer is still being read out should not produce two voices.
     func stopSpeaking() {
-        voiceTask?.cancel()
-        voiceTask = nil
+        narrationTask?.cancel()
+        narrationTask = nil
         voicePlayer.stop()
+        completeNarration(turnID)
     }
 
     /// Opens the conversation with something LIFO said first.
@@ -426,6 +510,10 @@ final class CoachViewModel {
         turnID = UUID()
         spokeThisTurn = false
         holdingAnswer = voiceAvailable
+        revealedBlocks = holdingAnswer ? 0 : nil
+        currentTrack = nil
+        lastStartedSegment = nil
+        narrationStarted = false
         latestShown = ""
         heldTurn = nil
         revealTimeout?.cancel()
@@ -495,26 +583,36 @@ final class CoachViewModel {
                     text: reply.tier == .cloud ? cloud : onDevice,
                     tier: reply.tier
                 )
-                // The spoken line is for the voice and nobody else: it is not
+                // The passages are for the voice and nobody else: not
                 // rendered, not kept in the transcript, and not written to the
-                // store the next prompt is built from. A reply that was only a
-                // spoken line is shown as itself rather than as nothing.
-                let final = SpokenReply(parsing: reply.text)
-                let shown = final.shown.isEmpty ? (final.spoken ?? reply.text) : final.shown
+                // store the next prompt is built from. A reply that was only
+                // an opening is shown as itself rather than as nothing.
+                let final = SpokenTrack(parsing: reply.text, final: true).capped(to: 700)
+                let shown = final.shownText.isEmpty ? (final.opening ?? reply.text) : final.shownText
                 try? store.append(conversationID: conversationID, role: .assistant, text: shown)
                 let turn = LifoTurn(question: question, answer: shown, sent: sent)
                 phase = .answered
                 status = "LIFO"
-                if holdingAnswer {
+                if holdingAnswer || spokeThisTurn {
                     heldTurn = turn
                     latestShown = shown
-                    if !spokeThisTurn {
+                    currentTrack = final
+                    if !holdingAnswer { answer = shown }
+                    let passages = final.segments.enumerated().compactMap { index, segment in
+                        segment.spoken.map { (index: index, text: $0) }
+                    }
+                    if spokeThisTurn {
+                        // The opening is already playing; queue the rest.
+                        queuePassages(passages.filter { $0.index > 0 }, turn: turnID)
+                    } else if !passages.isEmpty {
                         spokeThisTurn = true
-                        if let spoken = final.spoken ?? Self.fallbackSpokenLine(shown) {
-                            speak(spoken, turn: turnID)
-                        } else {
-                            reveal(turnID)
-                        }
+                        queuePassages(passages, turn: turnID)
+                    } else if let fallback = Self.fallbackTrack(for: shown), let opening = fallback.opening {
+                        spokeThisTurn = true
+                        currentTrack = fallback
+                        queuePassages([(index: 0, text: opening)], turn: turnID)
+                    } else {
+                        completeNarration(turnID)
                     }
                     // Whatever the voice does, the answer is on screen within
                     // two seconds of being finished. A slow synthesis is a
@@ -522,8 +620,9 @@ final class CoachViewModel {
                     let id = turnID
                     revealTimeout = Task { [weak self] in
                         try? await Task.sleep(for: .seconds(2))
-                        guard !Task.isCancelled else { return }
-                        self?.reveal(id)
+                        guard !Task.isCancelled, let self, id == self.turnID else { return }
+                        self.reveal(id)
+                        if self.lastStartedSegment == nil { self.completeNarration(id) }
                     }
                 } else {
                     finish(turn)
@@ -570,7 +669,7 @@ final class CoachViewModel {
         money, and life-sector scores.
 
         \(CoachPresentation.instruction)
-        \(spokenLine ? CoachPresentation.spokenLineInstruction : "")
+        \(spokenLine ? CoachPresentation.spokenTrackInstruction : "")
 
         Here is what their data shows:
 
@@ -590,7 +689,34 @@ final class CoachViewModel {
         pendingSent = nil
         holdingAnswer = false
         heldTurn = nil
+        revealedBlocks = nil
         revealTimeout?.cancel()
         revealTimeout = nil
     }
+
+    #if DEBUG
+    /// Runs the post-reply path on a canned reply, for the design preview:
+    /// holds the answer, narrates through `synthesize`, reveals per passage.
+    func previewNarrate(_ reply: String) {
+        stopSpeaking()
+        turnID = UUID()
+        spokeThisTurn = true
+        holdingAnswer = true
+        revealedBlocks = 0
+        lastStartedSegment = nil
+        narrationStarted = false
+        pendingQuestion = "Give me a quick look at my week."
+        answer = ""
+        phase = .answered
+        let final = SpokenTrack(parsing: reply, final: true).capped(to: 700)
+        let shown = final.shownText
+        heldTurn = LifoTurn(question: pendingQuestion, answer: shown)
+        latestShown = shown
+        currentTrack = final
+        let passages = final.segments.enumerated().compactMap { index, segment in
+            segment.spoken.map { (index: index, text: $0) }
+        }
+        queuePassages(passages, turn: turnID)
+    }
+    #endif
 }
