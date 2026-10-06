@@ -65,7 +65,8 @@ struct AssistantSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
-                        CalendarScreen(onTapEvent: { eventSheet = .edit($0) },
+                        CalendarScreen(assistant: model,
+                                       onTapEvent: { eventSheet = .edit($0) },
                                        onAddEvent: { eventSheet = .create(on: $0) },
                                        isCalendarConnected: model.isAuthorized,
                                        onConnectCalendar: { Task { await model.connectCalendar() } })

@@ -21,6 +21,15 @@ struct CalendarScreen: View {
     /// What the person is finding. Trimmed for matching; the block and the
     /// marks show only while the trimmed text is not empty.
     @State private var query: String
+    /// The question asked from here and, once answered, its reply. While
+    /// set, the reply card stands where the results block would.
+    @State private var asked: CalendarAsk?
+
+    /// The one assistant the app owns; nil in previews that never ask.
+    private let assistant: AssistantViewModel?
+    /// For the `calendar-ask` preview: adopt the conversation's last reply
+    /// as the answer to this question on appear, so no model runs.
+    private let initialQuestion: String?
 
     /// A day to open on instead of today. For previews and deep links; the
     /// header button passes nothing.
@@ -31,9 +40,11 @@ struct CalendarScreen: View {
     var onConnectCalendar: () -> Void
 
     init(
+        assistant: AssistantViewModel? = nil,
         initialMode: CalendarMode = .monthly,
         initialSelection: Date? = nil,
         initialQuery: String = "",
+        initialQuestion: String? = nil,
         onTapEvent: @escaping (CalendarEventSnapshot) -> Void = { _ in },
         onAddEvent: @escaping (Date) -> Void = { _ in },
         isCalendarConnected: Bool = true,
@@ -41,7 +52,9 @@ struct CalendarScreen: View {
     ) {
         _mode = State(initialValue: initialMode)
         _query = State(initialValue: initialQuery)
+        self.assistant = assistant
         self.initialSelection = initialSelection
+        self.initialQuestion = initialQuestion
         self.onTapEvent = onTapEvent
         self.onAddEvent = onAddEvent
         self.isCalendarConnected = isCalendarConnected
@@ -94,6 +107,45 @@ struct CalendarScreen: View {
         }
     }
 
+    /// An assistant was passed, the device model is there, and the calendar
+    /// is connected. Find works without any of these.
+    private var canAsk: Bool {
+        guard let assistant else { return false }
+        return assistant.modelAvailable && assistant.isAuthorized
+    }
+
+    /// The calendar is connected but the model is not on this device: say
+    /// so under the field once there is text, instead of a dead arrow.
+    private var needsModel: Bool {
+        guard let assistant, isFinding else { return false }
+        return assistant.isAuthorized && !assistant.modelAvailable
+    }
+
+    /// Hands the words to the assistant as a turn in the one conversation
+    /// the sheet shows, then adopts its reply.
+    private func ask() async {
+        guard let assistant, canAsk, !assistant.isThinking else { return }
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        query = ""
+        asked = CalendarAsk(question: text, replyID: nil)
+        assistant.draft = text
+        await assistant.send()
+        adoptReply(for: text)
+    }
+
+    /// The reply is the conversation's last assistant turn. The calendar
+    /// follows it: the earliest event it was about opens in Weekly.
+    private func adoptReply(for question: String) {
+        guard let assistant,
+              let reply = assistant.messages.last(where: { $0.role == .assistant })
+        else { return }
+        asked = CalendarAsk(question: question, replyID: reply.id)
+        if let first = assistant.eventsByMessage[reply.id]?.first {
+            reveal(first)
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -106,7 +158,10 @@ struct CalendarScreen: View {
                         options: [(.monthly, "Monthly"), (.weekly, "Weekly")]
                     )
                     findField
-                    if isFinding {
+                    if let asked, let assistant {
+                        AssistantReplyCard(ask: asked, assistant: assistant, onSelect: reveal,
+                                           onClear: { self.asked = nil })
+                    } else if isFinding {
                         ScheduleResultsBlock(results: found, months: months, onSelect: reveal)
                     }
                     if !isCalendarConnected { connectCard }
@@ -161,6 +216,8 @@ struct CalendarScreen: View {
             .task {
                 model.attach(context)
                 if let initialSelection { model.goTo(initialSelection) }
+                await assistant?.appear()
+                if let initialQuestion { adoptReply(for: initialQuestion) }
             }
             .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
                 model.load()
@@ -224,7 +281,32 @@ struct CalendarScreen: View {
     }
 
     private var findField: some View {
-        HairlineField(text: $query, placeholder: ScheduleFindText.placeholder)
+        VStack(alignment: .leading, spacing: Space.x1) {
+            HairlineField(text: $query, placeholder: ScheduleFindText.placeholder,
+                          onSubmit: { Task { await ask() } }) {
+                if isFinding, canAsk { askArrow }
+            }
+            if needsModel {
+                Text(ScheduleFindText.needsModel)
+                    .font(LifeOSType.caption).foregroundStyle(quiet)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// An ink circle with `arrow.up` in paper: the composer's send, at the
+    /// field's size.
+    private var askArrow: some View {
+        Button { Task { await ask() } } label: {
+            Image(systemName: "arrow.up")
+                .font(LifeOSType.label.weight(.semibold))
+                .foregroundStyle(paper)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(ink))
+        }
+        .buttonStyle(.plain)
+        .disabled(assistant?.isThinking ?? true)
+        .accessibilityLabel("Ask")
     }
 
     private func monthBlock(_ month: Date, matching: Set<Date>) -> some View {

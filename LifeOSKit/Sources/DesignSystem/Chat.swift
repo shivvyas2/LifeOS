@@ -125,18 +125,30 @@ extension ChatComposer where Accessory == EmptyView {
     }
 }
 
-/// A write the assistant wants to make, awaiting a yes or a no.
+/// A write the assistant wants to make, awaiting a yes or a no. Framed as
+/// its own card in a transcript; unframed inside the calendar's reply card.
 public struct ChatConfirmation: View {
     let lines: [String]
+    let framed: Bool
     let onConfirm: () -> Void
     let onCancel: () -> Void
     @Environment(\.colorScheme) private var scheme
 
-    public init(lines: [String], onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
-        self.lines = lines; self.onConfirm = onConfirm; self.onCancel = onCancel
+    public init(lines: [String], framed: Bool = true,
+                onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.lines = lines; self.framed = framed
+        self.onConfirm = onConfirm; self.onCancel = onCancel
     }
 
     public var body: some View {
+        if framed {
+            content.editorialCard()
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: Space.x2) {
             VStack(alignment: .leading, spacing: Space.half) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
@@ -150,7 +162,6 @@ public struct ChatConfirmation: View {
                 Button("Cancel", action: onCancel).buttonStyle(.editorial(.secondary, size: .compact))
             }
         }
-        .editorialCard()
     }
 }
 

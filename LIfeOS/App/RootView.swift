@@ -429,6 +429,7 @@ struct RootView: View {
                     }
                     .navigationDestination(isPresented: $showMonth) {
                         CalendarScreen(
+                            assistant: assistantModel,
                             onTapEvent: { eventSheet = .edit($0) },
                             onAddEvent: { eventSheet = .create(on: $0) },
                             isCalendarConnected: today.snapshot.calendarAccess == .authorized,

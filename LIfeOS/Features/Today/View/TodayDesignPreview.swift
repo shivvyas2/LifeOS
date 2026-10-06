@@ -7,9 +7,11 @@ import Persistence
 /// Fixture pages for Today, the calendar screen, the day sheet and Notes,
 /// mounted by `--design-preview` with `--page=today`, `today-empty`,
 /// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
-/// in Weekly), `calendar-find` (the calendar with `--query=` live), `day`,
-/// `day-past`, `notes` or `notes-empty`. `--select=` opens the calendar
-/// pages on a given day.
+/// in Weekly), `calendar-find` (the calendar with `--query=` live),
+/// `calendar-ask` (the reply card from a seeded conversation; `--no-model`
+/// on either calendar page hides the arrow and shows the needs-model line),
+/// `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens the
+/// calendar pages on a given day.
 struct TodayDesignPreview: View {
     let page: String
     @State private var fixture = TodayFixture()
@@ -45,7 +47,16 @@ struct TodayDesignPreview: View {
             case "schedule":
                 NavigationStack { CalendarScreen(initialMode: .weekly, initialSelection: selected) }.modelContainer(fixture.container)
             case "calendar-find":
-                NavigationStack { CalendarScreen(initialSelection: selected, initialQuery: query) }.modelContainer(fixture.container)
+                NavigationStack {
+                    CalendarScreen(assistant: fixture.assistant, initialSelection: selected, initialQuery: query)
+                }
+                .modelContainer(fixture.container)
+            case "calendar-ask":
+                NavigationStack {
+                    CalendarScreen(assistant: fixture.assistant, initialSelection: selected,
+                                   initialQuestion: TodayFixture.question)
+                }
+                .modelContainer(fixture.container)
             case "day":
                 DayDetailSheet(snapshot: fixture.day, onToggleHabit: { _ in })
             case "day-past":
@@ -83,6 +94,27 @@ struct TodayDesignPreview: View {
     let calendar = Calendar.current
     let events: [CalendarEventSnapshot]
     private var today: Date { calendar.startOfDay(for: .now) }
+
+    static let question = "When is the dentist?"
+
+    /// The calendar pages share one assistant, seeded with a question about
+    /// the dentist and its answer under the conversation id the model loads,
+    /// so the reply card draws without a model turn. `--no-model` hides the
+    /// ask arrow the way a device without Apple Intelligence would.
+    private(set) lazy var assistant: AssistantViewModel = {
+        let model = AssistantViewModel(context: container.mainContext)
+        model.previewAuthorized = true
+        model.previewModelAvailable = !ProcessInfo.processInfo.arguments.contains("--no-model")
+        let id = UUID()
+        UserDefaults.currentAccount.set(id.uuidString, forKey: "assistant.conversationID")
+        let chat = ChatStore(context: container.mainContext)
+        try! chat.append(conversationID: id, role: .user, text: Self.question)
+        try! chat.append(conversationID: id, role: .assistant,
+                         text: "Your dentist is tomorrow at 10:00, for an hour. Nothing else is booked that morning.",
+                         toolSummaries: ["Checked your calendar"],
+                         eventIDs: [events.first { $0.title == "Dentist" }!.id])
+        return model
+    }()
 
     init() {
         let start = Calendar.current.startOfDay(for: .now)

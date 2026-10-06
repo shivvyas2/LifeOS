@@ -31,6 +31,9 @@ final class AssistantViewModel {
     var previewAuthorized: Bool?
     /// Design previews need a confirmation card on screen without a model turn.
     func previewSeed(pending writes: [PendingWrite]) { pending = writes }
+    /// Design previews run on a simulator without the model; this answers
+    /// `modelAvailable` so the ask arrow can be drawn, or hidden on purpose.
+    var previewModelAvailable: Bool?
     #endif
     var draft = ""
 
@@ -76,7 +79,10 @@ final class AssistantViewModel {
     }
 
     var modelAvailable: Bool {
-        ModelAvailability.from(SystemLanguageModel.default.availability) == .available
+        #if DEBUG
+        if let previewModelAvailable { return previewModelAvailable }
+        #endif
+        return ModelAvailability.from(SystemLanguageModel.default.availability) == .available
     }
 
     func appear() async {
