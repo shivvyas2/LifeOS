@@ -386,7 +386,7 @@ struct NotesHubScreen: View {
 /// A separate view because the model has to be created with the document id in
 /// hand, and `@State` cannot be initialised from a navigation destination's
 /// argument without a wrapper like this one.
-private struct NoteEditorHost: View {
+struct NoteEditorHost: View {
     let documentID: UUID
     var onOpenLinked: (UUID) -> Void
 
