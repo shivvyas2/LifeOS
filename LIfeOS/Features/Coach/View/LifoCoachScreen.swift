@@ -3,6 +3,13 @@ import UIKit
 import DesignSystem
 import Insights
 
+/// Which face the coach shows: the typed conversation or the voice one.
+/// Two cases and nothing else; the colours it used to carry are gone with
+/// the aura. Both faces are paper and ink and follow the system scheme.
+enum CoachScreenStyle: String {
+    case text, voice
+}
+
 /// Two presentations of one conversation. Changing screens never recreates the model.
 struct LifoCoachScreen: View {
     @Bindable var model: CoachViewModel
@@ -11,39 +18,55 @@ struct LifoCoachScreen: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
     @Environment(\.openURL) private var openURL
     @FocusState private var typingFocused: Bool
     @State private var showHistory = false
     @State private var mode: CoachScreenStyle = .text
 
+    /// The LIFO mark. PR #18 names this `LifeOSMark.symbol` in DesignSystem;
+    /// until that merges the symbol is spelled here, once, so the two PRs do
+    /// not depend on each other. Swap to `LifeOSMark.symbol` after #18.
+    private static let markSymbol = "circle.hexagongrid.fill"
+
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
+    private var quiet: Color { Editorial.quietInk(scheme) }
+
     private var isEmpty: Bool {
         model.history.isEmpty && model.answer.isEmpty && model.pendingQuestion.isEmpty
     }
+    private var isSpeaking: Bool { model.voicePlayer.isSpeaking }
     private var activityLevel: CGFloat {
         if model.phase == .listening { return model.level }
-        return model.voicePlayer.isSpeaking ? model.voicePlayer.level : 0
+        return isSpeaking ? model.voicePlayer.level : 0
+    }
+    private var voiceState: VoiceState {
+        VoiceState.from(isListening: model.phase == .listening,
+                        isThinking: model.phase == .thinking,
+                        isSpeaking: isSpeaking)
+    }
+    /// The accent is for what is live: LIFO listening or speaking.
+    private var liveColor: Color {
+        model.phase == .listening || isSpeaking ? LifeOSTokens.accent : ink
     }
 
     var body: some View {
-        ZStack {
-            LifoAura(style: mode, intensity: activityLevel,
-                     isActive: model.phase == .listening || model.voicePlayer.isSpeaking)
-            VStack(spacing: 0) {
-                header
-                if mode == .text { textScreen } else { voiceScreen }
-            }
-            .frame(maxWidth: 800)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            header
+            if mode == .text { textScreen } else { voiceScreen }
         }
+        .frame(maxWidth: 800)
+        .frame(maxWidth: .infinity)
+        .background(paper.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Group {
                 if mode == .text { textComposer } else { voiceControls }
             }
             .frame(maxWidth: 800)
             .frame(maxWidth: .infinity)
-            .background(mode.night)
+            .background(paper)
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showHistory) { historySheet }
         .task {
             mode = initialMode
@@ -56,45 +79,63 @@ struct LifoCoachScreen: View {
         }
     }
 
+    // MARK: - Header
+
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.x2) {
             if mode == .voice {
-                iconButton("chevron.left", label: "Back to text chat") { switchMode(.text) }
+                glyphButton("chevron.left", label: "Back to text chat") { switchMode(.text) }
             } else {
-                Image(systemName: "sparkle")
-                    .font(.title3).foregroundStyle(LifeOSTokens.accent)
+                Image(systemName: Self.markSymbol)
+                    .font(LifeOSType.sectionTitle)
+                    .foregroundStyle(LifeOSTokens.accent)
                     .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.10), in: Circle())
+                    .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text("LIFO").font(LifeOSType.rowTitle)
-                Text(mode == .text ? "Your personal coach" : "Voice conversation")
-                    .font(LifeOSType.caption).foregroundStyle(LifoPalette.quietInk)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(mode == .text ? "Your personal coach" : "Voice conversation").editorialEyebrow()
+                Text("LIFO").font(Editorial.headline(22)).tracking(-0.5).foregroundStyle(ink)
+                    .accessibilityAddTraits(.isHeader)
             }
             Spacer(minLength: 0)
             if !model.history.isEmpty {
-                iconButton("clock", label: "Conversation history") { showHistory = true }
+                glyphButton("clock", label: "Conversation history") { showHistory = true }
             }
-            iconButton("xmark", label: "Close coach") { model.disappear(); onDismiss() }
+            glyphButton("xmark", label: "Close coach") { model.disappear(); onDismiss() }
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 12)
+        .padding(.horizontal, Space.x3).padding(.vertical, 12)
     }
 
-    private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+    /// A bare glyph in ink: the header's controls and the voice screen's
+    /// secondary buttons. 44pt so the target is honest even without a shape.
+    private func glyphButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.body.weight(.medium))
-                .foregroundStyle(.white).frame(width: 44, height: 44)
-                .background(.white.opacity(0.10), in: Circle())
+            Image(systemName: symbol).font(LifeOSType.body.weight(.medium))
+                .foregroundStyle(ink).frame(width: 44, height: 44)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain).accessibilityLabel(label)
     }
+
+    /// An outlined circle: the keyboard switch, the end-voice button, and
+    /// the composer's voice toggle.
+    private func outlinedButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(LifeOSType.body.weight(.medium))
+                .foregroundStyle(ink).frame(width: 48, height: 48)
+                .overlay(Circle().strokeBorder(ink.opacity(0.85), lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain).accessibilityLabel(label)
+    }
+
+    // MARK: - Text screen
 
     private var textScreen: some View {
         GeometryReader { geometry in
             ScrollViewReader { reader in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: Space.x3) {
                         if isEmpty {
                             opening.frame(minHeight: max(0, geometry.size.height - 40))
                         } else {
@@ -102,7 +143,7 @@ struct LifoCoachScreen: View {
                         }
                         Color.clear.frame(height: 1).id("latest")
                     }
-                    .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 16)
+                    .padding(.horizontal, Space.x3).padding(.top, Space.x2).padding(.bottom, Space.x2)
                 }
                 .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
@@ -114,203 +155,49 @@ struct LifoCoachScreen: View {
     }
 
     private var opening: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: Space.x3) {
             VStack(alignment: .leading, spacing: 14) {
                 Text("A little clarity.\nA better day.")
                     .font(LifeOSType.display.weight(.medium))
-                    .tracking(-1).fixedSize(horizontal: false, vertical: true)
+                    .tracking(-1).foregroundStyle(ink)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Make sense of your health, money, and everyday life. One question at a time.")
-                    .font(LifeOSType.body).foregroundStyle(LifoPalette.quietInk)
+                    .font(LifeOSType.body).foregroundStyle(quiet)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 16)
-            Spacer(minLength: 44)
+            .padding(.top, Space.x2)
+            Spacer(minLength: Space.x5)
             VStack(alignment: .leading, spacing: 12) {
-                Text("WHERE SHALL WE START?")
-                    .font(LifeOSType.caption.weight(.semibold)).tracking(1.5)
-                    .foregroundStyle(LifoPalette.quietInk)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { suggestions }
-                    VStack(spacing: 10) { suggestions }
-                }
+                Text("Where shall we start?").editorialEyebrow()
+                WrapLayout(spacing: Space.x1) { suggestions }
             }
             if let error = model.error { errorView(error) }
         }
-        .foregroundStyle(.white)
     }
 
+    /// Outlined pills that send their question. The pill is `EditorialTag`
+    /// wrapped in a button, so it reads as a word, not a card.
     private var suggestions: some View {
         ForEach(Array(Self.prompts.enumerated()), id: \.offset) { _, item in
             Button {
                 model.draft = item.question
                 Task { await model.sendTyped() }
             } label: {
-                VStack(alignment: .leading, spacing: 20) {
-                    Image(systemName: item.symbol).font(.body).foregroundStyle(mode.accent)
-                    Text(item.title).font(LifeOSType.label.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: "arrow.up.right").font(.caption)
-                        .foregroundStyle(LifoPalette.quietInk)
-                }
-                .frame(minWidth: 78, maxWidth: .infinity, minHeight: 118, alignment: .topLeading)
-                .padding(14)
-                .background(.white.opacity(0.065), in: RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.09)))
+                EditorialTag(item.title)
             }
-            .foregroundStyle(.white).buttonStyle(.plain)
+            .buttonStyle(.plain)
             .accessibilityLabel(item.question)
             .disabled(model.phase == .thinking)
         }
     }
     private static let prompts = [
-        (symbol: "moon", title: "My sleep", question: "How did I sleep this week?"),
-        (symbol: "chart.xyaxis.line", title: "My spending", question: "Where did my money go?"),
-        (symbol: "sun.max", title: "My next step", question: "What should I focus on today?")
+        (title: "My sleep", question: "How did I sleep this week?"),
+        (title: "My spending", question: "Where did my money go?"),
+        (title: "My next step", question: "What should I focus on today?")
     ]
 
-    private var voiceScreen: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                CoachVoiceOrb(level: activityLevel,
-                              isResponding: model.phase == .thinking || model.voicePlayer.isSpeaking,
-                              isEnabled: scenePhase == .active)
-                    .frame(height: isEmpty ? 280 : 160)
-                    .frame(maxWidth: 320)
-                    .padding(.top, isEmpty ? 28 : 4)
-                    .accessibilityHidden(true)
-                VStack(spacing: 8) {
-                    Text(voiceTitle).font(LifeOSType.sectionTitle)
-                    Text(voiceSubtitle).font(LifeOSType.label)
-                        .foregroundStyle(LifoPalette.quietInk)
-                        .multilineTextAlignment(.center)
-                }
-                CoachAudioWaveform(level: activityLevel, active: model.phase == .listening || model.voicePlayer.isSpeaking,
-                                   color: mode.accent)
-                    .frame(maxWidth: 310).frame(height: 56)
-                if model.phase == .listening && !model.liveTranscript.isEmpty {
-                    Text(model.liveTranscript).font(LifeOSType.body)
-                        .multilineTextAlignment(.center).textSelection(.enabled)
-                }
-                if !model.pendingQuestion.isEmpty {
-                    bubble(model.pendingQuestion)
-                    if !model.answer.isEmpty {
-                        CoachResponseView(text: model.answer, onAura: true, style: mode)
-                    }
-                } else if let turn = model.history.last {
-                    CoachResponseView(text: turn.answer, onAura: true, style: mode)
-                    if let sent = turn.sent { sentView(sent) }
-                }
-                if let error = model.error { errorView(error) }
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 24).padding(.bottom, 20)
-        }
-        .scrollIndicators(.hidden)
-    }
-
-    private var voiceTitle: String {
-        if model.phase == .listening { return "I'm listening" }
-        if model.voicePlayer.isSpeaking { return "Let's talk it through" }
-        if model.phase == .thinking { return "Connecting the dots…" }
-        return "A moment for you"
-    }
-    private var voiceSubtitle: String {
-        if model.phase == .listening { return "Speak naturally. I'll follow along." }
-        if model.voicePlayer.isSpeaking { return "Your answer is here to read, too." }
-        if model.phase == .thinking { return "Making sense of your question." }
-        return "Tap the microphone whenever you're ready."
-    }
-
-    private var textComposer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Message LIFO", text: $model.draft,
-                          prompt: Text("Ask about your day…").foregroundStyle(LifoPalette.quietInk), axis: .vertical)
-                    .font(LifeOSType.body).foregroundStyle(.white)
-                    .focused($typingFocused).lineLimit(1...5).tint(mode.accent)
-                    .padding(.vertical, 12)
-                    .onSubmit { Task { await model.sendTyped() } }
-                if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Button { Task { await model.sendTyped() } } label: {
-                        Image(systemName: "arrow.up").font(.body.bold())
-                            .foregroundStyle(.white).frame(width: 44, height: 44)
-                            .background(mode.accent, in: Circle())
-                    }
-                    .disabled(model.phase == .thinking).accessibilityLabel("Send message")
-                }
-            }
-            .padding(.leading, 18).padding(.trailing, 6).padding(.vertical, 6)
-            .background(Color(red: 0.075, green: 0.095, blue: 0.16), in: RoundedRectangle(cornerRadius: 26))
-            .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(.white.opacity(0.15)))
-            Button { switchMode(.voice) } label: {
-                Image(systemName: "waveform").font(.title3.weight(.semibold))
-                    .foregroundStyle(.white).frame(width: 56, height: 56)
-                    .background(mode.accent, in: Circle())
-            }
-            .accessibilityLabel("Open voice conversation")
-        }
-        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
-    }
-
-    private var voiceControls: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 38) {
-                iconButton("keyboard", label: "Switch to text chat") { switchMode(.text) }
-                Button {
-                    if model.voicePlayer.isSpeaking { model.stopSpeaking() }
-                    else { Task { await model.toggleListening() } }
-                } label: {
-                    Image(systemName: model.phase == .listening || model.voicePlayer.isSpeaking ? "stop.fill" : "mic.fill")
-                        .font(.title2.weight(.medium)).foregroundStyle(mode.night)
-                        .frame(width: 72, height: 72)
-                        .background(mode.accent, in: Circle())
-                        .padding(12).background(mode.accent.opacity(0.12), in: Circle())
-                        .padding(10).background(mode.accent.opacity(0.06), in: Circle())
-                }
-                .disabled(model.phase == .thinking)
-                .accessibilityLabel(model.voicePlayer.isSpeaking ? "Stop speaking" : model.phase == .listening ? "Finish recording and send" : "Start listening")
-                iconButton("xmark", label: "End voice conversation") { switchMode(.text) }
-            }
-            Text(model.phase == .listening ? "Tap to finish" : model.voicePlayer.isSpeaking ? "Tap to stop" : "Tap to speak")
-                .font(LifeOSType.caption).foregroundStyle(LifoPalette.quietInk)
-        }
-        .padding(.top, 8).padding(.bottom, 16)
-    }
-
-    private func switchMode(_ destination: CoachScreenStyle) {
-        typingFocused = false
-        if destination == .text { model.showKeyboard() }
-        model.voiceScreenActive = destination == .voice
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { mode = destination }
-    }
-
-    private func errorView(_ error: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(error)
-                .font(LifeOSType.label.weight(.regular))
-                .foregroundStyle(LifoPalette.ink.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
-
-            if model.needsAppleIntelligence {
-                Button {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        openURL(url)
-                    }
-                } label: {
-                    Text("Turn on Apple Intelligence")
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 16).fill(.white))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
     private var transcript: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: Space.x3) {
             ForEach(model.history) { turn in
                 turnView(question: turn.question, answer: turn.answer, sent: turn.sent)
             }
@@ -320,186 +207,150 @@ struct LifoCoachScreen: View {
             // is on screen through the whole wait rather than appearing with
             // the answer it was waiting for.
             if !model.pendingQuestion.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    bubble(model.pendingQuestion)
-
+                ChatTurn(question: model.pendingQuestion) {
                     if model.answer.isEmpty {
-                        HStack(spacing: 8) {
-                            ProgressView().tint(LifoPalette.ink)
-                            Text("Thinking…")
-                                .font(LifeOSType.label.weight(.regular))
-                                .foregroundStyle(LifoPalette.quietInk)
-                        }
+                        ChatThinking()
                     } else {
-                        // The answer as it is written. No cursor and no
-                        // per-character animation: the text arrives fast
-                        // enough that animating it would slow it down.
-                        CoachResponseView(text: model.answer, onAura: true, style: mode)
+                        CoachResponseView(text: model.answer)
                     }
                 }
             }
 
-            if let error = model.error {
-                errorView(error)
-            }
+            if let error = model.error { errorView(error) }
         }
     }
 
     private func turnView(question: String, answer: String, sent: SentContext?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // A seeded nudge has no question above it, because LIFO spoke
-            // first. An empty bubble there reads as a message the person sent
-            // and then deleted.
-            if !question.isEmpty {
-                bubble(question)
-            }
-            CoachResponseView(text: answer, onAura: true, style: mode)
-
-            if let sent {
-                sentView(sent)
-            }
+        ChatTurn(question: question) {
+            CoachResponseView(text: answer)
+            if let sent { sentView(sent) }
         }
     }
 
     /// What this answer was produced from, closed by default and openable.
-    ///
-    /// Closed, because a line of provenance under every answer would bury the
-    /// answers. Openable, because "your own data" is a claim, and the only
-    /// honest way to make it is to show the thing itself rather than a
-    /// description of it that can drift from what was actually sent.
     private func sentView(_ sent: SentContext) -> some View {
         DisclosureGroup {
             Text(sent.text)
                 .font(LifeOSType.caption)
-                .foregroundStyle(LifoPalette.quietInk)
+                .foregroundStyle(quiet)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
-                .padding(.top, 8)
+                .padding(.top, Space.x1)
         } label: {
             Label(sent.headline, systemImage: sent.tier == .cloud ? "cloud" : "iphone")
                 .font(LifeOSType.caption.weight(.medium))
-                .foregroundStyle(LifoPalette.quietInk)
+                .foregroundStyle(quiet)
         }
-        .tint(LifoPalette.quietInk)
+        .tint(quiet)
         .padding(.top, 2)
     }
 
-    /// White on the aura, not glass: your own words are the brightest thing
-    /// in the transcript, and the answer reads underneath them.
-    private func bubble(_ text: String) -> some View {
-        Text(text)
-            .font(LifeOSType.label.weight(.semibold))
-            .foregroundStyle(.black)
-            .padding(.vertical, 9)
-            .padding(.horizontal, 14)
-            .background(RoundedRectangle(cornerRadius: 16).fill(.white))
-            .frame(maxWidth: .infinity, alignment: .trailing)
+    private func errorView(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(error)
+                .font(LifeOSType.secondary)
+                .foregroundStyle(quiet)
+                .fixedSize(horizontal: false, vertical: true)
+            if model.needsAppleIntelligence {
+                Button("Turn on Apple Intelligence") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .buttonStyle(.editorial(.secondary, size: .compact))
+            }
+        }
     }
+
+    private var textComposer: some View {
+        ChatComposer(text: $model.draft, placeholder: "Ask about your day…",
+                     isSending: model.phase == .thinking, focus: $typingFocused,
+                     onSend: { Task { await model.sendTyped() } }) {
+            outlinedButton("waveform", label: "Open voice conversation") { switchMode(.voice) }
+        }
+        .padding(.horizontal, Space.x3).padding(.top, 12).padding(.bottom, 12)
+    }
+
+    // MARK: - Voice screen
+
+    private var voiceScreen: some View {
+        let headline = VoiceHeadline.make(voiceState)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Space.x3) {
+                EditorialMasthead(eyebrow: headline.eyebrow, title: headline.title, detail: headline.detail)
+                    .padding(.top, Space.x2)
+                AudioWaveform(level: activityLevel,
+                              active: model.phase == .listening || isSpeaking,
+                              color: liveColor)
+                    .frame(height: 56)
+                    .frame(maxWidth: .infinity)
+                if model.phase == .listening && !model.liveTranscript.isEmpty {
+                    Text(model.liveTranscript).font(LifeOSType.body).foregroundStyle(ink)
+                        .textSelection(.enabled)
+                }
+                if !model.pendingQuestion.isEmpty {
+                    ChatTurn(question: model.pendingQuestion) {
+                        if !model.answer.isEmpty { CoachResponseView(text: model.answer) }
+                    }
+                } else if let turn = model.history.last {
+                    ChatTurn(question: turn.question) {
+                        CoachResponseView(text: turn.answer)
+                        if let sent = turn.sent { sentView(sent) }
+                    }
+                }
+                if let error = model.error { errorView(error) }
+            }
+            .padding(.horizontal, Space.x3).padding(.bottom, Space.x3)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var voiceControls: some View {
+        VStack(spacing: Space.x1) {
+            HStack(spacing: Space.x5) {
+                outlinedButton("keyboard", label: "Switch to text chat") { switchMode(.text) }
+                Button {
+                    if isSpeaking { model.stopSpeaking() }
+                    else { Task { await model.toggleListening() } }
+                } label: {
+                    Image(systemName: model.phase == .listening || isSpeaking ? "stop.fill" : "mic.fill")
+                        .font(LifeOSType.screenTitle.weight(.medium)).foregroundStyle(paper)
+                        .frame(width: 72, height: 72)
+                        .background(Circle().fill(liveColor))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.phase == .thinking)
+                .accessibilityLabel(isSpeaking ? "Stop speaking" : model.phase == .listening ? "Finish recording and send" : "Start listening")
+                outlinedButton("xmark", label: "End voice conversation") { switchMode(.text) }
+            }
+            Text(model.phase == .listening ? "Tap to finish" : isSpeaking ? "Tap to stop" : "Tap to speak")
+                .font(LifeOSType.caption).foregroundStyle(quiet)
+        }
+        .padding(.top, Space.x1).padding(.bottom, Space.x2)
+    }
+
+    private func switchMode(_ destination: CoachScreenStyle) {
+        typingFocused = false
+        if destination == .text { model.showKeyboard() }
+        model.voiceScreenActive = destination == .voice
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { mode = destination }
+    }
+
+    // MARK: - History
 
     private var historySheet: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 24) {
+                LazyVStack(alignment: .leading, spacing: Space.x3) {
                     ForEach(model.history) { turn in
                         turnView(question: turn.question, answer: turn.answer, sent: turn.sent)
                     }
-                }.padding(24)
+                }
+                .padding(Space.x3)
             }
-            .background(mode.night)
+            .background(paper.ignoresSafeArea())
             .navigationTitle("Conversation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showHistory = false } } }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.large])
-    }
-}
-
-/// A rolling amplitude history from the microphone or spoken reply, silent at rest.
-private struct CoachAudioWaveform: View {
-    let level: CGFloat
-    let active: Bool
-    let color: Color
-    @State private var samples = Array(repeating: CGFloat.zero, count: 48)
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Canvas { context, size in
-            for (index, sample) in samples.enumerated() {
-                let height = max(2, sample * (size.height - 4))
-                let rect = CGRect(x: CGFloat(index) * size.width / 48, y: (size.height - height) / 2,
-                                  width: 2, height: height)
-                context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(color.opacity(0.35 + sample * 0.65)))
-            }
-        }
-        .onChange(of: level) { _, value in
-            guard !reduceMotion else { return }
-            samples.removeFirst()
-            samples.append(active && value.isFinite ? min(max(value, 0), 1) : 0)
-        }
-        .onChange(of: active) { _, active in
-            if !active { samples = Array(repeating: 0, count: 48) }
-        }
-        .accessibilityLabel(active ? "Audio is active" : "Audio is idle")
-    }
-}
-
-/// The glass this screen is made of.
-///
-/// `.ultraThinMaterial` alone is flat on a dark ground: it frosts, but it has
-/// no edge and no light on it, so a chip and a field and a button all read as
-/// the same grey smear over the aura. Real glass has a bright top edge where
-/// light catches it and a dimmer bottom, and that gradient stroke is what
-/// separates one pane from the next without drawing a border around anything.
-struct GlassPane: ViewModifier {
-    var shape: AnyInsettableShape
-    var highlight: Double = 0.34
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                shape.fill(.ultraThinMaterial)
-                // A wash of the palette inside the frost, so the glass looks
-                // lit by the aura behind it rather than laid on top of it.
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.10), LifoPalette.gold.opacity(0.05)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-            }
-            .overlay {
-                shape.strokeBorder(
-                    LinearGradient(
-                        colors: [Color.white.opacity(highlight),
-                                 Color.white.opacity(0.06)],
-                        startPoint: .top, endPoint: .bottom
-                    ),
-                    lineWidth: 1
-                )
-            }
-    }
-}
-
-/// Type-erased so `GlassPane` can take a capsule or a rounded rectangle
-/// without the modifier becoming generic at every call site.
-struct AnyInsettableShape: InsettableShape {
-    // `@Sendable` on both: `Shape` is Sendable, so the closures capturing a
-    // shape are too, but the compiler cannot see that through the erasure.
-    private let makePath: @Sendable (CGRect) -> Path
-    private let makeInset: @Sendable (CGFloat) -> AnyInsettableShape
-
-    init<S: InsettableShape>(_ shape: S) {
-        makePath = { shape.path(in: $0) }
-        makeInset = { AnyInsettableShape(shape.inset(by: $0)) }
-    }
-
-    func path(in rect: CGRect) -> Path { makePath(rect) }
-    func inset(by amount: CGFloat) -> AnyInsettableShape { makeInset(amount) }
-}
-
-extension View {
-    func glassPane(_ shape: some InsettableShape, highlight: Double = 0.34) -> some View {
-        modifier(GlassPane(shape: AnyInsettableShape(shape), highlight: highlight))
     }
 }
