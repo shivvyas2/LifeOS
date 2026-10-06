@@ -175,6 +175,10 @@ struct TodayDesignPreview: View {
     /// for today and three days ago, so every day section has rows.
     private func seedDay() {
         let context = container.mainContext
+        // The needs-location page must not find a forecast another page cached minutes ago.
+        if ProcessInfo.processInfo.arguments.contains("--page=day-no-location") {
+            UserDefaults.currentAccount.removeObject(forKey: "day.forecasts")
+        }
         for (offset, steps, sleep, weight, recovery) in [(0, 8_432, 432, 77.4, 82.0), (-3, 6_120, 401, 77.6, 64.0)] {
             let day = calendar.date(byAdding: .day, value: offset, to: today)!
             let row = DailyMetrics(date: day)
@@ -187,8 +191,12 @@ struct TodayDesignPreview: View {
         }
         let plan = PlanStore(context: context, calendar: calendar)
         let run = try! plan.add(kind: .habit, title: "5km run")
-        _ = try! plan.add(kind: .habit, title: "Read 10 pages")
-        _ = try! plan.add(kind: .habit, title: "Walk the dog")
+        let read = try! plan.add(kind: .habit, title: "Read 10 pages")
+        let walk = try! plan.add(kind: .habit, title: "Walk the dog")
+        // Habits that existed before the past page's day, so a record shows them.
+        run.createdAt = calendar.date(byAdding: .day, value: -30, to: today)!
+        read.createdAt = calendar.date(byAdding: .day, value: -10, to: today)!
+        walk.createdAt = calendar.date(byAdding: .day, value: -1, to: today)!
         for offset in [0, -1, -2, -3, -4, -5] {
             try! plan.toggleTick(for: run, on: calendar.date(byAdding: .day, value: offset, to: today)!)
         }
