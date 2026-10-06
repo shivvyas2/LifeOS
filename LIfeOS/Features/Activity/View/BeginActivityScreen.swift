@@ -62,6 +62,7 @@ struct BeginActivityScreen: View {
     /// The session itself: hero or timer, the tiles, the picker.
     @ViewBuilder private var leading: some View {
         if model.hasSession, let readout = model.readout {
+            if model.source == .demo { demoBanner }
             liveHero(readout)
             if model.selection.name == ActivityRecorder.badminton, model.badminton?.kind != .practice {
                 BadmintonScoreCard(model: model)
@@ -70,21 +71,34 @@ struct BeginActivityScreen: View {
                 LiveReadings(model: model, readout: readout, link: liveLink(at: timeline.date), now: timeline.date)
             }
         } else {
-            EditorialMasthead(eyebrow: model.saved ? "Activity · saved" : "Activity",
-                title: model.saved ? "Time well spent." : "Make time to move.",
-                detail: model.saved ? (model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.") : "One activity. Your own pace.")
+            EditorialMasthead(eyebrow: model.saved ? (model.source == .demo ? "Demo · finished" : "Activity · saved") : "Activity",
+                title: model.saved ? (model.source == .demo ? "That was the demo." : "Time well spent.") : "Make time to move.",
+                detail: model.saved
+                    ? (model.source == .demo ? "Nothing was saved. For the real thing, wear your Watch on your racket wrist with swing analysis on."
+                       : model.healthSaved ? "Saved to Almanac and Apple Health." : "Saved to your Almanac account on this device.")
+                    : "One activity. Your own pace.")
             timerCard
             if !model.saved {
                 if let library { followVideoLink(library) }
                 activityPicker
                 if model.selection.name == ActivityRecorder.badminton {
                     BadmintonSetupCard(setup: $model.badmintonSetup)
+                    swingAnalysisLine
                 }
                 VStack(spacing: 0) {
                     Button { showAthleteSetup = true } label: { Label("Your activity setup", systemImage: "figure.stand") }
                         .buttonStyle(.editorial(.quiet, fullWidth: true))
-                    NavigationLink { BadmintonHistoryScreen() } label: { Label("Badminton session reviews", systemImage: "figure.badminton") }
+                    if model.selection.name == ActivityRecorder.badminton {
+                        Button { model.startDemo() } label: { Label("Try the demo", systemImage: "play.circle") }
+                            .buttonStyle(.editorial(.secondary, fullWidth: true)).disabled(model.busy)
+                        NavigationLink { BadmintonHistoryScreen(onDemo: { model.startDemo() }) } label: {
+                            Label("Past badminton sessions", systemImage: "figure.badminton")
+                        }
                         .buttonStyle(.editorial(.quiet, fullWidth: true))
+                    } else {
+                        NavigationLink { BadmintonHistoryScreen() } label: { Label("Past badminton sessions", systemImage: "figure.badminton") }
+                            .buttonStyle(.editorial(.quiet, fullWidth: true))
+                    }
                 }
             }
         }
@@ -98,8 +112,14 @@ struct BeginActivityScreen: View {
     /// wide screen, under it otherwise.
     @ViewBuilder private var trailing: some View {
         if model.saved && model.selection.name == "Badminton" {
-            NavigationLink { BadmintonHistoryScreen() } label: { Label("Review your session", systemImage: "chart.xyaxis.line") }
-                .buttonStyle(.editorial(.primary, fullWidth: true))
+            if model.source == .demo, let review = model.demoReview {
+                NavigationLink { BadmintonReviewScreen(workout: review) } label: { Label("Review the demo", systemImage: "chart.xyaxis.line") }
+                    .buttonStyle(.editorial(.primary, fullWidth: true))
+            } else {
+                // The session just finished, not the list it belongs to.
+                NavigationLink { BadmintonLatestReview(externalID: model.savedRecordID) } label: { Label("Review your session", systemImage: "chart.xyaxis.line") }
+                    .buttonStyle(.editorial(.primary, fullWidth: true))
+            }
         }
         ActivityControls(model: model, onDone: { dismiss() })
         if !model.saved { connections }
@@ -167,6 +187,43 @@ struct BeginActivityScreen: View {
                 .fixedSize()
                 .padding(.top, 10)
         }
+        }
+    }
+
+    /// Whether the Watch will analyze swings on the next badminton workout,
+    /// and if not, the one thing to change. Said here, before Start, rather
+    /// than left to the Watch's "off" afterwards.
+    private var swingAnalysisLine: some View {
+        let status = SwingAnalysisStatus.describe(model.athlete)
+        return HStack(alignment: .top, spacing: Space.x1) {
+            Circle().fill(status.isOn ? LifeOSTokens.pushEasy : Editorial.quietInk(scheme))
+                .frame(width: 8, height: 8).padding(.top, 5)
+            Text(status.text).font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The demo says it is one, and says how to get the real thing.
+    private var demoBanner: some View {
+        VStack(alignment: .leading, spacing: Space.x1) {
+            Text("Demo").editorialEyebrow()
+            Text("Simulated Watch data: the swings, the score and the heart rate are scripted. For the real thing:")
+                .font(LifeOSType.secondary).foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                demoStep(1, "Turn on experimental swing analysis in Your activity setup.")
+                demoStep(2, "Set Watch wrist to your playing hand.")
+                demoStep(3, "Wear the Watch on that wrist, start Badminton, and hold still for a second.")
+            }
+        }
+        .editorialCard()
+    }
+    private func demoStep(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Space.x1) {
+            Text(String(format: "%02d", number)).font(LifeOSType.caption).monospacedDigit()
+                .foregroundStyle(Editorial.quietInk(scheme))
+            Text(text).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -244,7 +301,9 @@ struct BeginActivityScreen: View {
                     Button(model.sensor.connectedName == nil ? "Connect" : "Manage") { showSensors = true }
                         .buttonStyle(.editorial(.secondary, size: .compact))
                 }
-                Text(model.source == .watch ? "Apple Watch is recording this session." : WatchSessionBridge.watchAvailable ? "Apple Watch ready" : "Apple Watch not nearby")
+                Text(model.source == .watch ? "Apple Watch is recording this session."
+                     : model.source == .demo ? "The demo is standing in for your Apple Watch."
+                     : WatchSessionBridge.watchAvailable ? "Apple Watch ready" : "Apple Watch not nearby")
                     .font(LifeOSType.caption).foregroundStyle(.secondary)
                 Text(model.sensor.status).font(LifeOSType.caption).foregroundStyle(.secondary)
                 DisclosureGroup("How syncing works") {

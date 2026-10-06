@@ -30,7 +30,7 @@ struct ActivityControls: View {
                     }
                 }
                 Button { Task { await model.finish() } } label: {
-                    Label(model.busy ? "Saving…" : "Finish & save", systemImage: "checkmark")
+                    Label(model.busy ? "Saving…" : model.source == .demo ? "Finish the demo" : "Finish & save", systemImage: "checkmark")
                 }.buttonStyle(.editorial(.secondary, fullWidth: true)).disabled(model.busy)
                 // Offered only when the watch cannot be asked: disconnected,
                 // or a Finish that never got an answer. The workout keeps
@@ -40,7 +40,7 @@ struct ActivityControls: View {
                         Label("End on iPhone", systemImage: "iphone")
                     }.buttonStyle(.editorial(.secondary, fullWidth: true))
                 }
-                Button("Discard activity", role: .destructive) { confirmDiscard = true }
+                Button(model.source == .demo ? "Stop the demo" : "Discard activity", role: .destructive) { confirmDiscard = true }
                     .buttonStyle(.editorial(.destructive, size: .compact)).disabled(model.busy)
             } else {
                 Toggle("Save to Apple Health", isOn: $model.saveToHealth).font(LifeOSType.rowTitle)
@@ -56,9 +56,9 @@ struct ActivityControls: View {
                 Task { await model.start() }
             }
         }
-        .confirmationDialog("Discard this activity?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-            Button("Discard activity", role: .destructive) { model.discard() }
-        } message: { Text("This timer and its unsaved readings will be removed.") }
+        .confirmationDialog(model.source == .demo ? "Stop the demo?" : "Discard this activity?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button(model.source == .demo ? "Stop the demo" : "Discard activity", role: .destructive) { model.discard() }
+        } message: { Text(model.source == .demo ? "Nothing from the demo is kept either way." : "This timer and its unsaved readings will be removed.") }
     }
 
     private func primaryButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {

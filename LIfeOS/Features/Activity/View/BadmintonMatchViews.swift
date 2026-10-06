@@ -124,6 +124,9 @@ struct BadmintonScoreCard: View {
             if model.source == .watch {
                 Text("Your watch keeps the score; taps here go to it.")
                     .font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
+            } else if model.source == .demo {
+                Text("The demo scores its rallies; tap a side to add your own.")
+                    .font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
             }
         }
     }
