@@ -17,7 +17,7 @@ struct HealthActivityDesignPreview: View {
     @State private var checkResults = "Running checks…"
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var page: String { ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--page=") })?.dropFirst(7).description ?? "health" }
-    private static var badmintonFixture: WorkoutRecord {
+    fileprivate static var badmintonFixture: WorkoutRecord {
         let row = WorkoutRecord(externalID: "design-badminton", start: .now, durationMinutes: 32, activityName: "Badminton", energyKcal: 216)
         var analysis = SwingAnalysis(); analysis.sampledSeconds = 1852
         analysis.events = (0..<38).map { index in
@@ -82,9 +82,14 @@ struct HealthActivityDesignPreview: View {
             }
             else if page == "badminton-setup" {
                 BeginActivityScreen(model: fixture.recorder)
+                    .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom : nil)
                     .task {
                         fixture.recorder.selection = ActivityCatalog.type(named: "Badminton") ?? ActivityCatalog.run
                         fixture.recorder.badmintonSetup = BadmintonSession(format: .doubles, teammate: "Priya", opponents: ["Sam", "Alex"])
+                        // `--analysis-on` shows the status line as a set-up player sees it.
+                        if ProcessInfo.processInfo.arguments.contains("--analysis-on") {
+                            fixture.recorder.athlete = ActivityAthleteProfile(playingHand: .right, watchWrist: .right, motionEnabled: true)
+                        }
                     }
             }
             else if page == "badminton" {
@@ -93,6 +98,36 @@ struct HealthActivityDesignPreview: View {
                 NavigationStack { BadmintonReviewScreen(workout: Self.badmintonFixture) }
                     .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom
                                          : ProcessInfo.processInfo.arguments.contains("--anchor=center") ? .center : nil)
+            }
+            else if page == "badminton-history" || page == "badminton-history-empty" {
+                NavigationStack { BadmintonHistoryScreen(onDemo: {}) }
+                    .task { if page == "badminton-history" { fixture.seedBadmintonHistory() } }
+            }
+            // The script runs faster than the clock so a capture a few seconds
+            // in shows a match under way, or, for `-done`, already finished.
+            else if page == "badminton-demo" || page == "badminton-demo-done" {
+                BeginActivityScreen(model: fixture.recorder)
+                    .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom : nil)
+                    .task {
+                        guard !fixture.recorder.hasSession else { return }
+                        fixture.recorder.startDemo(tick: .milliseconds(50), timeScale: page == "badminton-demo-done" ? 400 : 12)
+                    }
+            }
+            // The review a finished demo opens, without the tap: run the whole
+            // script in a couple of seconds, then show what it left behind.
+            else if page == "badminton-demo-review" {
+                NavigationStack {
+                    if let review = fixture.recorder.demoReview {
+                        BadmintonReviewScreen(workout: review)
+                            .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=bottom") ? .bottom : nil)
+                    } else {
+                        ProgressView("Playing the demo…")
+                    }
+                }
+                .task {
+                    guard !fixture.recorder.hasSession, fixture.recorder.demoReview == nil else { return }
+                    fixture.recorder.startDemo(tick: .milliseconds(20), timeScale: 600)
+                }
             }
             else if page == "profile" { ProfileDesignPreview() }
             else if page == "money" || page == "nav" { EditorialDesignPreview(page: page) }
@@ -200,6 +235,30 @@ struct HealthActivityDesignPreview: View {
         settings.attach(container.mainContext)
         seedLibrary()
         library.attach(container.mainContext)
+    }
+
+    /// Four past sessions for the history page: one with a motion review, one
+    /// still waiting for its Watch, one whose motion the review rejects, and
+    /// one imported from WHOOP with no motion at all.
+    func seedBadmintonHistory() {
+        let context = container.mainContext
+        let reviewed = HealthActivityDesignPreview.badmintonFixture
+        reviewed.start = .now.addingTimeInterval(-2 * 86400)
+        context.insert(reviewed)
+        let waiting = WorkoutRecord(externalID: "almanac-watch:\(UUID().uuidString)", start: .now.addingTimeInterval(-3600),
+                                    durationMinutes: 41, activityName: "Badminton", energyKcal: 280)
+        var singles = BadmintonSession(opponents: ["Dev"])
+        for side: BadmintonSide in Array(repeating: .them, count: 12) + Array(repeating: .us, count: 21) { singles.record(side) }
+        waiting.badmintonData = try? JSONEncoder().encode(singles)
+        context.insert(waiting)
+        let rejected = WorkoutRecord(externalID: "almanac-watch:\(UUID().uuidString)", start: .now.addingTimeInterval(-5 * 86400),
+                                     durationMinutes: 10, activityName: "Badminton", energyKcal: 70)
+        var tooLong = SwingAnalysis(); tooLong.sampledSeconds = 5000
+        rejected.swingAnalysisData = try? JSONEncoder().encode(tooLong)
+        context.insert(rejected)
+        context.insert(WorkoutRecord(externalID: "whoop:118-\(UUID().uuidString)", start: .now.addingTimeInterval(-9 * 86400),
+                                     durationMinutes: 55, activityName: "Badminton", energyKcal: 410))
+        try? context.save()
     }
 
     /// Strength, dumbbells, thirty minutes, and a push day two days ago, so

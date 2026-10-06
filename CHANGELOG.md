@@ -4,6 +4,12 @@ All notable changes to Almanac are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Added
+
+- **Badminton demo.** Try the demo from the badminton start screen or the empty history: a scripted doubles match plays through the live screen with simulated Watch data, scores its own rallies, and ends in the real court review. Nothing from it is saved.
+- **Swing analysis status.** The start screen says whether the next badminton workout will analyze swings, and if not, the one setting to change.
+- **Past sessions.** Badminton history groups motion reviews from summaries and says why a summary has no motion: still waiting for the Watch, motion that could not be read, recorded on iPhone, or imported. The saved screen opens the session just finished rather than the list.
+
 ## [1.0.1] - 2026-10-05
 
 The editorial redesign and badminton match tracking.

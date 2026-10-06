@@ -37,7 +37,7 @@ struct FitnessSegmentView: View {
             }
 
             NavigationLink { BadmintonHistoryScreen() } label: {
-                Label("Badminton session reviews", systemImage: "figure.badminton").font(LifeOSType.rowTitle).frame(minHeight: 48)
+                Label("Past badminton sessions", systemImage: "figure.badminton").font(LifeOSType.rowTitle).frame(minHeight: 48)
             }
             if !activity.workouts.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

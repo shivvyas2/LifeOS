@@ -6,29 +6,83 @@ import AppSurfaces
 import Persistence
 import DesignSystem
 
+/// Every past badminton session, the ones with a motion review first, and
+/// for the rest the reason there is none. Opens any of them in the review.
 struct BadmintonHistoryScreen: View {
+    /// Starts the demo from the empty state, where there is a recorder to
+    /// start it on: Begin activity passes it; the Health hub does not.
+    var onDemo: (() -> Void)? = nil
     @Query(filter: #Predicate<WorkoutRecord> { $0.activityName == "Badminton" }, sort: \WorkoutRecord.start, order: .reverse)
     private var workouts: [WorkoutRecord]
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
+
+    private var reviewed: [WorkoutRecord] { workouts.filter { BadmintonReviewScreen.motionState(of: $0) == .readable } }
+    private var summaries: [WorkoutRecord] { workouts.filter { BadmintonReviewScreen.motionState(of: $0) != .readable } }
+    private static let emptySentence = "Every badminton session lands here with its score, and with the swing replay once your Watch has synced it."
+
     var body: some View {
-        List {
-            Section {
-                Text("Your time on court").font(.title2.bold())
-                Text("Apple Watch motion reviews arrive when your saved workout syncs. WHOOP and Apple Health sessions without motion data still show their workout totals.").font(.subheadline).foregroundStyle(.secondary)
-            }
-            if workouts.isEmpty {
-                ContentUnavailableView("Your next session starts here", systemImage: "figure.badminton", description: Text("Enable experimental swing analysis in Your activity setup, then record badminton on your racket wrist."))
-            }
-            ForEach(workouts) { workout in
-                NavigationLink {
-                    BadmintonReviewScreen(workout: workout)
-                } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(workout.start, format: .dateTime.month().day().hour().minute()).font(.headline)
-                        Text(Self.subtitle(for: workout)).font(.caption).foregroundStyle(.secondary)
-                    }.padding(.vertical, 5)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                EditorialMasthead(eyebrow: "Badminton", title: "Past sessions",
+                                  detail: "Scores arrive with the session. Motion reviews arrive when your Watch syncs, and only from a Watch worn on your racket wrist.")
+                if workouts.isEmpty {
+                    if let onDemo {
+                        EditorialEmptyState(sentence: Self.emptySentence, action: "Try the demo", onAction: { dismiss(); onDemo() }) { sampleRow }
+                    } else {
+                        EditorialEmptyState(sentence: Self.emptySentence) { sampleRow }
+                    }
+                } else {
+                    if !reviewed.isEmpty { section(index: 1, title: "Motion reviews", rows: reviewed) }
+                    if !summaries.isEmpty { section(index: reviewed.isEmpty ? 1 : 2, title: "Summaries only", rows: summaries) }
                 }
+            }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(22)
+        }
+        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .navigationTitle("Badminton").navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .tint(LifeOSTokens.primaryText.resolve(scheme))
+    }
+
+    private func section(index: Int, title: String, rows: [WorkoutRecord]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            EditorialSectionHeader(index: index, title: title)
+            ForEach(rows) { workout in
+                NavigationLink { BadmintonReviewScreen(workout: workout) } label: {
+                    row(date: workout.start, line: Self.subtitle(for: workout), reason: Self.reason(for: workout))
+                }
+                .buttonStyle(.plain)
             }
-        }.navigationTitle("Badminton").tint(LifeOSTokens.accent)
+        }
+    }
+    /// What a row will look like, for the empty state's ghost.
+    private var sampleRow: some View {
+        row(date: .now.addingTimeInterval(-2 * 86400), line: "38 min · Won 21-17 18-21 21-15 · with Priya", reason: nil)
+    }
+    private func row(date: Date, line: String, reason: String?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(date, format: .dateTime.weekday(.abbreviated).month().day().hour().minute()).font(LifeOSType.rowTitle)
+                    Text(line).font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
+                    if let reason {
+                        Text(reason).font(LifeOSType.caption).foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(LifeOSType.caption.weight(.semibold))
+                    .foregroundStyle(Editorial.quietInk(scheme)).accessibilityHidden(true)
+            }
+            .padding(.vertical, 12)
+            Hairline()
+        }
+        .contentShape(.rect)
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+    }
+    /// Why a row has no motion review, or nil when it has one.
+    static func reason(for workout: WorkoutRecord) -> String? {
+        BadmintonSessionStatus.reason(externalID: workout.externalID, start: workout.start,
+                                      motion: BadmintonReviewScreen.motionState(of: workout))
     }
 
     /// "32 min · Won 21-17 21-19 · with Priya", or the motion line when the
@@ -39,9 +93,22 @@ struct BadmintonHistoryScreen: View {
             parts.append(session.summary)
             if let partner = session.teammate { parts.append("with \(partner)") }
         } else {
-            parts.append(workout.swingAnalysisData == nil ? "Workout summary" : "Motion review")
+            parts.append(BadmintonReviewScreen.motionState(of: workout) == .readable ? "Motion review" : "Workout summary")
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// The session just finished, by the id the recorder wrote it under, or the
+/// list when no row answers to it.
+struct BadmintonLatestReview: View {
+    @Query private var workouts: [WorkoutRecord]
+    init(externalID: String?) {
+        let id = externalID ?? ""
+        _workouts = Query(filter: #Predicate<WorkoutRecord> { $0.externalID == id })
+    }
+    var body: some View {
+        if let workout = workouts.first { BadmintonReviewScreen(workout: workout) } else { BadmintonHistoryScreen() }
     }
 }
 
@@ -92,6 +159,16 @@ struct BadmintonReviewScreen: View {
         if let learned = StrokeClassifier.convention(events: analysis?.events ?? [], tags: tags) { savedConvention = learned }
     }
     private var event: SwingEvent? { analysis?.events.first(where: { $0.id == selected }) }
+    /// A demo's review is a record that was never stored; the screen says so.
+    private var isDemo: Bool { workout.externalID.hasPrefix("almanac-demo:") }
+    /// Whether the stored motion, if any, passes the same validation this
+    /// screen applies before showing it. The history list groups by this.
+    static func motionState(of workout: WorkoutRecord) -> BadmintonMotionState {
+        guard let data = workout.swingAnalysisData else { return .none }
+        let elapsed = Double(workout.durationMinutes + 1) * 60
+        let analysis = try? JSONDecoder().decode(SwingAnalysis.self, from: data)
+        return analysis?.isValid(elapsed: elapsed) == true ? .readable : .unreadable
+    }
     /// Decoded and validated the same way as the motion review.
     static func session(of workout: WorkoutRecord) -> BadmintonSession? {
         workout.badmintonData
@@ -102,7 +179,7 @@ struct BadmintonReviewScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top) {
-                    EditorialMasthead(eyebrow: "Badminton · \(workout.start.formatted(.dateTime.weekday().month().day()))",
+                    EditorialMasthead(eyebrow: isDemo ? "Badminton · Demo" : "Badminton · \(workout.start.formatted(.dateTime.weekday().month().day()))",
                                       title: "Court review")
                     Button { showInfo = true } label: { Image(systemName: "info.circle").font(.title3) }
                         .buttonStyle(.plain).frame(width: 44, height: 44)
@@ -123,6 +200,10 @@ struct BadmintonReviewScreen: View {
                             .fill(LinearGradient(colors: EditorialFieldTone.dusk.colors(scheme), startPoint: .top, endPoint: .bottom))
                     }
                 }
+                if isDemo {
+                    Text("A demo session, scripted on this iPhone. Nothing here was saved.")
+                        .font(LifeOSType.caption).foregroundStyle(quiet)
+                }
                 if let session = Self.session(of: workout) {
                     matchPanel(session)
                 }
@@ -131,7 +212,8 @@ struct BadmintonReviewScreen: View {
                     if !analysis.events.isEmpty { strokesPanel(analysis) }
                 } else {
                     panel("No wrist data", icon: "applewatch") {
-                        Text("Turn on swing analysis and wear your watch on your racket wrist.")
+                        if let reason = BadmintonHistoryScreen.reason(for: workout) { Text(reason) }
+                        Text("For the motion review, turn on swing analysis in Your activity setup and wear your Watch on your racket wrist.")
                     }
                 }
             }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(22)

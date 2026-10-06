@@ -7,7 +7,7 @@ import SwiftUI
 /// says what the tab shows, one button is the action that fills it.
 public struct EditorialEmptyState<Sample: View>: View {
     let sentence: String
-    let action: String
+    let action: String?
     let onAction: () -> Void
     let sample: Sample
     @Environment(\.colorScheme) private var scheme
@@ -15,6 +15,13 @@ public struct EditorialEmptyState<Sample: View>: View {
     public init(sentence: String, action: String, onAction: @escaping () -> Void,
                 @ViewBuilder sample: () -> Sample) {
         self.sentence = sentence; self.action = action; self.onAction = onAction
+        self.sample = sample()
+    }
+
+    /// The ghost and the sentence alone, for a place that can show what the
+    /// tab holds but cannot start the action that fills it.
+    public init(sentence: String, @ViewBuilder sample: () -> Sample) {
+        self.sentence = sentence; self.action = nil; self.onAction = {}
         self.sample = sample()
     }
 
@@ -29,8 +36,10 @@ public struct EditorialEmptyState<Sample: View>: View {
                 .font(LifeOSType.secondary)
                 .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
                 .fixedSize(horizontal: false, vertical: true)
-            Button(action: onAction) { Text(action) }
-                .buttonStyle(.editorial(.primary))
+            if let action {
+                Button(action: onAction) { Text(action) }
+                    .buttonStyle(.editorial(.primary))
+            }
         }
         .editorialCard()
     }

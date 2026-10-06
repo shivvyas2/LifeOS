@@ -61,7 +61,7 @@ struct LiveReadings: View {
                             : "Earlier sets: \(model.completedSets.map(String.init).joined(separator: ", "))")
             }
             plainRow("Calories", value: readout.caloriesText, unit: "kcal",
-                     caption: readout.calories == nil ? "No energy reading yet" : "From Apple Health")
+                     caption: readout.calories == nil ? "No energy reading yet" : model.source == .demo ? "Simulated for the demo" : "From Apple Health")
             if model.selection.tracksDistance {
                 plainRow("Distance", value: readout.distanceKilometresText, unit: "km",
                          caption: readout.distanceMeters == nil ? "No distance reading yet" : "From Apple Health", last: true)
@@ -86,7 +86,9 @@ struct LiveReadings: View {
     }
 
     private var heartSource: String {
-        model.source == .watch ? "From Apple Watch" : model.sensor.connectedName.map { "From \($0)" } ?? "Live sensor"
+        model.source == .watch ? "From Apple Watch"
+            : model.source == .demo ? "Simulated for the demo"
+            : model.sensor.connectedName.map { "From \($0)" } ?? "Live sensor"
     }
 
     private var effortRow: some View {
@@ -115,7 +117,7 @@ struct LiveReadings: View {
     private var swingCaption: String {
         guard model.swingCount != nil else { return "Turn on swing analysis and wear the watch on your racket wrist" }
         let peak = model.peakWristRotation.map { "peak \(Int(($0 * 180 / .pi).rounded()))°/s at the wrist" }
-        return ["Estimated", peak].compactMap { $0 }.joined(separator: " · ")
+        return [model.source == .demo ? "Simulated for the demo" : "Estimated", peak].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func plainRow(_ label: String, value: String?, unit: String?, caption: String, last: Bool = false) -> some View {
