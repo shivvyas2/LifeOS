@@ -11,11 +11,6 @@ import Persistence
 struct NotesSidebar: View {
     let snapshot: NotesSnapshot
     @Binding var selection: NoteSelection
-    @Binding var query: String
-    /// Driven by Command-F from the scene's menu. A binding rather than a
-    /// `@FocusState` owned here, because the thing that raises it is three
-    /// views up and cannot reach a focus state.
-    var isSearchFocused: Binding<Bool>?
     var onNewFolder: (NoteBucket) -> Void
     /// Habits are the one thing in this tab that is not a page. See
     /// `PlanNoteMigration` for why they stayed behind.
@@ -35,7 +30,6 @@ struct NotesSidebar: View {
     /// row, because only one row can be targeted at a time and two rows both
     /// believing they are is exactly how a stuck highlight happens.
     @State private var droppingOn: NoteSelection?
-    @FocusState private var searchFieldFocused: Bool
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -43,12 +37,10 @@ struct NotesSidebar: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                searchField
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-
-                shortcut(.recent, title: "Recent", systemImage: "clock.fill",
-                         hue: .recovery, count: snapshot.recent.count)
+                shortcut(.inbox, title: "Inbox", systemImage: "tray.fill",
+                         hue: .recovery, count: snapshot.inboxCount)
+                shortcut(.all, title: "All", systemImage: "doc.on.doc.fill",
+                         hue: .recovery, count: snapshot.totalCount)
                 shortcut(.favorites, title: "Favourites", systemImage: "star.fill",
                          hue: .activity, count: snapshot.favorites.count)
                 habitsRow
@@ -62,36 +54,6 @@ struct NotesSidebar: View {
             .padding(.vertical, 16)
         }
         .scrollIndicators(.hidden)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(LifeOSType.label)
-                .foregroundStyle(secondary)
-            TextField("Search notes", text: $query)
-                .font(LifeOSType.secondary)
-                .textFieldStyle(.plain)
-                .submitLabel(.search)
-                .focused($searchFieldFocused)
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(LifeOSType.label.weight(.regular))
-                        .foregroundStyle(secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(primary.opacity(scheme == .dark ? 0.10 : 0.05))
-        )
     }
 
     /// Styled as a shortcut but pushing its own screen rather than selecting,

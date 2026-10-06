@@ -22,6 +22,7 @@ struct NotesHubScreen: View {
     /// arrangement; everywhere else a page is pushed onto `path` instead.
     /// Keeping one of the two always empty is what stops them disagreeing.
     @State private var openPage: UUID?
+    @State private var openPageFocus: NoteEditorFocus = .none
     /// Collapsing the library gives the page the width back, which is what a
     /// person writing rather than filing actually wants.
     @State private var isLibraryVisible = true
@@ -38,7 +39,7 @@ struct NotesHubScreen: View {
     @State private var pendingRename: UUID?
 
     enum NoteRoute: Hashable {
-        case page(UUID)
+        case page(UUID, focus: NoteEditorFocus)
         case habits
     }
 
@@ -141,13 +142,14 @@ struct NotesHubScreen: View {
         // column and the navigation stack with it, or it vanishes.
         .onChange(of: isThreeColumn) { _, three in
             if three {
-                if case .page(let id) = path.last {
+                if case .page(let id, let focus) = path.last {
                     path.removeLast()
+                    openPageFocus = focus
                     openPage = id
                 }
             } else if let page = openPage {
                 openPage = nil
-                path.append(.page(page))
+                path.append(.page(page, focus: openPageFocus))
             }
         }
     }
@@ -156,7 +158,7 @@ struct NotesHubScreen: View {
     private var detailColumn: some View {
         if let openPage {
             NavigationStack {
-                NoteEditorHost(documentID: openPage, onOpenLinked: { open($0) })
+                NoteEditorHost(documentID: openPage, focus: openPageFocus, onOpenLinked: { open($0) })
             }
             // Rebuilt per page rather than reused, so the editor never shows
             // the previous page's blocks for a frame while the new ones load.
@@ -222,7 +224,6 @@ struct NotesHubScreen: View {
         NotesSidebar(
             snapshot: model.snapshot,
             selection: librarySelection,
-            query: $model.query,
             onNewFolder: { newFolderBucket = $0 },
             onOpenHabits: libraryHabits,
             habitCount: plan.snapshot.habits.count,
@@ -237,8 +238,6 @@ struct NotesHubScreen: View {
         NotesLibraryList(
             snapshot: model.snapshot,
             selection: librarySelection,
-            query: $model.query,
-            isSearchFocused: $isSearchFocused,
             onNewFolder: { pendingNewFolder = $0; isLibraryPresented = false },
             onOpenHabits: libraryHabits,
             habitCount: plan.snapshot.habits.count,
@@ -292,8 +291,8 @@ struct NotesHubScreen: View {
     @ViewBuilder
     private func destination(_ route: NoteRoute) -> some View {
         switch route {
-        case .page(let id):
-            NoteEditorHost(documentID: id, onOpenLinked: { open($0) })
+        case .page(let id, let focus):
+            NoteEditorHost(documentID: id, focus: focus, onOpenLinked: { open($0) })
         case .habits:
             PlanScreen(
                 snapshot: plan.snapshot,
@@ -313,7 +312,7 @@ struct NotesHubScreen: View {
             model: model,
             openPageID: openPage,
             onOpen: { open($0) },
-            onNewFolder: { newFolderBucket = $0 },
+            onOpenNew: { open($0, focus: .title) },
             // Offered only where there is a library to collapse.
             onToggleLibrary: layout.isRegular ? { isLibraryVisible.toggle() } : nil,
             isLibraryVisible: isLibraryVisible,
@@ -327,7 +326,7 @@ struct NotesHubScreen: View {
     /// knows whether a page is pushed or shown beside the shelf.
     private var commandTarget: NotesCommandTarget {
         NotesCommandTarget(
-            newPage: { if let id = model.createNote() { open(id) } },
+            newPage: { if let id = model.createNote() { open(id, focus: .title) } },
             newFolder: { newFolderBucket = model.activeBucket },
             todaysJournal: { if let id = model.openTodaysJournal() { open(id) } },
             focusSearch: {
@@ -343,8 +342,8 @@ struct NotesHubScreen: View {
                 path.removeAll()
                 openPage = nil
             },
-            selectRecent: {
-                model.selection = .recent
+            selectInbox: {
+                model.selection = .inbox
                 path.removeAll()
                 openPage = nil
             },
@@ -364,12 +363,14 @@ struct NotesHubScreen: View {
         return nil
     }
 
-    /// Opens a page wherever this arrangement puts one.
-    private func open(_ id: UUID) {
+    /// Opens a page wherever this arrangement puts one, focusing what the
+    /// caller asked for: the title for a page just made, nothing otherwise.
+    private func open(_ id: UUID, focus: NoteEditorFocus = .none) {
         if isThreeColumn {
+            openPageFocus = focus
             openPage = id
         } else {
-            path.append(.page(id))
+            path.append(.page(id, focus: focus))
         }
     }
 
@@ -388,6 +389,7 @@ struct NotesHubScreen: View {
 /// argument without a wrapper like this one.
 struct NoteEditorHost: View {
     let documentID: UUID
+    var focus: NoteEditorFocus = .none
     var onOpenLinked: (UUID) -> Void
 
     @Environment(\.modelContext) private var context
@@ -397,7 +399,7 @@ struct NoteEditorHost: View {
     var body: some View {
         Group {
             if let model, model.documentID == documentID {
-                NoteEditorScreen(model: model, onOpenLinked: onOpenLinked)
+                NoteEditorScreen(model: model, focusOnAppear: focus, onOpenLinked: onOpenLinked)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

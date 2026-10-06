@@ -1,13 +1,16 @@
 import Foundation
 import Persistence
 
-/// What the library rail currently points at.
+/// What the library currently points at.
 ///
-/// One enum rather than a pair of optionals, because "a folder is selected" and
-/// "a shelf is selected" are mutually exclusive and expressing them as two
-/// nullable properties makes a fourth, meaningless state representable.
+/// One enum rather than a pair of optionals, because "a folder is selected"
+/// and "a shelf is selected" are mutually exclusive and expressing them as
+/// two nullable properties makes a fourth, meaningless state representable.
+/// The first three are the stream chips across the top of the shelf.
 enum NoteSelection: Hashable {
-    case recent
+    case inbox
+    case all
+    case todos
     case favorites
     case bucket(NoteBucket)
     case folder(UUID)
@@ -20,6 +23,24 @@ enum NoteSelection: Hashable {
     var folderID: UUID? {
         if case .folder(let id) = self { return id }
         return nil
+    }
+
+    /// The chip this selection is, or nil on a shelf, a folder or favourites.
+    var streamChip: NoteStreamChip? {
+        switch self {
+        case .inbox: .inbox
+        case .all: .all
+        case .todos: .todos
+        default: nil
+        }
+    }
+
+    init(chip: NoteStreamChip) {
+        switch chip {
+        case .inbox: self = .inbox
+        case .all: self = .all
+        case .todos: self = .todos
+        }
     }
 }
 
