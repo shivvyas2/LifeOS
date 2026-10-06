@@ -8,24 +8,38 @@ import DesignSystem
 struct NotesDesignPreview: View {
     var showEditor = false
     var showsPreviewLabel = true
+    /// `notes-editor-new`: a blank page with the title focused;
+    /// `notes-filing`: the sample page with the filing sheet up.
+    var page: String = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var fixture = NotesPreviewFixture()
 
     var body: some View {
         Group {
-            if showEditor {
+            switch page {
+            case "notes-editor-new":
                 NavigationStack {
-                    NoteEditorScreen(model: fixture.editor, onOpenLinked: { _ in })
-                        .navigationTitle("Preview page")
+                    NoteEditorScreen(model: fixture.blankEditor, focusOnAppear: .title, onOpenLinked: { _ in })
                 }
-            } else {
-                NotesHubScreen(model: fixture.notes, plan: fixture.plan, onAddHabit: {})
+            case "notes-filing":
+                NavigationStack {
+                    NoteEditorScreen(model: fixture.editor, openFilingOnAppear: true, onOpenLinked: { _ in })
+                }
+            default:
+                if showEditor {
+                    NavigationStack {
+                        NoteEditorScreen(model: fixture.editor, onOpenLinked: { _ in })
+                            .navigationTitle("Preview page")
+                    }
+                } else {
+                    NotesHubScreen(model: fixture.notes, plan: fixture.plan, onAddHabit: {})
+                }
             }
         }
         .modelContainer(fixture.container)
         .environment(\.layout, .metrics(for: sizeClass == .regular ? .regular : .compact))
         .safeAreaInset(edge: .top, spacing: 0) {
-            if showsPreviewLabel {
+            if showsPreviewLabel, page.isEmpty {
                 Text("DESIGN PREVIEW · SAMPLE PAGES")
                     .font(.caption2).tracking(1).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -40,6 +54,7 @@ struct NotesDesignPreview: View {
     let notes = NotesViewModel()
     let plan = PlanViewModel()
     let editor: NoteEditorViewModel
+    let blankEditor: NoteEditorViewModel
 
     init() {
         container = try! LifeOSContainer.make(inMemory: true)
@@ -75,6 +90,10 @@ struct NotesDesignPreview: View {
         editor = NoteEditorViewModel(documentID: page.id)
         editor.attach(context)
         editor.load()
+        let blank = try! store.createDocument(title: "", bucket: .projects)
+        blankEditor = NoteEditorViewModel(documentID: blank.id)
+        blankEditor.attach(context)
+        blankEditor.load()
     }
 }
 

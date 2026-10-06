@@ -16,7 +16,7 @@ import Persistence
 /// `day` (today, every section), `day-past` (three days ago), `day-future`
 /// (three days ahead), `day-far` (twenty days ahead, no forecast), `day-empty`
 /// (today with nothing), `day-no-location` (location not yet allowed), `notes`
-/// or `notes-empty`. `--select=` opens the
+/// (the shelf; `--scope=inbox|all|todos|favorites`) or `notes-empty`. `--select=` opens the
 /// calendar pages on a given day.
 struct TodayDesignPreview: View {
     let page: String
@@ -155,6 +155,20 @@ struct TodayDesignPreview: View {
         _ = notes.createNote(kind: .note, title: "Marathon block, week four")
         _ = notes.createNote(kind: .task, title: "Groceries")
         _ = notes.openTodaysJournal()
+        if let marathon = try? NotesStore(context: container.mainContext).document(titled: "Marathon block, week four") {
+            try? NotesStore(context: container.mainContext).update(marathon, blocks: [
+                NoteBlock(text: "Long run moved to Sunday. Calf held up."),
+                NoteBlock(kind: .todo, text: "Book the physio"),
+            ])
+        }
+        if let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scope=") })?.dropFirst(8) {
+            switch String(raw) {
+            case "all": notes.selection = .all
+            case "todos": notes.selection = .todos
+            case "favorites": notes.selection = .favorites
+            default: notes.selection = .inbox
+            }
+        }
         notes.load()
         emptyNotes.attach(emptyContainer.mainContext)
         emptyNotes.load()
