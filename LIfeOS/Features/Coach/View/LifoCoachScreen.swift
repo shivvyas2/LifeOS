@@ -24,11 +24,6 @@ struct LifoCoachScreen: View {
     @State private var showHistory = false
     @State private var mode: CoachScreenStyle = .text
 
-    /// The LIFO mark. PR #18 names this `LifeOSMark.symbol` in DesignSystem;
-    /// until that merges the symbol is spelled here, once, so the two PRs do
-    /// not depend on each other. Swap to `LifeOSMark.symbol` after #18.
-    private static let markSymbol = "circle.hexagongrid.fill"
-
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
     private var quiet: Color { Editorial.quietInk(scheme) }
@@ -90,7 +85,7 @@ struct LifoCoachScreen: View {
             if mode == .voice {
                 glyphButton("chevron.left", label: "Back to text chat") { switchMode(.text) }
             } else {
-                Image(systemName: Self.markSymbol)
+                Image(systemName: LifeOSMark.symbol)
                     .font(LifeOSType.sectionTitle)
                     .foregroundStyle(LifeOSTokens.accent)
                     .frame(width: 44, height: 44)
