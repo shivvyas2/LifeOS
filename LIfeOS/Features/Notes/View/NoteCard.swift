@@ -44,7 +44,10 @@ struct NoteCard: View {
                             .foregroundStyle(.secondary).lineLimit(2)
                     }
                     HStack(spacing: 8) {
-                        Text(card.folderName ?? card.bucket.title).lineLimit(1)
+                        if card.kind != .note {
+                            Text(card.kind == .journal ? "Journal" : "Tasks").editorialEyebrow()
+                        }
+                        Text(card.folderName ?? (card.isInInbox ? "Inbox" : card.bucket.title)).lineLimit(1)
                         if card.taskCount > 0 {
                             Label("\(card.doneCount)/\(card.taskCount)", systemImage: "checkmark.circle")
                         }
@@ -159,22 +162,5 @@ private struct NoteDragPreview: View {
         .background(
             Capsule().fill(LifeOSTokens.cardSurface.resolve(scheme))
         )
-    }
-}
-
-
-/// Somewhere a page can be filed: a shelf, or a folder on one.
-struct NoteMoveTarget: Identifiable, Hashable {
-    let bucket: NoteBucket
-    /// Nil for the shelf itself, which files the page loose on it.
-    let folderID: UUID?
-    let title: String
-
-    var id: String { "\(bucket.rawValue)-\(folderID?.uuidString ?? "root")" }
-
-    /// Greys out the place the page already is, rather than offering a move
-    /// that would do nothing.
-    func isCurrentHome(of card: NoteCardSnapshot) -> Bool {
-        card.bucket == bucket && card.folderID == folderID
     }
 }
