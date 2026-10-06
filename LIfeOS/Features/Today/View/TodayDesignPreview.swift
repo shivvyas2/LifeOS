@@ -9,7 +9,8 @@ import Persistence
 /// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
 /// in Weekly), `calendar-find` (the calendar with `--query=` live; add
 /// `--weekly` to open it on the bands),
-/// `calendar-ask` (the reply card from a seeded conversation; `--no-model`
+/// `calendar-ask` (the reply card from a seeded conversation; `--far` makes
+/// it about an event outside the loaded months; `--no-model`
 /// on either calendar page hides the arrow and shows the needs-model line),
 /// `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens the
 /// calendar pages on a given day.
@@ -98,7 +99,9 @@ struct TodayDesignPreview: View {
     let events: [CalendarEventSnapshot]
     private var today: Date { calendar.startOfDay(for: .now) }
 
-    static let question = "When is the dentist?"
+    static var question: String {
+        ProcessInfo.processInfo.arguments.contains("--far") ? "When is the ski trip?" : "When is the dentist?"
+    }
 
     /// The calendar pages share one assistant, seeded with a question about
     /// the dentist and its answer under the conversation id the model loads,
@@ -112,10 +115,15 @@ struct TodayDesignPreview: View {
         UserDefaults.currentAccount.set(id.uuidString, forKey: "assistant.conversationID")
         let chat = ChatStore(context: container.mainContext)
         try! chat.append(conversationID: id, role: .user, text: Self.question)
-        try! chat.append(conversationID: id, role: .assistant,
-                         text: "Your dentist is tomorrow at 10:00, for an hour. Nothing else is booked that morning.",
-                         toolSummaries: ["Checked your calendar"],
-                         eventIDs: [events.first { $0.title == "Dentist" }!.id])
+        // `--far` answers about the ski trip 100 days out, outside the two
+        // months the screen loads, so the jump to an unloaded week is drawn.
+        let far = ProcessInfo.processInfo.arguments.contains("--far")
+        let about = events.first { $0.title == (far ? "Ski trip" : "Dentist") }!
+        let answer = far
+            ? "Your ski trip is on \(about.startDate.formatted(.dateTime.weekday(.wide).month(.wide).day())), from 09:00."
+            : "Your dentist is tomorrow at 10:00, for an hour. Nothing else is booked that morning."
+        try! chat.append(conversationID: id, role: .assistant, text: answer,
+                         toolSummaries: ["Checked your calendar"], eventIDs: [about.id])
         return model
     }()
 
@@ -132,7 +140,7 @@ struct TodayDesignPreview: View {
             at(0, 9, 30, "Standup"), at(0, 12, 60, "Lunch with Sam"), at(0, 16, 90, "Design review"),
             at(1, 10, 60, "Dentist"), at(2, 19, 120, "Dinner with Alice"), at(3, 8, 60, "Programming class"),
             at(6, 19, 180, "Professional party"), at(-2, 9, 30, "Standup"), at(-7, 11, 60, "Dentist follow-up"),
-            at(14, 9, 60, "Flight to Lisbon"),
+            at(14, 9, 60, "Flight to Lisbon"), at(100, 9, 60, "Ski trip"),
         ]
         let window = DateInterval(start: calendar.date(byAdding: .day, value: -40, to: start)!,
                                   end: calendar.date(byAdding: .day, value: 70, to: start)!)

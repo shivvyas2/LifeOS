@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import DesignSystem
+import Insights
 import Persistence
 
 /// The calendar behind the header's calendar button: one screen, two faces.
@@ -102,7 +103,13 @@ struct CalendarScreen: View {
     /// The query stays so several results can be visited.
     private func reveal(_ event: CalendarEventSnapshot) {
         withAnimation(.snappy(duration: 0.22)) {
-            model.select(event.startDate)
+            if model.holds(event.startDate) {
+                model.select(event.startDate)
+            } else {
+                // A reply about a flight in January, asked in October: the
+                // week is not loaded, so move the calendar there.
+                model.goTo(event.startDate)
+            }
             mode = .weekly
         }
     }
@@ -160,7 +167,12 @@ struct CalendarScreen: View {
                     findField
                     if let asked, let assistant {
                         AssistantReplyCard(ask: asked, assistant: assistant, onSelect: reveal,
-                                           onClear: { self.asked = nil })
+                                           onClear: {
+                                               // A write still awaiting a yes gets a no, or the
+                                               // turn would wait forever behind a hidden card.
+                                               for write in assistant.pending { assistant.cancel(write.id) }
+                                               self.asked = nil
+                                           })
                     } else if isFinding {
                         ScheduleResultsBlock(results: found, months: months, onSelect: reveal)
                     }
@@ -221,6 +233,11 @@ struct CalendarScreen: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
                 model.load()
+            }
+            .onChange(of: isCalendarConnected) { _, connected in
+                // Connected from this screen's card: the assistant learns of
+                // it the way it does on appear, so the ask arrow can show.
+                if connected { Task { await assistant?.appear() } }
             }
             .onChange(of: mode) { _, _ in
                 // The grids can be scrolled a long way down when a day in the

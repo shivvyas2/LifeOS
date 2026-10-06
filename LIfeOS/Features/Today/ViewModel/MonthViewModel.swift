@@ -95,20 +95,15 @@ final class MonthViewModel {
     /// one. It also means stepping a month redraws immediately for the days
     /// either side while the new fetch lands.
     func load() {
-        guard let context else { return }
+        guard let context, let window = CalendarDayIndex.window(forMonth: month, calendar: calendar) else { return }
         let store = CalendarStore(context: context)
+        let events = (try? store.events(from: window.start, to: window.end)) ?? []
+        eventsByDay = CalendarDayIndex.group(events, from: window.start, to: window.end, calendar: calendar)
+    }
 
-        let startOfMonth = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: month)
-        ) ?? month
-        // Two months, not one: the screen shows this month and the next, the
-        // way the reference stacks October over November.
-        guard let from = calendar.date(byAdding: .day, value: -7, to: startOfMonth),
-              let endOfMonth = calendar.date(byAdding: .month, value: 2, to: startOfMonth),
-              let to = calendar.date(byAdding: .day, value: 7, to: endOfMonth)
-        else { return }
-
-        let events = (try? store.events(from: from, to: to)) ?? []
-        eventsByDay = CalendarDayIndex.group(events, from: from, to: to, calendar: calendar)
+    /// Whether a day lies inside the loaded window, so a caller knows if
+    /// `select` is enough or the screen has to `goTo` it.
+    func holds(_ day: Date) -> Bool {
+        CalendarDayIndex.window(forMonth: month, calendar: calendar)?.contains(day) ?? false
     }
 }
