@@ -1,5 +1,6 @@
 import SwiftUI
 import Insights
+import Persistence
 import Integrations
 import DesignSystem
 
@@ -213,6 +214,10 @@ struct SettingsScreen: View {
                         .buttonStyle(.plain)
                         .hoverEffect(.highlight)
                     }
+                    Text("\(VoiceBudget(defaults: .currentAccount).used().formatted()) of \(VoiceBudget.monthlyAllowance.formatted()) characters this month")
+                        .font(LifeOSType.caption)
+                        .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+                        .padding(.top, 4)
                 }
             }
         }

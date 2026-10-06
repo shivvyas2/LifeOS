@@ -7,6 +7,10 @@ import DesignSystem
 /// On paper, in ink; nothing about it is a card unless it holds a figure.
 struct CoachResponseView: View {
     let text: String
+    /// How many blocks may show, from the top; nil shows them all. The voice
+    /// raises it as each passage starts, so a section arrives with the
+    /// sentence about it.
+    var revealed: Int? = nil
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -14,8 +18,10 @@ struct CoachResponseView: View {
     private var quiet: Color { Editorial.quietInk(scheme) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.x2) {
-            ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { index, block in
+        let blocks = CoachResponse(text).blocks
+        let shown = revealed.map { Array(blocks.prefix($0)) } ?? blocks
+        return VStack(alignment: .leading, spacing: Space.x2) {
+            ForEach(Array(shown.enumerated()), id: \.offset) { index, block in
                 blockView(block)
                     .modifier(BlockReveal(index: index))
             }
