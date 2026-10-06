@@ -142,7 +142,8 @@ public struct NotesStore {
             counts: counts,
             recent: try recent(),
             favorites: try favorites(),
-            totalCount: allDocuments.filter { !$0.isArchived }.count
+            totalCount: allDocuments.filter { !$0.isArchived }.count,
+            inboxCount: allDocuments.filter(\.isInInbox).count
         )
     }
 
@@ -223,6 +224,11 @@ public struct NotesStore {
     /// and the thing you just wrote is the thing you are still thinking about.
     public func inbox() throws -> [NoteCardSnapshot] {
         try cardsNewestFirst(filter: \.isInInbox)
+    }
+
+    /// Every live page, newest edit first: the All chip.
+    public func allCards() throws -> [NoteCardSnapshot] {
+        try cardsNewestFirst()
     }
 
     /// Live pages, newest first, mapped to cards. `inbox()` and
@@ -584,7 +590,8 @@ public struct NotesStore {
             hasInk: document.drawingData?.isEmpty == false,
             linkCount: NoteLinkScanner.links(in: blocks).count,
             createdAt: document.createdAt,
-            openedAt: document.openedAt
+            openedAt: document.openedAt,
+            isInInbox: document.isInInbox
         )
     }
 }

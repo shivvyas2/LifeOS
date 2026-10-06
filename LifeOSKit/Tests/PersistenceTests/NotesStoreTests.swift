@@ -402,4 +402,37 @@ import SwiftData
         let tasks = try store.indexedTasks(openOnly: true)
         #expect(tasks.contains { $0.documentID == captured.id && $0.text == "A task" })
     }
+
+    @Test func aCardSaysWhetherItIsInTheInbox() throws {
+        let store = try makeStore()
+        let document = try store.createDocument(title: "Idea", bucket: .projects)
+        #expect(try store.inbox().first?.isInInbox == true)
+
+        try store.move(document, to: .areas, folderID: nil)
+
+        #expect(try store.cards(bucket: .areas).first?.isInInbox == false)
+    }
+
+    @Test func theSnapshotCountsOnlyUnfiledLivePagesAsInbox() throws {
+        let store = try makeStore()
+        _ = try store.createDocument(title: "Loose", bucket: .projects)
+        let filed = try store.createDocument(title: "Filed", bucket: .projects)
+        try store.move(filed, to: .projects, folderID: nil)
+        let archived = try store.createDocument(title: "Archived", bucket: .projects)
+        try store.archive(archived)
+
+        #expect(try store.snapshot().inboxCount == 1)
+    }
+
+    @Test func allCardsAreEveryLivePageNewestFirst() throws {
+        let store = try makeStore()
+        let first = try store.createDocument(title: "First", bucket: .projects)
+        let second = try store.createDocument(title: "Second", bucket: .areas)
+        let archived = try store.createDocument(title: "Gone", bucket: .research)
+        try store.archive(archived)
+        try store.rename(second, to: "Second again")
+
+        let all = try store.allCards()
+        #expect(all.map(\.id) == [second.id, first.id])
+    }
 }
