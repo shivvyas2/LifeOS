@@ -74,21 +74,73 @@ nonisolated enum ElevenLabsVoiceClient {
     }
 }
 
-/// Plays what the client returns.
+/// One passage of audio and which segment of the track it belongs to.
+struct VoiceSegment {
+    let index: Int
+    let audio: Data
+}
+
+/// Plays what the clients return, in order.
 ///
 /// Holds the player because `AVAudioPlayer` stops the moment it is
 /// deallocated, which is the classic way a sound plays for a tenth of a second
-/// and no longer.
+/// and no longer. Plays a queue so a narration of several passages is one
+/// `isSpeaking` from first start to last end, and tells the screen which
+/// passage has just begun so the section it belongs to can come up with it.
 @MainActor
 @Observable
 final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     private(set) var isSpeaking = false
-    private var player: AVAudioPlayer?
     private(set) var level: CGFloat = 0
-    private var meteringTask: Task<Void, Never>?
+    /// Called the moment a segment begins to play, with its index.
+    var onSegmentStart: ((Int) -> Void)?
+    /// Called once, when the last queued segment has ended or playback was stopped.
+    var onFinish: (() -> Void)?
 
-    func play(_ data: Data) {
-        stop()
+    private var player: AVAudioPlayer?
+    private var meteringTask: Task<Void, Never>?
+    private var queue: [VoiceSegment] = []
+
+    /// Starts a fresh narration. Anything playing stops first.
+    func play(_ segments: [VoiceSegment]) {
+        stop(notifying: false)
+        queue = segments
+        playNext()
+    }
+
+    /// Adds passages to a narration already under way. If nothing is playing
+    /// (the earlier passages have all ended), they start at once.
+    func append(_ segments: [VoiceSegment]) {
+        queue.append(contentsOf: segments)
+        if player == nil { playNext() }
+    }
+
+    /// One passage, as the old single-line voice used it.
+    func play(_ data: Data) { play([VoiceSegment(index: 0, audio: data)]) }
+
+    func stop() { stop(notifying: true) }
+
+    private func stop(notifying: Bool) {
+        let wasSpeaking = isSpeaking || !queue.isEmpty
+        meteringTask?.cancel()
+        meteringTask = nil
+        level = 0
+        player?.stop()
+        player = nil
+        queue = []
+        isSpeaking = false
+        // Handed back so a podcast or a playlist returns to full volume rather
+        // than staying ducked until the app is killed.
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if notifying, wasSpeaking { onFinish?() }
+    }
+
+    private func playNext() {
+        guard !queue.isEmpty else {
+            if isSpeaking { stop(notifying: true) }
+            return
+        }
+        let segment = queue.removeFirst()
         do {
             // Spoken word, so it ducks other audio rather than stopping it, and
             // it plays through the speaker rather than the earpiece.
@@ -97,44 +149,38 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
             )
             try AVAudioSession.sharedInstance().setActive(true)
 
-            let player = try AVAudioPlayer(data: data)
+            let player = try AVAudioPlayer(data: segment.audio)
             player.delegate = self
             self.player = player
             player.isMeteringEnabled = true
-            guard player.play() else { stop(); return }
+            guard player.play() else { playNext(); return }
             isSpeaking = true
+            onSegmentStart?(segment.index)
+            meteringTask?.cancel()
             meteringTask = Task { [weak self] in
                 while !Task.isCancelled {
                     guard let self, let player = self.player else { break }
-                    guard player.isPlaying else { self.stop(); break }
+                    guard player.isPlaying else { break }
                     player.updateMeters()
                     self.level = CGFloat(AudioEnvelope.level(decibels: Double(player.averagePower(forChannel: 0))))
                     try? await Task.sleep(for: .milliseconds(33))
                 }
             }
         } catch {
-            stop()
+            // A passage that cannot be decoded is skipped, not fatal: the
+            // next one still plays and the screen still fills.
+            playNext()
         }
     }
 
-    func stop() {
-        meteringTask?.cancel()
-        meteringTask = nil
-        level = 0
-        player?.stop()
-        player = nil
-        isSpeaking = false
-        // Handed back so a podcast or a playlist returns to full volume rather
-        // than staying ducked until the app is killed.
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        // A delayed completion from an old player must not stop a newer reply.
+        // A delayed completion from an old player must not advance a newer narration.
         let finished = ObjectIdentifier(player)
         Task { @MainActor [weak self] in
             guard let self, self.player.map(ObjectIdentifier.init) == finished else { return }
-            self.stop()
+            self.player = nil
+            self.level = 0
+            self.playNext()
         }
     }
 }
