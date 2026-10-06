@@ -67,6 +67,10 @@ struct LifoCoachScreen: View {
             .frame(maxWidth: .infinity)
             .background(paper)
         }
+        // Ink, not the app tint: the caret and selection in the composer are
+        // the one place the accent could otherwise reach this screen. After
+        // the inset, so the composer inside it inherits it too.
+        .tint(ink)
         .sheet(isPresented: $showHistory) { historySheet }
         .task {
             mode = initialMode
