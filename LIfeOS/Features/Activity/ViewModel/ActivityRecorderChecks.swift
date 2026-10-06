@@ -72,6 +72,61 @@ import HealthKit
             player.deactivate()
             UserDefaults(suiteName: playerSuite)?.removePersistentDomain(forName: playerSuite)
 
+            // A demo match plays without a watch: simulated packets reach the
+            // live counts and the score through the watch path, and finishing
+            // ends in a review that was never written to the store.
+            let demoSuite = suite + ".demo"
+            let demo = ActivityRecorder(defaults: UserDefaults(suiteName: demoSuite)!, liveActivitiesEnabled: false)
+            demo.watch = nil
+            demo.attach(context); demo.saveToHealth = true
+            let rowsBefore = try context.fetch(FetchDescriptor<WorkoutRecord>()).count
+            // A slow tick, so the feed's own packets stay out of this check.
+            demo.startDemo(tick: .seconds(60))
+            check(demo.source == .demo && demo.isRunning && demo.selection.name == "Badminton"
+                  && demo.badminton?.kind == .match && !demo.recordingHealth && demo.demoReview == nil,
+                  "A demo starts a badminton match on the phone without Health")
+            var simulated = WatchPacket(sentAt: .now)
+            simulated.swingCount = 3; simulated.peakWristRotation = 6.5; simulated.heartRate = 142; simulated.heartRateAt = .now
+            var scored = demo.badminton ?? BadmintonSession(); scored.record(.us); simulated.badminton = scored
+            demo.receiveWatchPacket(try WatchWire.encode(simulated))
+            check(demo.swingCount == 3 && demo.peakWristRotation == 6.5 && demo.badminton?.score?.current.us == 1 && demo.heartRate == 142,
+                  "A demo session takes simulated packets as if from the watch")
+            demo.scoreRally(.them)
+            check(demo.badminton?.score?.current.them == 1, "The phone scoreboard still counts during a demo")
+            let relaunched = ActivityRecorder(defaults: UserDefaults(suiteName: demoSuite)!, liveActivitiesEnabled: false)
+            relaunched.watch = nil
+            relaunched.attach(context)
+            check(!relaunched.hasSession && relaunched.notice == nil, "A demo is not restored after a relaunch")
+            relaunched.deactivate()
+            await demo.finish()
+            let rowsAfter = try context.fetch(FetchDescriptor<WorkoutRecord>()).count
+            check(demo.saved && rowsAfter == rowsBefore, "Finishing a demo writes nothing to the store")
+            check(demo.demoReview?.swingAnalysisData != nil && demo.demoReview?.badmintonData != nil
+                  && demo.demoReview?.activityName == "Badminton", "The demo review carries motion and the score")
+            check(UserDefaults(suiteName: demoSuite)!.data(forKey: ActivityRecorder.draftKey) == nil, "A finished demo leaves no draft")
+            demo.deactivate()
+            UserDefaults(suiteName: demoSuite)?.removePersistentDomain(forName: demoSuite)
+
+            // The feed itself: run fast, it moves the counts and the score on
+            // its own, and finishes the demo when the script runs out.
+            let feedSuite = suite + ".demo-feed"
+            let fed = ActivityRecorder(defaults: UserDefaults(suiteName: feedSuite)!, liveActivitiesEnabled: false)
+            fed.watch = nil
+            fed.attach(context)
+            fed.startDemo(tick: .milliseconds(10), timeScale: 300)
+            var feedWaits = 0
+            while !fed.saved, feedWaits < 800 { feedWaits += 1; try? await Task.sleep(for: .milliseconds(10)) }
+            check(fed.saved && (fed.swingCount ?? 0) > 20 && (fed.badminton?.score?.rallies.count ?? 0) > 10,
+                  "The demo feed counts swings and scores rallies, then finishes itself")
+            let review = fed.demoReview
+            let elapsed = Double((review?.durationMinutes ?? 0) + 1) * 60
+            let motion = review?.swingAnalysisData.flatMap { try? JSONDecoder().decode(SwingAnalysis.self, from: $0) }
+            check(motion?.isValid(elapsed: elapsed) == true && (motion?.events.count ?? 0) == fed.swingCount,
+                  "The demo review's motion is valid and matches the live count")
+            check(try context.fetch(FetchDescriptor<WorkoutRecord>()).count == rowsBefore, "A self-finished demo writes nothing either")
+            fed.deactivate()
+            UserDefaults(suiteName: feedSuite)?.removePersistentDomain(forName: feedSuite)
+
             // A watch workout the phone can no longer reach can be ended here.
             let strandedSuite = suite + ".stranded"
             let strandedDefaults = UserDefaults(suiteName: strandedSuite)!

@@ -46,8 +46,9 @@ public struct ActivitySessionState: Codable, Equatable, Sendable {
 }
 
 /// Who runs the HealthKit session. The phone when no watch is nearby, the
-/// watch when it is; the draft keeps the answer so a relaunch knows.
-public enum SessionSource: String, Codable, Sendable { case phone, watch }
+/// watch when it is; the draft keeps the answer so a relaunch knows. A demo
+/// runs on the phone with simulated watch packets and no Health session.
+public enum SessionSource: String, Codable, Sendable { case phone, watch, demo }
 
 /// Bluetooth SIG Heart Rate Measurement, supporting both 8-bit and 16-bit values.
 public enum HeartRateMeasurement {

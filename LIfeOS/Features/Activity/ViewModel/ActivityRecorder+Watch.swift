@@ -111,10 +111,11 @@ extension ActivityRecorder {
         persist()
     }
 
-    /// Raw bytes from the mirrored session. Anything not a current-version
-    /// packet is dropped without changing state.
+    /// Raw bytes from the mirrored session, or from the demo feed, which
+    /// speaks the same wire. Anything not a current-version packet is
+    /// dropped without changing state.
     func receiveWatchPacket(_ data: Data) {
-        guard active, hasSession, source == .watch, let packet = WatchWire.packet(from: data) else { return }
+        guard active, hasSession, source == .watch || source == .demo, let packet = WatchWire.packet(from: data) else { return }
         guard packet.sentAt >= Date.now.addingTimeInterval(-30), packet.sentAt <= Date.now.addingTimeInterval(60),
               lastWatchPacketAt.map({ packet.sentAt > $0 }) ?? true else { return }
         if let owner = packet.ownerID, owner != SurfaceCoordinator.shared.workoutOwnerID {

@@ -79,6 +79,35 @@ public struct BadmintonDemoScript: Equatable, Sendable {
         return analysis
     }
 
+    /// The id the demo's packets carry, so the recorder treats them as one
+    /// session the way it treats a Watch's.
+    public static let sessionID = UUID(uuidString: "6B4D1A70-DE30-4C11-9A5E-00BADD01DE70")!
+
+    /// One second of the demo as the Watch would report it: the counts at
+    /// this moment, and the rallies decided since `ralliesApplied` scored
+    /// onto `session`. Paused, the score stands and no reading is sent, as
+    /// a paused Watch sends none. No elapsed time travels: the phone owns
+    /// the clock in a demo, where the Watch owns it in a real session.
+    public func packet(at elapsed: Double, paused: Bool, session: BadmintonSession,
+                       ralliesApplied: Int, now: Date) -> (packet: WatchPacket, ralliesApplied: Int) {
+        let moment = state(at: elapsed)
+        var packet = WatchPacket(sentAt: now)
+        packet.sessionID = Self.sessionID
+        packet.paused = paused
+        packet.swingCount = moment.swingCount
+        packet.peakWristRotation = moment.peakRotation
+        packet.energyKcal = moment.energyKcal
+        var session = session
+        var applied = ralliesApplied
+        if !paused {
+            packet.heartRate = moment.heartRate
+            packet.heartRateAt = now
+            while applied < moment.rallyWins.count { session.record(moment.rallyWins[applied]); applied += 1 }
+        }
+        packet.badminton = session
+        return (packet, applied)
+    }
+
     /// One swing shaped like the detector keeps them: eight frames at least
     /// 0.12 s apart tracing a wrist turn, and the peaks the review charts.
     public static func swing(id: Int, time: Double, rotation: Double, acceleration: Double, twist: Double) -> SwingEvent {
