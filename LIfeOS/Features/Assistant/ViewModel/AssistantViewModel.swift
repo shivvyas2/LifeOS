@@ -24,6 +24,14 @@ final class AssistantViewModel {
     private(set) var eventsByMessage: [UUID: [CalendarEventSnapshot]] = [:]
     private(set) var isThinking = false
     private(set) var isAuthorized = false
+
+    #if DEBUG
+    /// Design previews run without calendar access; this answers `appear()`
+    /// in place of EventKit so the connected state can be drawn.
+    var previewAuthorized: Bool?
+    /// Design previews need a confirmation card on screen without a model turn.
+    func previewSeed(pending writes: [PendingWrite]) { pending = writes }
+    #endif
     var draft = ""
 
     private let chat: ChatStore
@@ -74,7 +82,15 @@ final class AssistantViewModel {
     func appear() async {
         conversationID = Self.loadOrCreateConversationID()
         reloadMessages()
+        #if DEBUG
+        if let previewAuthorized {
+            isAuthorized = previewAuthorized
+        } else {
+            isAuthorized = await eventKit.isAuthorized
+        }
+        #else
         isAuthorized = await eventKit.isAuthorized
+        #endif
         if isAuthorized { await sync.sync() }
     }
 
