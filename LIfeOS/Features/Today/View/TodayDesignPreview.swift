@@ -161,6 +161,14 @@ struct TodayDesignPreview: View {
                 NoteBlock(kind: .todo, text: "Book the physio"),
             ])
         }
+        // The notes pages want Groceries' to-dos too; the day pages re-seed
+        // them below with their due dates.
+        if let groceries = try? NotesStore(context: container.mainContext).document(titled: "Groceries") {
+            try? NotesStore(context: container.mainContext).update(groceries, blocks: [
+                NoteBlock(kind: .todo, text: "Buy oat milk"),
+                NoteBlock(kind: .todo, text: "Order the filter"),
+            ])
+        }
         if let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--scope=") })?.dropFirst(8) {
             switch String(raw) {
             case "all": notes.selection = .all
