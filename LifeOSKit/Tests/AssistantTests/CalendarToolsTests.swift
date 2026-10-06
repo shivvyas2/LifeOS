@@ -142,6 +142,19 @@ private final class FakeCalendar: CalendarReading, CalendarWriting, @unchecked S
         #expect(fake.created[0].notes == nil)
     }
 
+    @Test func createEventRecordsTheNewEventForTheReplyCard() async throws {
+        let fake = FakeCalendar()
+        let collector = CalendarEventCollector()
+        let tools = CalendarAssistant.tools(reading: fake, writing: fake, collector: collector)
+        let create = try #require(tools.first { $0.name == "create_event" })
+        _ = try await create.call(arguments([
+            "title": "Dentist", "start": "2026-08-26T12:00:00Z", "end": "2026-08-26T13:00:00Z",
+            "isAllDay": "false", "location": "", "notes": "",
+        ]))
+        let collected = await collector.collected()
+        #expect(collected.map(\.title) == ["Dentist"])
+    }
+
     @Test func updateRejectsAnUnknownID() async throws {
         let fake = FakeCalendar()
         let result = try await tool(named: "update_event", on: fake).call(arguments([
