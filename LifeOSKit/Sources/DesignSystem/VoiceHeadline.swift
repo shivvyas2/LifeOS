@@ -25,20 +25,22 @@ public struct VoiceHeadline: Equatable, Sendable {
         self.eyebrow = eyebrow; self.title = title; self.detail = detail
     }
 
+    /// The eyebrow names the state, not the screen: the header above the
+    /// masthead already says "Voice conversation", and two lines saying the
+    /// same thing a few points apart read as a mistake.
     public static func make(_ state: VoiceState) -> VoiceHeadline {
-        let eyebrow = "Voice conversation"
         switch state {
         case .idle:
-            return VoiceHeadline(eyebrow: eyebrow, title: "A moment for you",
+            return VoiceHeadline(eyebrow: "Ready", title: "A moment for you",
                                  detail: "Tap the microphone whenever you're ready.")
         case .listening:
-            return VoiceHeadline(eyebrow: eyebrow, title: "I'm listening",
+            return VoiceHeadline(eyebrow: "Listening", title: "I'm listening",
                                  detail: "Speak naturally. I'll follow along.")
         case .thinking:
-            return VoiceHeadline(eyebrow: eyebrow, title: "Connecting the dots…",
+            return VoiceHeadline(eyebrow: "Thinking", title: "Connecting the dots…",
                                  detail: "Making sense of your question.")
         case .speaking:
-            return VoiceHeadline(eyebrow: eyebrow, title: "Let's talk it through",
+            return VoiceHeadline(eyebrow: "Speaking", title: "Let's talk it through",
                                  detail: "Your answer is here to read, too.")
         }
     }

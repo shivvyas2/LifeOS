@@ -94,6 +94,7 @@ struct LifoCoachScreen: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(mode == .text ? "Your personal coach" : "Voice conversation").editorialEyebrow()
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                 Text("LIFO").font(Editorial.headline(22)).tracking(-0.5).foregroundStyle(ink)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -208,10 +209,12 @@ struct LifoCoachScreen: View {
             // the answer it was waiting for.
             if !model.pendingQuestion.isEmpty {
                 ChatTurn(question: model.pendingQuestion) {
-                    if model.answer.isEmpty {
-                        ChatThinking()
-                    } else {
+                    if !model.answer.isEmpty {
                         CoachResponseView(text: model.answer)
+                    } else if model.phase == .thinking {
+                        // Only while a reply is actually on its way: after a
+                        // failure the error line below says what happened.
+                        ChatThinking()
                     }
                 }
             }
@@ -349,7 +352,10 @@ struct LifoCoachScreen: View {
             .background(paper.ignoresSafeArea())
             .navigationTitle("Conversation")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showHistory = false } } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { showHistory = false } }
+                    .sharedBackgroundVisibility(.hidden)
+            }
         }
         .presentationDetents([.large])
     }
