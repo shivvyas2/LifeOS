@@ -20,6 +20,10 @@ final class NoteEditorViewModel {
     private(set) var blocks: [NoteBlock] = NoteBlock.blank
     private(set) var kind: NoteKind = .note
     private(set) var bucket: NoteBucket = .projects
+    private(set) var folderID: UUID?
+    private(set) var folderName: String?
+    /// Unfiled and not archived: the File chip reads `Inbox`.
+    private(set) var isInInbox = false
     private(set) var accent: NoteAccent = .sage
     private(set) var status: PlanStatus = .todo
     private(set) var entryDate: Date?
@@ -78,6 +82,9 @@ final class NoteEditorViewModel {
         blocks = document.blocks
         kind = document.kind
         bucket = document.bucket
+        folderID = document.folderID
+        folderName = document.folderID.flatMap { try? store.folder(id: $0)?.name }
+        isInInbox = document.isInInbox
         accent = document.accent
         status = document.status
         entryDate = document.entryDate
@@ -88,6 +95,35 @@ final class NoteEditorViewModel {
 
         try? store.markOpened(document)
         refreshLinks()
+    }
+
+    /// `Inbox`, `Projects`, or `Projects · Training`: what the chip reads.
+    var fileLabel: String {
+        if isInInbox { return "Inbox" }
+        if let folderName { return "\(bucket.title) · \(folderName)" }
+        return bucket.title
+    }
+
+    /// Files the page. Choosing a home is what takes a page out of the Inbox.
+    func file(to bucket: NoteBucket, folderID: UUID?) {
+        mutate { store, document in try store.move(document, to: bucket, folderID: folderID) }
+        self.bucket = bucket
+        self.folderID = folderID
+        folderName = folderID.flatMap { try? store?.folder(id: $0)?.name }
+        isInInbox = false
+    }
+
+    /// A folder made from the filing sheet, so a page can be put somewhere
+    /// that did not exist a moment ago.
+    func createFolder(named name: String, in bucket: NoteBucket) -> UUID? {
+        guard let store else { return nil }
+        let folder = try? store.createFolder(name: name, bucket: bucket)
+        requestSync()
+        return folder?.id
+    }
+
+    func moveTargets() -> [NoteMoveTarget] {
+        (try? store?.snapshot().moveTargets()) ?? []
     }
 
     private func refreshLinks() {
