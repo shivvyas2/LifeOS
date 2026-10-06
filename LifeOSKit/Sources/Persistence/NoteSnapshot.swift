@@ -25,6 +25,8 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
     public let taskCount: Int
     public let hasInk: Bool
     public let linkCount: Int
+    /// Unfiled and not archived: the page is still waiting to be put away.
+    public let isInInbox: Bool
 
     public init(
         id: UUID, title: String, icon: String, excerpt: String, accent: NoteAccent,
@@ -32,7 +34,7 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
         entryDate: Date?, dueDate: Date?, status: PlanStatus,
         updatedAt: Date, isFavorite: Bool, isArchived: Bool,
         doneCount: Int, taskCount: Int, hasInk: Bool, linkCount: Int,
-        createdAt: Date? = nil, openedAt: Date? = nil
+        createdAt: Date? = nil, openedAt: Date? = nil, isInInbox: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -55,6 +57,7 @@ public struct NoteCardSnapshot: Identifiable, Equatable, Sendable {
         self.taskCount = taskCount
         self.hasInk = hasInk
         self.linkCount = linkCount
+        self.isInInbox = isInInbox
     }
 
     public var progress: Double? {
@@ -100,19 +103,21 @@ public struct NotesSnapshot: Equatable, Sendable {
     public let recent: [NoteCardSnapshot]
     public let favorites: [NoteCardSnapshot]
     public let totalCount: Int
+    public let inboxCount: Int
 
     public init(
         folders: [NoteBucket: [NoteFolderSnapshot]] = [:],
         counts: [NoteBucket: Int] = [:],
         recent: [NoteCardSnapshot] = [],
         favorites: [NoteCardSnapshot] = [],
-        totalCount: Int = 0
+        totalCount: Int = 0, inboxCount: Int = 0
     ) {
         self.folders = folders
         self.counts = counts
         self.recent = recent
         self.favorites = favorites
         self.totalCount = totalCount
+        self.inboxCount = inboxCount
     }
 
     public static let empty = NotesSnapshot()
@@ -122,6 +127,26 @@ public struct NotesSnapshot: Equatable, Sendable {
     }
 
     public func count(in bucket: NoteBucket) -> Int { counts[bucket] ?? 0 }
+
+    /// Everywhere a page can be filed: each shelf in `NoteBucket.filing`
+    /// first, then its folders in tree order, each child named after its
+    /// parent. One list, so the editor's chip, a swipe and a long-press
+    /// cannot offer different places.
+    public func moveTargets() -> [NoteMoveTarget] {
+        var targets: [NoteMoveTarget] = []
+        for bucket in NoteBucket.filing {
+            targets.append(NoteMoveTarget(bucket: bucket, folderID: nil, title: bucket.title, depth: 0))
+            func walk(_ folders: [NoteFolderSnapshot], prefix: String, depth: Int) {
+                for folder in folders {
+                    let name = prefix.isEmpty ? folder.name : "\(prefix) / \(folder.name)"
+                    targets.append(NoteMoveTarget(bucket: bucket, folderID: folder.id, title: name, depth: depth))
+                    walk(folder.children, prefix: name, depth: depth + 1)
+                }
+            }
+            walk(folders(in: bucket), prefix: "", depth: 1)
+        }
+        return targets
+    }
 }
 
 /// A note that links to the note being read. Obsidian's backlinks pane, which
@@ -139,5 +164,36 @@ public struct NoteBacklink: Identifiable, Equatable, Sendable {
         self.title = title
         self.accent = accent
         self.context = context
+    }
+}
+
+/// Somewhere a page can be filed: a shelf, or a folder on one.
+public struct NoteMoveTarget: Identifiable, Hashable, Sendable {
+    public let bucket: NoteBucket
+    /// Nil for the shelf itself, which files the page loose on it.
+    public let folderID: UUID?
+    /// `Training / Drills` for a nested folder; the shelf's own name at the root.
+    public let title: String
+    /// 0 for the shelf, 1 for its folders, 2 for theirs.
+    public let depth: Int
+
+    public init(bucket: NoteBucket, folderID: UUID?, title: String, depth: Int = 0) {
+        self.bucket = bucket; self.folderID = folderID; self.title = title; self.depth = depth
+    }
+
+    public var id: String { "\(bucket.rawValue)-\(folderID?.uuidString ?? "root")" }
+
+    /// The last part of the title, for a row that shows its depth by indent.
+    public var leafName: String {
+        title.components(separatedBy: " / ").last ?? title
+    }
+
+    /// Greys out the place the page already is.
+    public func isCurrentHome(of card: NoteCardSnapshot) -> Bool {
+        card.bucket == bucket && card.folderID == folderID
+    }
+
+    public func isCurrentHome(bucket: NoteBucket, folderID: UUID?) -> Bool {
+        self.bucket == bucket && self.folderID == folderID
     }
 }
