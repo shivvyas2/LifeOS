@@ -74,9 +74,11 @@ public enum SurfaceRoute: Equatable, Sendable {
         if host == "day" {
             guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
                   items.count == 1, items[0].name == "date", let raw = items[0].value,
-                  // Exactly `YYYY-MM-DD`: the ISO formatter would otherwise swallow a trailing time.
+                  // Exactly `YYYY-MM-DD`: the ISO formatter would otherwise swallow a trailing time,
+                  // and it rolls `02-30` over to March, so the date has to print back as it came.
                   raw.count == 10, raw.allSatisfy({ $0.isNumber || $0 == "-" }),
-                  let date = Self.dayFormatter().date(from: raw) else { return nil }
+                  let date = Self.dayFormatter().date(from: raw),
+                  Self.dayFormatter().string(from: date) == raw else { return nil }
             self = .day(date)
             return
         }

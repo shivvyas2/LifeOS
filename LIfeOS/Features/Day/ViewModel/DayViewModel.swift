@@ -1,8 +1,11 @@
 import Foundation
 import SwiftData
+import os
 import AppSurfaces
 import DesignSystem
 import Persistence
+
+private let dayLog = Logger(subsystem: "com.shivvyas.lifeos", category: "day")
 
 /// Loads one day's briefing from the stores and the weather provider, and
 /// writes ticks and new tasks back through the same paths the editor uses.
@@ -16,6 +19,8 @@ final class DayViewModel {
     private var sync: NoteSyncing?
     private let calendar: Calendar
     private var weatherTask: Task<Void, Never>?
+    private var weatherTaskDay: Date?
+    private var weatherGeneration = 0
 
     init(date: Date, calendar: Calendar = .current) {
         self.date = calendar.startOfDay(for: date)
@@ -42,7 +47,9 @@ final class DayViewModel {
         load()
     }
 
-    /// Everything but the weather, synchronously; the weather follows.
+    /// Everything but the weather, synchronously; the weather follows. Each
+    /// section reads on its own: a store that throws blanks its rows, not
+    /// the day, and says so in the log where a release build keeps it.
     func load() {
         guard let context else { return }
         let placement = DayPlacement.of(date, calendar: calendar)
@@ -54,45 +61,61 @@ final class DayViewModel {
             weather: sections.contains(.weather) ? keptWeather : .hidden,
             agenda: [], checklist: [], readings: nil, workouts: [], spend: nil, nudges: [], dayLook: nil
         )
-        do {
-            briefing.agenda = try CalendarStore(context: context, calendar: calendar)
+        briefing.agenda = section("agenda") {
+            try CalendarStore(context: context, calendar: calendar)
                 .events(from: date, to: dayEnd)
                 .sorted { lhs, rhs in
                     if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
                     return lhs.startDate < rhs.startDate
                 }
-            briefing.checklist = try loadChecklist(context: context, editable: placement.isEditable)
-            if sections.contains(.readings) {
-                let metrics = MetricsStore(context: context, calendar: calendar)
+        } ?? []
+        briefing.checklist = section("checklist") {
+            try loadChecklist(context: context, editable: placement.isEditable)
+        } ?? []
+        if sections.contains(.readings) {
+            let metrics = MetricsStore(context: context, calendar: calendar)
+            briefing.readings = section("readings") {
                 let targets = try metrics.goals().targets
                 let row = try metrics.metrics(from: date, to: date).first
-                briefing.readings = DayReadings(
+                return DayReadings(
                     steps: row?.steps, stepsTarget: targets.steps,
                     sleepMinutes: row?.sleepMinutes, sleepTargetMinutes: targets.sleepMinutes,
                     weightKg: row?.weightKg, recoveryPct: row?.whoopRecoveryPct
                 )
-                briefing.workouts = try metrics.workouts(on: date).map {
+            }
+            briefing.workouts = section("workouts") {
+                try metrics.workouts(on: date).map {
                     DayWorkout(id: $0.externalID, title: $0.activityName, durationMinutes: $0.durationMinutes)
                 }
-            }
-            if sections.contains(.money) {
+            } ?? []
+        }
+        if sections.contains(.money) {
+            briefing.spend = section("money") {
                 let entries = try MoneyStore(context: context, calendar: calendar).entries(from: date, to: date)
                     .filter(\.isSpending)
                 let rows = entries.sorted { abs($0.amount) > abs($1.amount) }.prefix(3)
                     .map { DaySpendRow(id: $0.id, merchant: $0.merchant, amount: $0.amount) }
-                briefing.spend = DaySpending(total: -entries.map(\.amount).reduce(0, +), rows: Array(rows))
+                return DaySpending(total: -entries.map(\.amount).reduce(0, +), rows: Array(rows))
             }
-            if sections.contains(.nudges) {
-                let key = WeatherCache.dayKey(date, calendar: calendar)
-                briefing.nudges = PushService.shared.entries.filter { $0.day == key }
-                    .sorted { $0.receivedAt < $1.receivedAt }
-            }
-        } catch {
-            assertionFailure("Day load failed: \(error)")
+        }
+        if sections.contains(.nudges) {
+            let key = WeatherCache.dayKey(date, calendar: calendar)
+            briefing.nudges = PushService.shared.entries.filter { $0.day == key }
+                .sorted { $0.receivedAt < $1.receivedAt }
         }
         briefing.dayLook = dayLook(for: briefing)
         self.briefing = briefing
         if sections.contains(.weather) { loadWeather() }
+    }
+
+    private func section<Value>(_ name: String, _ read: () throws -> Value) -> Value? {
+        do {
+            return try read()
+        } catch {
+            dayLog.error("Day \(name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            assertionFailure("Day \(name) failed: \(error)")
+            return nil
+        }
     }
 
     private func loadChecklist(context: ModelContext, editable: Bool) throws -> [ChecklistRow] {
@@ -129,10 +152,14 @@ final class DayViewModel {
 
     // MARK: Weather
 
+    /// The cache first: fresh, it is the answer; stale, it shows while the
+    /// fresh one is fetched. One fetch per day at a time, so a save landing
+    /// mid-fetch neither restarts it nor flashes the error text in between.
     private func loadWeather() {
         guard let providers else { setWeather(.unavailable); return }
-        let cache = WeatherCache()
-        if let cached = cache.forecast(for: date, calendar: calendar), cached.isFresh(at: .now) {
+        let cache = WeatherCache(defaults: .currentAccount)
+        let cached = cache.forecast(for: date, calendar: calendar)
+        if let cached, cached.isFresh(at: .now) {
             setWeather(.ready(cached))
             return
         }
@@ -141,20 +168,30 @@ final class DayViewModel {
         case .denied: setWeather(.denied); return
         case .granted: break
         }
-        if case .ready = briefing?.weather {} else { setWeather(.loading) }
+        if let cached { setWeather(.ready(cached)) }
+        else if case .ready = briefing?.weather {} else { setWeather(.loading) }
         let day = date
+        if weatherTask != nil, weatherTaskDay == day { return }
         weatherTask?.cancel()
+        weatherGeneration += 1
+        let generation = weatherGeneration
+        weatherTaskDay = day
         weatherTask = Task {
+            defer {
+                if generation == weatherGeneration { weatherTask = nil; weatherTaskDay = nil }
+            }
             do {
                 let location = try await providers.location.currentLocation()
-                guard let forecast = try await providers.weather.forecast(for: day, at: location) else {
-                    if self.date == day { setWeather(.unavailable) }
-                    return
-                }
-                cache.store(forecast, calendar: calendar)
-                if self.date == day { setWeather(.ready(forecast)) }
+                let forecast = try await providers.weather.forecast(for: day, at: location)
+                if let forecast { cache.store(forecast, calendar: calendar) }
+                guard self.date == day else { return }
+                if let forecast { setWeather(.ready(forecast)) }
+                else if cached == nil { setWeather(.unavailable) }
             } catch {
-                if self.date == day { setWeather(.unavailable) }
+                // A cancelled fetch was replaced, not lost: the newer one reports.
+                guard !Task.isCancelled, !(error is CancellationError), self.date == day else { return }
+                dayLog.error("Day weather failed: \(error.localizedDescription, privacy: .public)")
+                if cached == nil { setWeather(.unavailable) }
             }
         }
     }
@@ -193,6 +230,7 @@ final class DayViewModel {
                 try plan.toggleTick(for: entry, on: date)
             }
         } catch {
+            dayLog.error("Day tick failed: \(error.localizedDescription, privacy: .public)")
             assertionFailure("Day tick failed: \(error)")
         }
         // `didSave` reloads the screen; nothing else to do here.
@@ -207,10 +245,12 @@ final class DayViewModel {
 
     /// Appends a to-do to the day's journal page, creating the page on the
     /// first add. A page that is only its blank paragraph gets the to-do in
-    /// its place rather than under it.
-    func add(_ text: String) {
+    /// its place rather than under it. Returns whether the to-do was
+    /// written, so the field can keep its text when it was not.
+    @discardableResult
+    func add(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let context, !trimmed.isEmpty, briefing?.placement.isEditable == true else { return }
+        guard let context, !trimmed.isEmpty, briefing?.placement.isEditable == true else { return false }
         let notes = NotesStore(context: context, calendar: calendar)
         do {
             let page = try notes.journalEntry(on: date)
@@ -219,8 +259,11 @@ final class DayViewModel {
             blocks.append(NoteBlock(kind: .todo, text: trimmed))
             try notes.update(page, blocks: blocks)
             requestSync()
+            return true
         } catch {
+            dayLog.error("Day add failed: \(error.localizedDescription, privacy: .public)")
             assertionFailure("Day add failed: \(error)")
+            return false
         }
     }
 

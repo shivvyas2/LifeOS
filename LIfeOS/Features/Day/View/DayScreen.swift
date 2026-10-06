@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 import DesignSystem
 import Persistence
 
@@ -8,6 +9,9 @@ import Persistence
 /// Today is the centre; a past day is a record, a day ahead a plan.
 struct DayScreen: View {
     @State private var model: DayViewModel
+    /// The date the shell asked for. A route that lands while the screen is
+    /// up changes it in place, and the model follows.
+    private let date: Date
     @Environment(\.modelContext) private var context
     @Environment(\.dayProviders) private var providers
     @Environment(\.noteSync) private var sync
@@ -28,6 +32,7 @@ struct DayScreen: View {
          onAddEvent: @escaping (Date) -> Void = { _ in },
          onOpenHabits: @escaping () -> Void = {}) {
         _model = State(initialValue: DayViewModel(date: date))
+        self.date = date
         self.onTapEvent = onTapEvent
         self.onAddEvent = onAddEvent
         self.onOpenHabits = onOpenHabits
@@ -93,7 +98,11 @@ struct DayScreen: View {
             model.attach(context, providers: providers, sync: sync)
             model.load()
         }
-        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+        .onChange(of: date) { _, newDate in model.goTo(newDate) }
+        // Saves arrive in bursts (a tick, a health sample, a sync); one reload
+        // a quarter second after the last is enough.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
             model.load()
         }
     }
@@ -172,8 +181,8 @@ struct DayScreen: View {
                 if briefing.placement.isEditable {
                     HairlineField(text: $newTask, placeholder: "Add a task", glyph: "plus", submitLabel: .done,
                                   onSubmit: {
-                                      model.add(newTask)
-                                      newTask = ""
+                                      // The text stays if the write failed, so nothing typed is lost.
+                                      if model.add(newTask) { newTask = "" }
                                   })
                 }
             }

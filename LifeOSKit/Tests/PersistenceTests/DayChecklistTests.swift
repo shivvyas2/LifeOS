@@ -33,6 +33,18 @@ import Foundation
         #expect(Set(rows.map(\.id)).count == 5)
     }
 
+    @Test func habitsAreARecordOnAnyDayButToday() {
+        let habit = DayChecklist.Habit(id: UUID(), title: "5km run", createdAt: day.addingTimeInterval(-86_400 * 30), streak: 0)
+        let journal = [NoteBlock(kind: .todo, text: "Draft the plan")]
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: day)!
+        let ahead = DayChecklist.rows(journal: journal, journalID: journalID, due: [], habits: [habit], ticked: [],
+                                      day: tomorrow, editable: true, calendar: calendar, now: day)
+        #expect(ahead.map(\.isEditable) == [true, false])
+        let today = DayChecklist.rows(journal: journal, journalID: journalID, due: [], habits: [habit], ticked: [],
+                                      day: day, editable: true, calendar: calendar, now: day.addingTimeInterval(3_600 * 15))
+        #expect(today.map(\.isEditable) == [true, true])
+    }
+
     @Test func aJournalToDoIsNotAlsoADueRow() {
         let block = NoteBlock(kind: .todo, text: "Draft the plan", dueDate: day)
         let rows = DayChecklist.rows(

@@ -361,9 +361,13 @@ public struct NotesStore {
     /// read from the day screen must not leave an empty page behind.
     public func journalEntryIfPresent(on date: Date) throws -> NoteDocument? {
         let day = calendar.startOfDay(for: date)
-        return try documents(includeArchived: true).first {
-            $0.kind == .journal && $0.entryDate.map { calendar.isDate($0, inSameDayAs: day) } == true
-        }
+        let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+        let kind = NoteKind.journal.rawValue
+        // A predicate, not a scan: the day screen asks on every save.
+        let dated = FetchDescriptor<NoteDocument>(predicate: #Predicate {
+            $0.kindRaw == kind && $0.entryDate.flatMap { $0 >= day && $0 < next } == true
+        })
+        return try context.fetch(dated).first { $0.deletedAt == nil }
     }
 
     /// Today's journal entry, created on first write rather than on first
