@@ -114,10 +114,13 @@ public enum CoachPresentation {
     /// and each later passage lets its section onto the screen as it plays.
     public static let spokenTrackInstruction = """
     Your reply will be spoken aloud and shown on screen, and the two parts are different.
-    Begin with exactly one line that starts with \(SpokenTrack.prefix) followed by what you \
-    would actually say out loud: one or two short, warm sentences in plain spoken English, \
-    the way a person talks to a friend, with at most one figure and no markdown, no list, \
-    no table, no quotation marks. Do not read out the details; the screen shows them.
+    The spoken parts are you talking, not text being read. Talk the way you would to a friend \
+    across a table: contractions, short sentences, one thought at a time, a reaction before a \
+    number (that's a good week), and figures said the way people say them out loud (seven hours \
+    twenty minutes, seventy-two percent), never as they are written in a table. Never read the \
+    screen out; say what it means, and mention it only naturally (I've put the numbers up for you).
+    Begin with exactly one line that starts with \(SpokenTrack.prefix) followed by the opening: \
+    one or two sentences, at most one figure, no markdown, no list, no table, no quotation marks.
     Then a blank line, then the written answer following the rules above, in sections.
     Before each later section you may add one more line starting with \(SpokenTrack.prefix): \
     one or two sentences that say what that section shows and why it matters, again with at \

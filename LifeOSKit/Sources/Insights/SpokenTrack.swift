@@ -151,10 +151,10 @@ public struct SpokenTrack: Equatable, Sendable {
         line.count < prefix.count && prefix.hasPrefix(line.uppercased())
     }
 
-    /// The passage as a voice should get it: no markup, no dashes, and no
-    /// quotation marks around the whole thing, which a model adds when told
-    /// to write what it would say.
+    /// The passage as a voice should get it: no markup, no dashes, no
+    /// quotation marks around the whole thing (which a model adds when told
+    /// to write what it would say), and figures in the words a person says.
     private static func cleanPassage(_ raw: String) -> String {
-        ResponseStyle.clean(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        SpokenForm.normalize(ResponseStyle.clean(raw)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
