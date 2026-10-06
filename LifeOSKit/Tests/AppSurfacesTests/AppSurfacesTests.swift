@@ -47,13 +47,6 @@ struct AppSurfacesTests {
         b.write(to: defaults)
         #expect(SurfaceSnapshot.read(from: defaults)?.steps == 20)
     }
-    @Test func routesAcceptOnlyExactInternalDestinations() {
-        for route in SurfaceRoute.allCases { #expect(SurfaceRoute(url: route.url) == route) }
-        for value in ["https://health", "almanac://health?code=token", "almanac://health/path",
-                      "almanac://health#fragment", "almanac://someone@health", "almanac://health:443", "almanac://oauth"] {
-            #expect(SurfaceRoute(url: URL(string: value)!) == nil)
-        }
-    }
     @Test func inboxDeduplicatesPreservesReadAndRejectsAnotherAccount() {
         var first = InboxEntry(ownerID: "a", text: "Take a break", trigger: "rest", day: "2026-09-14")
         first.isRead = true

@@ -568,6 +568,8 @@ struct RootView: View {
         case .health: tab = .health; selectHealthDate(.now)
         case .activity: showActivity = true
         case .notifications: showNotifications = true
+        // Placeholder until the day screen lands in this branch's Task 8.
+        case .day: tab = .today
         }
     }
 
