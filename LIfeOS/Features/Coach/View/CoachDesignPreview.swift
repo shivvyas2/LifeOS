@@ -2,35 +2,26 @@
 import SwiftUI
 import DesignSystem
 
-/// Visual fixtures only. Audio levels are simulated; no microphone or provider calls.
+/// Fixture pages for LIFO, mounted by `--design-preview` with `--page=coach`
+/// (a reply with cells, a table and steps), `coach-empty` (the opening) or
+/// `coach-voice` (the voice screen, listening, with a simulated level).
+/// Audio levels are simulated; no microphone or provider calls.
 struct CoachDesignPreview: View {
+    let page: String
     @State private var model = CoachViewModel()
-    @State private var simulatedAudio = ProcessInfo.processInfo.arguments.contains("--voice")
 
     var body: some View {
-        VStack(spacing: 0) {
-            if ProcessInfo.processInfo.arguments.contains("--controls") { previewControls }
-            LifoCoachScreen(model: model, onDismiss: {}, initialMode: ProcessInfo.processInfo.arguments.contains("--voice") ? .voice : .text)
-        }
-        .preferredColorScheme(.dark)
-        .task {
-            if !ProcessInfo.processInfo.arguments.contains("--empty") { model.history = [LifoTurn(question: "Give me a quick look at my week.", answer: Self.sample)] }
-        }
-        .task(id: simulatedAudio) { await animateSample() }
+        LifoCoachScreen(model: model, onDismiss: {}, initialMode: page == "coach-voice" ? .voice : .text)
+            .task {
+                if page != "coach-empty" {
+                    model.history = [LifoTurn(question: "Give me a quick look at my week.", answer: Self.sample)]
+                }
+                if page == "coach-voice" { await animateListening() }
+            }
     }
 
-    private var previewControls: some View {
-        HStack {
-            Text("PREVIEW · SAMPLE REPLY").font(.caption2)
-            Spacer()
-            Toggle("Sound", isOn: $simulatedAudio).font(.caption).fixedSize()
-        }
-        .padding(.horizontal, 16).padding(.vertical, 6)
-    }
-
-    private func animateSample() async {
-        model.phase = simulatedAudio ? .listening : .answered
-        guard simulatedAudio else { model.level = 0; return }
+    private func animateListening() async {
+        model.phase = .listening
         var time: Double = 0
         while !Task.isCancelled {
             let syllable = sin(time * 3.6) * 0.6
@@ -41,8 +32,8 @@ struct CoachDesignPreview: View {
         }
     }
 
-    private static let sample = """
-    Your week, at a glance. Here are the numbers you’ve recorded.
+    static let sample = """
+    Your week, at a glance. Here are the numbers you've recorded.
 
     | Metric | This week |
     | --- | --- |
@@ -60,6 +51,4 @@ struct CoachDesignPreview: View {
     - Pick one priority for tomorrow.
     """
 }
-
-#Preview { CoachDesignPreview() }
 #endif
