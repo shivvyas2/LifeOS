@@ -12,6 +12,9 @@ import Persistence
 /// month grids rather than on a pushed screen of their own.
 struct WeekBands: View {
     let model: MonthViewModel
+    /// Ids of the events a live query matched; their rows get a 6pt accent
+    /// dot before the time. Empty when nothing is being found.
+    var highlighted: Set<UUID> = []
     var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
     var onAddEvent: (Date) -> Void = { _ in }
 
@@ -76,10 +79,16 @@ struct WeekBands: View {
                     }
                     ForEach(rows) { event in
                         Button { onTapEvent(event) } label: {
-                            EditorialRow(event.timeLabel) {
-                                HStack(spacing: Space.half) {
-                                    Text(event.title).lineLimit(2)
-                                    Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold))
+                            HStack(alignment: .center, spacing: Space.half) {
+                                if highlighted.contains(event.id) {
+                                    Circle().fill(LifeOSTokens.accent).frame(width: 6, height: 6)
+                                        .accessibilityHidden(true)
+                                }
+                                EditorialRow(event.timeLabel) {
+                                    HStack(spacing: Space.half) {
+                                        Text(event.title).lineLimit(2)
+                                        Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold))
+                                    }
                                 }
                             }
                         }

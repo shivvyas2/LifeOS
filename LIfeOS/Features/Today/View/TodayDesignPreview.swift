@@ -7,8 +7,9 @@ import Persistence
 /// Fixture pages for Today, the calendar screen, the day sheet and Notes,
 /// mounted by `--design-preview` with `--page=today`, `today-empty`,
 /// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
-/// in Weekly), `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens
-/// the calendar pages on a given day.
+/// in Weekly), `calendar-find` (the calendar with `--query=` live), `day`,
+/// `day-past`, `notes` or `notes-empty`. `--select=` opens the calendar
+/// pages on a given day.
 struct TodayDesignPreview: View {
     let page: String
     @State private var fixture = TodayFixture()
@@ -24,6 +25,12 @@ struct TodayDesignPreview: View {
         return formatter.date(from: String(raw))
     }
 
+    /// `--query=den` opens the calendar with that text in the field, so the
+    /// results block and the grid marks can be captured without typing.
+    private var query: String {
+        ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--query=") })?.dropFirst(8).description ?? ""
+    }
+
     var body: some View {
         Group {
             switch page {
@@ -37,6 +44,8 @@ struct TodayDesignPreview: View {
                 NavigationStack { CalendarScreen(initialSelection: selected) }.modelContainer(fixture.container)
             case "schedule":
                 NavigationStack { CalendarScreen(initialMode: .weekly, initialSelection: selected) }.modelContainer(fixture.container)
+            case "calendar-find":
+                NavigationStack { CalendarScreen(initialSelection: selected, initialQuery: query) }.modelContainer(fixture.container)
             case "day":
                 DayDetailSheet(snapshot: fixture.day, onToggleHabit: { _ in })
             case "day-past":

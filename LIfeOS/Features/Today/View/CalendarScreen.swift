@@ -18,6 +18,9 @@ struct CalendarScreen: View {
     @Environment(\.layout) private var layout
     @Environment(\.dismiss) private var dismiss
     @State private var showDatePicker = false
+    /// What the person is finding. Trimmed for matching; the block and the
+    /// marks show only while the trimmed text is not empty.
+    @State private var query: String
 
     /// A day to open on instead of today. For previews and deep links; the
     /// header button passes nothing.
@@ -30,12 +33,14 @@ struct CalendarScreen: View {
     init(
         initialMode: CalendarMode = .monthly,
         initialSelection: Date? = nil,
+        initialQuery: String = "",
         onTapEvent: @escaping (CalendarEventSnapshot) -> Void = { _ in },
         onAddEvent: @escaping (Date) -> Void = { _ in },
         isCalendarConnected: Bool = true,
         onConnectCalendar: @escaping () -> Void = {}
     ) {
         _mode = State(initialValue: initialMode)
+        _query = State(initialValue: initialQuery)
         self.initialSelection = initialSelection
         self.onTapEvent = onTapEvent
         self.onAddEvent = onAddEvent
@@ -67,25 +72,54 @@ struct CalendarScreen: View {
         }
     }
 
+    private var quiet: Color { Editorial.quietInk(scheme) }
+
+    private var isFinding: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Everything the model holds: the two shown months and their padding.
+    /// Nothing is fetched on a keystroke.
+    private var results: [CalendarEventSnapshot] {
+        guard isFinding else { return [] }
+        return ScheduleSearch.matches(query, in: model.eventsByDay.values.flatMap { $0 })
+    }
+
+    /// Shows the week of an event: a result tap, and later a reply's events.
+    /// The query stays so several results can be visited.
+    private func reveal(_ event: CalendarEventSnapshot) {
+        withAnimation(.snappy(duration: 0.22)) {
+            model.select(event.startDate)
+            mode = .weekly
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
+                let found = results
+                let matchingDays = Set(found.map { calendar.startOfDay(for: $0.startDate) })
                 VStack(alignment: .leading, spacing: Space.x3) {
                     header
                     UnderlinePicker(
                         selection: $mode.animation(.snappy(duration: 0.22)),
                         options: [(.monthly, "Monthly"), (.weekly, "Weekly")]
                     )
+                    findField
+                    if isFinding {
+                        ScheduleResultsBlock(results: found, months: months, onSelect: reveal)
+                    }
                     if !isCalendarConnected { connectCard }
                     switch mode {
                     case .monthly:
                         VStack(alignment: .leading, spacing: Space.x4) {
                             ForEach(months, id: \.self) { month in
-                                monthBlock(month)
+                                monthBlock(month, matching: matchingDays)
                             }
                         }
                     case .weekly:
-                        WeekBands(model: model, onTapEvent: onTapEvent, onAddEvent: onAddEvent)
+                        WeekBands(model: model, highlighted: Set(found.map(\.id)),
+                                  onTapEvent: onTapEvent, onAddEvent: onAddEvent)
                     }
                     Button("Go back") { dismiss() }
                         .buttonStyle(.editorial(.secondary, fullWidth: true))
@@ -189,7 +223,11 @@ struct CalendarScreen: View {
         .editorialCard()
     }
 
-    private func monthBlock(_ month: Date) -> some View {
+    private var findField: some View {
+        HairlineField(text: $query, placeholder: ScheduleFindText.placeholder)
+    }
+
+    private func monthBlock(_ month: Date, matching: Set<Date>) -> some View {
         let isCurrent = calendar.isDate(month, equalTo: .now, toGranularity: .month)
         return VStack(alignment: .leading, spacing: Space.x2) {
             Text(month.formatted(.dateTime.month(.wide)))
@@ -200,7 +238,7 @@ struct CalendarScreen: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
                 ForEach(MonthGridLayout.cells(monthContaining: month, calendar: calendar, today: .now, status: { _ in .noData })) { cell in
                     if let date = cell.date {
-                        dayCell(date)
+                        dayCell(date, isMatch: matching.contains(calendar.startOfDay(for: date)))
                     } else {
                         Color.clear.frame(height: 48)
                     }
@@ -213,9 +251,10 @@ struct CalendarScreen: View {
     /// A tap selects the day and turns the screen to its week. Nothing is
     /// pushed: the week appears under the same masthead, with this day's
     /// band open.
-    private func dayCell(_ date: Date) -> some View {
+    private func dayCell(_ date: Date, isMatch: Bool) -> some View {
         let state = MonthDayState.of(date, calendar: calendar)
         let count = model.events(on: date).count
+        let mark: Color = state == .today ? paper : (isMatch ? LifeOSTokens.accent : ink)
         return Button {
             model.select(date)
             withAnimation(.snappy(duration: 0.22)) { mode = .weekly }
@@ -227,11 +266,11 @@ struct CalendarScreen: View {
                 }
                 VStack(spacing: 3) {
                     Text(date.formatted(.dateTime.day()))
-                        .font(LifeOSType.label.weight(state == .today ? .semibold : .regular))
+                        .font(LifeOSType.label.weight(state == .today || isMatch ? .semibold : .regular))
                         .monospacedDigit()
-                        .foregroundStyle(state == .today ? paper : ink)
+                        .foregroundStyle(mark)
                     Circle()
-                        .fill(state == .today ? paper : ink)
+                        .fill(mark)
                         .frame(width: 3, height: 3)
                         .opacity(count > 0 ? 1 : 0)
                 }
