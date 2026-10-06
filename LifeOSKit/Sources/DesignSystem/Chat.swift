@@ -105,11 +105,14 @@ public struct ChatComposer<Accessory: View>: View {
         }
     }
 
+    /// `.submitLabel(.send)`: on a multi-line field the Return key inserts a
+    /// newline unless the submit label says otherwise, and a composer whose
+    /// Return key does nothing but add lines is not a composer.
     @ViewBuilder private var field: some View {
         if let focus {
-            TextField(placeholder, text: $text, axis: .vertical).focused(focus)
+            TextField(placeholder, text: $text, axis: .vertical).focused(focus).submitLabel(.send)
         } else {
-            TextField(placeholder, text: $text, axis: .vertical)
+            TextField(placeholder, text: $text, axis: .vertical).submitLabel(.send)
         }
     }
 }

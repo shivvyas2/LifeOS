@@ -53,6 +53,10 @@ struct AssistantSheet: View {
                         .padding(.bottom, 12)
                 }
             }
+            // The same cap LIFO uses: full screen on an iPad is not a reason
+            // for a question to run the width of the room.
+            .frame(maxWidth: 800)
+            .frame(maxWidth: .infinity)
             .background(paper.ignoresSafeArea())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
