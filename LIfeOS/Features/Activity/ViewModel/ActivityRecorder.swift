@@ -32,6 +32,14 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
     var badminton: BadmintonSession?
     static let badminton = "Badminton"
     private static let badmintonSetupKey = "activity.badminton.setup"
+    /// The finished demo as a review: a record shaped like a saved badminton
+    /// workout that was never inserted, so the real review screen opens it
+    /// and nothing in the store, the totals or the coach's digest counts it.
+    private(set) var demoReview: WorkoutRecord?
+    private var demoFeed: BadmintonDemoFeed?
+    /// The row the last finish wrote, so the saved screen can open that
+    /// session rather than the list it belongs to.
+    private(set) var savedRecordID: String?
     func saveAthlete(_ profile: ActivityAthleteProfile) {
         guard profile.isValid else { return }
         athlete = profile; profile.save(to: defaults)
@@ -171,6 +179,8 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         defer { if let mirrored = watch?.session { adoptMirroredSession(mirrored) } }
         guard let data = defaults.data(forKey: Self.draftKey),
               let draft = try? JSONDecoder().decode(Draft.self, from: data) else { return }
+        // A demo does not survive a relaunch: nothing it held was worth keeping.
+        if draft.source == .demo { defaults.removeObject(forKey: Self.draftKey); return }
         recordingHealth = draft.recordsHealth == true
         // A watch draft records to Health on the wrist, so `recordsHealth` is
         // false for it; reading that back as the toggle would silently turn
@@ -307,6 +317,41 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
             self.error = "Could not start activity: \(error.localizedDescription)"
         }
     }
+    /// A badminton match played by the scripted demo: a phone timer with no
+    /// Health session and no Watch, fed simulated packets through the Watch
+    /// path, so the live screen behaves as it would with a Watch on the
+    /// racket wrist. Finishing yields `demoReview`; nothing is stored.
+    func startDemo(tick: Duration = .seconds(1), timeScale: Double = 1) {
+        guard active, !busy, !hasSession else { return }
+        pendingVideoID = nil; pendingSplit = nil; following = nil
+        watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; swingMoments = []; peakWristRotation = nil
+        busy = true; error = nil; notice = nil; saved = false; healthSaved = false; collectionEnded = false; timer = nil
+        demoReview = nil; savedRecordID = nil
+        defer { busy = false }
+        selection = ActivityCatalog.type(named: Self.badminton) ?? selection
+        zones = HeartRateZones(birthDate: birthDate()); capacity = loadCapacity()
+        effort = EffortAccumulator(); lastReadingAt = nil
+        source = .demo
+        reps = nil; setIndex = nil; completedSets = []
+        badminton = BadmintonDemoScript.match
+        recordingHealth = false
+        timer = ActivitySessionState(activity: selection.name, at: .now)
+        persist()
+        let feed = BadmintonDemoFeed(recorder: self, tick: tick, timeScale: timeScale)
+        demoFeed = feed
+        feed.start()
+    }
+    /// The demo as the review screen reads it. Court time and motion are the
+    /// script's seconds, which the feed may have run faster than the clock.
+    private func demoRecord(_ timer: ActivitySessionState) -> WorkoutRecord {
+        let elapsed = timer.elapsed() * (demoFeed?.timeScale ?? 1)
+        let row = WorkoutRecord(externalID: "almanac-demo:\(timer.id.uuidString)", start: timer.startedAt,
+                                durationMinutes: Int(elapsed / 60), activityName: timer.activity, energyKcal: energy)
+        let script = demoFeed?.script ?? BadmintonDemoScript()
+        row.swingAnalysisData = try? JSONEncoder().encode(script.analysis(through: elapsed, profile: athlete))
+        if let badminton, badminton.isValid { row.badmintonData = try? JSONEncoder().encode(badminton) }
+        return row
+    }
     func togglePause() {
         guard !busy else { return }
         if source == .watch {
@@ -364,7 +409,16 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 guard workout != nil else { throw CocoaError(.fileWriteUnknown) }
                 healthSaved = true; persist(); session?.end()
             }
-            guard active, let context, let timer else { return }
+            guard active, let timer else { return }
+            if source == .demo {
+                demoReview = demoRecord(timer)
+                demoFeed?.stop(); demoFeed = nil
+                liveActivity.end()
+                saved = true; defaults.removeObject(forKey: Self.draftKey)
+                onSaved?()
+                return
+            }
+            guard let context else { return }
             var id = watchSessionID.map { "almanac-watch:\($0.uuidString)" } ?? "almanac:\(timer.id.uuidString)"
             if source == .watch, watchSessionID == nil {
                 let start = timer.startedAt
@@ -384,6 +438,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
                 context.insert(row)
             }
             try context.save()
+            savedRecordID = id
             liveActivity.end()
             saved = true; defaults.removeObject(forKey: Self.draftKey)
             sensor.stopStreaming()
@@ -430,6 +485,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         watchSessionID = nil; lastWatchPacketAt = nil; swingCount = nil; swingMoments = []; peakWristRotation = nil
         source = .phone; reps = nil; setIndex = nil; completedSets = []; badminton = nil
         pendingVideoID = nil; pendingSplit = nil; following = nil
+        demoFeed?.stop(); demoFeed = nil; demoReview = nil; savedRecordID = nil
         error = nil; notice = nil; busy = false
         defaults.removeObject(forKey: Self.draftKey)
     }

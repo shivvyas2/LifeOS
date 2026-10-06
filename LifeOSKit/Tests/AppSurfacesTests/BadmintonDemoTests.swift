@@ -72,6 +72,32 @@ import Foundation
         #expect(BadmintonDemoScript(seed: 3) == BadmintonDemoScript(seed: 3))
         #expect(BadmintonDemoScript(seed: 3) != BadmintonDemoScript(seed: 4))
     }
+
+    @Test func aPacketCarriesTheMomentsCountsAndAppliesNewRallies() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let second = script.rallies[1].time + 0.5
+        let (packet, applied) = script.packet(at: second, paused: false, session: BadmintonDemoScript.match, ralliesApplied: 1, now: now)
+        // The phone keeps its own clock during a demo, so no elapsed time
+        // travels in the packet to resynchronize it.
+        #expect(packet.sentAt == now && packet.elapsed == nil && packet.paused == false)
+        #expect(packet.sessionID == BadmintonDemoScript.sessionID)
+        #expect(packet.swingCount == script.state(at: second).swingCount)
+        #expect(packet.peakWristRotation == script.state(at: second).peakRotation)
+        #expect(packet.heartRate == script.state(at: second).heartRate && packet.heartRateAt == now)
+        #expect(packet.energyKcal == script.state(at: second).energyKcal)
+        #expect(applied == 2)
+        var expected = BadmintonDemoScript.match
+        expected.record(script.rallies[1].winner)
+        #expect(packet.badminton == expected)
+    }
+
+    @Test func aPausedPacketAppliesNoRallies() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let (packet, applied) = script.packet(at: 400, paused: true, session: BadmintonDemoScript.match, ralliesApplied: 0, now: now)
+        #expect(packet.paused == true && applied == 0)
+        #expect(packet.badminton == BadmintonDemoScript.match)
+        #expect(packet.heartRate == nil)
+    }
 }
 
 @Suite struct SwingAnalysisStatusTests {
