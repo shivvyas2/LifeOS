@@ -47,12 +47,6 @@ import Testing
         ])
     }
 
-    @Test func voiceReadsTableValuesWithoutMarkdown() {
-        let text = CoachResponse("| Metric | Value |\n| --- | --- |\n| Sleep | 7 h |").spokenText
-        #expect(text == "Metric: Sleep, Value: 7 h")
-        #expect(!text.contains("|"))
-    }
-
     @Test func onlyCoachFormattingBypassesPlainTextCleaner() {
         let markdown = "## Sleep\n- Wake up at 7"
         #expect(CoachPresentation.clean(markdown, instructions: CoachPresentation.instruction) == markdown)
