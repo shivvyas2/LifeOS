@@ -9,22 +9,41 @@ import Foundation
 /// through, and this catches it before the voice does.
 public enum SpokenForm {
     public static func normalize(_ text: String) -> String {
-        var out = text
-        // Hours and minutes together, then alone.
-        out = replace(out, #"(\d+)h\s*(\d+)m\b"#) { g in
-            "\(g[0]) \(plural(g[0], "hour")) \(Int(g[1]).map(String.init) ?? g[1]) \(plural(g[1], "minute"))"
+        rules.reduce(text) { partial, rule in replace(partial, rule.regex, rule.make) }
+    }
+
+    /// One substitution: a compiled pattern and what to make of its groups.
+    /// `NSRegularExpression` is immutable and thread-safe, which is what the
+    /// unchecked conformance vouches for.
+    private struct Rule: @unchecked Sendable {
+        let regex: NSRegularExpression
+        let make: @Sendable ([String]) -> String
+        init(_ regex: NSRegularExpression, _ make: @escaping @Sendable ([String]) -> String) {
+            self.regex = regex; self.make = make
         }
-        out = replace(out, #"(\d+)h\b"#) { g in "\(g[0]) \(plural(g[0], "hour"))" }
-        out = replace(out, #"(\d+)\s*min\b"#) { g in "\(g[0]) \(plural(g[0], "minute"))" }
-        out = replace(out, #"(\d+(?:\.\d+)?)%"#) { g in "\(g[0]) percent" }
-        out = replace(out, #"\s*/\s*day\b"#) { _ in " a day" }
-        out = replace(out, #"(\d+(?:\.\d+)?)\s*kg\b"#) { g in "\(g[0]) \(plural(g[0], "kilogram"))" }
-        out = replace(out, #"(\d+(?:\.\d+)?)\s*km\b"#) { g in "\(g[0]) \(plural(g[0], "kilometre"))" }
-        out = replace(out, #"(\d+)\s*bpm\b"#) { g in "\(g[0]) beats per minute" }
-        out = replace(out, #"(\d+)\s*ms\b"#) { g in "\(g[0]) milliseconds" }
-        out = replace(out, #"(\d+)\s*-\s*(\d+)"#) { g in "\(g[0]) to \(g[1])" }
-        out = replace(out, #"\s*·\s*"#) { _ in ", " }
-        return out
+    }
+
+    /// Compiled once: `normalize` runs on every streamed chunk.
+    private static let rules: [Rule] = [
+        // Hours and minutes together, then alone.
+        Rule(compile(#"(\d+)h\s*(\d+)m\b"#), { g in
+            "\(g[0]) \(plural(g[0], "hour")) \(Int(g[1]).map(String.init) ?? g[1]) \(plural(g[1], "minute"))" }),
+        Rule(compile(#"(\d+)h\b"#), { g in "\(g[0]) \(plural(g[0], "hour"))" }),
+        Rule(compile(#"(\d+)\s*min\b"#), { g in "\(g[0]) \(plural(g[0], "minute"))" }),
+        Rule(compile(#"(\d+(?:\.\d+)?)%"#), { g in "\(g[0]) percent" }),
+        Rule(compile(#"\s*/\s*day\b"#), { _ in " a day" }),
+        Rule(compile(#"(\d+(?:\.\d+)?)\s*kg\b"#), { g in "\(g[0]) \(plural(g[0], "kilogram"))" }),
+        Rule(compile(#"(\d+(?:\.\d+)?)\s*km\b"#), { g in "\(g[0]) \(plural(g[0], "kilometre"))" }),
+        Rule(compile(#"(\d+)\s*bpm\b"#), { g in "\(g[0]) beats per minute" }),
+        Rule(compile(#"(\d+)\s*ms\b"#), { g in "\(g[0]) milliseconds" }),
+        Rule(compile(#"(\d+)\s*-\s*(\d+)"#), { g in "\(g[0]) to \(g[1])" }),
+        Rule(compile(#"\s*·\s*"#), { _ in ", " }),
+    ]
+
+    private static func compile(_ pattern: String) -> NSRegularExpression {
+        // The patterns are literals above; a typo there is a programming
+        // error, not a runtime condition.
+        try! NSRegularExpression(pattern: pattern)
     }
 
     private static func plural(_ value: String, _ unit: String) -> String {
@@ -32,8 +51,7 @@ public enum SpokenForm {
     }
 
     /// Replaces each match with what the closure makes of its capture groups.
-    private static func replace(_ text: String, _ pattern: String, _ make: ([String]) -> String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+    private static func replace(_ text: String, _ regex: NSRegularExpression, _ make: ([String]) -> String) -> String {
         let ns = text as NSString
         var out = ""
         var cursor = 0

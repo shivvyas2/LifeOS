@@ -44,10 +44,10 @@ nonisolated enum ElevenLabsVoiceClient {
             // Lower stability and a little style let the delivery move the
             // way a person's does; a flat, perfectly stable read is the sound
             // of text to speech. Speaker boost keeps the voice present at
-            // phone volume, and text normalisation says a number out loud
-            // rather than spelling it.
+            // phone volume. Numbers arrive already written as words
+            // (`SpokenForm`): Flash does not support the API's own
+            // normalisation.
             "voice_settings": ["stability": 0.35, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": true],
-            "apply_text_normalization": "auto",
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -103,9 +103,36 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
     /// Called once, when the last queued segment has ended or playback was stopped.
     var onFinish: (() -> Void)?
 
+    /// True while more passages are still being fetched, so a queue that
+    /// drains between them idles rather than ending the narration. The
+    /// view model sets it; the player only reads it.
+    var holdsForMore = false
+    /// Whether a segment is playing right now.
+    var isPlaying: Bool { player != nil }
+
     private var player: AVAudioPlayer?
     private var meteringTask: Task<Void, Never>?
     private var queue: [VoiceSegment] = []
+    private var observers: [NSObjectProtocol] = []
+
+    override init() {
+        super.init()
+        // A call, Siri, or headphones unplugged pause the player and the
+        // delegate never fires; without this the narration would hang with
+        // the screen half revealed. Stopping fires `onFinish`, which
+        // reveals everything and closes the turn.
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let type = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
+            guard type == .began else { return }
+            Task { @MainActor [weak self] in self?.stop() }
+        })
+        observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+            let reason = (note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+            guard reason == .oldDeviceUnavailable else { return }
+            Task { @MainActor [weak self] in self?.stop() }
+        })
+    }
 
     /// Starts a fresh narration. Anything playing stops first.
     func play(_ segments: [VoiceSegment]) {
@@ -143,6 +170,9 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
 
     private func playNext() {
         guard !queue.isEmpty else {
+            // Drained while passages are still on their way: idle, still
+            // speaking as far as the screen is concerned, until `append`.
+            if holdsForMore { return }
             if isSpeaking { stop(notifying: true) }
             return
         }

@@ -11,6 +11,9 @@ struct CoachResponseView: View {
     /// raises it as each passage starts, so a section arrives with the
     /// sentence about it.
     var revealed: Int? = nil
+    /// Whether blocks rise in as they appear. The answer in flight animates;
+    /// a turn already in the transcript must not blink when it gets there.
+    var animates = true
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -23,7 +26,7 @@ struct CoachResponseView: View {
         return VStack(alignment: .leading, spacing: Space.x2) {
             ForEach(Array(shown.enumerated()), id: \.offset) { index, block in
                 blockView(block)
-                    .modifier(BlockReveal(index: index))
+                    .modifier(BlockReveal(index: index, enabled: animates))
             }
         }
         .foregroundStyle(ink)
@@ -134,17 +137,22 @@ struct CoachResponseView: View {
 /// on screen is never re-animated when the text under it streams on.
 private struct BlockReveal: ViewModifier {
     let index: Int
+    var enabled = true
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .opacity(shown ? 1 : 0)
-            .offset(y: shown || reduceMotion ? 0 : 10)
-            .onAppear {
-                let delay = Double(min(index, 5)) * 0.14
-                withAnimation(.easeOut(duration: 0.4).delay(delay)) { shown = true }
-            }
+        if enabled {
+            content
+                .opacity(shown ? 1 : 0)
+                .offset(y: shown || reduceMotion ? 0 : 10)
+                .onAppear {
+                    let delay = Double(min(index, 5)) * 0.14
+                    withAnimation(.easeOut(duration: 0.4).delay(delay)) { shown = true }
+                }
+        } else {
+            content
+        }
     }
 }
 

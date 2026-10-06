@@ -229,7 +229,7 @@ struct LifoCoachScreen: View {
 
     private func turnView(question: String, answer: String, sent: SentContext?) -> some View {
         ChatTurn(question: question) {
-            CoachResponseView(text: answer)
+            CoachResponseView(text: answer, animates: false)
             if let sent { sentView(sent) }
         }
     }
@@ -302,7 +302,7 @@ struct LifoCoachScreen: View {
                     }
                 } else if let turn = model.history.last {
                     ChatTurn(question: turn.question) {
-                        CoachResponseView(text: turn.answer)
+                        CoachResponseView(text: turn.answer, animates: false)
                         if let sent = turn.sent { sentView(sent) }
                     }
                 }

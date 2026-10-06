@@ -124,7 +124,15 @@ final class CoachViewModel {
     /// keep that passage's sections filling in.
     private var lastStartedSegment: Int?
     private var narrationStarted = false
-    private var narrationTask: Task<Void, Never>?
+    /// Every fetch task of the turn, so stopping cancels all of them: the
+    /// opening's task and the later passages' task run back to back.
+    private var narrationTasks: [Task<Void, Never>] = []
+    /// Passages still being fetched. While any remain, a drained player
+    /// idles rather than ending the turn.
+    private var pendingPassages = 0
+    /// Premium or device voice, decided once per turn on the first passage,
+    /// so one answer is never spoken by two voices.
+    private var premiumThisTurn: Bool?
     private let voiceBudget = VoiceBudget(defaults: .currentAccount)
     /// The premium synthesiser. A closure so a design preview can hand in a
     /// stub that returns a moment of silence and the staged reveal can be
@@ -343,33 +351,49 @@ final class CoachViewModel {
             }
         }
         player.onFinish = { [weak self] in
-            self?.completeNarration(turn)
+            guard let self, self.pendingPassages == 0 else { return }
+            self.completeNarration(turn)
         }
         let synthesize = self.synthesize
         let budget = voiceBudget
-        let previous = narrationTask
-        narrationTask = Task { [weak self] in
+        pendingPassages += passages.count
+        player.holdsForMore = true
+        let previous = narrationTasks.last
+        let task = Task { [weak self] in
             await previous?.value
             for passage in passages {
                 guard !Task.isCancelled, let self, turn == self.turnID else { return }
+                let premium: Bool
+                if let decided = self.premiumThisTurn {
+                    premium = decided
+                } else {
+                    premium = budget.remaining() >= passage.text.count
+                    self.premiumThisTurn = premium
+                }
                 let audio: Data?
-                if budget.remaining() >= passage.text.count {
+                if premium {
                     budget.debit(passage.text.count)
+                    self.voiceNotice = nil
                     audio = try? await synthesize(passage.text, voice, key)
                 } else {
                     self.voiceNotice = "Premium voice resumes on the 1st"
                     audio = try? await DeviceVoiceClient.speech(for: passage.text)
                 }
                 guard !Task.isCancelled, turn == self.turnID else { return }
-                guard let audio else { continue }
-                let segment = VoiceSegment(index: passage.index, audio: audio)
-                if self.narrationStarted { player.append([segment]) } else { player.play([segment]); self.narrationStarted = true }
-            }
-            // Nothing played at all (every fetch failed): show everything.
-            if let self, turn == self.turnID, !self.narrationStarted {
-                self.completeNarration(turn)
+                self.pendingPassages -= 1
+                player.holdsForMore = self.pendingPassages > 0
+                if let audio {
+                    let segment = VoiceSegment(index: passage.index, audio: audio)
+                    if self.narrationStarted { player.append([segment]) } else { player.play([segment]); self.narrationStarted = true }
+                } else if self.pendingPassages == 0, !player.isPlaying {
+                    // The last fetch failed and nothing is playing: show
+                    // everything now rather than waiting for a sound that
+                    // will not come.
+                    self.completeNarration(turn)
+                }
             }
         }
+        narrationTasks.append(task)
     }
 
     /// The narration is over, one way or another: the whole answer is on
@@ -448,8 +472,10 @@ final class CoachViewModel {
     /// Stops whatever is being said. Asking a new question while the last
     /// answer is still being read out should not produce two voices.
     func stopSpeaking() {
-        narrationTask?.cancel()
-        narrationTask = nil
+        narrationTasks.forEach { $0.cancel() }
+        narrationTasks = []
+        pendingPassages = 0
+        voicePlayer.holdsForMore = false
         voicePlayer.stop()
         completeNarration(turnID)
     }
@@ -514,6 +540,8 @@ final class CoachViewModel {
         currentTrack = nil
         lastStartedSegment = nil
         narrationStarted = false
+        pendingPassages = 0
+        premiumThisTurn = nil
         latestShown = ""
         heldTurn = nil
         revealTimeout?.cancel()
@@ -598,12 +626,18 @@ final class CoachViewModel {
                     latestShown = shown
                     currentTrack = final
                     if !holdingAnswer { answer = shown }
+                    if let started = lastStartedSegment, revealedBlocks != nil {
+                        revealedBlocks = final.revealedBlocks(throughSegment: started)
+                    }
                     let passages = final.segments.enumerated().compactMap { index, segment in
                         segment.spoken.map { (index: index, text: $0) }
                     }
                     if spokeThisTurn {
-                        // The opening is already playing; queue the rest.
-                        queuePassages(passages.filter { $0.index > 0 }, turn: turnID)
+                        // The opening is already playing or on its way; queue
+                        // the rest. With nothing after it, the opening's own
+                        // finish, or the timeout below, closes the turn.
+                        let rest = passages.filter { $0.index > 0 }
+                        if !rest.isEmpty { queuePassages(rest, turn: turnID) }
                     } else if !passages.isEmpty {
                         spokeThisTurn = true
                         queuePassages(passages, turn: turnID)
@@ -705,6 +739,8 @@ final class CoachViewModel {
         revealedBlocks = 0
         lastStartedSegment = nil
         narrationStarted = false
+        pendingPassages = 0
+        premiumThisTurn = nil
         pendingQuestion = "Give me a quick look at my week."
         answer = ""
         phase = .answered

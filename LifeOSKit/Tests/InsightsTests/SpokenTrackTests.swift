@@ -134,6 +134,19 @@ import Testing
         #expect(two.segments[2].spoken == nil)
     }
 
+    @Test func theCapNeverCutsInsideANumber() {
+        // "7.4" has a full stop in it; a cap landing there must not end the
+        // passage on "averaged 7." A sentence ends at a stop followed by a
+        // space or the end of the text.
+        let track = SpokenTrack(parsing: "SAY: You averaged 7.4 hours, which is solid. Keep it up.\n\nDetail.", final: true)
+        #expect(track.capped(to: 20).opening == "You averaged 7.4 hours, which is solid.")
+        #expect(track.capped(to: 46).opening == "You averaged 7.4 hours, which is solid.")
+        let later = SpokenTrack(parsing: "SAY: Opening here.\n\nA.\n\nSAY: Recovery sits at 72.5 percent today. Fine.\n", final: true)
+        // Budget for the opening plus a cut inside "72.5": nothing of the
+        // second passage survives rather than a half number.
+        #expect(later.capped(to: 14 + 22).segments[1].spoken == nil)
+    }
+
     @Test func theInstructionAsksForThePrefixAndTheWrittenRulesDoNot() {
         #expect(CoachPresentation.spokenTrackInstruction.contains(SpokenTrack.prefix))
         #expect(CoachPresentation.spokenTrackInstruction.contains("four"))
