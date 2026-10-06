@@ -36,8 +36,14 @@ struct CoachDesignPreview: View {
                             if let failing, call == failing { throw VoiceSynthesisError.remoteFailed }
                             return Self.silence(seconds: 0.8)
                         }
+                        // The budget persists on the simulator between runs,
+                        // so a run that is not about the budget starts the
+                        // month fresh, and one that is spends exactly the rest.
+                        let budget = VoiceBudget(defaults: .currentAccount)
                         if args.contains("--budget-spent") {
-                            VoiceBudget(defaults: .currentAccount).debit(VoiceBudget.monthlyAllowance)
+                            budget.debit(budget.remaining())
+                        } else {
+                            UserDefaults.currentAccount.removeObject(forKey: VoiceBudget.key(for: .now, calendar: .current))
                         }
                         try? await Task.sleep(for: .milliseconds(600))
                         model.previewNarrate(Self.narrated)

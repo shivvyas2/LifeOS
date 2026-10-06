@@ -132,15 +132,29 @@ public struct SpokenTrack: Equatable, Sendable {
     /// the first sentence survives even when it is longer than the limit; a
     /// voice that says nothing is worse than one that runs a little long.
     private static func cut(_ text: String, to limit: Int, keepAtLeastOneSentence: Bool) -> String {
-        let clipped = String(text.prefix(limit))
-        if let lastStop = clipped.lastIndex(where: { ".!?".contains($0) }) {
-            return String(clipped[...lastStop]).trimmingCharacters(in: .whitespaces)
+        let ends = sentenceEnds(in: text)
+        if let last = ends.last(where: { text.distance(from: text.startIndex, to: $0) < limit }) {
+            return String(text[...last]).trimmingCharacters(in: .whitespaces)
         }
         guard keepAtLeastOneSentence else { return "" }
-        if let firstStop = text.firstIndex(where: { ".!?".contains($0) }) {
-            return String(text[...firstStop])
-        }
+        if let first = ends.first { return String(text[...first]) }
         return text
+    }
+
+    /// Where sentences end: a stop followed by whitespace or the end of the
+    /// text. The point in "7.4" is not one, which is what keeps a cut from
+    /// landing inside a number.
+    private static func sentenceEnds(in text: String) -> [String.Index] {
+        var ends: [String.Index] = []
+        var index = text.startIndex
+        while index < text.endIndex {
+            if ".!?".contains(text[index]) {
+                let next = text.index(after: index)
+                if next == text.endIndex || text[next].isWhitespace { ends.append(index) }
+            }
+            index = text.index(after: index)
+        }
+        return ends
     }
 
     private static func hasPrefix(_ line: String) -> Bool {
