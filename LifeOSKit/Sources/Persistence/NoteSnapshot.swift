@@ -197,3 +197,15 @@ public struct NoteMoveTarget: Identifiable, Hashable, Sendable {
         self.bucket == bucket && self.folderID == folderID
     }
 }
+
+/// One page's open to-dos, as the rows the day screen draws, under the
+/// page's card. What the To-dos chip lists.
+public struct NoteTaskGroup: Identifiable, Equatable {
+    public let page: NoteCardSnapshot
+    public let rows: [ChecklistRow]
+    public var id: UUID { page.id }
+
+    public init(page: NoteCardSnapshot, rows: [ChecklistRow]) {
+        self.page = page; self.rows = rows
+    }
+}

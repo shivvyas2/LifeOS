@@ -64,6 +64,24 @@ struct NoteEditorScreen: View {
             editorWidth = width
         }
         .animation(.easeInOut(duration: 0.2), value: showsInspector)
+        // On the screen, not on the header inside the scroll view, so the
+        // sheet presents from the page itself.
+        .sheet(isPresented: $showFiling) {
+            NoteFilingSheet(
+                targets: model.moveTargets(),
+                currentBucket: model.isInInbox ? nil : model.bucket, currentFolderID: model.folderID,
+                onPick: { model.file(to: $0.bucket, folderID: $0.folderID) },
+                onCreateFolder: { model.createFolder(named: $0, in: $1) }
+            )
+        }
+        .onAppear {
+            switch focusOnAppear {
+            case .title: titleFocused = true
+            case .firstBlock: model.focusedBlockID = model.blocks.first?.id
+            case .none: break
+            }
+            if openFilingOnAppear { showFiling = true }
+        }
     }
 
     private var page: some View {
@@ -162,22 +180,6 @@ struct NoteEditorScreen: View {
         .sheet(isPresented: $showEmojiPicker) {
             NoteIconPicker(selected: model.icon) { model.setIcon($0) }
                 .presentationDetents([.height(320)])
-        }
-        .sheet(isPresented: $showFiling) {
-            NoteFilingSheet(
-                targets: model.moveTargets(),
-                currentBucket: model.isInInbox ? nil : model.bucket, currentFolderID: model.folderID,
-                onPick: { model.file(to: $0.bucket, folderID: $0.folderID) },
-                onCreateFolder: { model.createFolder(named: $0, in: $1) }
-            )
-        }
-        .onAppear {
-            switch focusOnAppear {
-            case .title: titleFocused = true
-            case .firstBlock: model.focusedBlockID = model.blocks.first?.id
-            case .none: break
-            }
-            if openFilingOnAppear { showFiling = true }
         }
     }
 

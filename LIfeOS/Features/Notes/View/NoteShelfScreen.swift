@@ -162,8 +162,11 @@ struct NoteShelfScreen: View {
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: layout.gutter, bottom: 0, trailing: layout.gutter))
                 .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    Button("File", systemImage: "tray.and.arrow.down") { filing = card }
-                        .tint(LifeOSTokens.primaryText.resolve(scheme))
+                    // An archived page is restored first, from the other edge.
+                    if !card.isArchived {
+                        Button("File", systemImage: "tray.and.arrow.down") { filing = card }
+                            .tint(LifeOSTokens.primaryText.resolve(scheme))
+                    }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(card.isArchived ? "Restore" : "Archive",

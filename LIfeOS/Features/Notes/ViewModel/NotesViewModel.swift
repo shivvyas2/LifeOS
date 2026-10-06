@@ -60,13 +60,13 @@ final class NotesViewModel {
 
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             isSearching = !trimmed.isEmpty
+            tasks = []
 
             if isSearching {
                 cards = try store.search(trimmed)
                 return
             }
 
-            tasks = []
             switch selection {
             case .inbox:
                 cards = try store.inbox()
@@ -74,7 +74,7 @@ final class NotesViewModel {
                 cards = try store.allCards()
             case .todos:
                 cards = []
-                tasks = try taskGroups(store)
+                tasks = try store.taskGroups()
                 return
             case .favorites:
                 cards = try store.favorites()
@@ -103,25 +103,6 @@ final class NotesViewModel {
         }
     }
 
-    /// The open to-dos of every live page, in the index's order (newest page
-    /// first, written order within a page), each page's rows under its
-    /// title. A second read for the titles; the index carries only ids.
-    private func taskGroups(_ store: NotesStore) throws -> [NoteTaskGroup] {
-        guard case .tasks(let rows) = try store.stream(for: .todos) else { return [] }
-        let pages = Dictionary(uniqueKeysWithValues: try store.allCards().map { ($0.id, $0) })
-        var order: [UUID] = []
-        var byPage: [UUID: [ChecklistRow]] = [:]
-        for task in rows {
-            guard pages[task.documentID] != nil else { continue }
-            if byPage[task.documentID] == nil { order.append(task.documentID) }
-            byPage[task.documentID, default: []].append(ChecklistRow(
-                source: .page(documentID: task.documentID, blockID: task.id),
-                text: task.text, detail: nil, isDone: task.isChecked, isEditable: true
-            ))
-        }
-        return order.compactMap { id in pages[id].map { NoteTaskGroup(page: $0, rows: byPage[id] ?? []) } }
-    }
-
     // MARK: - Header
 
     /// The shelf a new page lands on, given where the library points. The
@@ -141,19 +122,22 @@ final class NotesViewModel {
     /// The chips are shown on the three stream selections only.
     var isStream: Bool { selection.streamChip != nil }
 
+    /// Search results are pages from every shelf, whatever chip they were
+    /// started from, so the eyebrow counts them as pages.
     var scope: NotesScope {
+        if isSearching { return .pages }
         switch selection {
-        case .inbox: .inbox
-        case .all: .all
-        case .todos: .todos
-        case .favorites: .favorites
-        case .bucket, .folder: .pages
+        case .inbox: return .inbox
+        case .all: return .all
+        case .todos: return .todos
+        case .favorites: return .favorites
+        case .bucket, .folder: return .pages
         }
     }
 
     /// What the eyebrow counts: rows on the To-dos chip, cards everywhere else.
     var headerCount: Int {
-        selection == .todos ? tasks.reduce(0) { $0 + $1.rows.count } : cards.count
+        selection == .todos && !isSearching ? tasks.reduce(0) { $0 + $1.rows.count } : cards.count
     }
 
     var headerTitle: String {
