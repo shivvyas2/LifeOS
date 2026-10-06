@@ -98,6 +98,8 @@ struct HealthActivityDesignPreview: View {
             else if page == "money" || page == "nav" { EditorialDesignPreview(page: page) }
             else if page.hasPrefix("life") || page == "shell" { LifeDesignPreview(page: page) }
             else if ["today", "today-empty", "today-done", "month", "schedule", "day", "day-past", "notes", "notes-empty"].contains(page) { TodayDesignPreview(page: page) }
+            else if ["coach", "coach-empty", "coach-voice"].contains(page) { CoachDesignPreview(page: page) }
+            else if ["assistant", "assistant-empty"].contains(page) { AssistantDesignPreview(page: page) }
             else if page == "library" || page == "library-empty" {
                 NavigationStack {
                     WorkoutLibraryScreen(model: fixture.library, recorder: fixture.recorder,
