@@ -177,7 +177,7 @@ struct TodayDesignPreview: View {
         let context = container.mainContext
         // The needs-location page must not find a forecast another page cached minutes ago.
         if ProcessInfo.processInfo.arguments.contains("--page=day-no-location") {
-            UserDefaults.currentAccount.removeObject(forKey: "day.forecasts")
+            WeatherCache(defaults: .currentAccount).clear()
         }
         for (offset, steps, sleep, weight, recovery) in [(0, 8_432, 432, 77.4, 82.0), (-3, 6_120, 401, 77.6, 64.0)] {
             let day = calendar.date(byAdding: .day, value: offset, to: today)!

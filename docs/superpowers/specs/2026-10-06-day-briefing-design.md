@@ -125,7 +125,7 @@ record.
 - `Config/App-Info.plist` gains `NSLocationWhenInUseUsageDescription`:
   "LifeOS uses your location for the weather on your day screen."
   `LIfeOS/LIfeOS.entitlements` gains `com.apple.developer.weatherkit`
-  (`["dummy"]`, as WeatherKit requires). The App ID needs the WeatherKit
+  (`true`: Apple documents the key as a Boolean, and a profile regenerated with WeatherKit on refuses any other shape). The App ID needs the WeatherKit
   capability turned on in the developer portal; that is the owner's step
   (§7).
 

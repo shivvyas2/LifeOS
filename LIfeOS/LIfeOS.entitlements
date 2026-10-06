@@ -51,9 +51,10 @@
 	<array>
 		<string>applinks:almanac.shivvyas.com</string>
 	</array>
-	<!-- Weather on the day screen. WeatherKit wants a dummy entry here and the
-	     capability on the App ID; the owner turns that on in the portal. -->
+	<!-- Weather on the day screen. Apple documents this key as a Boolean, and
+	     a profile regenerated with WeatherKit on refuses any other shape. The
+	     capability on the App ID is the owner's step in the portal. -->
 	<key>com.apple.developer.weatherkit</key>
-	<array><string>dummy</string></array>
+	<true/>
 </dict>
 </plist>

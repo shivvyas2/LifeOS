@@ -25,6 +25,7 @@ import Testing
         #expect(SurfaceRoute(url: route.url) == .day(day))
         #expect(SurfaceRoute(url: URL(string: "almanac://day?date=2026-10-06T09:00")!) == nil)
         #expect(SurfaceRoute(url: URL(string: "almanac://day?date=not-a-day")!) == nil)
+        #expect(SurfaceRoute(url: URL(string: "almanac://day?date=2026-02-30")!) == nil)
         #expect(SurfaceRoute(url: URL(string: "almanac://day?date=2026-10-06&x=1")!) == nil)
         #expect(SurfaceRoute(url: URL(string: "almanac://day")!) == nil)
     }
