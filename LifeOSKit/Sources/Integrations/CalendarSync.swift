@@ -68,12 +68,17 @@ public final class CalendarSync {
         try? store.apply(merged, window: window, authoritative: Set(bySource.keys), syncedAt: now())
     }
 
-    public func create(_ draft: CalendarEventDraft) async throws {
+    /// Writes through the first authorized source and returns the event as
+    /// the cache holds it after the sync. The snapshot a source hands back
+    /// carries a provisional id; the row the sync wrote is the one the rest
+    /// of the app can find by id, so that is what goes back.
+    @discardableResult
+    public func create(_ draft: CalendarEventDraft) async throws -> CalendarEventSnapshot {
         for source in sources {
             guard await source.isAuthorized else { continue }
-            _ = try await source.create(draft)
+            let created = try await source.create(draft)
             await sync()
-            return
+            return (try? store.snapshot(source: created.source, sourceID: created.sourceID)) ?? created
         }
         throw CalendarSyncError.noWritableSource
     }

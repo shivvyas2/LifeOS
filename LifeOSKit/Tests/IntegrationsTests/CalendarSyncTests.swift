@@ -116,6 +116,21 @@ final class FakeSource: CalendarSource, @unchecked Sendable {
         #expect(titles == ["Dentist"])
     }
 
+    @Test func createReturnsTheEventAsTheCacheHoldsIt() async throws {
+        let (sync, store, eventKit, _) = try make()
+        let draft = CalendarEventDraft(title: "Dentist", startDate: now, endDate: now.addingTimeInterval(3_600))
+        // The fake's create answers with sourceID "eventKit-new-1" under a
+        // throwaway id; the fetch after the write reports the same key under
+        // another. The caller must get the one the cache kept.
+        eventKit.fetchResult = .success([snapshot("Dentist", source: .eventKit, sourceID: "eventKit-new-1", start: now)])
+
+        let created = try await sync.create(draft)
+
+        let stored = try #require(try store.events(from: now.addingTimeInterval(-86_400), to: now.addingTimeInterval(86_400)).first)
+        #expect(created.id == stored.id)
+        #expect(created.title == "Dentist")
+    }
+
     @Test func updateRoutesToTheSourceOwningTheEvent() async throws {
         let (sync, store, eventKit, google) = try make()
         google.fetchResult = .success([snapshot("Gym", source: .google, sourceID: "g-1", start: now)])
