@@ -6,9 +6,6 @@ import Persistence
 @MainActor @Observable
 final class TodayViewModel {
     private(set) var snapshot = TodaySnapshot()
-    /// The day the sheet is showing, or nil when it is closed.
-    private(set) var detail: DayDetailSnapshot?
-
     private var context: ModelContext?
     private let calendar: Calendar
 
@@ -113,15 +110,6 @@ final class TodayViewModel {
             snapshot.agenda = agenda
             snapshot.upcoming = upcoming
             snapshot.scheduledWorkoutTitle = scheduledWorkoutTitle(context: context)
-
-            // Keeps an open sheet current on every reload, including the
-            // `didSave`-driven one in `RootView`. Without this, an external
-            // write (a Whoop sync, a tick from `toggleHabit`) updates the grid
-            // behind the sheet but not the sheet itself until the next tick or
-            // a dismiss-and-reopen.
-            if let detail {
-                select(detail.date)
-            }
         } catch {
             // A read failure leaves the previous snapshot in place rather than
             // blanking the screen. Nothing here is recoverable by the user.
@@ -141,71 +129,5 @@ final class TodayViewModel {
         let catalog = (try? CatalogStore.all(context: context)) ?? []
         let titleByID = Dictionary(catalog.map { ($0.youtubeID, $0.title) }, uniquingKeysWith: { _, last in last })
         return scheduled.compactMap { titleByID[$0.youtubeID] }.first
-    }
-
-    /// Builds the day sheet's contents from both stores.
-    ///
-    /// A day with no metrics row is not an early return: its habits are still
-    /// worth showing, and the metric rows render as blanks.
-    func select(_ date: Date) {
-        guard let context else { return }
-        let metrics = MetricsStore(context: context, calendar: calendar)
-        let plan = PlanStore(context: context, calendar: calendar)
-
-        do {
-            let day = calendar.startOfDay(for: date)
-            let targets = try metrics.goals().targets
-            let row = try metrics.metrics(from: day, to: day).first
-            let ticked = try plan.tickedHabitIDs(on: day)
-            let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            let events = (try? CalendarStore(context: context, calendar: calendar)
-                .events(from: day, to: dayEnd)) ?? []
-
-            detail = DayDetailSnapshot(
-                date: day,
-                isToday: calendar.isDateInToday(day),
-                steps: row?.steps,
-                stepsTarget: targets.steps,
-                sleepMinutes: row?.sleepMinutes,
-                sleepTargetMinutes: targets.sleepMinutes,
-                weightKg: row?.weightKg,
-                recoveryPct: row?.whoopRecoveryPct,
-                habits: try plan.entries(kind: .habit).map { entry in
-                    HabitRow(id: entry.id, title: entry.title, isDone: ticked.contains(entry.id))
-                },
-                events: events
-            )
-        } catch {
-            assertionFailure("Day detail load failed: \(error)")
-        }
-    }
-
-    func clearSelection() {
-        detail = nil
-    }
-
-    /// Only today can be ticked. Past days are history, and the sheet renders
-    /// them without controls, so this guard is the second lock rather than the
-    /// only one.
-    func toggleHabit(id: UUID) {
-        guard let context, let detail, detail.isToday else { return }
-
-        do {
-            let entry = try context.fetch(
-                FetchDescriptor<PlanEntry>(predicate: #Predicate { $0.id == id })
-            ).first
-            guard let entry else { return }
-
-            try PlanStore(context: context, calendar: calendar)
-                .toggleTick(for: entry, on: detail.date)
-
-            // No refresh here: `toggleTick` saves, `RootView` reloads every
-            // view model on `ModelContext.didSave`, and `load()` above
-            // re-derives `detail` whenever it is open. That is the one
-            // refresh path; calling `load()`/`select()` again here would
-            // just repeat the ~400-day grid pass a second time per tap.
-        } catch {
-            assertionFailure("Habit toggle failed: \(error)")
-        }
     }
 }

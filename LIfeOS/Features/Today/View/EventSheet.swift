@@ -3,8 +3,7 @@ import DesignSystem
 import Persistence
 
 /// Which flavor of `EventSheet` is on screen. `Identifiable` so RootView can
-/// drive it with `.sheet(item:)`, the same idiom `DayDetailSheet` uses for
-/// `today.detail`; a stable `id` keeps the enum from re-identifying itself
+/// drive it with `.sheet(item:)`, the same `.sheet(item:)` idiom the shell uses elsewhere; a stable `id` keeps the enum from re-identifying itself
 /// (and resetting the form) across the reloads a save triggers.
 enum EventSheetPresentation: Identifiable {
     /// `on` is the day to open the pickers on, for the callers that have one:

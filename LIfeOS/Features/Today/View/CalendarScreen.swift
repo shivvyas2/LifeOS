@@ -37,6 +37,7 @@ struct CalendarScreen: View {
     private let initialSelection: Date?
     var onTapEvent: (CalendarEventSnapshot) -> Void
     var onAddEvent: (Date) -> Void
+    var onOpenDay: (Date) -> Void
     var isCalendarConnected: Bool
     var onConnectCalendar: () -> Void
 
@@ -48,6 +49,7 @@ struct CalendarScreen: View {
         initialQuestion: String? = nil,
         onTapEvent: @escaping (CalendarEventSnapshot) -> Void = { _ in },
         onAddEvent: @escaping (Date) -> Void = { _ in },
+        onOpenDay: @escaping (Date) -> Void = { _ in },
         isCalendarConnected: Bool = true,
         onConnectCalendar: @escaping () -> Void = {}
     ) {
@@ -58,6 +60,7 @@ struct CalendarScreen: View {
         self.initialQuestion = initialQuestion
         self.onTapEvent = onTapEvent
         self.onAddEvent = onAddEvent
+        self.onOpenDay = onOpenDay
         self.isCalendarConnected = isCalendarConnected
         self.onConnectCalendar = onConnectCalendar
     }
@@ -186,7 +189,7 @@ struct CalendarScreen: View {
                         }
                     case .weekly:
                         WeekBands(model: model, highlighted: Set(found.map(\.id)),
-                                  onTapEvent: onTapEvent, onAddEvent: onAddEvent)
+                                  onTapEvent: onTapEvent, onAddEvent: onAddEvent, onOpenDay: onOpenDay)
                     }
                     Button("Go back") { dismiss() }
                         .buttonStyle(.editorial(.secondary, fullWidth: true))

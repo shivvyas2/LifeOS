@@ -81,7 +81,7 @@ struct RootView: View {
     // `attachAll()` instead of at property declaration.
     @State private var assistantModel: AssistantViewModel?
     // Calendar sync is owned here so one pass serves Today's agenda, the
-    // day sheet, and the assistant alike; every trigger funnels through
+    // day screen, and the assistant alike; every trigger funnels through
     // `syncCalendar()`. Built in `attachAll()` because it needs the context.
     @State private var eventKitSource: EventKitSource?
     @State private var calendarSync: CalendarSync?
@@ -109,6 +109,12 @@ struct RootView: View {
     @State private var showAssistant = false
     @State private var showWhoop = false
     @State private var showMonth = false
+    /// The day pushed on Today's stack, from the grid, the calendar's open
+    /// band or a day link.
+    @State private var openDay: Date?
+    @State private var openHabitsFromDay = false
+    /// Built in `attachAll()`; the day screen's location, asked for on first use.
+    @State private var locationOnce: LocationOnce?
     @State private var eventSheet: EventSheetPresentation?
 
     /// Wide panes only. The rail floats over the content rather than taking
@@ -136,14 +142,6 @@ struct RootView: View {
             } else {
                 compactShell
             }
-        }
-        // `today.detail` is the only source of truth for what the sheet shows;
-        // there is deliberately no parallel `selectedDay` state to keep in step.
-        .sheet(item: Binding(
-            get: { today.detail },
-            set: { if $0 == nil { today.clearSelection() } }
-        )) { detail in
-            DayDetailSheet(snapshot: detail) { today.toggleHabit(id: $0) }
         }
         // A sheet on an iPad is a centered card, and the live session and
         // the video it pushes would be stuck inside it. Regular width gets
@@ -231,6 +229,7 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0) })
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.
@@ -406,11 +405,11 @@ struct RootView: View {
                 NavigationStack {
                     TodayScreen(
                         snapshot: today.snapshot,
-                        onSelectDay: { today.select($0) },
+                        onSelectDay: { openDay = Calendar.current.startOfDay(for: $0) },
                         onConnectCalendar: { requestCalendarAccess() },
                         onAddEvent: { eventSheet = .create(on: nil) },
                         onTapEvent: { eventSheet = .edit($0) },
-                        onOpenToday: { today.select(.now) },
+                        onOpenToday: { openDay = Calendar.current.startOfDay(for: .now) },
                         onConnectHealth: { Task { await health.connect() } },
                         isHealthConnected: health.isConnected,
                         onSelectMetric: { openMetric = $0 }
@@ -432,6 +431,7 @@ struct RootView: View {
                             assistant: assistantModel,
                             onTapEvent: { eventSheet = .edit($0) },
                             onAddEvent: { eventSheet = .create(on: $0) },
+                            onOpenDay: { openDay = $0 },
                             isCalendarConnected: today.snapshot.calendarAccess == .authorized,
                             onConnectCalendar: { requestCalendarAccess() }
                         )
@@ -441,6 +441,26 @@ struct RootView: View {
                     // that interrupts them, and a push keeps the way back.
                     .navigationDestination(item: $openMetric) { metric in
                         MetricDetailScreen(metric: metric, model: metricDetail, onManageConnections: { showSettings = true })
+                    }
+                    .navigationDestination(item: $openDay) { date in
+                        DayScreen(date: date,
+                                  onTapEvent: { eventSheet = .edit($0) },
+                                  onAddEvent: { eventSheet = .create(on: $0) },
+                                  onOpenHabits: { openHabitsFromDay = true })
+                    }
+                    // The habits screen the Notes tab hosts, reachable from a
+                    // day's checklist too; the plan model is this shell's.
+                    .navigationDestination(isPresented: $openHabitsFromDay) {
+                        PlanScreen(
+                            snapshot: plan.snapshot,
+                            section: .constant(.habits),
+                            showsSections: false,
+                            onAdd: { plan.section = .habits; showAddPlan = true },
+                            onAdvance: { plan.advance(id: $0) },
+                            onToggleHabit: { plan.toggleHabit(id: $0) },
+                            onDelete: { plan.delete(id: $0) }
+                        )
+                        .navigationTitle("Habits")
                     }
                 }
             case .health:
@@ -568,8 +588,7 @@ struct RootView: View {
         case .health: tab = .health; selectHealthDate(.now)
         case .activity: showActivity = true
         case .notifications: showNotifications = true
-        // Placeholder until the day screen lands in this branch's Task 8.
-        case .day: tab = .today
+        case .day(let date): tab = .today; openDay = Calendar.current.startOfDay(for: date)
         }
     }
 
@@ -805,6 +824,7 @@ struct RootView: View {
                 store: CalendarStore(context: context)
             )
         }
+        if locationOnce == nil { locationOnce = LocationOnce() }
     }
 
     /// Only while its page is up. Off screen it is six months of rows nobody
