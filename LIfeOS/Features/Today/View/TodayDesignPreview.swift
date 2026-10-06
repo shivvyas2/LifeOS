@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import SwiftData
+import AppSurfaces
 import DesignSystem
 import Persistence
 
@@ -12,7 +13,10 @@ import Persistence
 /// `calendar-ask` (the reply card from a seeded conversation; `--far` makes
 /// it about an event outside the loaded months; `--no-model`
 /// on either calendar page hides the arrow and shows the needs-model line),
-/// `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens the
+/// `day` (today, every section), `day-past` (three days ago), `day-future`
+/// (three days ahead), `day-far` (twenty days ahead, no forecast), `day-empty`
+/// (today with nothing), `day-no-location` (location not yet allowed), `notes`
+/// or `notes-empty`. `--select=` opens the
 /// calendar pages on a given day.
 struct TodayDesignPreview: View {
     let page: String
@@ -61,10 +65,12 @@ struct TodayDesignPreview: View {
                                    initialQuestion: TodayFixture.question)
                 }
                 .modelContainer(fixture.container)
-            case "day":
-                DayDetailSheet(snapshot: fixture.day, onToggleHabit: { _ in })
-            case "day-past":
-                DayDetailSheet(snapshot: fixture.pastDay, onToggleHabit: { _ in })
+            case "day", "day-past", "day-future", "day-far", "day-empty", "day-no-location":
+                NavigationStack { DayScreen(date: fixture.dayDate(for: page)) }
+                    .modelContainer(page == "day-empty" ? fixture.emptyContainer : fixture.container)
+                    .environment(\.dayProviders, DayProviders(
+                        weather: StubWeatherProvider(),
+                        location: StubLocation(access: page == "day-no-location" ? .notDetermined : .granted)))
             case "today-done":
                 NavigationStack {
                     TodayScreen(snapshot: fixture.doneSnapshot, onSelectDay: { _ in }, onConnectCalendar: {},
@@ -152,6 +158,59 @@ struct TodayDesignPreview: View {
         notes.load()
         emptyNotes.attach(emptyContainer.mainContext)
         emptyNotes.load()
+        seedDay()
+    }
+
+    func dayDate(for page: String) -> Date {
+        let offset: Int = switch page {
+        case "day-past": -3
+        case "day-future": 3
+        case "day-far": 20
+        default: 0
+        }
+        return calendar.date(byAdding: .day, value: offset, to: today)!
+    }
+
+    /// Readings, spend, habits, due tasks, the journal's to-dos and a nudge,
+    /// for today and three days ago, so every day section has rows.
+    private func seedDay() {
+        let context = container.mainContext
+        for (offset, steps, sleep, weight, recovery) in [(0, 8_432, 432, 77.4, 82.0), (-3, 6_120, 401, 77.6, 64.0)] {
+            let day = calendar.date(byAdding: .day, value: offset, to: today)!
+            let row = DailyMetrics(date: day)
+            row.steps = steps; row.sleepMinutes = sleep; row.weightKg = weight; row.whoopRecoveryPct = recovery
+            context.insert(row)
+        }
+        context.insert(WorkoutRecord(externalID: "run-1", start: today.addingTimeInterval(7 * 3_600), durationMinutes: 35, activityName: "Running"))
+        for (offset, amount, merchant) in [(0, -4.60, "Monmouth Coffee"), (0, -48.10, "Waitrose"), (0, -9.99, "Spotify"), (-3, -23.50, "Dishoom")] {
+            context.insert(MoneyEntry(date: calendar.date(byAdding: .day, value: offset, to: today)!, amount: amount, merchant: merchant))
+        }
+        let plan = PlanStore(context: context, calendar: calendar)
+        let run = try! plan.add(kind: .habit, title: "5km run")
+        _ = try! plan.add(kind: .habit, title: "Read 10 pages")
+        _ = try! plan.add(kind: .habit, title: "Walk the dog")
+        for offset in [0, -1, -2, -3, -4, -5] {
+            try! plan.toggleTick(for: run, on: calendar.date(byAdding: .day, value: offset, to: today)!)
+        }
+        let notes = NotesStore(context: context, calendar: calendar)
+        let groceries = try! notes.document(titled: "Groceries")!
+        try! notes.update(groceries, blocks: [
+            NoteBlock(kind: .todo, text: "Buy oat milk", dueDate: today),
+            NoteBlock(kind: .todo, text: "Order the filter", dueDate: calendar.date(byAdding: .day, value: 3, to: today)),
+        ])
+        let journal = try! notes.journalEntry(on: today)
+        try! notes.update(journal, blocks: [
+            NoteBlock(kind: .todo, text: "Call the dentist", isChecked: true),
+            NoteBlock(kind: .todo, text: "Draft the plan"),
+        ])
+        try! context.save()
+        // The empty page shows an empty inbox too; the seed is global.
+        guard !ProcessInfo.processInfo.arguments.contains("--page=day-empty") else { return }
+        PushService.shared.previewSeed(entries: [
+            InboxEntry(ownerID: "preview", text: "Three short nights in a row. An early one tonight would do more than any workout.",
+                       trigger: "short_sleep", day: WeatherCache.dayKey(today, calendar: calendar),
+                       receivedAt: today.addingTimeInterval(8 * 3_600)),
+        ])
     }
 
     var snapshot: TodaySnapshot {
@@ -180,13 +239,6 @@ struct TodayDesignPreview: View {
         return s
     }
 
-    var pastDay: DayDetailSnapshot {
-        DayDetailSnapshot(date: calendar.date(byAdding: .day, value: -3, to: today)!, isToday: false, steps: 6_120,
-                          stepsTarget: 10_000, sleepMinutes: 401, sleepTargetMinutes: 480, weightKg: 77.6, recoveryPct: 64,
-                          habits: [HabitRow(id: UUID(), title: "5km run", isDone: true),
-                                   HabitRow(id: UUID(), title: "Read 10 pages", isDone: false)],
-                          events: [])
-    }
 
     var emptySnapshot: TodaySnapshot {
         var s = TodaySnapshot()
@@ -195,13 +247,5 @@ struct TodayDesignPreview: View {
         return s
     }
 
-    var day: DayDetailSnapshot {
-        DayDetailSnapshot(date: today, isToday: true, steps: 8_432, stepsTarget: 10_000, sleepMinutes: 432,
-                          sleepTargetMinutes: 480, weightKg: 77.4, recoveryPct: 82,
-                          habits: [HabitRow(id: UUID(), title: "5km run", isDone: true),
-                                   HabitRow(id: UUID(), title: "Read 10 pages", isDone: false),
-                                   HabitRow(id: UUID(), title: "Walk the dog", isDone: false)],
-                          events: events.filter { calendar.isDateInToday($0.startDate) })
-    }
 }
 #endif
