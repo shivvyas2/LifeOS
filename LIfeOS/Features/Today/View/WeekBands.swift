@@ -2,61 +2,33 @@ import SwiftUI
 import DesignSystem
 import Persistence
 
-/// The week around a day, as stacked bands: the day's number large, its
-/// events beside it. The chosen day opens with its rows and an Add button;
-/// the others show their number and a count until tapped.
-struct DayScheduleScreen: View {
+/// The week around the selected day, as stacked bands: the day's number
+/// large, its events beside it. The selected day's band is open, with its
+/// rows and an Add button; the others show their number and a count until
+/// their number is tapped.
+///
+/// A body view, not a screen: `CalendarScreen` owns the masthead, the mode
+/// switch and the scroll, so the bands can sit under them in place of the
+/// month grids rather than on a pushed screen of their own.
+struct WeekBands: View {
     let model: MonthViewModel
-    let day: Date
     var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
     var onAddEvent: (Date) -> Void = { _ in }
 
-    @State private var expanded: Date
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.layout) private var layout
     private let calendar = Calendar.current
-
-    init(model: MonthViewModel, day: Date,
-         onTapEvent: @escaping (CalendarEventSnapshot) -> Void = { _ in },
-         onAddEvent: @escaping (Date) -> Void = { _ in }) {
-        self.model = model
-        self.day = day
-        self.onTapEvent = onTapEvent
-        self.onAddEvent = onAddEvent
-        _expanded = State(initialValue: Calendar.current.startOfDay(for: day))
-    }
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var quiet: Color { Editorial.quietInk(scheme) }
-    private var week: [Date] { WeekSpan.days(containing: day, calendar: calendar) }
+    private var week: [Date] { WeekSpan.days(containing: model.selection, calendar: calendar) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                EditorialMasthead(eyebrow: "Weekly · \(day.formatted(.dateTime.month(.wide)))",
-                                  title: weekTitle)
-                    .padding(.bottom, Space.x2)
-                ForEach(week, id: \.self) { date in
-                    band(date)
-                    Hairline()
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(week, id: \.self) { date in
+                band(date)
+                Hairline()
             }
-            .frame(maxWidth: layout.maxContentWidth)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, layout.gutter)
-            .padding(.leading, layout.railInset)
-            .padding(.top, Space.x2)
-            .padding(.bottom, layout.contentBottomInset)
         }
-        .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var weekTitle: String {
-        guard let first = week.first, let last = week.last else { return "" }
-        let style = Date.FormatStyle().month(.abbreviated).day()
-        return "\(first.formatted(style)) to \(last.formatted(style))"
     }
 
     private func events(on date: Date) -> [CalendarEventSnapshot] {
@@ -76,10 +48,10 @@ struct DayScheduleScreen: View {
 
     private func band(_ date: Date) -> some View {
         let rows = events(on: date)
-        let isOpen = calendar.isDate(date, inSameDayAs: expanded)
+        let isOpen = calendar.isDate(date, inSameDayAs: model.selection)
         return HStack(alignment: .top, spacing: Space.x2) {
             Button {
-                withAnimation(.snappy(duration: 0.22)) { expanded = calendar.startOfDay(for: date) }
+                withAnimation(.snappy(duration: 0.22)) { model.select(date) }
             } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(date.formatted(.dateTime.day()))
@@ -94,6 +66,7 @@ struct DayScheduleScreen: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(rows.count) events")
             .accessibilityHint(isOpen ? "Showing its events" : "Shows its events")
+            .accessibilityAddTraits(isOpen ? [.isSelected] : [])
 
             VStack(alignment: .leading, spacing: Space.x1) {
                 if isOpen {
