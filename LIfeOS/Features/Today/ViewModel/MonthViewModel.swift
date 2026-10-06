@@ -58,6 +58,21 @@ final class MonthViewModel {
         load()
     }
 
+    /// Steps a whole week and carries the selection with it.
+    ///
+    /// The selection is the anchor here, not the month: a week has no day
+    /// number to keep, so the day simply moves by seven. The month follows
+    /// the selection so the fetch window and the Monthly grid both land
+    /// where the week did, and the reload runs only when the month changed,
+    /// because the current window already covers the week either side.
+    func stepWeek(_ weeks: Int) {
+        guard let moved = calendar.date(byAdding: .day, value: 7 * weeks, to: selection) else { return }
+        let monthChanged = !calendar.isDate(moved, equalTo: month, toGranularity: .month)
+        select(moved)
+        month = moved
+        if monthChanged { load() }
+    }
+
     /// Back to today, in every sense: the month, the selection and the fetch.
     func goToToday() {
         goTo(.now)
