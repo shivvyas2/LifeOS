@@ -10,6 +10,10 @@ import Persistence
 /// screen in the app that is genuinely prose.
 struct NoteEditorScreen: View {
     @Bindable var model: NoteEditorViewModel
+    /// What to focus once the page is up: the title for a page just made.
+    var focusOnAppear: NoteEditorFocus = .none
+    /// Previews open the filing sheet straight away to draw it.
+    var openFilingOnAppear = false
     var onOpenLinked: (UUID) -> Void
     var onClose: (() -> Void)?
 
@@ -25,6 +29,8 @@ struct NoteEditorScreen: View {
     @State private var showEmojiPicker = false
     @State private var drawWithFinger = false
     @State private var confirmClearDrawing = false
+    @State private var showFiling = false
+    @FocusState private var titleFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
@@ -148,6 +154,7 @@ struct NoteEditorScreen: View {
                 .foregroundStyle(primary)
                 .textFieldStyle(.plain)
                 .lineLimit(1...3)
+                .focused($titleFocused)
 
             metaRow
         }
@@ -155,6 +162,22 @@ struct NoteEditorScreen: View {
         .sheet(isPresented: $showEmojiPicker) {
             NoteIconPicker(selected: model.icon) { model.setIcon($0) }
                 .presentationDetents([.height(320)])
+        }
+        .sheet(isPresented: $showFiling) {
+            NoteFilingSheet(
+                targets: model.moveTargets(),
+                currentBucket: model.isInInbox ? nil : model.bucket, currentFolderID: model.folderID,
+                onPick: { model.file(to: $0.bucket, folderID: $0.folderID) },
+                onCreateFolder: { model.createFolder(named: $0, in: $1) }
+            )
+        }
+        .onAppear {
+            switch focusOnAppear {
+            case .title: titleFocused = true
+            case .firstBlock: model.focusedBlockID = model.blocks.first?.id
+            case .none: break
+            }
+            if openFilingOnAppear { showFiling = true }
         }
     }
 
@@ -168,7 +191,11 @@ struct NoteEditorScreen: View {
     }
 
     @ViewBuilder private var metadata: some View {
-        Text(model.bucket.title)
+        Button { showFiling = true } label: {
+            Label(model.fileLabel, systemImage: model.isInInbox ? "tray" : "folder")
+        }
+        .buttonStyle(.editorial(.secondary, size: .compact))
+        .accessibilityHint("Choose where this page lives")
         if let date = model.entryDate {
             Text(date, format: .dateTime.month(.abbreviated).day())
         }

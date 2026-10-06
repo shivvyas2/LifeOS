@@ -78,10 +78,10 @@ struct TodayDesignPreview: View {
                         .shellToolbar()
                 }
             case "notes":
-                NavigationStack { NoteShelfScreen(model: fixture.notes, onOpen: { _ in }, onNewFolder: { _ in }).shellToolbar() }
+                NavigationStack { NoteShelfScreen(model: fixture.notes, onOpen: { _ in }, onOpenNew: { _ in }).shellToolbar() }
                     .modelContainer(fixture.container)
             case "notes-empty":
-                NavigationStack { NoteShelfScreen(model: fixture.emptyNotes, onOpen: { _ in }, onNewFolder: { _ in }).shellToolbar() }
+                NavigationStack { NoteShelfScreen(model: fixture.emptyNotes, onOpen: { _ in }, onOpenNew: { _ in }).shellToolbar() }
                     .modelContainer(fixture.emptyContainer)
             default:
                 NavigationStack {
