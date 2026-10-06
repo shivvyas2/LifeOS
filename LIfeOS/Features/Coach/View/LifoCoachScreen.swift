@@ -214,7 +214,7 @@ struct LifoCoachScreen: View {
             if !model.pendingQuestion.isEmpty {
                 ChatTurn(question: model.pendingQuestion) {
                     if !model.answer.isEmpty {
-                        CoachResponseView(text: model.answer)
+                        CoachResponseView(text: model.answer, revealed: model.revealedBlocks)
                     } else if model.phase == .thinking {
                         // Only while a reply is actually on its way: after a
                         // failure the error line below says what happened.
@@ -289,13 +289,16 @@ struct LifoCoachScreen: View {
                               color: liveColor)
                     .frame(height: 56)
                     .frame(maxWidth: .infinity)
+                if let notice = model.voiceNotice {
+                    Text(notice).font(LifeOSType.caption).foregroundStyle(quiet)
+                }
                 if model.phase == .listening && !model.liveTranscript.isEmpty {
                     Text(model.liveTranscript).font(LifeOSType.body).foregroundStyle(ink)
                         .textSelection(.enabled)
                 }
                 if !model.pendingQuestion.isEmpty {
                     ChatTurn(question: model.pendingQuestion) {
-                        if !model.answer.isEmpty { CoachResponseView(text: model.answer) }
+                        if !model.answer.isEmpty { CoachResponseView(text: model.answer, revealed: model.revealedBlocks) }
                     }
                 } else if let turn = model.history.last {
                     ChatTurn(question: turn.question) {
