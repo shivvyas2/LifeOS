@@ -3,8 +3,8 @@ import UIKit
 import DesignSystem
 import Persistence
 
-/// Shared by `AgendaCard` and `DayDetailSheet`'s schedule section, so both
-/// render one event the same way.
+/// Shared by `AgendaCard`, the bands and the day screen, so every row
+/// renders one event the same way.
 extension CalendarEventSnapshot {
     var timeLabel: String {
         isAllDay ? "all day" : startDate.formatted(.dateTime.hour().minute())

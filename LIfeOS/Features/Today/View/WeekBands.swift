@@ -17,6 +17,9 @@ struct WeekBands: View {
     var highlighted: Set<UUID> = []
     var onTapEvent: (CalendarEventSnapshot) -> Void = { _ in }
     var onAddEvent: (Date) -> Void = { _ in }
+    /// Raised when the number of the band that is already open is tapped:
+    /// the first tap shows the day's events, the second opens the day.
+    var onOpenDay: (Date) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var scheme
     private let calendar = Calendar.current
@@ -54,7 +57,11 @@ struct WeekBands: View {
         let isOpen = calendar.isDate(date, inSameDayAs: model.selection)
         return HStack(alignment: .top, spacing: Space.x2) {
             Button {
-                withAnimation(.snappy(duration: 0.22)) { model.select(date) }
+                if isOpen {
+                    onOpenDay(date)
+                } else {
+                    withAnimation(.snappy(duration: 0.22)) { model.select(date) }
+                }
             } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(date.formatted(.dateTime.day()))
@@ -68,7 +75,7 @@ struct WeekBands: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(date.formatted(.dateTime.weekday(.wide).month().day())), \(rows.count) events")
-            .accessibilityHint(isOpen ? "Showing its events" : "Shows its events")
+            .accessibilityHint(isOpen ? "Opens the day" : "Shows its events")
             .accessibilityAddTraits(isOpen ? [.isSelected] : [])
 
             VStack(alignment: .leading, spacing: Space.x1) {
@@ -78,22 +85,7 @@ struct WeekBands: View {
                             .padding(.top, Space.x2)
                     }
                     ForEach(rows) { event in
-                        Button { onTapEvent(event) } label: {
-                            HStack(alignment: .center, spacing: Space.half) {
-                                if highlighted.contains(event.id) {
-                                    Circle().fill(LifeOSTokens.accent).frame(width: 6, height: 6)
-                                        .accessibilityHidden(true)
-                                }
-                                EditorialRow(event.timeLabel) {
-                                    HStack(spacing: Space.half) {
-                                        Text(event.title).lineLimit(2)
-                                        Image(systemName: "arrow.right").font(LifeOSType.caption.weight(.semibold))
-                                    }
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(event.title), \(event.spanLabel)")
+                        AgendaRow(event: event, highlighted: highlighted.contains(event.id)) { onTapEvent(event) }
                     }
                     Button("Add") { onAddEvent(date) }
                         .buttonStyle(.editorial(.secondary, size: .compact))

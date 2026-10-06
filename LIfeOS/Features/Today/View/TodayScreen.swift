@@ -4,7 +4,7 @@ import Persistence
 
 struct TodayScreen: View {
     let snapshot: TodaySnapshot
-    /// Raised when a dot for a real, non-future day is tapped. The screen stays
+    /// Raised when a dot for a real day is tapped. The screen stays
     /// a pure function of its inputs: it does not decide what a day opens.
     let onSelectDay: (Date) -> Void
     /// Raised from the agenda card's empty state. The EventKit prompt itself
@@ -12,7 +12,7 @@ struct TodayScreen: View {
     let onConnectCalendar: () -> Void
     let onAddEvent: () -> Void
     let onTapEvent: (CalendarEventSnapshot) -> Void
-    /// Raised by the agenda's "+N more" row, since only the day sheet lists
+    /// Raised by the agenda's "+N more" row, since only the day screen lists
     /// everything.
     let onOpenToday: () -> Void
     /// Raised from the empty state below. Like the calendar prompt, the

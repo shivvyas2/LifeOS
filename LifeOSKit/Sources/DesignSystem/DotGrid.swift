@@ -29,7 +29,7 @@ public struct DotGrid: View {
     public var body: some View {
         LazyVGrid(columns: columns, spacing: 8) {
             ForEach(cells) { cell in
-                if let onTap, isTappable(cell) {
+                if let onTap, Self.isOpenable(cell) {
                     // The label is a `Circle`, whose hit region is the filled
                     // path — corners of the cell fall through without this,
                     // and `.missed`/`.noData` dots are filled `.clear`, which
@@ -38,6 +38,7 @@ public struct DotGrid: View {
                     Button { onTap(cell) } label: { dot(for: cell).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
                         .accessibilityLabel(label(for: cell))
+                        .accessibilityHint("Shows the day")
                 } else {
                     dot(for: cell)
                         .accessibilityLabel(label(for: cell))
@@ -49,10 +50,10 @@ public struct DotGrid: View {
         }
     }
 
-    /// Padding cells are not days, and a day that has not happened yet has
-    /// nothing to open. Both stay inert rather than presenting an empty sheet.
-    private func isTappable(_ cell: DotCell) -> Bool {
-        cell.date != nil && cell.state != .future && cell.state != .blank
+    /// Padding cells are layout, not days. A day ahead opens like any other:
+    /// the day screen shows it as a plan.
+    public static func isOpenable(_ cell: DotCell) -> Bool {
+        cell.date != nil && cell.state != .blank
     }
 
     private func label(for cell: DotCell) -> String {

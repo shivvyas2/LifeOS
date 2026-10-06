@@ -15,6 +15,7 @@ struct AssistantSheet: View {
     /// Today uses, so an event edited from a conversation and one edited from
     /// the day view are edited in one place.
     @State private var eventSheet: EventSheetPresentation?
+    @State private var openDay: Date?
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var paper: Color { LifeOSTokens.canvas.resolve(scheme) }
@@ -68,6 +69,7 @@ struct AssistantSheet: View {
                         CalendarScreen(assistant: model,
                                        onTapEvent: { eventSheet = .edit($0) },
                                        onAddEvent: { eventSheet = .create(on: $0) },
+                                       onOpenDay: { openDay = $0 },
                                        isCalendarConnected: model.isAuthorized,
                                        onConnectCalendar: { Task { await model.connectCalendar() } })
                     } label: { Label("Schedule", systemImage: "calendar") }
@@ -77,6 +79,11 @@ struct AssistantSheet: View {
                     Button("Done") { dismiss() }
                 }
                 .sharedBackgroundVisibility(.hidden)
+            }
+            .navigationDestination(item: $openDay) { date in
+                DayScreen(date: date,
+                          onTapEvent: { eventSheet = .edit($0) },
+                          onAddEvent: { eventSheet = .create(on: $0) })
             }
         }
         .sheet(item: $eventSheet) { mode in
