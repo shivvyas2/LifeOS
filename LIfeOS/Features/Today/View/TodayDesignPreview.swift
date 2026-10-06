@@ -4,12 +4,25 @@ import SwiftData
 import DesignSystem
 import Persistence
 
-/// Fixture pages for Today, the month screen, the schedule, the day sheet
-/// and Notes, mounted by `--design-preview` with `--page=today`,
-/// `today-empty`, `month`, `schedule`, `day`, `notes` or `notes-empty`.
+/// Fixture pages for Today, the calendar screen, the day sheet and Notes,
+/// mounted by `--design-preview` with `--page=today`, `today-empty`,
+/// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
+/// in Weekly), `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens
+/// the calendar pages on a given day.
 struct TodayDesignPreview: View {
     let page: String
     @State private var fixture = TodayFixture()
+
+    /// `--select=2026-09-29` opens the calendar pages on that day, so a week
+    /// that straddles two months or a month in another year can be captured
+    /// without a tap.
+    private var selected: Date? {
+        guard let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--select=") })?.dropFirst(9) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        formatter.timeZone = .current
+        return formatter.date(from: String(raw))
+    }
 
     var body: some View {
         Group {
@@ -21,9 +34,9 @@ struct TodayDesignPreview: View {
                         .shellToolbar()
                 }
             case "month":
-                NavigationStack { MonthScreen() }.modelContainer(fixture.container)
+                NavigationStack { CalendarScreen(initialSelection: selected) }.modelContainer(fixture.container)
             case "schedule":
-                NavigationStack { DayScheduleScreen(model: fixture.month, day: .now) }.modelContainer(fixture.container)
+                NavigationStack { CalendarScreen(initialMode: .weekly, initialSelection: selected) }.modelContainer(fixture.container)
             case "day":
                 DayDetailSheet(snapshot: fixture.day, onToggleHabit: { _ in })
             case "day-past":
@@ -56,7 +69,6 @@ struct TodayDesignPreview: View {
 @MainActor private final class TodayFixture {
     let container = try! LifeOSContainer.make(inMemory: true)
     let emptyContainer = try! LifeOSContainer.make(inMemory: true)
-    let month = MonthViewModel()
     let notes = NotesViewModel()
     let emptyNotes = NotesViewModel()
     let calendar = Calendar.current
@@ -75,13 +87,12 @@ struct TodayDesignPreview: View {
         events = [
             at(0, 9, 30, "Standup"), at(0, 12, 60, "Lunch with Sam"), at(0, 16, 90, "Design review"),
             at(1, 10, 60, "Dentist"), at(2, 19, 120, "Dinner with Alice"), at(3, 8, 60, "Programming class"),
-            at(6, 19, 180, "Professional party"), at(-2, 9, 30, "Standup"), at(14, 9, 60, "Flight to Lisbon"),
+            at(6, 19, 180, "Professional party"), at(-2, 9, 30, "Standup"), at(-7, 11, 60, "Dentist follow-up"),
+            at(14, 9, 60, "Flight to Lisbon"),
         ]
         let window = DateInterval(start: calendar.date(byAdding: .day, value: -40, to: start)!,
                                   end: calendar.date(byAdding: .day, value: 70, to: start)!)
         try! CalendarStore(context: container.mainContext, calendar: calendar).apply(events, window: window)
-        month.attach(container.mainContext)
-        month.load()
         notes.attach(container.mainContext)
         _ = notes.createNote(kind: .note, title: "Marathon block, week four")
         _ = notes.createNote(kind: .task, title: "Groceries")

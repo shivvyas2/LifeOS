@@ -20,7 +20,7 @@ struct CalendarHealthDesignPreview: View {
                 .padding(.horizontal)
             NavigationStack {
                 if page == 0 {
-                    MonthScreen()
+                    CalendarScreen()
                 } else if page == 1 {
                     HealthHubScreen(activity: ActivitySnapshot(steps: 8240, exerciseMinutes: 35, activeEnergyKcal: 460),
                                     weight: BodySnapshot(weightKg: 77.4, weeklyDeltaKg: 0.2),
