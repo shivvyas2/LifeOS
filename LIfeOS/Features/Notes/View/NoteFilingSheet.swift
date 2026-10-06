@@ -46,10 +46,8 @@ struct NoteFilingSheet: View {
                 Section {
                     HairlineField(text: $newName, placeholder: "New folder name", glyph: "folder.badge.plus",
                                   submitLabel: .done, onSubmit: createAndFile)
-                    Picker("Shelf", selection: $newBucket) {
-                        ForEach(NoteBucket.filing) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                    UnderlinePicker(selection: $newBucket, options: NoteBucket.filing.map { ($0, $0.title) })
+                        .accessibilityLabel("Shelf for the new folder")
                     Button("Create and file here", action: createAndFile)
                         .buttonStyle(.editorial(.primary, size: .compact))
                         .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -68,6 +66,8 @@ struct NoteFilingSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // A new folder goes on the page's own shelf unless the person says otherwise.
+        .onAppear { if let currentBucket { newBucket = currentBucket } }
     }
 
     private func createAndFile() {

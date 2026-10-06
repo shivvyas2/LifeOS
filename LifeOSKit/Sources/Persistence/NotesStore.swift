@@ -231,6 +231,26 @@ public struct NotesStore {
         try cardsNewestFirst()
     }
 
+    /// The To-dos chip: each live page's open to-dos as checklist rows under
+    /// its card, pages newest edit first, rows in the page's written order.
+    /// Here rather than in the view model so the grouping is tested the way
+    /// `stream(for:)` is.
+    public func taskGroups() throws -> [NoteTaskGroup] {
+        guard case .tasks(let tasks) = try stream(for: .todos) else { return [] }
+        let pages = Dictionary(uniqueKeysWithValues: try allCards().map { ($0.id, $0) })
+        var byPage: [UUID: [ChecklistRow]] = [:]
+        for task in tasks where pages[task.documentID] != nil {
+            byPage[task.documentID, default: []].append(ChecklistRow(
+                source: .page(documentID: task.documentID, blockID: task.id),
+                text: task.text, detail: nil, isDone: task.isChecked, isEditable: true
+            ))
+        }
+        return pages.values
+            .filter { byPage[$0.id] != nil }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .map { NoteTaskGroup(page: $0, rows: byPage[$0.id] ?? []) }
+    }
+
     /// Live pages, newest first, mapped to cards. `inbox()` and
     /// `stream(for: .all)` differ only in which documents qualify, so the
     /// sort and the mapping to a card live here once rather than twice

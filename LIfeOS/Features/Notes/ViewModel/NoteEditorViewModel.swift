@@ -52,6 +52,9 @@ final class NoteEditorViewModel {
     private var sync: NoteSyncing?
     private let calendar: Calendar
     private var saveTask: Task<Void, Never>?
+    /// True from a scheduled save until it lands: the blocks here are newer
+    /// than the store's, and a reload would throw the edit away.
+    private var pendingSave = false
     private var isLoading = false
     private(set) var saveMessage = "Saved on this device"
     private(set) var hasSaveError = false
@@ -104,22 +107,28 @@ final class NoteEditorViewModel {
         return bucket.title
     }
 
-    /// Files the page. Choosing a home is what takes a page out of the Inbox.
+    /// Files the page. Choosing a home is what takes a page out of the Inbox,
+    /// and an archived page filed somewhere is back in use. The chip changes
+    /// only once the write has landed.
     func file(to bucket: NoteBucket, folderID: UUID?) {
-        mutate { store, document in try store.move(document, to: bucket, folderID: folderID) }
+        let moved = mutate { store, document in
+            if document.isArchived { try store.unarchive(document) }
+            try store.move(document, to: bucket, folderID: folderID)
+        }
+        guard moved else { return }
         self.bucket = bucket
         self.folderID = folderID
         folderName = folderID.flatMap { try? store?.folder(id: $0)?.name }
         isInInbox = false
+        isArchived = false
     }
 
     /// A folder made from the filing sheet, so a page can be put somewhere
-    /// that did not exist a moment ago.
+    /// that did not exist a moment ago. Nil, and no sync, when it could not.
     func createFolder(named name: String, in bucket: NoteBucket) -> UUID? {
-        guard let store else { return nil }
-        let folder = try? store.createFolder(name: name, bucket: bucket)
+        guard let store, let folder = try? store.createFolder(name: name, bucket: bucket) else { return nil }
         requestSync()
-        return folder?.id
+        return folder.id
     }
 
     func moveTargets() -> [NoteMoveTarget] {
@@ -308,6 +317,7 @@ final class NoteEditorViewModel {
 
     private func scheduleSave() {
         guard !isLoading else { return }
+        pendingSave = true
         saveMessage = "Saving…"
         hasSaveError = false
         saveTask?.cancel()
@@ -328,6 +338,7 @@ final class NoteEditorViewModel {
     }
 
     private func saveNow() {
+        pendingSave = false
         guard let store, let document = try? store.document(id: documentID) else { return }
         do {
             try store.update(document, blocks: blocks)
@@ -343,14 +354,42 @@ final class NoteEditorViewModel {
         }
     }
 
-    private func mutate(_ work: (NotesStore, NoteDocument) throws -> Void) {
-        guard let store, let document = try? store.document(id: documentID) else { return }
+    /// Re-reads the page after another writer saved it (a tick from the
+    /// To-dos chip or the day screen while this page is open beside it), so
+    /// the next save here does not write the old blocks back over the tick.
+    /// Skipped while a save of this page is pending: those edits are newer
+    /// than the store's.
+    func reloadIfClean() {
+        guard !pendingSave, let store, let document = try? store.document(id: documentID) else { return }
+        guard document.updatedAt != updatedAt || document.blocks != blocks else { return }
+        isLoading = true
+        defer { isLoading = false }
+        if document.title != title { title = document.title }
+        blocks = document.blocks
+        status = document.status
+        isFavorite = document.isFavorite
+        isArchived = document.isArchived
+        bucket = document.bucket
+        folderID = document.folderID
+        folderName = document.folderID.flatMap { try? store.folder(id: $0)?.name }
+        isInInbox = document.isInInbox
+        updatedAt = document.updatedAt
+        refreshLinks()
+    }
+
+    /// Answers whether the write landed, so a caller that mirrors the change
+    /// in its own fields can leave them alone when it did not.
+    @discardableResult
+    private func mutate(_ work: (NotesStore, NoteDocument) throws -> Void) -> Bool {
+        guard let store, let document = try? store.document(id: documentID) else { return false }
         do {
             try work(store, document)
             updatedAt = document.updatedAt
             requestSync()
+            return true
         } catch {
             assertionFailure("Note property update failed: \(error)")
+            return false
         }
     }
 

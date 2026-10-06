@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import DesignSystem
 import Persistence
 
@@ -142,14 +143,16 @@ struct NotesHubScreen: View {
         // column and the navigation stack with it, or it vanishes.
         .onChange(of: isThreeColumn) { _, three in
             if three {
-                if case .page(let id, let focus) = path.last {
+                // A page moved by a rotation is one already being read, so
+                // it opens without the focus it was first opened with.
+                if case .page(let id, _) = path.last {
                     path.removeLast()
-                    openPageFocus = focus
+                    openPageFocus = .none
                     openPage = id
                 }
             } else if let page = openPage {
                 openPage = nil
-                path.append(.page(page, focus: openPageFocus))
+                path.append(.page(page, focus: .none))
             }
         }
     }
@@ -410,6 +413,11 @@ struct NoteEditorHost: View {
             editor.attach(context, sync: sync)
             editor.load()
             model = editor
+        }
+        // A tick from the To-dos chip or the day screen beside this page
+        // must reach it before its next save writes the old blocks back.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            model?.reloadIfClean()
         }
     }
 }

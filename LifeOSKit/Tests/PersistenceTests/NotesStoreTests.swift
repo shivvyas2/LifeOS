@@ -435,4 +435,34 @@ import SwiftData
         let all = try store.allCards()
         #expect(all.map(\.id) == [second.id, first.id])
     }
+
+    @Test func taskGroupsListOpenToDosUnderTheirPagesNewestFirst() throws {
+        let store = try makeStore()
+        let groceries = try store.createDocument(title: "Groceries", bucket: .projects, blocks: [
+            NoteBlock(kind: .todo, text: "Buy oat milk"),
+            NoteBlock(kind: .todo, text: "Done already", isChecked: true),
+            NoteBlock(kind: .todo, text: "Order the filter"),
+        ])
+        let marathon = try store.createDocument(title: "Marathon", bucket: .areas, blocks: [
+            NoteBlock(kind: .todo, text: "Book the physio"),
+        ])
+        let gone = try store.createDocument(title: "Gone", bucket: .research, blocks: [
+            NoteBlock(kind: .todo, text: "Never shown"),
+        ])
+        try store.archive(gone)
+
+        let groups = try store.taskGroups()
+
+        #expect(groups.map(\.page.id) == [marathon.id, groceries.id])
+        #expect(groups[1].rows.map(\.text) == ["Buy oat milk", "Order the filter"])
+        #expect(groups[1].rows.map(\.isDone) == [false, false])
+        if case .page(let documentID, let blockID) = groups[0].rows[0].source {
+            #expect(documentID == marathon.id)
+            #expect(blockID == marathon.blocks[0].id)
+        } else {
+            Issue.record("a To-dos row must point at its page and block")
+        }
+        let allEditable = groups.flatMap(\.rows).allSatisfy(\.isEditable)
+        #expect(allEditable)
+    }
 }
