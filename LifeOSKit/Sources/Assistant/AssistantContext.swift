@@ -16,7 +16,7 @@ public enum CalendarAssistant {
             GetEventsTool(reading: reading, collector: collector),
             FindFreeTimeTool(reading: reading),
             AnalyzeScheduleTool(reading: reading),
-            CreateEventTool(writing: writing),
+            CreateEventTool(writing: writing, collector: collector),
             UpdateEventTool(reading: reading, writing: writing),
             DeleteEventTool(reading: reading, writing: writing),
         ]

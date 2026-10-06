@@ -136,6 +136,10 @@ struct AnalyzeScheduleTool: CoachTool {
 
 struct CreateEventTool: CoachTool {
     let writing: any CalendarWriting
+    /// The created event joins the reply's cards, so the person sees what
+    /// was made and the calendar can jump to it. Optional for the same
+    /// reason as on `GetEventsTool`.
+    var collector: CalendarEventCollector?
     let name = "create_event"
     let description = "Create a calendar event."
     var parameters: GenerationSchema { EventDraftArguments.generationSchema }
@@ -152,7 +156,8 @@ struct CreateEventTool: CoachTool {
             location: args.location.isEmpty ? nil : args.location,
             notes: args.notes.isEmpty ? nil : args.notes
         )
-        try await writing.create(draft)
+        let created = try await writing.create(draft)
+        await collector?.record([created])
         return "Created \"\(args.title)\"."
     }
 }
