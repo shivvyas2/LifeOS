@@ -67,9 +67,11 @@ struct AssistantSheet: View {
                                        onConnectCalendar: { Task { await model.connectCalendar() } })
                     } label: { Label("Schedule", systemImage: "calendar") }
                 }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
         .sheet(item: $eventSheet) { mode in

@@ -6,26 +6,39 @@ import Insights
 import Persistence
 
 /// Fixture pages for the calendar assistant, mounted by `--design-preview`
-/// with `--page=assistant` (a conversation with an agenda card, tool tags
-/// and a pending confirmation) or `assistant-empty` (the opening; add
-/// `--connected` for the prompt rows instead of the connect button).
+/// with `--page=assistant` (a conversation with an agenda card and tool
+/// tags), `assistant-confirm` (one question with its pending confirmation
+/// card) or `assistant-empty` (the opening; add `--connected` for the prompt
+/// rows instead of the connect button).
 struct AssistantDesignPreview: View {
     let page: String
     @State private var fixture = AssistantFixture()
 
     var body: some View {
         Color.clear
-            .sheet(isPresented: .constant(true)) {
-                AssistantSheet(model: page == "assistant-empty" ? fixture.empty : fixture.full)
-                    .interactiveDismissDisabled()
+            .fullScreenCover(isPresented: .constant(true)) {
+                AssistantSheet(model: model)
             }
             .modelContainer(fixture.container)
+    }
+
+    private var model: AssistantViewModel {
+        switch page {
+        case "assistant-empty": fixture.empty
+        case "assistant-confirm": fixture.confirm
+        default: fixture.full
+        }
     }
 }
 
 @MainActor private final class AssistantFixture {
     let container = try! LifeOSContainer.make(inMemory: true)
+    /// Its own store, or the empty model would load the conversation the
+    /// full one seeded under the shared conversation id.
+    let emptyContainer = try! LifeOSContainer.make(inMemory: true)
+    let confirmContainer = try! LifeOSContainer.make(inMemory: true)
     let full: AssistantViewModel
+    let confirm: AssistantViewModel
     let empty: AssistantViewModel
 
     init() {
@@ -53,12 +66,17 @@ struct AssistantDesignPreview: View {
         try! chat.append(conversationID: id, role: .assistant,
                          text: "Three things today: standup at 9, lunch with Sam at 12, and a design review at 4.",
                          toolSummaries: ["Checked your calendar"], eventIDs: events.prefix(3).map(\.id))
-        try! chat.append(conversationID: id, role: .user, text: "Move the design review to 5.")
-        full.previewSeed(pending: [PendingWrite(toolName: "update_event",
-                                                preview: ["Now: 16:00 to 17:30 | Design review",
-                                                          "Becomes: Design review, 17:00 to 18:30"])])
 
-        empty = AssistantViewModel(context: container.mainContext)
+        // One question and the card it raised, short enough to fit a capture.
+        confirm = AssistantViewModel(context: confirmContainer.mainContext)
+        confirm.previewAuthorized = true
+        try! ChatStore(context: confirmContainer.mainContext)
+            .append(conversationID: id, role: .user, text: "Move the design review to 5.")
+        confirm.previewSeed(pending: [PendingWrite(toolName: "update_event",
+                                                   preview: ["Now: 16:00 to 17:30 | Design review",
+                                                             "Becomes: Design review, 17:00 to 18:30"])])
+
+        empty = AssistantViewModel(context: emptyContainer.mainContext)
         empty.previewAuthorized = ProcessInfo.processInfo.arguments.contains("--connected")
     }
 }

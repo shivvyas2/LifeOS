@@ -11,7 +11,12 @@ import Testing
         #expect(VoiceHeadline.make(.thinking).detail == "Making sense of your question.")
         #expect(VoiceHeadline.make(.speaking).title == "Let's talk it through")
         #expect(VoiceHeadline.make(.speaking).detail == "Your answer is here to read, too.")
-        #expect(VoiceHeadline.make(.idle).eyebrow == "Voice conversation")
+        // The header already says "Voice conversation"; the masthead's eyebrow
+        // names the state so the two lines never repeat each other.
+        #expect(VoiceHeadline.make(.idle).eyebrow == "Ready")
+        #expect(VoiceHeadline.make(.listening).eyebrow == "Listening")
+        #expect(VoiceHeadline.make(.thinking).eyebrow == "Thinking")
+        #expect(VoiceHeadline.make(.speaking).eyebrow == "Speaking")
     }
 
     @Test func speakingWinsOverAnswered() {
