@@ -2,130 +2,119 @@ import SwiftUI
 import Insights
 import DesignSystem
 
-/// Chooses native cells and tables from the reply's content, while keeping a
-/// short answer short. No fixed dashboard or placeholder values.
+/// A reply drawn from its content: a sentence stays a sentence, two metrics
+/// become cells, a comparison becomes a hairline table, steps are numbered.
+/// On paper, in ink; nothing about it is a card unless it holds a figure.
 struct CoachResponseView: View {
     let text: String
-    var onAura = false
-    var style: CoachScreenStyle = .text
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var quiet: Color { Editorial.quietInk(scheme) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if onAura {
-                Label("LIFO", systemImage: "sparkle")
-                    .font(.caption.weight(.semibold)).tracking(1)
-                    .foregroundStyle(onAura ? style.cardAccent : LifeOSTokens.accent)
-            }
+        VStack(alignment: .leading, spacing: Space.x2) {
             ForEach(Array(CoachResponse(text).blocks.enumerated()), id: \.offset) { index, block in
                 blockView(block)
                     .modifier(BlockReveal(index: index))
             }
         }
-        .foregroundStyle(LifeOSTokens.primaryText.resolve(onAura ? .light : scheme))
+        .foregroundStyle(ink)
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
-        .padding(onAura ? 20 : 0)
-        .background {
-            if onAura {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(style.card)
-                    .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
-            }
-        }
-        .environment(\.colorScheme, onAura ? .light : scheme)
     }
 
     @ViewBuilder
     private func blockView(_ block: CoachResponse.Block) -> some View {
-                switch block {
-                case .paragraph(let text):
-                    richText(text)
-                        .font(.subheadline)
-                        .lineSpacing(4)
-                case .heading(let text):
-                    richText(text)
-                        .font(.headline)
-                        .padding(.top, 6)
-                        .accessibilityAddTraits(.isHeader)
-                case .list(let items):
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                            HStack(alignment: .top, spacing: 12) {
-                                Text("\(index + 1)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(onAura ? style.cardAccent : LifeOSTokens.accent)
-                                    .frame(width: 22, alignment: .leading)
-                                richText(item).font(.subheadline)
-                            }
-                            .padding(14)
-                            if index < items.count - 1 { Divider().padding(.horizontal, 14) }
-                        }
+        switch block {
+        case .paragraph(let text):
+            richText(text)
+                .font(LifeOSType.secondary)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+        case .heading(let text):
+            richText(text)
+                .font(LifeOSType.sectionTitle)
+                .padding(.top, Space.half)
+                .accessibilityAddTraits(.isHeader)
+        case .list(let items):
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
+                        IndexPill(index + 1)
+                        richText(item).font(LifeOSType.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .background(surface, in: RoundedRectangle(cornerRadius: 16))
-                case .table(let headers, let rows):
-                    if headers.count == 2 && rows.count <= 6 {
-                        metricCells(headers: headers, rows: rows)
-                    } else {
-                        comparisonTable(headers: headers, rows: rows)
-                    }
+                    .padding(.vertical, 12)
+                    if index < items.count - 1 { Hairline() }
                 }
+            }
+        case .table(let headers, let rows):
+            if headers.count == 2 && rows.count <= 6 {
+                metricCells(headers: headers, rows: rows)
+            } else {
+                comparisonTable(headers: headers, rows: rows)
+            }
+        }
     }
-
-    private var surface: Color { onAura ? style.cell : LifeOSTokens.cardSurface.resolve(scheme) }
 
     private func richText(_ value: String) -> Text {
         Text((try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value))
     }
 
+    /// Two columns, six rows or fewer: each row is a figure with its label
+    /// above, on a hairline card, two to a row.
     private func metricCells(headers: [String], rows: [[String]]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(headers.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Space.x1) {
+            Text(headers.joined(separator: " · ")).editorialEyebrow()
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading),
-                                     count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 10) {
+                                     count: typeSize.isAccessibilitySize ? 1 : 2), spacing: Space.x1) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                    VStack(alignment: .leading, spacing: 8) {
-                        richText(row[0]).font(.caption).foregroundStyle(.secondary)
-                        richText(row[1]).font(.title3.weight(.semibold))
-                            .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: Space.half) {
+                        richText(row[0]).editorialEyebrow()
+                        richText(row[1])
+                            .font(Editorial.figure(28)).tracking(Editorial.figureTracking(28))
+                            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(14)
-                    .background(surface, in: RoundedRectangle(cornerRadius: 16))
+                    .editorialCard(padding: Space.x2)
                     .accessibilityElement(children: .combine)
                 }
             }
         }
     }
 
+    /// Wider or longer: a ruled table. Headers as eyebrows, rows separated
+    /// by hairlines, scrolling sideways when the columns do not fit.
     private func comparisonTable(headers: [String], rows: [[String]]) -> some View {
         ScrollView(.horizontal) {
-            Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-                GridRow {
-                    ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
-                        richText(header).font(.caption.bold())
-                            .frame(minWidth: 92, maxWidth: 160, alignment: .leading)
-                            .padding(12)
-                    }
-                }
-                .background(onAura ? style.cell.opacity(0.8) : LifeOSTokens.accent.opacity(0.10))
-                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+            VStack(alignment: .leading, spacing: 0) {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     GridRow {
-                        ForEach(Array(row.enumerated()), id: \.offset) { column, value in
-                            richText(value).font(.subheadline)
+                        ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
+                            richText(header).editorialEyebrow()
                                 .frame(minWidth: 92, maxWidth: 160, alignment: .leading)
-                                .padding(12)
-                                .accessibilityLabel("\(headers[column]): \(value)")
+                                .padding(.horizontal, 12).padding(.vertical, 10)
                         }
                     }
-                    .background(index.isMultiple(of: 2) ? surface : surface.opacity(0.6))
+                    Divider().gridCellUnsizedAxes(.horizontal).overlay(Editorial.rule(scheme))
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { column, value in
+                                richText(value).font(LifeOSType.secondary)
+                                    .frame(minWidth: 92, maxWidth: 160, alignment: .leading)
+                                    .padding(.horizontal, 12).padding(.vertical, 12)
+                                    .accessibilityLabel("\(headers[column]): \(value)")
+                            }
+                        }
+                        if index < rows.count - 1 {
+                            Divider().gridCellUnsizedAxes(.horizontal).overlay(Editorial.rule(scheme))
+                        }
+                    }
                 }
             }
         }
-        .background(surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
         .accessibilityHint("Scroll horizontally for additional columns")
     }
 }
