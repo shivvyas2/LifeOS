@@ -33,6 +33,11 @@ final class PushService {
     private var dismissedIDs: Set<String> = []
     var unreadCount: Int { entries.filter { !$0.isRead }.count }
 
+    #if DEBUG
+    /// Previews need a day's nudges without a push: seeds the inbox in memory.
+    func previewSeed(entries: [InboxEntry]) { self.entries = entries }
+    #endif
+
     func attach(ownerID: String?) {
         if self.ownerID != ownerID { pending = nil }
         self.ownerID = ownerID
