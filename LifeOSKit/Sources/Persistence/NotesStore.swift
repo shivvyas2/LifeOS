@@ -202,6 +202,16 @@ public struct NotesStore {
         return openOnly ? rows.filter { !$0.isChecked } : rows
     }
 
+    /// To-dos due on the day, across every page, open and done.
+    public func tasks(dueOn date: Date) throws -> [NoteTask] {
+        let day = calendar.startOfDay(for: date)
+        guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { return [] }
+        return try indexedTasks().filter { task in
+            guard let due = task.dueDate else { return false }
+            return due >= day && due < next
+        }
+    }
+
     /// Every link edge. The mindmap's input.
     public func indexedLinks() throws -> [NoteLink] {
         try context.fetch(FetchDescriptor<NoteLink>())
@@ -347,23 +357,36 @@ public struct NotesStore {
         )
     }
 
+    /// The day's journal page if there is one. Never creates: a past day
+    /// read from the day screen must not leave an empty page behind.
+    public func journalEntryIfPresent(on date: Date) throws -> NoteDocument? {
+        let day = calendar.startOfDay(for: date)
+        return try documents(includeArchived: true).first {
+            $0.kind == .journal && $0.entryDate.map { calendar.isDate($0, inSameDayAs: day) } == true
+        }
+    }
+
     /// Today's journal entry, created on first write rather than on first
-    /// launch: an empty page dated every day is noise, not a journal.
+    /// launch: an empty page dated every day is noise, not a journal. It
+    /// lives in the bucket's `Journal` folder, made here when missing.
     @discardableResult
     public func journalEntry(on date: Date = .now, in bucket: NoteBucket = .areas) throws -> NoteDocument {
+        if let existing = try journalEntryIfPresent(on: date) { return existing }
         let day = calendar.startOfDay(for: date)
-        if let existing = try documents(includeArchived: true).first(where: {
-            $0.kind == .journal && $0.entryDate.map { calendar.isDate($0, inSameDayAs: day) } == true
-        }) {
-            return existing
-        }
-
         return try createDocument(
             title: day.formatted(.dateTime.weekday(.wide).month(.wide).day()),
             kind: .journal,
             bucket: bucket,
+            folderID: try journalFolderID(in: bucket),
             entryDate: day
         )
+    }
+
+    private func journalFolderID(in bucket: NoteBucket) throws -> UUID {
+        if let folder = try folders().first(where: { $0.bucket == bucket && $0.parentID == nil && $0.name == "Journal" }) {
+            return folder.id
+        }
+        return try createFolder(name: "Journal", bucket: bucket, icon: "\u{1F5D3}").id
     }
 
     public func update(_ document: NoteDocument, blocks: [NoteBlock]) throws {
