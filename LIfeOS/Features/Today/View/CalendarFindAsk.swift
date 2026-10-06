@@ -64,3 +64,64 @@ struct ScheduleResultRow: View {
         .accessibilityHint("Shows its week")
     }
 }
+
+/// One question asked from the calendar: the words, and once the assistant
+/// has answered, the id of its reply in the shared conversation.
+struct CalendarAsk: Equatable {
+    let question: String
+    var replyID: UUID?
+}
+
+/// The reply, on the calendar: the question as a quiet line, `Thinking…`
+/// until the answer lands, the answer, the events it was about as the same
+/// rows the find draws, what the tools did as tags, any write awaiting a
+/// yes, and `Clear`. The conversation itself stays in the assistant sheet.
+struct AssistantReplyCard: View {
+    let ask: CalendarAsk
+    let assistant: AssistantViewModel
+    var onSelect: (CalendarEventSnapshot) -> Void
+    var onClear: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    private var reply: ChatMessageSnapshot? {
+        guard let id = ask.replyID else { return nil }
+        return assistant.messages.first { $0.id == id }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.x2) {
+            Text("Assistant").editorialEyebrow()
+            Text(ask.question)
+                .font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
+                .fixedSize(horizontal: false, vertical: true)
+            if reply == nil, assistant.isThinking, assistant.pending.isEmpty {
+                ChatThinking()
+            }
+            if let reply {
+                Text(reply.text)
+                    .font(LifeOSType.secondary)
+                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let events = assistant.eventsByMessage[reply.id], !events.isEmpty {
+                    VStack(spacing: 0) {
+                        ForEach(events) { event in
+                            ScheduleResultRow(event: event) { onSelect(event) }
+                        }
+                    }
+                }
+                if !reply.toolSummaries.isEmpty {
+                    ChatToolTags(reply.toolSummaries)
+                }
+            }
+            ForEach(assistant.pending) { write in
+                ChatConfirmation(lines: write.preview, framed: false,
+                                 onConfirm: { assistant.confirm(write.id) },
+                                 onCancel: { assistant.cancel(write.id) })
+            }
+            Button("Clear", action: onClear)
+                .buttonStyle(.editorial(.quiet, size: .compact))
+                .accessibilityHint("Hides the reply; the conversation stays in the assistant")
+        }
+        .editorialCard()
+    }
+}
