@@ -55,10 +55,10 @@ struct AssistantSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
-                        MonthScreen(onTapEvent: { eventSheet = .edit($0) },
-                                    onAddEvent: { eventSheet = .create(on: $0) },
-                                    isCalendarConnected: model.isAuthorized,
-                                    onConnectCalendar: { Task { await model.connectCalendar() } })
+                        CalendarScreen(onTapEvent: { eventSheet = .edit($0) },
+                                       onAddEvent: { eventSheet = .create(on: $0) },
+                                       isCalendarConnected: model.isAuthorized,
+                                       onConnectCalendar: { Task { await model.connectCalendar() } })
                     } label: { Label("Schedule", systemImage: "calendar") }
                 }
                 ToolbarItem(placement: .confirmationAction) {

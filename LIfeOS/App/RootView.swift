@@ -425,7 +425,7 @@ struct RootView: View {
                         }
                     }
                     .navigationDestination(isPresented: $showMonth) {
-                        MonthScreen(
+                        CalendarScreen(
                             onTapEvent: { eventSheet = .edit($0) },
                             onAddEvent: { eventSheet = .create(on: $0) },
                             isCalendarConnected: today.snapshot.calendarAccess == .authorized,
