@@ -28,15 +28,16 @@ public enum ScheduleFindText {
     /// `4 more`, under the eighth row.
     public static func more(_ hidden: Int) -> String { "\(hidden) more" }
 
-    /// `Tue 13 · 10:00`, or `All day`: the day a person scans for, then the
-    /// time the way the device shows it. Weekday and day are formatted
-    /// separately because one format puts the day first in some locales.
+    /// `Tue 13 · 10:00`, or `Tue 13 · All day`: the day a person scans for,
+    /// then the time the way the device shows it. Weekday and day are
+    /// formatted separately because one format puts the day first in some
+    /// locales. An all-day event keeps its day: birthdays and trips are
+    /// exactly what people search for.
     public static func rowLabel(start: Date, isAllDay: Bool, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        guard !isAllDay else { return "All day" }
         let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
         let weekday = start.formatted(style.weekday(.abbreviated))
         let day = start.formatted(style.day())
-        let time = start.formatted(style.hour().minute())
+        let time = isAllDay ? "All day" : start.formatted(style.hour().minute())
         return "\(weekday) \(day) · \(time)"
     }
 }

@@ -39,6 +39,6 @@ import Foundation
         let start = date(2026, 10, 13, hour: 10)
         #expect(ScheduleFindText.rowLabel(start: start, isAllDay: false, calendar: calendar, locale: gb) == "Tue 13 · 10:00")
         #expect(ScheduleFindText.rowLabel(start: start, isAllDay: false, calendar: calendar, locale: us).hasPrefix("Tue 13 · 10:00"))
-        #expect(ScheduleFindText.rowLabel(start: start, isAllDay: true, calendar: calendar, locale: us) == "All day")
+        #expect(ScheduleFindText.rowLabel(start: start, isAllDay: true, calendar: calendar, locale: us) == "Tue 13 · All day")
     }
 }
