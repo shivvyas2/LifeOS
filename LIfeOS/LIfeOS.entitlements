@@ -51,5 +51,9 @@
 	<array>
 		<string>applinks:almanac.shivvyas.com</string>
 	</array>
+	<!-- Weather on the day screen. WeatherKit wants a dummy entry here and the
+	     capability on the App ID; the owner turns that on in the portal. -->
+	<key>com.apple.developer.weatherkit</key>
+	<array><string>dummy</string></array>
 </dict>
 </plist>
