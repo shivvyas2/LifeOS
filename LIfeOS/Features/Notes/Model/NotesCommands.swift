@@ -19,7 +19,7 @@ struct NotesCommandTarget: Equatable {
     let focusSearch: () -> Void
     let toggleLibrary: () -> Void
     let selectBucket: (NoteBucket) -> Void
-    let selectRecent: () -> Void
+    let selectInbox: () -> Void
     /// Nil when no page is open, which is what disables the page-scoped items
     /// rather than letting them fire into nothing.
     let closePage: (() -> Void)?
@@ -70,9 +70,9 @@ struct NotesCommands: Commands {
             Divider()
 
             // Command-Option-number, matching how browsers and editors number
-            // their tabs, with Recent at zero because it is the one that is not
-            // a shelf.
-            Button("Recent") { target?.selectRecent() }
+            // their tabs, with the Inbox at zero because it is the one that is
+            // not a shelf.
+            Button("Inbox") { target?.selectInbox() }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(target == nil)
 

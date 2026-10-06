@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import SwiftData
 import Persistence
+import DesignSystem
 
 /// Owns the notes tab's state: what the rail points at, what the shelf shows,
 /// and every write that changes either.
@@ -14,11 +15,13 @@ import Persistence
 final class NotesViewModel {
     private(set) var snapshot: NotesSnapshot = .empty
     private(set) var cards: [NoteCardSnapshot] = []
+    /// The To-dos chip's rows, grouped by page. Empty on every other selection.
+    private(set) var tasks: [NoteTaskGroup] = []
     /// Set while a search is running, so the shelf can say it is showing
     /// results rather than the folder the rail still highlights.
     private(set) var isSearching = false
 
-    var selection: NoteSelection = .recent {
+    var selection: NoteSelection = .inbox {
         didSet { if selection != oldValue { load() } }
     }
     var filter: NoteShelfFilter = .all {
@@ -63,9 +66,16 @@ final class NotesViewModel {
                 return
             }
 
+            tasks = []
             switch selection {
-            case .recent:
-                cards = try store.recent(limit: 40)
+            case .inbox:
+                cards = try store.inbox()
+            case .all:
+                cards = try store.allCards()
+            case .todos:
+                cards = []
+                tasks = try taskGroups(store)
+                return
             case .favorites:
                 cards = try store.favorites()
             case .bucket(let bucket):
@@ -93,11 +103,31 @@ final class NotesViewModel {
         }
     }
 
+    /// The open to-dos of every live page, in the index's order (newest page
+    /// first, written order within a page), each page's rows under its
+    /// title. A second read for the titles; the index carries only ids.
+    private func taskGroups(_ store: NotesStore) throws -> [NoteTaskGroup] {
+        guard case .tasks(let rows) = try store.stream(for: .todos) else { return [] }
+        let pages = Dictionary(uniqueKeysWithValues: try store.allCards().map { ($0.id, $0) })
+        var order: [UUID] = []
+        var byPage: [UUID: [ChecklistRow]] = [:]
+        for task in rows {
+            guard pages[task.documentID] != nil else { continue }
+            if byPage[task.documentID] == nil { order.append(task.documentID) }
+            byPage[task.documentID, default: []].append(ChecklistRow(
+                source: .page(documentID: task.documentID, blockID: task.id),
+                text: task.text, detail: nil, isDone: task.isChecked, isEditable: true
+            ))
+        }
+        return order.compactMap { id in pages[id].map { NoteTaskGroup(page: $0, rows: byPage[id] ?? []) } }
+    }
+
     // MARK: - Header
 
-    /// The shelf a new page lands on, given where the rail points. Recent and
-    /// Favourites are cross-cutting lists rather than places, so a page made
-    /// from either goes to Projects, which is where PARA says active work goes.
+    /// The shelf a new page lands on, given where the library points. The
+    /// stream chips and Favourites are views, not places, so a page made from
+    /// them goes to Projects, which is where PARA says active work goes, and
+    /// stays in the Inbox until it is filed.
     var activeBucket: NoteBucket {
         switch selection {
         case .bucket(let bucket): bucket == .archive ? .projects : bucket
@@ -108,10 +138,30 @@ final class NotesViewModel {
 
     var activeFolderID: UUID? { selection.folderID }
 
+    /// The chips are shown on the three stream selections only.
+    var isStream: Bool { selection.streamChip != nil }
+
+    var scope: NotesScope {
+        switch selection {
+        case .inbox: .inbox
+        case .all: .all
+        case .todos: .todos
+        case .favorites: .favorites
+        case .bucket, .folder: .pages
+        }
+    }
+
+    /// What the eyebrow counts: rows on the To-dos chip, cards everywhere else.
+    var headerCount: Int {
+        selection == .todos ? tasks.reduce(0) { $0 + $1.rows.count } : cards.count
+    }
+
     var headerTitle: String {
         if isSearching { return "Search" }
         switch selection {
-        case .recent:              return "Recent"
+        case .inbox:               return "Inbox"
+        case .all:                 return "All pages"
+        case .todos:               return "To-dos"
         case .favorites:           return "Favourites"
         case .bucket(let bucket):  return bucket.title
         case .folder(let id):      return folderSnapshot(id)?.name ?? "Folder"
@@ -125,8 +175,12 @@ final class NotesViewModel {
                 : "\(cards.count) \(cards.count == 1 ? "page" : "pages") matching \"\(query)\"."
         }
         switch selection {
-        case .recent:
-            return "The pages you opened last, newest first. Nothing is filed here; this is a view onto everything else."
+        case .inbox:
+            return "Pages you have not put away yet. File one from its editor, or swipe it."
+        case .all:
+            return "Every page, newest first. Nothing is filed here; this is a view onto everything else."
+        case .todos:
+            return "Every open to-do from every page, in one list."
         case .favorites:
             return "Pages you starred, from every shelf."
         case .bucket(let bucket):
@@ -149,7 +203,9 @@ final class NotesViewModel {
     var breadcrumb: [String] {
         var trail = ["Library"]
         switch selection {
-        case .recent:    trail.append("Recent")
+        case .inbox:     trail.append("Inbox")
+        case .all:       trail.append("All pages")
+        case .todos:     trail.append("To-dos")
         case .favorites: trail.append("Favourites")
         case .bucket(let bucket): trail.append(bucket.title)
         case .folder(let id):
@@ -159,6 +215,21 @@ final class NotesViewModel {
             }
         }
         return trail
+    }
+
+    /// Everywhere a page can be filed, from the current snapshot.
+    func moveTargets() -> [NoteMoveTarget] { snapshot.moveTargets() }
+
+    /// A folder made from the filing sheet: created and answered, the
+    /// selection left where it was. `createFolder(named:in:icon:)` selects
+    /// what it makes, which is right for the library and wrong here.
+    func makeFolder(named name: String, in bucket: NoteBucket) -> UUID? {
+        guard let store else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let folder = try? store.createFolder(name: trimmed, bucket: bucket, icon: "") else { return nil }
+        load()
+        requestSync()
+        return folder.id
     }
 
     func folderSnapshot(_ id: UUID) -> NoteFolderSnapshot? {
@@ -179,8 +250,9 @@ final class NotesViewModel {
     // MARK: - Writing
 
     /// Creates a page and returns its id, so the caller can open it straight
-    /// into the editor. A note made from a button and then left for the person
-    /// to find is a note they will not write.
+    /// into the editor. From a shelf the page is filed loose on that shelf
+    /// (choosing a shelf is choosing a home); from a folder it is filed in it;
+    /// from the Inbox, All, To-dos or Favourites it stays in the Inbox.
     @discardableResult
     func createNote(kind: NoteKind = .note, title: String = "") -> UUID? {
         guard let store else { return nil }
@@ -191,6 +263,9 @@ final class NotesViewModel {
                 bucket: activeBucket,
                 folderID: activeFolderID
             )
+            if case .bucket(let bucket) = selection, bucket != .archive {
+                try store.move(document, to: bucket, folderID: nil)
+            }
             load()
             requestSync()
             return document.id
@@ -258,6 +333,16 @@ final class NotesViewModel {
 
     func move(_ id: UUID, to bucket: NoteBucket, folderID: UUID?) {
         mutate(id) { store, document in try store.move(document, to: bucket, folderID: folderID) }
+    }
+
+    /// Ticks a to-do on the To-dos chip, through the same path the editor
+    /// takes, so the index and the page agree.
+    func toggleTask(documentID: UUID, blockID: UUID) {
+        mutate(documentID) { store, document in
+            let result = NoteBlockEditor.toggleCheck(document.blocks, at: blockID)
+            guard result.handled else { return }
+            try store.update(document, blocks: result.blocks)
+        }
     }
 
     private func mutate(_ id: UUID, _ work: (NotesStore, NoteDocument) throws -> Void) {

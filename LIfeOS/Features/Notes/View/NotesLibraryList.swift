@@ -17,8 +17,6 @@ import Persistence
 struct NotesLibraryList: View {
     let snapshot: NotesSnapshot
     @Binding var selection: NoteSelection
-    @Binding var query: String
-    var isSearchFocused: Binding<Bool>?
     var onNewFolder: (NoteBucket) -> Void
     var onOpenHabits: () -> Void = {}
     var habitCount: Int = 0
@@ -31,7 +29,6 @@ struct NotesLibraryList: View {
     /// the rail opens them: four collapsed cards tell a new user nothing.
     @State private var expanded: Set<NoteBucket> = Set(NoteBucket.allCases)
     @State private var droppingOn: NoteSelection?
-    @FocusState private var searchFieldFocused: Bool
 
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
@@ -42,7 +39,6 @@ struct NotesLibraryList: View {
             // as they move rather than each rendering its own lens.
             GlassEffectContainer(spacing: 14) {
                 VStack(alignment: .leading, spacing: 14) {
-                    searchField
                     shortcuts
                     ForEach(NoteBucket.allCases) { bucket in
                         shelfCard(bucket)
@@ -54,51 +50,18 @@ struct NotesLibraryList: View {
             .padding(.top, 6)
         }
         .scrollIndicators(.hidden)
-        .onChange(of: isSearchFocused?.wrappedValue ?? false) { _, wanted in
-            if wanted { searchFieldFocused = true }
-        }
-        .onChange(of: searchFieldFocused) { _, focused in
-            if !focused { isSearchFocused?.wrappedValue = false }
-        }
-    }
-
-    // MARK: - Search
-
-    private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(LifeOSType.label)
-                .foregroundStyle(secondary)
-            TextField("Search notes", text: $query)
-                .font(LifeOSType.secondary)
-                .textFieldStyle(.plain)
-                .submitLabel(.search)
-                .focused($searchFieldFocused)
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(LifeOSType.label)
-                        .foregroundStyle(secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - Shortcuts
 
-    /// Recent, Favourites and Habits as three tiles in a row: the things
-    /// reached for most, reachable without scrolling past the shelves.
+    /// Inbox, All, Favourites and Habits as four tiles in two rows: the
+    /// things reached for most, reachable without scrolling past the shelves.
     private var shortcuts: some View {
-        HStack(spacing: 8) {
-            shortcutTile(.recent, title: "Recent", systemImage: "clock.fill",
-                         count: snapshot.recent.count)
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            shortcutTile(.inbox, title: "Inbox", systemImage: "tray.fill",
+                         count: snapshot.inboxCount)
+            shortcutTile(.all, title: "All", systemImage: "doc.on.doc.fill",
+                         count: snapshot.totalCount)
             shortcutTile(.favorites, title: "Favourites", systemImage: "star.fill",
                          count: snapshot.favorites.count)
             Button(action: onOpenHabits) {
