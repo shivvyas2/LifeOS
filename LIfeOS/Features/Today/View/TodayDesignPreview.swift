@@ -7,7 +7,8 @@ import Persistence
 /// Fixture pages for Today, the calendar screen, the day sheet and Notes,
 /// mounted by `--design-preview` with `--page=today`, `today-empty`,
 /// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
-/// in Weekly), `calendar-find` (the calendar with `--query=` live),
+/// in Weekly), `calendar-find` (the calendar with `--query=` live; add
+/// `--weekly` to open it on the bands),
 /// `calendar-ask` (the reply card from a seeded conversation; `--no-model`
 /// on either calendar page hides the arrow and shows the needs-model line),
 /// `day`, `day-past`, `notes` or `notes-empty`. `--select=` opens the
@@ -48,7 +49,9 @@ struct TodayDesignPreview: View {
                 NavigationStack { CalendarScreen(initialMode: .weekly, initialSelection: selected) }.modelContainer(fixture.container)
             case "calendar-find":
                 NavigationStack {
-                    CalendarScreen(assistant: fixture.assistant, initialSelection: selected, initialQuery: query)
+                    CalendarScreen(assistant: fixture.assistant,
+                                   initialMode: ProcessInfo.processInfo.arguments.contains("--weekly") ? .weekly : .monthly,
+                                   initialSelection: selected, initialQuery: query)
                 }
                 .modelContainer(fixture.container)
             case "calendar-ask":
