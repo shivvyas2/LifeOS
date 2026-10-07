@@ -13,6 +13,7 @@ All notable changes to Almanac are recorded here. The format follows [Keep a Cha
 ### Fixed
 
 - **Swing analysis on phone-started workouts.** The phone now sends its athlete profile to the Watch with the workout it starts, so a Watch that never received the profile, or holds an older one, adopts it and begins analyzing swings instead of silently recording none.
+- **The tab bar no longer sits on top of the keyboard.** While typing on a phone the bar steps out of the way and the page runs down to the keys; it returns when the keyboard closes.
 
 ## [1.0.1] - 2026-10-05
 
