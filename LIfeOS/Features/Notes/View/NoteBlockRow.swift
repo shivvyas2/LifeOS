@@ -34,11 +34,10 @@ struct NoteBlockRow: View {
     private var primary: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var secondary: Color { LifeOSTokens.secondaryText.resolve(scheme) }
 
-    /// Done to-dos go grey. Deliberately no strikethrough: a page of struck
-    /// text is unreadable, and the checkbox already says the same thing.
-    private var textColor: Color {
-        block.kind == .todo && block.isChecked ? secondary : primary
-    }
+    /// Done to-dos go quiet and struck through: the box says it, and so does
+    /// the line, which is what makes a long list scannable.
+    private var isStruck: Bool { block.kind == .todo && block.isChecked }
+    private var textColor: Color { isStruck ? secondary : primary }
 
     var body: some View {
         if block.kind == .sketch {
@@ -64,10 +63,23 @@ struct NoteBlockRow: View {
             .padding(.vertical, block.kind == .callout || block.kind == .code ? 10 : 3)
             .padding(.horizontal, block.kind == .callout || block.kind == .code ? 12 : 0)
             .background(ground)
+            .gesture(block.kind == .todo ? tickSwipe : nil)
+            .sensoryFeedback(.impact(weight: .light), trigger: block.isChecked)
         }
     }
 
     private var indentWidth: CGFloat { CGFloat(block.indent) * 22 }
+
+    /// A swipe to the right ticks a to-do; a scroll that starts on one does
+    /// not. The gesture sits under the scroll view's, so a vertical drag goes
+    /// to the page and only a sideways one reaches here.
+    private var tickSwipe: some Gesture {
+        DragGesture(minimumDistance: TodoSwipe.minimum)
+            .onEnded { value in
+                guard TodoSwipe.ticks(dx: value.translation.width, dy: value.translation.height) else { return }
+                onToggleCheck()
+            }
+    }
 
     @ViewBuilder
     private var gutter: some View {
@@ -86,7 +98,7 @@ struct NoteBlockRow: View {
             Button(action: onToggleCheck) {
                 Image(systemName: block.isChecked ? "checkmark.square.fill" : "square")
                     .font(LifeOSType.body)
-                    .foregroundStyle(block.isChecked ? LifeOSTokens.accent : secondary)
+                    .foregroundStyle(block.isChecked ? primary : secondary)
                     .frame(width: 18, height: lineHeight, alignment: .center)
             }
             .buttonStyle(.plain)
@@ -134,6 +146,7 @@ struct NoteBlockRow: View {
             placeholder: placeholder,
             linkColor: UIColor(LifeOSTokens.accent),
             textColor: UIColor(textColor),
+            strikethrough: isStruck,
             onReturn: onReturn,
             onBackspaceAtStart: onBackspaceAtStart,
             onIndent: onIndent,
