@@ -47,6 +47,9 @@ struct AppShell: View {
     /// the person arrived: signup, sign-in, or skip.
     @AppStorage("hasSeenFirstRunTour", store: .currentAccount) private var hasSeenFirstRunTour = false
     @State private var showTour = false
+    /// Set when the signed-in account is scheduled for deletion; the keep-or-
+    /// leave page covers the app until it is answered.
+    @State private var pendingDeletion: Date?
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -66,6 +69,21 @@ struct AppShell: View {
                     integrations.deactivateAll()
                     onboarding.signOut()
                 })
+                .overlay {
+                    if let pendingDeletion {
+                        KeepAccountScreen(date: pendingDeletion, onKeep: {
+                            do {
+                                try await AccountDataClient().keep()
+                                if let id = onboarding.session?.userID { PendingAccountWipe().remove(id) }
+                                withAnimation { self.pendingDeletion = nil }
+                            } catch {}
+                        }, onSignOut: {
+                            self.pendingDeletion = nil
+                            integrations.deactivateAll()
+                            onboarding.signOut()
+                        })
+                    }
+                }
                 .overlay {
                     // An overlay, deliberately not a fullScreenCover: iOS can
                     // restore a previously-presented cover at launch, and two
@@ -107,6 +125,12 @@ struct AppShell: View {
                 )
             }
         }
+        // Whenever an account is signed in, by a restored session or a fresh
+        // sign-in after a deletion request, ask whether it is set for deletion.
+        .task(id: onboarding.isSignedIn && hasFinishedOnboarding && hasStore ? onboarding.session?.userID : nil) {
+            guard onboarding.isSignedIn, hasFinishedOnboarding, hasStore else { pendingDeletion = nil; return }
+            pendingDeletion = try? await AccountDataClient().scheduledDeletion()
+        }
         .onChange(of: onboarding.session?.userID) { _, id in
             guard let id, (!hasStore || id != accountID), let account = onboarding.account, let session = onboarding.session else { return }
             onSignedIn(account, session)
@@ -116,6 +140,7 @@ struct AppShell: View {
         }
         .preferredColorScheme(appearance.colorScheme)
         .task {
+            await wipeDeletedAccounts()
             if hasStore {
                 integrations.attach(context)
             }
@@ -213,6 +238,24 @@ struct AppShell: View {
             guard let url = activity.webpageURL else { return }
             shellLog.info("continued activity host=\(url.host ?? "?", privacy: .public)")
             handle(url)
+        }
+    }
+
+    /// Accounts signed out by a deletion request keep their data on this
+    /// phone until the server confirms the deletion; then it goes: the store
+    /// folder, the defaults suite and the account's Keychain items.
+    private func wipeDeletedAccounts() async {
+        let pending = PendingAccountWipe()
+        guard !pending.ids.isEmpty,
+              let gone = try? await AccountDataClient().deleted(among: pending.ids),
+              let base = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                      appropriateFor: nil, create: false)
+        else { return }
+        for id in gone {
+            try? pending.wipe(id, base: base)
+            KeychainWhoopTokenStore(account: id).clear()
+            KeychainFitbitAuthStore(account: id).clearPending()
+            KeychainGitHubTokenStore(account: id).clear()
         }
     }
 
