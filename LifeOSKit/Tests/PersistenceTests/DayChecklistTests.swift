@@ -66,4 +66,32 @@ import Foundation
         let noneEditable = rows.allSatisfy { !$0.isEditable }
         #expect(noneEditable)
     }
+
+    private func task(_ text: String, daysAgo: Int, checked: Bool = false, page: String = "Health") -> DayChecklist.DueTask {
+        DayChecklist.DueTask(documentID: UUID(), blockID: UUID(), text: text, isChecked: checked, pageTitle: page,
+                             dueDate: day.addingTimeInterval(-86_400 * Double(daysAgo)))
+    }
+
+    @Test func overdueComesAfterTodaysDueOldestFirstOnTodayOnly() {
+        let today = day.addingTimeInterval(3_600 * 9)
+        let rows = DayChecklist.rows(
+            journal: [], journalID: nil,
+            due: [DayChecklist.DueTask(documentID: UUID(), blockID: UUID(), text: "Buy oat milk", isChecked: false, pageTitle: "Groceries")],
+            overdue: [task("Call the dentist", daysAgo: 1), task("File taxes", daysAgo: 5, page: "Money")],
+            habits: [], ticked: [], day: day, editable: true, calendar: calendar, now: today)
+        #expect(rows.map(\.text) == ["Buy oat milk", "File taxes", "Call the dentist"])
+        #expect(rows[1].detail == "overdue · Money")
+        let yesterday = DayChecklist.rows(
+            journal: [], journalID: nil, due: [], overdue: [task("Call the dentist", daysAgo: 1)],
+            habits: [], ticked: [], day: day, editable: true, calendar: calendar, now: today.addingTimeInterval(86_400))
+        #expect(yesterday.isEmpty)
+    }
+
+    @Test func overdueSkipsDoneTasks() {
+        let rows = DayChecklist.rows(
+            journal: [], journalID: nil, due: [], overdue: [task("Done already", daysAgo: 2, checked: true)],
+            habits: [], ticked: [], day: day, editable: true, calendar: calendar, now: day.addingTimeInterval(3_600))
+        #expect(rows.isEmpty)
+    }
 }
+

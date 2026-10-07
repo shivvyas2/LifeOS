@@ -47,4 +47,17 @@ import SwiftData
         ])
         #expect(try store.tasks(dueOn: day).map(\.text) == ["Morning", "Evening"])
     }
+
+    @Test func overdueTasksAreOpenAndDueBeforeTheDay() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Health", bucket: .areas)
+        try store.update(page, blocks: [
+            NoteBlock(kind: .todo, text: "Late", dueDate: day.addingTimeInterval(-86_400)),
+            NoteBlock(kind: .todo, text: "Late but done", isChecked: true, dueDate: day.addingTimeInterval(-86_400)),
+            NoteBlock(kind: .todo, text: "Early today", dueDate: calendar.startOfDay(for: day)),
+            NoteBlock(kind: .todo, text: "Undated"),
+        ])
+        #expect(try store.tasks(dueBefore: day).map(\.text) == ["Late"])
+    }
 }
+

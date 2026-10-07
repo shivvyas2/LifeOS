@@ -213,6 +213,13 @@ public struct NotesStore {
         }
     }
 
+    /// Open to-dos due before the day began, across every page: today's
+    /// overdue list.
+    public func tasks(dueBefore date: Date) throws -> [NoteTask] {
+        let day = calendar.startOfDay(for: date)
+        return try indexedTasks(openOnly: true).filter { ($0.dueDate ?? .distantFuture) < day }
+    }
+
     /// Every link edge. The mindmap's input.
     public func indexedLinks() throws -> [NoteLink] {
         try context.fetch(FetchDescriptor<NoteLink>())
