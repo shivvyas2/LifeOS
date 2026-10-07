@@ -94,6 +94,17 @@ public struct TodayLayout: Equatable, Sendable {
         }
     }
 
+    /// A drop: `module` lands just before or just after `target`, in
+    /// `target`'s column. Dropped on itself, nothing moves.
+    public mutating func place(_ module: TodayModule, nextTo target: TodayModule, after: Bool) {
+        guard module != target, column(of: target) != nil else { return }
+        hide(module)
+        guard let side = column(of: target) else { return }
+        let list = side == .left ? left : right
+        let index = (list.firstIndex(of: target) ?? 0) + (after ? 1 : 0)
+        move(module, to: side, at: index)
+    }
+
     public mutating func hide(_ module: TodayModule) {
         left.removeAll { $0 == module }
         right.removeAll { $0 == module }

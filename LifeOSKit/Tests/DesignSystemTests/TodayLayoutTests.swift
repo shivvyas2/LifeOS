@@ -55,6 +55,21 @@ import Foundation
         #expect(layout.right.first == .nextUp)
     }
 
+    @Test func aDropLandsBeforeOrAfterItsTarget() {
+        var layout = TodayLayout(left: [.nextUp, .month, .tasks], right: [.steps])
+        layout.place(.nextUp, nextTo: .month, after: true)
+        #expect(layout.left == [.month, .nextUp, .tasks])
+        layout.place(.tasks, nextTo: .month, after: false)
+        #expect(layout.left == [.tasks, .month, .nextUp])
+        layout.place(.steps, nextTo: .nextUp, after: true)
+        #expect(layout.left == [.tasks, .month, .nextUp, .steps])
+        #expect(layout.right.isEmpty)
+        layout.place(.month, nextTo: .month, after: true)
+        #expect(layout.left == [.tasks, .month, .nextUp, .steps])
+        layout.place(.weather, nextTo: .tasks, after: false)
+        #expect(layout.left.first == .weather)
+    }
+
     @Test func adjacentTilesPairUp() {
         #expect(TodayLayout.rows([.month, .steps, .sleep, .weight, .nextUp, .recovery])
                 == [.single(.month), .pair(.steps, .sleep), .pair(.weight, nil), .single(.nextUp), .pair(.recovery, nil)])

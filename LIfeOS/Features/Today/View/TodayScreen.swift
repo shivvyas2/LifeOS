@@ -37,6 +37,9 @@ struct TodayScreen: View {
     /// spend, LIFO and GitHub come from it, loading only what is shown.
     @State var day: DayViewModel
     @State var newTask = ""
+    /// While someone types a task, a long-press in the field is theirs (to
+    /// select or paste), not the start of arranging.
+    @FocusState var taskFieldFocused: Bool
 
     @Environment(\.colorScheme) var scheme
     @Environment(\.layout) var layout
@@ -92,9 +95,14 @@ struct TodayScreen: View {
         .task { attachDay() }
         .onChange(of: store.layout) { attachDay() }
         .onChange(of: github?.changeCount) { attachDay() }
-        .onChange(of: github?.state) { _, state in
+        // Initial too: GitHub may have been connected from another tab's
+        // Settings, or before this build, while Today was not on screen.
+        .onChange(of: github?.state, initial: true) { _, state in
             if case .connected = state { store.offerGitHubOnce() }
         }
+        // Past midnight the snapshot moves to the new day; the day model must
+        // follow, or Today's tasks would show yesterday, read-only.
+        .onChange(of: calendar.startOfDay(for: snapshot.date)) { _, newDay in day.goTo(newDay) }
         // Saves arrive in bursts (a tick, a health sample, a sync); one reload
         // a quarter second after the last is enough.
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)
@@ -159,15 +167,10 @@ struct TodayScreen: View {
         }
     }
 
-    /// Puts `module` just before `target`, in `target`'s column.
-    private func place(_ name: String, before target: TodayModule) -> Bool {
+    /// A drop on `target`: before it in its upper half, after it in its lower.
+    private func place(_ name: String, nextTo target: TodayModule, after: Bool) -> Bool {
         guard let module = TodayModule(rawValue: name), module != target else { return false }
-        store.update { layout in
-            layout.hide(module)
-            let side = layout.column(of: target) ?? .left
-            let index = (side == .left ? layout.left : layout.right).firstIndex(of: target) ?? 0
-            layout.move(module, to: side, at: index)
-        }
+        store.update { $0.place(module, nextTo: target, after: after) }
         return true
     }
 
@@ -190,13 +193,21 @@ struct TodayScreen: View {
                     .modifier(ArrangeableModule(
                         modules: row.modules, isArranging: store.isArranging, index: index,
                         onHide: { module in store.update { $0.hide(module) } },
-                        onDrop: { place($0, before: row.modules[0]) }))
+                        onDrop: { name, target, after in place(name, nextTo: target, after: after) }))
                     .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
                         if !store.isArranging { store.isArranging = true; store.hintSeen = true }
-                    })
+                    }, including: row.modules.contains(.tasks) && taskFieldFocused ? .subviews : .all)
+                    .overlay(alignment: .topLeading) {
+                        // VoiceOver's way to arrange: one focusable handle per
+                        // module, carrying its move and hide actions.
+                        HStack(spacing: 0) {
+                            ForEach(row.modules, id: \.self) { module in
+                                ModuleHandle(module: module, isRegular: layout.isRegular, store: store)
+                            }
+                        }
+                    }
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("today.module.\(row.modules[0].rawValue)")
-                    .modifier(MoveActions(modules: row.modules, isRegular: layout.isRegular, store: store))
             }
             if store.isArranging {
                 // Below the last row: drop here for the end of the column.
@@ -247,10 +258,10 @@ struct TodayScreen: View {
             access: snapshot.calendarAccess,
             agenda: snapshot.agenda,
             upcoming: snapshot.upcoming,
-            onConnect: onConnectCalendar,
-            onAddEvent: onAddEvent,
-            onTapEvent: onTapEvent,
-            onOpenToday: onOpenToday
+            onConnect: { if !store.isArranging { onConnectCalendar() } },
+            onAddEvent: { if !store.isArranging { onAddEvent() } },
+            onTapEvent: { if !store.isArranging { onTapEvent($0) } },
+            onOpenToday: { if !store.isArranging { onOpenToday() } }
         )
     }
 
@@ -263,7 +274,7 @@ struct TodayScreen: View {
             onTap: { cell in
                 // `DotGrid` only calls this for tappable cells, which
                 // always carry a date. The guard is belt and braces.
-                if let date = cell.date { onSelectDay(date) }
+                if let date = cell.date, !store.isArranging { onSelectDay(date) }
             }
         )
     }
@@ -374,28 +385,38 @@ struct TodayScreen: View {
     )
 }
 
-/// VoiceOver's way to arrange, available whether or not arranging: each
-/// module moves up, down, across (iPad) or hides. A tile pair names which
-/// tile each action moves.
-private struct MoveActions: ViewModifier {
-    let modules: [TodayModule]
+/// A module's VoiceOver handle: an otherwise invisible element, first in the
+/// module, that VoiceOver can land on and that carries Move up, Move down,
+/// Move to other column (iPad) and Hide, whether or not arranging.
+private struct ModuleHandle: View {
+    let module: TodayModule
+    let isRegular: Bool
+    let store: TodayLayoutStore
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityElement()
+            .accessibilityLabel("\(module.title), Today module")
+            .accessibilityHint("Actions move or hide it")
+            .accessibilityIdentifier("today.handle.\(module.rawValue)")
+            .accessibilityAction(named: "Move up") { store.update { $0.moveUp(module) } }
+            .accessibilityAction(named: "Move down") { store.update { $0.moveDown(module) } }
+            .accessibilityAction(named: "Hide") { store.update { $0.hide(module) } }
+            .modifier(OtherColumnAction(module: module, isRegular: isRegular, store: store))
+    }
+}
+
+private struct OtherColumnAction: ViewModifier {
+    let module: TodayModule
     let isRegular: Bool
     let store: TodayLayoutStore
 
     func body(content: Content) -> some View {
-        modules.reduce(AnyView(content)) { view, module in
-            let suffix = modules.count > 1 ? " \(module.title)" : ""
-            var actions = AnyView(view
-                .accessibilityAction(named: "Move up\(suffix)") { store.update { $0.moveUp(module) } }
-                .accessibilityAction(named: "Move down\(suffix)") { store.update { $0.moveDown(module) } }
-                .accessibilityAction(named: "Hide\(suffix)") { store.update { $0.hide(module) } })
-            if isRegular {
-                actions = AnyView(actions.accessibilityAction(named: "Move to other column\(suffix)") {
-                    store.update { $0.moveToOtherColumn(module) }
-                })
-            }
-            return actions
+        if isRegular {
+            content.accessibilityAction(named: "Move to other column") { store.update { $0.moveToOtherColumn(module) } }
+        } else {
+            content
         }
     }
 }
-

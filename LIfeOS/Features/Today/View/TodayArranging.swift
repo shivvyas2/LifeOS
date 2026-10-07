@@ -10,12 +10,14 @@ struct ArrangeableModule: ViewModifier {
     let isArranging: Bool
     let index: Int
     var onHide: (TodayModule) -> Void
-    /// A module name dropped on this row; it goes in before the row.
-    var onDrop: (String) -> Bool
+    /// A module name dropped on one of this row's modules, and whether it
+    /// landed in that module's lower half (after it) or upper (before).
+    var onDrop: (String, TodayModule, Bool) -> Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
     @State private var wobble = false
+    @State private var targeted: TodayModule?
 
     private var tilt: Double {
         guard isArranging, !reduceMotion else { return 0 }
@@ -28,15 +30,36 @@ struct ArrangeableModule: ViewModifier {
             .overlay {
                 if isArranging {
                     // Catches every touch on the row: the drag, the drop, and
-                    // taps, which it swallows.
-                    Color.clear
-                        .contentShape(.rect)
-                        .onTapGesture {}
-                        .draggable(modules[0].rawValue)
-                        .dropDestination(for: String.self) { names, _ in
-                            names.first.map(onDrop) ?? false
+                    // taps, which it swallows. One area per module, so either
+                    // tile of a pair can be picked up.
+                    HStack(spacing: 12) {
+                        ForEach(modules, id: \.self) { module in
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .contentShape(.rect)
+                                    .onTapGesture {}
+                                    .draggable(module.rawValue) {
+                                        Text(module.title)
+                                            .font(LifeOSType.rowTitle)
+                                            .padding(.horizontal, Space.x2).padding(.vertical, Space.x1)
+                                            .background(LifeOSTokens.cardSurface.resolve(scheme), in: Capsule())
+                                    }
+                                    .dropDestination(for: String.self) { names, location in
+                                        guard let name = names.first else { return false }
+                                        return onDrop(name, module, location.y > proxy.size.height / 2)
+                                    } isTargeted: { over in
+                                        if over { targeted = module } else if targeted == module { targeted = nil }
+                                    }
+                                    .overlay {
+                                        if targeted == module {
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .strokeBorder(LifeOSTokens.primaryText.resolve(scheme), lineWidth: 1.5)
+                                        }
+                                    }
+                            }
                         }
-                        .accessibilityHidden(true)
+                    }
+                    .accessibilityHidden(true)
                 }
             }
             .overlay {

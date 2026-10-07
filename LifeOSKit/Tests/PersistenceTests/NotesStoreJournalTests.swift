@@ -59,5 +59,18 @@ import SwiftData
         ])
         #expect(try store.tasks(dueBefore: day).map(\.text) == ["Late"])
     }
+
+    @Test func overdueTasksOnArchivedOrDeletedPagesAreLeftOut() throws {
+        let store = try makeStore()
+        let live = try store.createDocument(title: "Health", bucket: .areas)
+        let shelved = try store.createDocument(title: "Old plans", bucket: .areas)
+        let gone = try store.createDocument(title: "Gone", bucket: .areas)
+        for page in [live, shelved, gone] {
+            try store.update(page, blocks: [NoteBlock(kind: .todo, text: "Late on \(page.title)", dueDate: day.addingTimeInterval(-86_400))])
+        }
+        try store.archive(shelved)
+        try store.delete(gone)
+        #expect(try store.tasks(dueBefore: day).map(\.text) == ["Late on Health"])
+    }
 }
 
