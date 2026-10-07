@@ -64,14 +64,15 @@ struct ProjectScheduleView: View {
                         Rectangle().fill(ink.opacity(0.15)).frame(height: 1)
                     }
                     .offset(y: y)
-                    Color.clear.contentShape(.rect)
-                        .frame(width: width, height: hourHeight)
-                        .offset(x: gutter, y: y)
-                        .onTapGesture {
-                            if let start = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) { onCreateAt(start) }
-                        }
-                        .accessibilityLabel("Add a task at \(hourLabel(hour))")
-                        .accessibilityAddTraits(.isButton)
+                    Button {
+                        if let start = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) { onCreateAt(start) }
+                    } label: {
+                        Color.clear.contentShape(.rect).frame(width: width, height: hourHeight)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: gutter, y: y)
+                    .accessibilityLabel("Add a task at \(hourLabel(hour))")
+                    .accessibilityIdentifier("schedule.slot.\(hour)")
                 }
                 ForEach(blocks, id: \.0.id) { task, block in
                     let place = lanes[block.id] ?? (0, 1)
