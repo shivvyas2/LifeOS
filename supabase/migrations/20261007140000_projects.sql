@@ -64,15 +64,8 @@ create index project_milestones_project_idx on public.project_milestones (projec
 create index project_tasks_project_idx on public.project_tasks (project_id, updated_at);
 create index project_tasks_owner_idx on public.project_tasks (owner_id);
 
--- updated_at is the server's: it is what the sync cursor reads.
-create or replace function public.touch_updated_at() returns trigger
-language plpgsql as $$
-begin
-  new.updated_at := now();
-  return new;
-end;
-$$;
-
+-- updated_at is the server's: it is what the sync cursor reads. The shared
+-- public.touch_updated_at() from the initial schema sets it.
 create trigger projects_touch before insert or update on public.projects
   for each row execute function public.touch_updated_at();
 create trigger project_members_touch before insert or update on public.project_members
@@ -83,32 +76,40 @@ create trigger project_tasks_touch before insert or update on public.project_tas
   for each row execute function public.touch_updated_at();
 
 -- Membership checks bypass RLS (security definer) so the policies below can
--- ask them without recursing into project_members' own policies.
+-- ask them without recursing into project_members' own policies. Each asks
+-- about the caller only, so none can be used to probe other people.
 create or replace function public.is_project_member(p uuid) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from project_members where project_id = p and user_id = auth.uid());
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.project_members where project_id = p and user_id = auth.uid());
 $$;
 
 create or replace function public.is_project_owner(p uuid) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from projects where id = p and owner_id = auth.uid());
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.projects where id = p and owner_id = auth.uid());
 $$;
 
-create or replace function public.are_friends(a uuid, b uuid) returns boolean
-language sql stable security definer set search_path = public as $$
+create or replace function public.is_friend_of_me(other uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
   select exists (
-    select 1 from friendships
+    select 1 from public.friendships
     where status = 'accepted'
-      and ((requester = a and addressee = b) or (requester = b and addressee = a))
+      and ((requester = auth.uid() and addressee = other) or (requester = other and addressee = auth.uid()))
   );
 $$;
+
+revoke execute on function public.is_project_member(uuid) from public, anon;
+revoke execute on function public.is_project_owner(uuid) from public, anon;
+revoke execute on function public.is_friend_of_me(uuid) from public, anon;
+grant execute on function public.is_project_member(uuid) to authenticated;
+grant execute on function public.is_project_owner(uuid) to authenticated;
+grant execute on function public.is_friend_of_me(uuid) to authenticated;
 
 -- The creator becomes the owner member in the same transaction, so they can
 -- read back what they just made.
 create or replace function public.add_project_owner() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
-  insert into project_members (project_id, user_id, role)
+  insert into public.project_members (project_id, user_id, role)
   values (new.id, new.owner_id, 'owner')
   on conflict (project_id, user_id) do nothing;
   return new;
@@ -134,7 +135,7 @@ create policy "members read membership" on public.project_members
   for select to authenticated using (public.is_project_member(project_id));
 create policy "owners add friends" on public.project_members
   for insert to authenticated with check (
-    public.is_project_owner(project_id) and role = 'member' and public.are_friends(auth.uid(), user_id)
+    public.is_project_owner(project_id) and role = 'member' and public.is_friend_of_me(user_id)
   );
 create policy "owners remove members, members leave" on public.project_members
   for delete to authenticated using (
@@ -153,6 +154,7 @@ create policy "members read tasks" on public.project_tasks
   for select to authenticated using (public.is_project_member(project_id));
 create policy "members add tasks" on public.project_tasks
   for insert to authenticated with check (public.is_project_member(project_id));
+revoke execute on function public.add_project_owner() from public, anon;
 create policy "members edit tasks" on public.project_tasks
   for update to authenticated using (public.is_project_member(project_id))
   with check (public.is_project_member(project_id));

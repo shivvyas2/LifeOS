@@ -320,6 +320,7 @@ struct RootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await projectSync?.sync(); projects.load() } }
             if phase == .active {
                 reloadAll()
                 syncCalendar()
@@ -803,8 +804,12 @@ struct RootView: View {
         if projectSync == nil,
            let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
             let sessions = KeychainAuthSessionStore()
-            projectSync = ProjectSync(context: context, rest: SupabaseREST(baseURL: url, anonKey: key),
+            projectSync = ProjectSync(context: context, remote: SupabaseREST(baseURL: url, anonKey: key),
+                                      me: { sessions.load().flatMap { UUID(uuidString: $0.userID) } },
                                       accessToken: { sessions.load()?.accessToken })
+            // On launch, so tasks a friend assigned reach Today without
+            // opening the Projects tab.
+            Task { await projectSync?.sync(); projects.load() }
         }
         projects.attach(context, sync: projectSync,
                         me: KeychainAuthSessionStore().load().flatMap { UUID(uuidString: $0.userID) })

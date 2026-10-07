@@ -80,6 +80,12 @@ export type PurgeDeps = {
   heirOf(group: string, user: string): Promise<string | null>;
   transfer(group: string, heir: string): Promise<void>;
   deleteGroup(group: string): Promise<void>;
+  /// Shared projects go the same way as groups: the owner column cascades,
+  /// so ownership passes on before the login goes.
+  ownedProjects(user: string): Promise<string[]>;
+  projectHeirOf(project: string, user: string): Promise<string | null>;
+  transferProject(project: string, heir: string): Promise<void>;
+  deleteProject(project: string): Promise<void>;
   revokeConnections(user: string): Promise<void>;
   removeAvatars(user: string): Promise<void>;
   deleteUser(user: string): Promise<void>;
@@ -97,6 +103,10 @@ export async function runPurge(deps: PurgeDeps, now: Date): Promise<{ deleted: n
       for (const group of await deps.ownedGroups(user)) {
         const heir = await deps.heirOf(group, user);
         if (heir) await deps.transfer(group, heir); else await deps.deleteGroup(group);
+      }
+      for (const project of await deps.ownedProjects(user)) {
+        const heir = await deps.projectHeirOf(project, user);
+        if (heir) await deps.transferProject(project, heir); else await deps.deleteProject(project);
       }
       await deps.revokeConnections(user);
       await deps.removeAvatars(user);

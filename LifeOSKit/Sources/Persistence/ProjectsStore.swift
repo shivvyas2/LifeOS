@@ -100,7 +100,7 @@ public struct ProjectsStore {
     @discardableResult
     public func createProject(name: String, scope: String, colour: String, ownerID: UUID,
                               startsOn: Date? = nil, endsOn: Date? = nil, repo: String? = nil) throws -> UUID {
-        let project = ProjectRecord(name: String(name.prefix(60)), scope: String(scope.prefix(240)),
+        let project = ProjectRecord(name: Self.limit(name, 60), scope: Self.limit(scope, 240),
                                     colour: colour, ownerID: ownerID)
         project.startsOn = startsOn
         project.endsOn = endsOn
@@ -115,8 +115,8 @@ public struct ProjectsStore {
                               startsOn: Date?? = nil, endsOn: Date?? = nil, repo: String?? = nil,
                               archived: Bool? = nil) throws {
         guard let row = try projectRecord(id) else { return }
-        if let name { row.name = String(name.prefix(60)) }
-        if let scope { row.scope = String(scope.prefix(240)) }
+        if let name { row.name = Self.limit(name, 60) }
+        if let scope { row.scope = Self.limit(scope, 240) }
         if let colour { row.colour = colour }
         if let startsOn { row.startsOn = startsOn }
         if let endsOn { row.endsOn = endsOn }
@@ -129,7 +129,7 @@ public struct ProjectsStore {
     @discardableResult
     public func createTask(projectID: UUID, title: String, status: ProjectStatus = .todo) throws -> UUID {
         let position = try liveTasks().filter { $0.projectID == projectID && $0.status == status.rawValue }.count
-        let task = ProjectTaskRecord(projectID: projectID, title: String(title.prefix(120)), position: position)
+        let task = ProjectTaskRecord(projectID: projectID, title: Self.limit(title, 120), position: position)
         task.status = status.rawValue
         if status == .done { task.doneAt = .now }
         context.insert(task)
@@ -141,13 +141,17 @@ public struct ProjectsStore {
                            milestoneID: UUID?? = nil, dueOn: Date?? = nil,
                            startsAt: Date?? = nil, endsAt: Date?? = nil) throws {
         guard let row = try taskRecord(id) else { return }
-        if let title { row.title = String(title.prefix(120)) }
-        if let notes { row.notes = String(notes.prefix(2000)) }
+        if let title { row.title = Self.limit(title, 120) }
+        if let notes { row.notes = Self.limit(notes, 2000) }
         if let ownerID { row.ownerID = ownerID }
         if let milestoneID { row.milestoneID = milestoneID }
         if let dueOn { row.dueOn = dueOn }
         if let startsAt { row.startsAt = startsAt }
         if let endsAt { row.endsAt = endsAt }
+        // The server requires an end after the start.
+        if let start = row.startsAt, let end = row.endsAt, end <= start {
+            row.endsAt = start.addingTimeInterval(30 * 60)
+        }
         row.updatedAt = .now
         try context.save()
     }
@@ -181,7 +185,7 @@ public struct ProjectsStore {
     @discardableResult
     public func createMilestone(projectID: UUID, title: String, dueOn: Date? = nil) throws -> UUID {
         let position = try liveMilestones().filter { $0.projectID == projectID }.count
-        let row = MilestoneRecord(projectID: projectID, title: String(title.prefix(80)), position: position)
+        let row = MilestoneRecord(projectID: projectID, title: Self.limit(title, 80), position: position)
         row.dueOn = dueOn
         context.insert(row)
         try context.save()
@@ -235,15 +239,48 @@ public struct ProjectsStore {
         )
     }
 
-    /// Everything pending is now on the server; a removed member's row goes.
-    public func markSynced(at date: Date) throws {
-        let pending = try pending()
-        pending.projects.forEach { $0.syncedAt = max(date, $0.updatedAt) }
-        pending.milestones.forEach { $0.syncedAt = max(date, $0.updatedAt) }
-        pending.tasks.forEach { $0.syncedAt = max(date, $0.updatedAt) }
-        for member in pending.members {
-            if member.deletedAt != nil { context.delete(member) } else { member.syncedAt = max(date, member.updatedAt) }
+    /// What a push took: each row's id and the edit it carried, so marking
+    /// it synced afterwards cannot swallow an edit made while it was out.
+    public struct PushedSnapshot: Sendable {
+        public var stamps: [UUID: Date]
+        public init(_ pending: Pending) {
+            var stamps: [UUID: Date] = [:]
+            pending.projects.forEach { stamps[$0.id] = $0.updatedAt }
+            pending.members.forEach { stamps[$0.id] = $0.updatedAt }
+            pending.milestones.forEach { stamps[$0.id] = $0.updatedAt }
+            pending.tasks.forEach { stamps[$0.id] = $0.updatedAt }
+            self.stamps = stamps
         }
+    }
+
+    /// Marks synced only the rows the push carried and that have not changed
+    /// since; a removed member's row goes.
+    public func markSynced(_ pushed: PushedSnapshot) throws {
+        func unchanged(_ id: UUID, _ updated: Date) -> Bool { pushed.stamps[id] == updated }
+        for row in try context.fetch(FetchDescriptor<ProjectRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
+        for row in try context.fetch(FetchDescriptor<MilestoneRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
+        for row in try context.fetch(FetchDescriptor<ProjectTaskRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
+        for row in try context.fetch(FetchDescriptor<ProjectMemberRecord>()) where unchanged(row.id, row.updatedAt) {
+            if row.deletedAt != nil { context.delete(row) } else { row.syncedAt = row.updatedAt }
+        }
+        try context.save()
+    }
+
+    /// Everything pending is now on the server (tests and previews).
+    public func markSynced(at date: Date) throws { try markSynced(PushedSnapshot(try pending())) }
+
+    /// Projects this phone holds that have already been on the server.
+    public func syncedProjectIDs() throws -> Set<UUID> {
+        Set(try context.fetch(FetchDescriptor<ProjectRecord>()).filter { $0.syncedAt != nil }.map(\.id))
+    }
+
+    /// Drops a project and everything under it from this phone: the server
+    /// no longer shows it to this person (they left or were removed).
+    public func forgetProject(_ id: UUID) throws {
+        for row in try context.fetch(FetchDescriptor<ProjectTaskRecord>()) where row.projectID == id { context.delete(row) }
+        for row in try context.fetch(FetchDescriptor<MilestoneRecord>()) where row.projectID == id { context.delete(row) }
+        for row in try context.fetch(FetchDescriptor<ProjectMemberRecord>()) where row.projectID == id { context.delete(row) }
+        for row in try context.fetch(FetchDescriptor<ProjectRecord>()) where row.id == id { context.delete(row) }
         try context.save()
     }
 
@@ -317,6 +354,18 @@ public struct ProjectsStore {
     }
 
     // MARK: Helpers
+
+    /// Cut to `count` Unicode scalars, which is what Postgres's `char_length`
+    /// counts: a title the server would reject never leaves the phone.
+    static func limit(_ text: String, _ count: Int) -> String {
+        guard text.unicodeScalars.count > count else { return text }
+        var result = ""
+        for character in text {
+            guard result.unicodeScalars.count + character.unicodeScalars.count <= count else { break }
+            result.append(character)
+        }
+        return result
+    }
 
     private func projectRecord(_ id: UUID) throws -> ProjectRecord? {
         try context.fetch(FetchDescriptor<ProjectRecord>(predicate: #Predicate { $0.id == id })).first
