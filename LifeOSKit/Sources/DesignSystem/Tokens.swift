@@ -160,6 +160,10 @@ public enum LifeOSTokens {
     /// tone, and a black shadow on a black canvas is invisible cost.
     public static let cardShadow = Color.black.opacity(0.06)
 
+    /// The walkthrough's dimming. Black in both appearances: ink is light in
+    /// dark mode and would wash the screen out instead of dimming it.
+    public static let scrim = Color.black.opacity(0.55)
+
     /// Floating action buttons. Must never share a luminance with their glyph:
     /// a white plus on `primaryText` vanishes the moment the scheme goes dark.
     public static let fabFill = AdaptiveColor(
