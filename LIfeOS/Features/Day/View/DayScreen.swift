@@ -21,6 +21,7 @@ struct DayScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.shellProfile) private var shellProfile
+    @Environment(\.github) private var github
     @State private var showDatePicker = false
     @State private var newTask = ""
     @State private var openPage: UUID?
@@ -76,6 +77,12 @@ struct DayScreen: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .refreshable { await model.refreshProject() }
+        // Settings opens over this screen; a connect, disconnect or new pin
+        // there must reach the day without leaving it.
+        .onChange(of: github?.changeCount) {
+            model.attach(context, providers: providers, sync: sync)
+            model.load()
+        }
         .background(paper.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)

@@ -24,7 +24,13 @@ public enum GitHubAPI {
     public static func url(_ path: String, query: [(String, String)] = []) -> URL {
         var components = URLComponents(string: "https://api.github.com")!
         components.path = path
-        if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } }
+        if !query.isEmpty {
+            components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) }
+            // URLComponents leaves `+` alone, and GitHub reads a bare `+` in a
+            // query as a space: `+05:30` would arrive as ` 05:30`.
+            components.percentEncodedQuery = components.percentEncodedQuery?
+                .replacingOccurrences(of: "+", with: "%2B")
+        }
         return components.url!
     }
 }
@@ -73,12 +79,15 @@ public struct GitHubDayLoader: Sendable {
             }
             guard let repo else { return Result(state: nil, pinMissing: pinMissing) }
 
-            let milestones: [GitHubMilestone] = try await get(GitHubAPI.url("/repos/\(repo.fullName)/milestones", query: [
+            // The follow-up is extra: a repo with Issues turned off (most forks)
+            // or a hiccup on these calls costs the line, never the commits.
+            // Only a revoked token stops the card.
+            let milestones: [GitHubMilestone] = (try await optional(GitHubAPI.url("/repos/\(repo.fullName)/milestones", query: [
                 ("state", "open"), ("per_page", "10"),
-            ]))
+            ]))) ?? []
             var issues: GitHubIssueSearch?
             if milestones.isEmpty {
-                issues = try await get(GitHubAPI.url("/search/issues", query: [
+                issues = try await optional(GitHubAPI.url("/search/issues", query: [
                     ("q", "repo:\(repo.fullName) is:issue is:open"), ("sort", "created"), ("order", "desc"), ("per_page", "2"),
                 ]))
             }
@@ -89,6 +98,13 @@ public struct GitHubDayLoader: Sendable {
         } catch is Unauthorized {
             return Result(state: .reconnect, pinMissing: false)
         }
+    }
+
+    /// Nil for any failure but a revoked token.
+    private func optional<Value: Decodable>(_ url: URL) async throws -> Value? {
+        do { return try await get(url) as Value }
+        catch is Unauthorized { throw Unauthorized() }
+        catch { return nil }
     }
 
     private func get<Value: Decodable>(_ url: URL) async throws -> Value {

@@ -34,8 +34,15 @@ final class GitHubConnectionViewModel: NSObject {
     private var webSession: ASWebAuthenticationSession?
     private var active = true
 
-    nonisolated static let pinKey = "github.pinnedRepo"
-    nonisolated static let pinMissingKey = "github.pinnedRepoMissing"
+    nonisolated static let pinKey = GitHubDaySource.pinKey
+    nonisolated static let pinMissingKey = GitHubDaySource.pinMissingKey
+
+    /// GitHub refused the token (revoked on github.com). The connection is
+    /// kept, so Disconnect stays reachable, and the chip reads Reconnect.
+    private(set) var needsReconnect = false
+    /// Bumped on connect, disconnect and a new pin, so an open day screen
+    /// knows to ask again.
+    private(set) var changeCount = 0
 
     init(tokens: any GitHubTokenStoring = KeychainGitHubTokenStore(),
          sessions: any AuthSessionStoring = KeychainAuthSessionStore(),
@@ -53,6 +60,7 @@ final class GitHubConnectionViewModel: NSObject {
         guard AppConfig.isGitHubConfigured else { state = .unconfigured; return }
         if case .connecting = state { return }
         state = tokens.load().map { .connected(login: $0.login) } ?? .disconnected
+        needsReconnect = GitHubDaySource.needsReconnect(defaults)
     }
 
     func deactivate() {
@@ -67,7 +75,7 @@ final class GitHubConnectionViewModel: NSObject {
         case .unconfigured: "Not configured"
         case .disconnected: "Not connected"
         case .connecting: "Connecting…"
-        case .connected(let login): "Connected as @\(login)"
+        case .connected(let login): needsReconnect ? "GitHub needs reconnecting" : "Connected as @\(login)"
         case .failed(let message): message
         }
     }
@@ -80,9 +88,10 @@ final class GitHubConnectionViewModel: NSObject {
             withMutation(keyPath: \.pinnedRepo) {
                 if let newValue { defaults.set(newValue, forKey: Self.pinKey) }
                 else { defaults.removeObject(forKey: Self.pinKey) }
-                defaults.removeObject(forKey: Self.pinMissingKey)
+                withMutation(keyPath: \.pinMissing) { defaults.removeObject(forKey: Self.pinMissingKey) }
                 GitHubDayCache(defaults: defaults).clear()
             }
+            changeCount += 1
         }
     }
 
@@ -95,9 +104,8 @@ final class GitHubConnectionViewModel: NSObject {
 
     /// Nil unless connected, which is what hides the section.
     var dayProvider: (any GitHubDayProviding)? {
-        guard case .connected = state, let connection = tokens.load() else { return nil }
-        return GitHubDayProvider(connection: connection, pinnedRepo: pinnedRepo, defaults: defaults,
-                                 transport: transport)
+        guard case .connected = state else { return nil }
+        return GitHubDayProvider(source: GitHubDaySource(tokens: tokens, defaults: defaults, transport: transport))
     }
 
     // MARK: Sign-in
@@ -148,9 +156,17 @@ final class GitHubConnectionViewModel: NSObject {
             let token = try await exchange(code: code, verifier: attempt.verifier)
             let user: GitHubUser = try await get(GitHubAPI.url("/user"), token: token)
             guard active else { return }
+            // Another GitHub user's days and pin are not this one's.
+            if tokens.load()?.login != user.login {
+                GitHubDayCache(defaults: defaults).clear()
+                defaults.removeObject(forKey: Self.pinKey)
+            }
             try tokens.save(GitHubConnection(token: token, login: user.login))
             tokens.clearPending()
+            defaults.set(false, forKey: GitHubDaySource.needsReconnectKey)
+            needsReconnect = false
             state = .connected(login: user.login)
+            changeCount += 1
         } catch GitHubAuthError.denied {
             tokens.clearPending()
             state = .disconnected
@@ -201,8 +217,11 @@ final class GitHubConnectionViewModel: NSObject {
         tokens.clear()
         GitHubDayCache(defaults: defaults).clear()
         pinnedRepo = nil
+        defaults.removeObject(forKey: GitHubDaySource.needsReconnectKey)
+        needsReconnect = false
         repos = []
         state = .disconnected
+        changeCount += 1
     }
 
     // MARK: Repos for the pin
@@ -214,7 +233,8 @@ final class GitHubConnectionViewModel: NSObject {
                 ("sort", "pushed"), ("per_page", "50"), ("affiliation", "owner,collaborator,organization_member"),
             ]), token: connection.token)
         } catch GitHubConnectionError.unauthorized {
-            state = .failed("GitHub needs reconnecting")
+            defaults.set(true, forKey: GitHubDaySource.needsReconnectKey)
+            needsReconnect = true
         } catch {
             githubLog.error("github repos failed: \(error)")
         }
@@ -243,36 +263,13 @@ extension GitHubConnectionViewModel: ASWebAuthenticationPresentationContextProvi
     }
 }
 
-/// The day screen's GitHub source: the cache first, then the loader; a failed
-/// refresh falls back to the cached card with its time.
-///
-/// `@unchecked Sendable` for `UserDefaults`, which Apple documents as
-/// thread-safe.
-struct GitHubDayProvider: GitHubDayProviding, @unchecked Sendable {
-    let connection: GitHubConnection
-    let pinnedRepo: String?
-    let defaults: UserDefaults
-    var transport: any GitHubTransport = URLSessionGitHubTransport()
+/// The day screen's side of `GitHubDaySource`, which reads the token and
+/// the pin on every call.
+struct GitHubDayProvider: GitHubDayProviding {
+    let source: GitHubDaySource
 
     func project(for day: Date, isToday: Bool, force: Bool) async -> ProjectCardState? {
-        let calendar = Calendar.current
-        let cache = GitHubDayCache(defaults: defaults)
-        let cached = cache.entry(for: day, calendar: calendar)
-        if !force, let cached, cache.isFresh(cached, for: day, now: .now, calendar: calendar) {
-            return cached.card.map { .card($0, asOf: nil) }
-        }
-        let loader = GitHubDayLoader(transport: transport, connection: connection, pinnedRepo: pinnedRepo, calendar: calendar)
-        do {
-            let result = try await loader.load(day: day, isToday: isToday)
-            // Read by the Settings row, which says the pin was not found.
-            defaults.set(result.pinMissing, forKey: GitHubConnectionViewModel.pinMissingKey)
-            if case .reconnect = result.state { return .reconnect }
-            if case .card(let card, _)? = result.state { cache.store(card, for: day, calendar: calendar) }
-            else { cache.store(nil, for: day, calendar: calendar) }
-            return result.state
-        } catch {
-            return cached?.card.map { .card($0, asOf: cached?.fetchedAt) }
-        }
+        await source.project(for: day, isToday: isToday, force: force)
     }
 }
 
