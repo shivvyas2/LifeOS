@@ -72,6 +72,7 @@ struct NoteShelfScreen: View {
                 .buttonStyle(.editorial(.secondary, size: .compact))
                 .accessibilityLabel(isLibraryVisible ? "Hide library" : "Show library")
                 .keyboardShortcut("s", modifiers: [.command, .control])
+                .walkthroughAnchor(.notesLibrary)
             }
             EditorialMasthead(eyebrow: NotesHeadline.eyebrow(model.scope, count: model.headerCount),
                               title: model.headerTitle)
@@ -79,6 +80,7 @@ struct NoteShelfScreen: View {
                 .buttonStyle(.editorial(.primary, size: .compact))
                 .accessibilityLabel("New page")
                 .accessibilityHint("Starts a page in your Inbox")
+                .walkthroughAnchor(.notesNew)
         }
         .padding(.top, Space.x2)
     }
@@ -91,7 +93,8 @@ struct NoteShelfScreen: View {
         UnderlinePicker(
             selection: Binding(get: { model.selection.streamChip ?? .inbox },
                                set: { model.selection = NoteSelection(chip: $0) }),
-            options: [(NoteStreamChip.inbox, "Inbox"), (.all, "All"), (.todos, "To-dos")]
+            options: [(NoteStreamChip.inbox, "Inbox"), (.all, "All"), (.todos, "To-dos")],
+            anchors: [.todos: .notesTodos]
         )
     }
 
