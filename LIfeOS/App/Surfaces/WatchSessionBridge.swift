@@ -73,9 +73,10 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     }
 
     func send(_ command: PhoneCommand, maxHeartRate: Int? = nil, badminton: BadmintonSession? = nil,
-              completion: ((Bool) -> Void)? = nil) {
+              athlete: ActivityAthleteProfile? = nil, completion: ((Bool) -> Void)? = nil) {
         guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now,
-                                                                                  maxHeartRate: maxHeartRate, badminton: badminton)) else {
+                                                                                  maxHeartRate: maxHeartRate, badminton: badminton,
+                                                                                  athlete: athlete)) else {
             onControlFailure?("Apple Watch is unavailable. Use the controls on your Watch.")
             completion?(false); return
         }

@@ -262,10 +262,15 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     }
     func completeAthleteSetup(_ profile: ActivityAthleteProfile) {
         guard profile.isValid else { return }
-        athlete = profile
-        if let accountID { profile.save(to: UserDefaults(suiteName: "watch.athlete.\(accountID)") ?? .standard) }
+        adopt(profile)
         needsAthleteSetup = false
         if let pendingStart { self.pendingStart = nil; start(pendingStart) }
+    }
+    /// The profile the Watch keeps, saved under the account so a later
+    /// wrist-started workout finds it.
+    private func adopt(_ profile: ActivityAthleteProfile) {
+        athlete = profile
+        if let accountID { profile.save(to: UserDefaults(suiteName: "watch.athlete.\(accountID)") ?? .standard) }
     }
     /// Dismissing setup still starts the workout, just without swings.
     func skipAthleteSetup() {
@@ -412,6 +417,19 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
             if let setup = envelope.badminton, setup.isValid, activityName == "Badminton",
                badminton?.score?.rallies.isEmpty ?? true {
                 badminton = setup; sendPacket(force: true)
+            }
+            // The phone's profile, when it is newer than this Watch's own. A
+            // badminton workout the phone started on a Watch with no profile
+            // read nothing at start; it begins analyzing swings here instead.
+            let handoff = AthleteHandoff.decide(incoming: envelope.athlete, current: athlete,
+                                                activityName: activityName, analyzing: analyzesSwings)
+            if let profile = handoff.adopt { adopt(profile) }
+            if handoff.startsSwingAnalysis, state == .running || state == .starting {
+                swingAnalysis = SwingAnalysis(profile: athlete)
+                swingDetector = BadmintonSwingDetector(profile: athlete)
+                // Still starting: the start task begins motion itself once the
+                // session is running, now that there is an analysis to feed.
+                if state == .running { startMotion(); sendPacket(force: true) }
             }
         case .pause: pause()
         case .resume: resume()

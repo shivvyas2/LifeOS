@@ -95,7 +95,9 @@ extension ActivityRecorder {
         // a Health session of the phone's own for a relaunch to recover.
         recordingHealth = false
         persist()
-        watch?.send(.configure, maxHeartRate: zones?.maxHeartRate, badminton: badminton)
+        // The profile rides along: the watch read its own copy once, when the
+        // workout started, and may never have received the phone's at all.
+        watch?.send(.configure, maxHeartRate: zones?.maxHeartRate, badminton: badminton, athlete: athlete)
     }
 
     func mirroredStateChanged(_ state: HKWorkoutSessionState, at date: Date) {

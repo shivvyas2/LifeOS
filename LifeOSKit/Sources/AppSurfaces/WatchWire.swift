@@ -52,9 +52,15 @@ public struct PhoneCommandEnvelope: Codable, Equatable, Sendable {
     /// Sent with `configure`: the match or practice set up on the phone
     /// before the watch took the workout.
     public var badminton: BadmintonSession?
+    /// Sent with `configure`: the phone's athlete profile, so a workout the
+    /// phone started on a Watch that never received the profile can still
+    /// analyze swings. Absent from older phones, which the Watch tolerates.
+    public var athlete: ActivityAthleteProfile?
 
-    public init(command: PhoneCommand, sentAt: Date, maxHeartRate: Int? = nil, badminton: BadmintonSession? = nil) {
+    public init(command: PhoneCommand, sentAt: Date, maxHeartRate: Int? = nil, badminton: BadmintonSession? = nil,
+                athlete: ActivityAthleteProfile? = nil) {
         self.command = command; self.sentAt = sentAt; self.maxHeartRate = maxHeartRate; self.badminton = badminton
+        self.athlete = athlete
     }
 }
 
