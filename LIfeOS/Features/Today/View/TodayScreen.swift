@@ -86,6 +86,9 @@ struct TodayScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .sensoryFeedback(.impact(weight: .light), trigger: store.isArranging) { _, on in on }
+        // Switching tabs ends arranging; every change is already saved.
+        .onDisappear { store.isArranging = false }
         .task { attachDay() }
         .onChange(of: store.layout) { attachDay() }
         .onChange(of: github?.changeCount) { attachDay() }
@@ -115,7 +118,12 @@ struct TodayScreen: View {
     @ViewBuilder
     private var layoutBody: some View {
         VStack(alignment: .leading, spacing: Space.x3) {
-            masthead
+            if store.isArranging {
+                arrangingMasthead
+            } else {
+                masthead
+                if !store.hintSeen { TodayArrangeHint { store.hintSeen = true } }
+            }
             if layout.isRegular {
                 HStack(alignment: .top, spacing: Space.x4) {
                     column(store.layout.left, side: .left).frame(maxWidth: 520)
@@ -124,7 +132,51 @@ struct TodayScreen: View {
             } else {
                 column(store.layout.phoneOrder, side: nil)
             }
+            if store.isArranging {
+                TodayTray(hidden: store.layout.hidden, isGitHubConnected: isGitHubConnected,
+                          onAdd: { module in store.update { $0.add(module) } },
+                          onConnectGitHub: onOpenSettings,
+                          onReset: { store.reset() })
+            }
         }
+        // A tap on empty canvas ends arranging.
+        .contentShape(.rect)
+        .onTapGesture { if store.isArranging { store.isArranging = false } }
+    }
+
+    private var isGitHubConnected: Bool {
+        if case .connected = github?.state { return true }
+        return false
+    }
+
+    private var arrangingMasthead: some View {
+        let headline = TodayHeadline.make(date: snapshot.date, streak: snapshot.streak, calendar: calendar)
+        return HStack(alignment: .top) {
+            EditorialMasthead(eyebrow: "Arranging Today", title: headline.title, detail: nil)
+            Spacer(minLength: Space.x2)
+            Button("Done") { store.isArranging = false }
+                .buttonStyle(.editorial(.primary, size: .compact))
+        }
+    }
+
+    /// Puts `module` just before `target`, in `target`'s column.
+    private func place(_ name: String, before target: TodayModule) -> Bool {
+        guard let module = TodayModule(rawValue: name), module != target else { return false }
+        store.update { layout in
+            layout.hide(module)
+            let side = layout.column(of: target) ?? .left
+            let index = (side == .left ? layout.left : layout.right).firstIndex(of: target) ?? 0
+            layout.move(module, to: side, at: index)
+        }
+        return true
+    }
+
+    /// Dropped below a column's last row: the end of that column (on a phone,
+    /// the end of the list).
+    private func append(_ name: String, to side: TodayColumn?) -> Bool {
+        guard let module = TodayModule(rawValue: name) else { return false }
+        store.update { $0.move(module, to: side ?? .right, at: .max) }
+        return true
     }
 
     /// A column's rows, with the health prompt above its first tile row.
@@ -133,10 +185,24 @@ struct TodayScreen: View {
         let firstTileRow = rows.firstIndex { if case .pair = $0 { true } else { false } }
         return VStack(alignment: .leading, spacing: Space.x3) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index == firstTileRow, showsHealthPrompt { healthPrompt }
+                if index == firstTileRow, showsHealthPrompt, !store.isArranging { healthPrompt }
                 rowView(row)
+                    .modifier(ArrangeableModule(
+                        modules: row.modules, isArranging: store.isArranging, index: index,
+                        onHide: { module in store.update { $0.hide(module) } },
+                        onDrop: { place($0, before: row.modules[0]) }))
+                    .simultaneousGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                        if !store.isArranging { store.isArranging = true; store.hintSeen = true }
+                    })
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("today.module.\(row.modules[0].rawValue)")
+                    .modifier(MoveActions(modules: row.modules, isRegular: layout.isRegular, store: store))
+            }
+            if store.isArranging {
+                // Below the last row: drop here for the end of the column.
+                Color.clear.frame(height: 44).frame(maxWidth: .infinity)
+                    .contentShape(.rect)
+                    .dropDestination(for: String.self) { names, _ in names.first.map { append($0, to: side) } ?? false }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,3 +373,29 @@ struct TodayScreen: View {
         onOpenToday: {}
     )
 }
+
+/// VoiceOver's way to arrange, available whether or not arranging: each
+/// module moves up, down, across (iPad) or hides. A tile pair names which
+/// tile each action moves.
+private struct MoveActions: ViewModifier {
+    let modules: [TodayModule]
+    let isRegular: Bool
+    let store: TodayLayoutStore
+
+    func body(content: Content) -> some View {
+        modules.reduce(AnyView(content)) { view, module in
+            let suffix = modules.count > 1 ? " \(module.title)" : ""
+            var actions = AnyView(view
+                .accessibilityAction(named: "Move up\(suffix)") { store.update { $0.moveUp(module) } }
+                .accessibilityAction(named: "Move down\(suffix)") { store.update { $0.moveDown(module) } }
+                .accessibilityAction(named: "Hide\(suffix)") { store.update { $0.hide(module) } })
+            if isRegular {
+                actions = AnyView(actions.accessibilityAction(named: "Move to other column\(suffix)") {
+                    store.update { $0.moveToOtherColumn(module) }
+                })
+            }
+            return actions
+        }
+    }
+}
+
