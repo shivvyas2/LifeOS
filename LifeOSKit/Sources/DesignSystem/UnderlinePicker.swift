@@ -4,12 +4,15 @@ import SwiftUI
 public struct UnderlinePicker<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(Value, String)]
+    /// The walkthrough points at single tabs, so each option can carry an anchor.
+    let anchors: [Value: WalkthroughAnchor]
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var scheme
 
-    public init(selection: Binding<Value>, options: [(Value, String)]) {
+    public init(selection: Binding<Value>, options: [(Value, String)], anchors: [Value: WalkthroughAnchor] = [:]) {
         _selection = selection
         self.options = options
+        self.anchors = anchors
     }
 
     public var body: some View {
@@ -19,6 +22,9 @@ public struct UnderlinePicker<Value: Hashable>: View {
             }
             .pickerStyle(.menu).tint(LifeOSTokens.primaryText.resolve(scheme))
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            // One menu stands for every tab at accessibility sizes, so it
+            // carries the anchor of whichever tab has one.
+            .walkthroughAnchor(anchors.values.first)
         } else {
             tabs
         }
@@ -39,6 +45,7 @@ public struct UnderlinePicker<Value: Hashable>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selection == value ? .isSelected : [])
+                .walkthroughAnchor(anchors[value])
             }
         }
         .background(alignment: .bottom) {
