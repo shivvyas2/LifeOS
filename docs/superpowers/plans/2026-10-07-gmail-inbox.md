@@ -4,7 +4,7 @@
 
 **Goal:** Connect Gmail (test users), read the last two days of important Primary mail on the phone, sort it into NEEDS YOU and FYI with Apple's on-device model, and show it as an Inbox module on Today.
 
-**Architecture:** `Integrations` holds the tested pieces: `GoogleOAuth` (authorize URL, callback, token request bodies, expiry), `GoogleTokenStore` (Keychain per account), `GmailAPI` (URLs and decoding into `MailItem`), `MailVerdictCache`, `InboxDigest` (what Today shows) and `MailFallback` (snippet trimming). The app holds `GmailConnectionViewModel` (sign-in, refresh, disconnect, the mail fetch), `MailSorter` (FoundationModels guided generation), the Connections card and the Today `inbox` module. No server.
+**Architecture:** `Integrations` holds the tested pieces: `GoogleOAuth` (authorize URL, callback, token request bodies, expiry), `GoogleTokenStore` (Keychain per account), `GmailAPI` (URLs and decoding into `MailItem`), `MailVerdictCache`, `MailDigest` (what Today shows) and `MailFallback` (snippet trimming). The app holds `GmailConnectionViewModel` (sign-in, refresh, disconnect, the mail fetch), `MailSorter` (FoundationModels guided generation), the Connections card and the Today `inbox` module. No server.
 
 **Tech Stack:** AuthenticationServices, FoundationModels (`SystemLanguageModel`, `@Generable`), Keychain, Swift Testing, XCUITest.
 
@@ -26,7 +26,7 @@
 
 1. A token close to expiry must be refreshed before a call, and a refused refresh must read as reconnect, never as an empty inbox: `GoogleOAuthTests.expiryAndRefusal`.
 2. A `From` header with a quoted name, an encoded name, or a bare address must give a readable sender: `GmailAPITests.senders`.
-3. When three mails need you and four are FYI, Today shows three NEEDS YOU and two FYI; with six NEEDS YOU, all five slots are NEEDS YOU: `InboxDigestTests.capAndOrder`.
+3. When three mails need you and four are FYI, Today shows three NEEDS YOU and two FYI; with six NEEDS YOU, all five slots are NEEDS YOU: `MailDigestTests.capAndOrder`.
 4. A snippet with HTML entities (`&#39;`, `&amp;`) must read as text: `MailFallbackTests.entities`.
 5. A message classified once is never sent to the model again: `MailVerdictCacheTests.remembersAndCaps`.
 
@@ -36,13 +36,13 @@
 
 ### Task 1: The tested pieces (`Integrations`)
 
-**Files:** Create `GoogleOAuth.swift`, `GoogleTokenStore.swift`, `GmailAPI.swift`, `InboxDigest.swift` in `LifeOSKit/Sources/Integrations`; tests `GoogleOAuthTests.swift`, `GmailAPITests.swift`, `InboxDigestTests.swift` (with `MailFallbackTests`, `MailVerdictCacheTests`).
+**Files:** Create `GoogleOAuth.swift`, `GoogleTokenStore.swift`, `GmailAPI.swift`, `MailDigest.swift` in `LifeOSKit/Sources/Integrations`; tests `GoogleOAuthTests.swift`, `GmailAPITests.swift`, `InboxDigestTests.swift` (with `MailFallbackTests`, `MailVerdictCacheTests`).
 
 **Produces:**
 - `GoogleOAuth.session(clientID:redirectURI:state:verifier:) -> (url, state, verifier)`; `code(from:expectedState:) throws -> String` (`GoogleAuthError.denied/stateMismatch/missingCode`); `tokenRequestBody(code:verifier:clientID:redirectURI:) -> Data` and `refreshRequestBody(refreshToken:clientID:) -> Data` (form-encoded); `static func reversed(clientID:) -> String` (`123-abc.apps.googleusercontent.com` → `com.googleusercontent.apps.123-abc`); `GoogleTokenResponse` decoding `access_token`, `refresh_token?`, `expires_in`, `id_token?`; `email(fromIDToken:) -> String?` (JWT payload `email`); `GoogleRefreshOutcome { case refreshed(...), reconnect, unavailable }` from a status and body (`invalid_grant` → reconnect).
 - `GoogleConnection: Codable { accessToken, refreshToken, expiresAt, email }` with `needsRefresh(now:) -> Bool` (within 60 s); `GoogleTokenStoring` + `KeychainGoogleTokenStore` (service `ai.lifeos.google`, per account, pending auth item) + `InMemoryGoogleTokenStore`.
 - `GmailAPI.listURL() -> URL`, `messageURL(id:) -> URL`; `GmailAPI.messageIDs(from: Data) -> [String]`; `GmailAPI.item(from: Data) -> MailItem?`; `MailItem: Codable, Equatable { id, threadId, sender, senderEmail, subject, snippet, receivedAt, isUnread }`.
-- `MailBucket: String, Codable { needsYou, fyi }`; `MailVerdict: Codable, Equatable { bucket, summary }`; `MailFallback.verdict(for: MailItem) -> MailVerdict` (FYI, snippet cleaned of HTML entities and cut to ≤ 90 on a word with `…`); `MailVerdictCache(defaults:)` with `verdict(for id:)`, `store(_:for:)` (keeps the newest 200); `InboxDigest.make(items:verdicts:) -> InboxDigest { needsYou: [Row], fyi: [Row], needsYouCount: Int }` with `Row { item, summary }`.
+- `MailBucket: String, Codable { needsYou, fyi }`; `MailVerdict: Codable, Equatable { bucket, summary }`; `MailFallback.verdict(for: MailItem) -> MailVerdict` (FYI, snippet cleaned of HTML entities and cut to ≤ 90 on a word with `…`); `MailVerdictCache(defaults:)` with `verdict(for id:)`, `store(_:for:)` (keeps the newest 200); `MailDigest.make(items:verdicts:) -> MailDigest { needsYou: [Row], fyi: [Row], needsYouCount: Int }` with `Row { item, summary }`.
 
 - [ ] Tests first for every line of the Review Focus plus: the authorize URL's parameters; the reversed client id; token response decoding; email from a sample id token; list and message decoding from recorded Gmail JSON (`internalDate` in ms as a string, `UNREAD` in `labelIds`, headers by name case-insensitively). Watch them fail; implement; pass; commit `feat(integrations): Gmail's pieces, tested`.
 
@@ -50,7 +50,7 @@
 
 **Files:** Modify `AppConfig.swift` (`googleClientID`, `isGoogleConfigured`), `Config/App-Info.plist` (`GoogleClientID` = `$(GOOGLE_CLIENT_ID)`; `LSApplicationQueriesSchemes` with `googlegmail`), `Secrets.example.xcconfig`, `IntegrationContainer.swift` (owns `gmail`), `RootView.swift` (`.environment(\.gmail, …)`), `ConnectionsSettingsScreen.swift` (the card); Create `LIfeOS/Features/Settings/ViewModel/GmailConnectionViewModel.swift`, `LIfeOS/Features/Today/Model/MailSorter.swift`.
 
-- [ ] `GmailConnectionViewModel`: states like GitHub's (`unconfigured`, `disconnected`, `connecting`, `connected(email)`, `failed`), `needsReconnect`, `changeCount`; `connect()` through `ASWebAuthenticationSession(callbackURLScheme: GoogleOAuth.reversed(...))`; `handle(_:)` exchanges at `https://oauth2.googleapis.com/token` (no secret), reads the email from the id token, saves the connection; `validToken() async -> String?` refreshing when `needsRefresh`; `disconnect()` revokes (best effort) and clears; `inbox(force:) async -> InboxState` (`.notConnected`, `.reconnect`, `.ready(InboxDigest, fetchedAt)`) fetching the list then each message's metadata (concurrently, at most 6 at a time), sorting new ids through `MailSorter`, caching the last digest for 10 minutes.
+- [ ] `GmailConnectionViewModel`: states like GitHub's (`unconfigured`, `disconnected`, `connecting`, `connected(email)`, `failed`), `needsReconnect`, `changeCount`; `connect()` through `ASWebAuthenticationSession(callbackURLScheme: GoogleOAuth.reversed(...))`; `handle(_:)` exchanges at `https://oauth2.googleapis.com/token` (no secret), reads the email from the id token, saves the connection; `validToken() async -> String?` refreshing when `needsRefresh`; `disconnect()` revokes (best effort) and clears; `inbox(force:) async -> InboxState` (`.notConnected`, `.reconnect`, `.ready(MailDigest, fetchedAt)`) fetching the list then each message's metadata (concurrently, at most 6 at a time), sorting new ids through `MailSorter`, caching the last digest for 10 minutes.
 - [ ] `MailSorter`: when `SystemLanguageModel.default.availability == .available`, one `LanguageModelSession` per batch, `respond(to:generating: MailVerdictModel.self)` per message with only sender, subject, snippet; any failure or unavailability → `MailFallback.verdict`.
 - [ ] Build; commit `feat(gmail): connect Gmail and read the important mail on the phone`.
 
