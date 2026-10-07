@@ -23,6 +23,10 @@ final class DayViewModel {
     private var weatherTaskDay: Date?
     private var weatherGeneration = 0
     private var projectTask: Task<Void, Never>?
+    /// Today's screen shows only some of the day; it loads only those parts,
+    /// so a hidden Weather means no location request and no forecast call.
+    /// Nil: everything the day's placement allows.
+    var onlySections: Set<DaySection>?
 
     init(date: Date, calendar: Calendar = .current) {
         self.date = calendar.startOfDay(for: date)
@@ -55,7 +59,7 @@ final class DayViewModel {
     func load() {
         guard let context else { return }
         let placement = DayPlacement.of(date, calendar: calendar)
-        let sections = DaySections.visible(for: placement)
+        let sections = DaySections.visible(for: placement).filter { onlySections?.contains($0) ?? true }
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: date) ?? date
         let keptWeather: WeatherState = (self.briefing?.date == date) ? (self.briefing?.weather ?? .loading) : .loading
         let keptProject: ProjectCardState? = (self.briefing?.date == date) ? self.briefing?.project : nil
@@ -132,12 +136,19 @@ final class DayViewModel {
             return DayChecklist.DueTask(documentID: task.documentID, blockID: task.id, text: task.text,
                                         isChecked: task.isChecked, pageTitle: page.displayTitle)
         }
+        let overdue: [DayChecklist.DueTask] = calendar.isDateInToday(date)
+            ? try notes.tasks(dueBefore: date).compactMap { task in
+                guard let page = try? notes.document(id: task.documentID), !page.isArchived else { return nil }
+                return DayChecklist.DueTask(documentID: task.documentID, blockID: task.id, text: task.text,
+                                            isChecked: task.isChecked, pageTitle: page.displayTitle, dueDate: task.dueDate)
+            }
+            : []
         let habits = try plan.entries(kind: .habit).map { entry in
             DayChecklist.Habit(id: entry.id, title: entry.title, createdAt: entry.createdAt,
                                streak: (try? plan.streak(for: entry, endingOn: date)) ?? 0)
         }
         return DayChecklist.rows(
-            journal: journal?.blocks ?? [], journalID: journal?.id, due: due, habits: habits,
+            journal: journal?.blocks ?? [], journalID: journal?.id, due: due, overdue: overdue, habits: habits,
             ticked: try plan.tickedHabitIDs(on: date), day: date, editable: editable, calendar: calendar
         )
     }
