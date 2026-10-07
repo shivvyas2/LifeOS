@@ -242,6 +242,9 @@ struct DayScreen: View {
             openPage = documentID
         case .habit:
             onOpenHabits()
+        case .project:
+            // The task lives in the Projects tab; ticking it here is the action.
+            break
         }
     }
 }

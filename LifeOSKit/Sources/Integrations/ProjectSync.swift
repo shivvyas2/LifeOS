@@ -32,6 +32,13 @@ public final class ProjectSync {
         inFlight = nil
     }
 
+    /// Pushes local changes only, without a pull: after a tick or an edit
+    /// made outside the Projects tab.
+    public func pushPending() async {
+        guard let token = await accessToken() else { return }
+        do { try await push(token: token) } catch { lastError = String(describing: error) }
+    }
+
     private func run() async {
         guard let token = await accessToken() else { lastError = nil; return }
         do {

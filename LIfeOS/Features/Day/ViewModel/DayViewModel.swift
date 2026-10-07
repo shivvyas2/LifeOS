@@ -143,12 +143,19 @@ final class DayViewModel {
                                             isChecked: task.isChecked, pageTitle: page.displayTitle, dueDate: task.dueDate)
             }
             : []
+        // Project tasks assigned to this person for the day.
+        let me = KeychainAuthSessionStore().load().flatMap { UUID(uuidString: $0.userID) }
+        let projectTasks: [DayChecklist.ProjectDue] = me.map { id in
+            ((try? ProjectsStore(context: context, calendar: calendar).myTasks(userID: id, on: date)) ?? []).map {
+                DayChecklist.ProjectDue(taskID: $0.id, text: $0.title, isDone: $0.status == .done, projectName: $0.projectName)
+            }
+        } ?? []
         let habits = try plan.entries(kind: .habit).map { entry in
             DayChecklist.Habit(id: entry.id, title: entry.title, createdAt: entry.createdAt,
                                streak: (try? plan.streak(for: entry, endingOn: date)) ?? 0)
         }
         return DayChecklist.rows(
-            journal: journal?.blocks ?? [], journalID: journal?.id, due: due, overdue: overdue, habits: habits,
+            journal: journal?.blocks ?? [], journalID: journal?.id, due: due, overdue: overdue, projectTasks: projectTasks, habits: habits,
             ticked: try plan.tickedHabitIDs(on: date), day: date, editable: editable, calendar: calendar
         )
     }
@@ -266,6 +273,9 @@ final class DayViewModel {
             case .page(let documentID, let blockID):
                 guard let page = try notes.document(id: documentID) else { return }
                 try toggle(blockID, on: page, notes: notes)
+            case .project(let taskID):
+                try ProjectsStore(context: context, calendar: calendar)
+                    .moveTask(id: taskID, to: row.isDone ? .todo : .done, at: .max)
             case .habit(let entryID):
                 // Habits keep today's rule: a tick is a record of the day it is made.
                 guard isOnToday else { return }

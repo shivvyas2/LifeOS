@@ -7,7 +7,7 @@ import Foundation
         let layout = TodayLayout.standard
         #expect(layout.left == [.nextUp, .month, .tasks, .scheduledWorkout])
         #expect(layout.right == [.steps, .sleep, .weight, .recovery])
-        #expect(layout.hidden == [.github, .weather, .spentToday, .fromLifo])
+        #expect(layout.hidden == [.github, .weather, .spentToday, .fromLifo, .projects])
         #expect(layout.phoneOrder == layout.left + layout.right)
     }
 
@@ -109,6 +109,13 @@ import Foundation
         layout.offerGitHub()
         #expect(layout.left.filter { $0 == .github }.count == 1)
         #expect(layout.left.last == .github)
+    }
+
+    @Test func aLayoutSavedBeforeProjectsKeepsItHidden() {
+        let data = Data(#"{"left":["month","nextUp"],"right":["steps"]}"#.utf8)
+        #expect(TodayLayout.decoded(data).hidden.contains(.projects))
+        #expect(TodayModule.projects.title == "Projects")
+        #expect(TodayModule.projects.daySection == nil)
     }
 
     @Test func titlesAndTiles() {

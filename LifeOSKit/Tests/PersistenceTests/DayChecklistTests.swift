@@ -93,5 +93,18 @@ import Foundation
             habits: [], ticked: [], day: day, editable: true, calendar: calendar, now: day.addingTimeInterval(3_600))
         #expect(rows.isEmpty)
     }
+
+    @Test func myProjectTasksComeAfterTheDaysTasksAndBeforeHabits() {
+        let task = UUID(), run = UUID()
+        let rows = DayChecklist.rows(
+            journal: [NoteBlock(kind: .todo, text: "Draft the plan")], journalID: journalID,
+            due: [], projectTasks: [DayChecklist.ProjectDue(taskID: task, text: "Wireframes", isDone: false, projectName: "LifeOS 1.1")],
+            habits: [DayChecklist.Habit(id: run, title: "5km run", createdAt: day.addingTimeInterval(-86_400), streak: 2)],
+            ticked: [], day: day, editable: true, calendar: calendar, now: day.addingTimeInterval(3_600))
+        #expect(rows.map(\.text) == ["Draft the plan", "Wireframes", "5km run"])
+        #expect(rows[1].detail == "LifeOS 1.1")
+        #expect(rows[1].source == .project(taskID: task))
+        #expect(rows[1].isEditable)
+    }
 }
 

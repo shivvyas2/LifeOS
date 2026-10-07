@@ -1,6 +1,7 @@
 import SwiftUI
 import AppSurfaces
 import SwiftData
+import Combine
 import DesignSystem
 import Persistence
 import Insights
@@ -252,6 +253,13 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        // A project task ticked on Today or the day screen goes up without
+        // waiting for the Projects tab: push only, and only when something
+        // is pending.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .debounce(for: .seconds(2), scheduler: RunLoop.main)) { _ in
+            Task { await projectSync?.pushPending() }
+        }
         .environment(\.github, integrations.github)
         .environment(\.walkthroughFrames, notesWalkthrough.frames)
         .environment(\.notesWalkthrough, notesWalkthrough)
@@ -435,7 +443,8 @@ struct RootView: View {
                         onConnectHealth: { Task { await health.connect() } },
                         isHealthConnected: health.isConnected,
                         onSelectMetric: { openMetric = $0 },
-                        onOpenSettings: { showSettings = true }
+                        onOpenSettings: { showSettings = true },
+                        onOpenProjects: { tab = .projects }
                     )
                     // Applied before the bar items below, so the actions sit
                     // inboard of the avatar rather than being pushed past it:

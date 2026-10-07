@@ -30,6 +30,8 @@ struct TodayScreen: View {
     var onSelectMetric: (TodayMetric) -> Void = { _ in }
     /// The GitHub card's reconnect row and the tray's Connect GitHub.
     var onOpenSettings: () -> Void = {}
+    /// The Projects module's tap.
+    var onOpenProjects: () -> Void = {}
 
     /// The arrangement, saved per account on this device.
     @State var store: TodayLayoutStore
@@ -60,6 +62,7 @@ struct TodayScreen: View {
          isHealthConnected: Bool = false,
          onSelectMetric: @escaping (TodayMetric) -> Void = { _ in },
          onOpenSettings: @escaping () -> Void = {},
+         onOpenProjects: @escaping () -> Void = {},
          layoutStore: TodayLayoutStore? = nil) {
         self.snapshot = snapshot
         self.onSelectDay = onSelectDay
@@ -71,6 +74,7 @@ struct TodayScreen: View {
         self.isHealthConnected = isHealthConnected
         self.onSelectMetric = onSelectMetric
         self.onOpenSettings = onOpenSettings
+        self.onOpenProjects = onOpenProjects
         _store = State(initialValue: layoutStore ?? TodayLayoutStore())
         _day = State(initialValue: DayViewModel(date: snapshot.date))
     }

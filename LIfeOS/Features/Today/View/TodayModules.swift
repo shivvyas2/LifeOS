@@ -35,6 +35,7 @@ extension TodayScreen {
                 Task { await day.allowLocation() }
             }
         case .spentToday: spendModule
+        case .projects: projectsModule
         case .fromLifo:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(title: "From LIFO")
@@ -117,6 +118,37 @@ extension TodayScreen {
         } else {
             ghost(.github, note: "Not connected", action: ("Connect GitHub", onOpenSettings))
         }
+    }
+
+    /// The last twelve weeks of finished project work and the three active
+    /// projects' progress; a tap opens the Projects tab.
+    @ViewBuilder
+    private var projectsModule: some View {
+        let store = ProjectsStore(context: context)
+        let projects = Array(((try? store.projects()) ?? []).prefix(3))
+        Button { if !self.store.isArranging { onOpenProjects() } } label: {
+            VStack(alignment: .leading, spacing: Space.x2) {
+                HStack {
+                    Text("PROJECTS").brutalLabel()
+                    Spacer()
+                    Image(systemName: "arrow.right").font(LifeOSType.label.weight(.heavy))
+                }
+                ContributionGrid(counts: (try? store.completedPerDay(endingOn: .now, days: 84)) ?? [],
+                                 colour: .moss, weeks: 12)
+                if projects.isEmpty {
+                    Text("No projects yet.").font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
+                }
+                ForEach(projects) { project in
+                    VStack(alignment: .leading, spacing: Space.half) {
+                        Text(project.name.uppercased()).font(LifeOSType.label.weight(.heavy))
+                        BrutalProgress(fraction: project.fraction, colour: ProjectColour(named: project.colour))
+                    }
+                }
+            }
+            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+            .brutalCard()
+        }
+        .buttonStyle(.plain)
     }
 
     private var spendModule: some View {
