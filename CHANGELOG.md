@@ -10,6 +10,10 @@ All notable changes to Almanac are recorded here. The format follows [Keep a Cha
 - **Swing analysis status.** The start screen says whether the next badminton workout will analyze swings, and if not, the one setting to change.
 - **Past sessions.** Badminton history groups motion reviews from summaries and says why a summary has no motion: still waiting for the Watch, motion that could not be read, recorded on iPhone, or imported. The saved screen opens the session just finished rather than the list.
 
+### Fixed
+
+- **Swing analysis on phone-started workouts.** The phone now sends its athlete profile to the Watch with the workout it starts, so a Watch that never received the profile, or holds an older one, adopts it and begins analyzing swings instead of silently recording none.
+
 ## [1.0.1] - 2026-10-05
 
 The editorial redesign and badminton match tracking.
