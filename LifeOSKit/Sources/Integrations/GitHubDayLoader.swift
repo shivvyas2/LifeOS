@@ -20,8 +20,8 @@ public enum GitHubLoadError: Error, Equatable {
     case unavailable(Int)
 }
 
-enum GitHubAPI {
-    static func url(_ path: String, query: [(String, String)] = []) -> URL {
+public enum GitHubAPI {
+    public static func url(_ path: String, query: [(String, String)] = []) -> URL {
         var components = URLComponents(string: "https://api.github.com")!
         components.path = path
         if !query.isEmpty { components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) } }

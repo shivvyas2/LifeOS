@@ -200,6 +200,9 @@ struct DayScreen: View {
                     SpendRows(spend: spend)
                 }
             }
+        case .project:
+            // Drawn in the next task; nothing to show until then.
+            EmptyView()
         case .nudges:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(index: number(of: section, in: briefing), title: "From LIFO")

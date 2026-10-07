@@ -21,6 +21,7 @@ final class IntegrationContainer {
     
     let whoopTokenStore: any WhoopTokenStoring
     let fitbitAuthStore: any FitbitAuthStoring
+    let githubTokens: any GitHubTokenStoring
     let authSessionStore: any AuthSessionStoring
     let userDefaults: UserDefaults
     
@@ -38,6 +39,10 @@ final class IntegrationContainer {
         )
     }()
     
+    private(set) lazy var github: GitHubConnectionViewModel = {
+        GitHubConnectionViewModel(tokens: githubTokens, sessions: authSessionStore, defaults: userDefaults)
+    }()
+
     private(set) lazy var plaid: PlaidConnectionViewModel = {
         PlaidConnectionViewModel()
     }()
@@ -55,11 +60,13 @@ final class IntegrationContainer {
     init(
         whoopTokenStore: any WhoopTokenStoring = KeychainWhoopTokenStore(),
         fitbitAuthStore: any FitbitAuthStoring = KeychainFitbitAuthStore(),
+        githubTokens: any GitHubTokenStoring = KeychainGitHubTokenStore(),
         authSessionStore: any AuthSessionStoring = KeychainAuthSessionStore(),
         userDefaults: UserDefaults = .currentAccount
     ) {
         self.whoopTokenStore = whoopTokenStore
         self.fitbitAuthStore = fitbitAuthStore
+        self.githubTokens = githubTokens
         self.authSessionStore = authSessionStore
         self.userDefaults = userDefaults
     }
@@ -68,12 +75,14 @@ final class IntegrationContainer {
     static func test(
         whoopTokenStore: any WhoopTokenStoring = InMemoryWhoopTokenStore(),
         fitbitAuthStore: any FitbitAuthStoring = InMemoryFitbitAuthStore(),
+        githubTokens: any GitHubTokenStoring = InMemoryGitHubTokenStore(),
         authSessionStore: any AuthSessionStoring = InMemoryAuthSessionStore(),
         userDefaults: UserDefaults = UserDefaults(suiteName: "test")!
     ) -> IntegrationContainer {
         IntegrationContainer(
             whoopTokenStore: whoopTokenStore,
             fitbitAuthStore: fitbitAuthStore,
+            githubTokens: githubTokens,
             authSessionStore: authSessionStore,
             userDefaults: userDefaults
         )
@@ -95,6 +104,7 @@ final class IntegrationContainer {
         fitbit.deactivate()
         plaid.deactivate()
         health.deactivate()
+        github.deactivate()
     }
     
     /// Syncs all integrations if needed.

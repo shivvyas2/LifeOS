@@ -250,6 +250,7 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        .environment(\.github, integrations.github)
         .environment(\.walkthroughFrames, notesWalkthrough.frames)
         .environment(\.notesWalkthrough, notesWalkthrough)
         .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0) })
