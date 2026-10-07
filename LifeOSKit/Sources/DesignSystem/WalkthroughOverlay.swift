@@ -79,6 +79,7 @@ public struct WalkthroughOverlay: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(LifeOSTokens.cardSurface.resolve(scheme)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(ink.opacity(0.12), lineWidth: 0.5))
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("walkthrough.card")
         // Modal for VoiceOver too: swiping past the card must not reach the
         // controls under the scrim.
         .accessibilityAddTraits(.isModal)
