@@ -23,7 +23,7 @@ struct AccountControlsDesignPreview: View {
                 Text("Kept").font(LifeOSType.screenTitle).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 KeepAccountScreen(date: Calendar.current.date(byAdding: .day, value: 23, to: .now)!,
-                                  onKeep: { kept = true }, onSignOut: {})
+                                  onKeep: { kept = true; return true }, onSignOut: {})
             }
         }
     }

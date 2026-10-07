@@ -12,7 +12,8 @@ const GRACE_DAYS = 30;
 
 export type AccountStore = {
   clear(user: string, categories: ServerCategory[]): Promise<void>;
-  schedule(user: string, at: Date): Promise<Date>;
+  /// Null when the account has no profile row to stamp.
+  schedule(user: string, at: Date): Promise<Date | null>;
   cancel(user: string): Promise<void>;
   scheduledFor(user: string): Promise<Date | null>;
   deletedAmong(ids: string[]): Promise<string[]>;
@@ -49,6 +50,9 @@ export async function handleAccountData(
     case "DELETE": {
       const at = new Date(deps.now.getTime() + GRACE_DAYS * 86_400_000);
       const date = await deps.store.schedule(user, at);
+      // Nothing to stamp means nothing would ever be deleted: say so rather
+      // than let the phone sign out believing it was scheduled.
+      if (!date) return json({ error: "no_profile" }, 409);
       return json({ deletion_scheduled_for: date.toISOString() }, 200);
     }
     case "PATCH": {
@@ -69,6 +73,9 @@ export async function handleAccountData(
 
 export type PurgeDeps = {
   due(now: Date): Promise<string[]>;
+  /// Read again just before anything irreversible: an account kept after
+  /// the run took its list must be left alone.
+  stillDue(user: string, now: Date): Promise<boolean>;
   ownedGroups(user: string): Promise<string[]>;
   heirOf(group: string, user: string): Promise<string | null>;
   transfer(group: string, heir: string): Promise<void>;
@@ -86,6 +93,7 @@ export async function runPurge(deps: PurgeDeps, now: Date): Promise<{ deleted: n
   let deleted = 0, failed = 0;
   for (const user of await deps.due(now)) {
     try {
+      if (!(await deps.stillDue(user, now))) continue;
       for (const group of await deps.ownedGroups(user)) {
         const heir = await deps.heirOf(group, user);
         if (heir) await deps.transfer(group, heir); else await deps.deleteGroup(group);
@@ -97,7 +105,7 @@ export async function runPurge(deps: PurgeDeps, now: Date): Promise<{ deleted: n
       deleted += 1;
     } catch (error) {
       failed += 1;
-      deps.log(`purge failed: ${error instanceof Error ? error.name : "unknown"}`);
+      deps.log(`purge failed: ${error instanceof Error ? error.message : "unknown"}`);
     }
   }
   deps.log(`purge done: ${deleted} deleted, ${failed} failed`);

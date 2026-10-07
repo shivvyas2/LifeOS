@@ -12,6 +12,12 @@ function deps(): PurgeDeps {
       if (error) throw new Error("due_failed");
       return (data ?? []).map((row: { user_id: string }) => row.user_id);
     },
+    async stillDue(user, now) {
+      const { data, error } = await db.from("profiles").select("deletion_scheduled_for")
+        .eq("user_id", user).maybeSingle();
+      if (error) throw new Error("recheck_failed");
+      return !!data?.deletion_scheduled_for && new Date(data.deletion_scheduled_for) <= now;
+    },
     async ownedGroups(user) {
       const { data, error } = await db.from("social_groups").select("id").eq("owner_id", user);
       if (error) throw new Error("groups_failed");
@@ -35,7 +41,10 @@ function deps(): PurgeDeps {
     async revokeConnections(user) {
       // Plaid keeps billing for an Item that still exists, so removal there is
       // required; an Item Plaid no longer knows is already gone.
-      const { data: items } = await db.from("plaid_items").select("access_token").eq("user_id", user);
+      // A failed read must stop this account: deleting the login would drop
+      // the rows while the Items stay live at Plaid, with nothing to retry from.
+      const { data: items, error: itemsError } = await db.from("plaid_items").select("access_token").eq("user_id", user);
+      if (itemsError) throw new Error("plaid_items_failed");
       for (const item of items ?? []) {
         try {
           await callPlaid("/item/remove", { access_token: item.access_token });
