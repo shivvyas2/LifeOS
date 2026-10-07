@@ -9,6 +9,8 @@ struct NotesDesignPreview: View {
     var showEditor = false
     var showsPreviewLabel = true
     /// `notes-editor-new`: a blank page with the title focused;
+    /// `notes-editor`: the sample page, nothing focused;
+    /// `notes-editor-picker`: its first block focused, the picker up;
     /// `notes-filing`: the sample page with the filing sheet up.
     var page: String = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -24,6 +26,14 @@ struct NotesDesignPreview: View {
             case "notes-filing":
                 NavigationStack {
                     NoteEditorScreen(model: fixture.editor, openFilingOnAppear: true, onOpenLinked: { _ in })
+                }
+            case "notes-editor":
+                NavigationStack {
+                    NoteEditorScreen(model: fixture.editor, onOpenLinked: { _ in })
+                }
+            case "notes-editor-picker":
+                NavigationStack {
+                    NoteEditorScreen(model: fixture.editor, focusOnAppear: .firstBlock, onOpenLinked: { _ in })
                 }
             default:
                 if showEditor {
