@@ -75,6 +75,9 @@ final class ProjectsViewModel {
         for profile in profiles { names[profile.userID] = profile.displayName }
     }
 
+    /// Shown on the home when the last sync could not finish.
+    var syncError: String? { sync?.lastError }
+
     func name(_ id: UUID?) -> String {
         guard let id else { return "Unassigned" }
         if id == me { return "You" }

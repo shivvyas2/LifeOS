@@ -74,4 +74,21 @@ import SwiftData
                                      updatedAt: Date(timeIntervalSince1970: 200), deletedAt: nil)
         #expect(try store.projects().first?.name == "Edited here")
     }
+
+    @Test func aTimeBlockNeverEndsBeforeItStarts() throws {
+        let store = try store()
+        let project = try store.createProject(name: "P", scope: "", colour: "moss", ownerID: me)
+        let task = try store.createTask(projectID: project, title: "Block")
+        try store.updateTask(id: task, startsAt: day, endsAt: day.addingTimeInterval(-600))
+        let saved = try #require(try store.tasks(projectID: project).first)
+        #expect(try #require(saved.endsAt) > day)
+    }
+
+    @Test func titlesAreCutAsTheServerCountsThem() {
+        let family = String(repeating: "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}", count: 30)
+        let cut = ProjectsStore.limit(family, 60)
+        #expect(cut.unicodeScalars.count <= 60)
+        #expect(ProjectsStore.limit("short", 60) == "short")
+    }
 }
+

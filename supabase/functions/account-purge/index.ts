@@ -38,6 +38,30 @@ function deps(): PurgeDeps {
       const { error } = await db.from("social_groups").delete().eq("id", group);
       if (error) throw new Error("delete_group_failed");
     },
+    async ownedProjects(user) {
+      const { data, error } = await db.from("projects").select("id").eq("owner_id", user);
+      if (error) throw new Error("projects_failed");
+      return (data ?? []).map((row: { id: string }) => row.id);
+    },
+    async projectHeirOf(project, user) {
+      const { data, error } = await db.from("project_members").select("user_id")
+        .eq("project_id", project).neq("user_id", user)
+        .order("added_at", { ascending: true }).limit(1).maybeSingle();
+      if (error) throw new Error("project_heir_failed");
+      return data?.user_id ?? null;
+    },
+    async transferProject(project, heir) {
+      const owner = await db.from("projects").update({ owner_id: heir }).eq("id", project);
+      if (owner.error) throw new Error("transfer_project_failed");
+      const role = await db.from("project_members").update({ role: "owner" })
+        .eq("project_id", project).eq("user_id", heir);
+      if (role.error) throw new Error("transfer_project_role_failed");
+    },
+    async deleteProject(project) {
+      // A tombstone, so members' phones learn it is gone on their next pull.
+      const { error } = await db.from("projects").update({ deleted_at: new Date().toISOString() }).eq("id", project);
+      if (error) throw new Error("delete_project_failed");
+    },
     async revokeConnections(user) {
       // Plaid keeps billing for an Item that still exists, so removal there is
       // required; an Item Plaid no longer knows is already gone.

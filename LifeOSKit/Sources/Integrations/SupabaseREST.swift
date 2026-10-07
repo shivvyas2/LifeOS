@@ -52,6 +52,37 @@ public struct SupabaseREST: Sendable {
 
     /// Serialises rows for `upsert`. Static so the caller can do it on its own
     /// actor before handing over the bytes.
+    /// Inserts, leaving rows that already exist alone: for a table whose
+    /// rows are never updated (membership), where an upsert would need an
+    /// update policy that must not exist.
+    public func insertIgnoringDuplicates(table: String, body: Data, accessToken: String) async throws {
+        guard !body.isEmpty else { return }
+        var request = try authorized(path: "rest/v1/\(table)", accessToken: accessToken)
+        request.httpMethod = "POST"
+        request.setValue("resolution=ignore-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        _ = try await perform(request)
+    }
+
+    /// Every row of `table` whose `column` equals `value`, oldest edit first.
+    public func fetch(table: String, column: String, equals value: String, accessToken: String,
+                      limit: Int = 1_000) async throws -> Data {
+        var components = URLComponents(url: baseURL.appendingPathComponent("rest/v1/\(table)"),
+                                       resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "select", value: "*"),
+            URLQueryItem(name: column, value: "eq.\(value)"),
+            URLQueryItem(name: "order", value: "updated_at.asc"),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        guard let url = components?.url else { throw RESTError.encoding }
+        var request = URLRequest(url: url)
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        return try await perform(request)
+    }
+
     public static func encode(_ rows: [[String: Any]]) throws -> Data {
         guard !rows.isEmpty else { return Data() }
         guard JSONSerialization.isValidJSONObject(rows) else { throw RESTError.encoding }

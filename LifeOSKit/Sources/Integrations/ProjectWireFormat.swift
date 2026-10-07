@@ -2,15 +2,14 @@ import Foundation
 
 /// Rows of the four project tables as the server stores them.
 enum WireDate {
-    /// `date` columns travel as `yyyy-MM-dd` in UTC.
+    /// `date` columns travel as `yyyy-MM-dd` in the phone's own timezone and
+    /// come back as local midnight, as journal dates do, so a day never moves.
     static func day(_ date: Date?) -> Any {
         guard let date else { return NSNull() }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return SupabaseREST.day(date)
     }
+
+    static func readDay(_ value: Any?) -> Date? { (value as? String).flatMap { SupabaseREST.day(from: $0) } }
 
     static func instant(_ date: Date?) -> Any { date.map(SupabaseREST.timestamp) ?? NSNull() }
     static func read(_ value: Any?) -> Date? { (value as? String).flatMap(SupabaseREST.date) }
@@ -32,8 +31,8 @@ public struct ProjectRow: Equatable, Sendable {
     public init?(json: [String: Any]) {
         guard let id = WireDate.uuid(json["id"]), let name = json["name"] as? String,
               let updated = WireDate.read(json["updated_at"]) else { return nil }
-        self.init(id: id, name: name, scope: json["scope"] as? String ?? "", startsOn: WireDate.read(json["starts_on"]),
-                  endsOn: WireDate.read(json["ends_on"]), colour: json["colour"] as? String ?? "tomato",
+        self.init(id: id, name: name, scope: json["scope"] as? String ?? "", startsOn: WireDate.readDay(json["starts_on"]),
+                  endsOn: WireDate.readDay(json["ends_on"]), colour: json["colour"] as? String ?? "tomato",
                   ownerID: WireDate.uuid(json["owner_id"]), repo: json["repo"] as? String,
                   archivedAt: WireDate.read(json["archived_at"]), updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
     }
@@ -78,7 +77,7 @@ public struct MilestoneRow: Equatable, Sendable {
     public init?(json: [String: Any]) {
         guard let id = WireDate.uuid(json["id"]), let project = WireDate.uuid(json["project_id"]),
               let updated = WireDate.read(json["updated_at"]) else { return nil }
-        self.init(id: id, projectID: project, title: json["title"] as? String ?? "", dueOn: WireDate.read(json["due_on"]),
+        self.init(id: id, projectID: project, title: json["title"] as? String ?? "", dueOn: WireDate.readDay(json["due_on"]),
                   position: json["position"] as? Int ?? 0, updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
     }
 
@@ -108,7 +107,7 @@ public struct ProjectTaskRow: Equatable, Sendable {
         self.init(id: id, projectID: project, milestoneID: WireDate.uuid(json["milestone_id"]),
                   title: json["title"] as? String ?? "", notes: json["notes"] as? String ?? "",
                   status: json["status"] as? String ?? "todo", ownerID: WireDate.uuid(json["owner_id"]),
-                  dueOn: WireDate.read(json["due_on"]), startsAt: WireDate.read(json["starts_at"]),
+                  dueOn: WireDate.readDay(json["due_on"]), startsAt: WireDate.read(json["starts_at"]),
                   endsAt: WireDate.read(json["ends_at"]), position: json["position"] as? Int ?? 0,
                   doneAt: WireDate.read(json["done_at"]), updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
     }

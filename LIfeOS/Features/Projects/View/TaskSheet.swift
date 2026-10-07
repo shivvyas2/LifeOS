@@ -67,7 +67,7 @@ struct TaskSheet: View {
                     Toggle("Time block", isOn: $hasBlock)
                     if hasBlock {
                         DatePicker("Starts", selection: $start)
-                        DatePicker("Ends", selection: $end, in: start...)
+                        DatePicker("Ends", selection: $end, in: start.addingTimeInterval(60)...)
                     }
                 }
                 if existing != nil {
@@ -91,6 +91,12 @@ struct TaskSheet: View {
                 }
             }
             .onAppear(perform: fill)
+            // Moving the start keeps the block's length; the end never falls
+            // on or before the start.
+            .onChange(of: start) { old, new in
+                let length = max(end.timeIntervalSince(old), 15 * 60)
+                end = new.addingTimeInterval(length)
+            }
         }
     }
 

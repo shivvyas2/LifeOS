@@ -79,6 +79,10 @@ function purgeDeps(over: Partial<PurgeDeps> = {}) {
     heirOf: (g) => Promise.resolve(g === "g-shared" ? "c" : null),
     transfer: (g, h) => { steps.push(`transfer ${g} ${h}`); return Promise.resolve(); },
     deleteGroup: (g) => { steps.push(`delete-group ${g}`); return Promise.resolve(); },
+    ownedProjects: (u) => Promise.resolve(u === "a" ? ["p-shared", "p-solo"] : []),
+    projectHeirOf: (p) => Promise.resolve(p === "p-shared" ? "d" : null),
+    transferProject: (p, h) => { steps.push(`transfer-project ${p} ${h}`); return Promise.resolve(); },
+    deleteProject: (p) => { steps.push(`delete-project ${p}`); return Promise.resolve(); },
     revokeConnections: (u) => { steps.push(`revoke ${u}`); return Promise.resolve(); },
     removeAvatars: (u) => { steps.push(`avatars ${u}`); return Promise.resolve(); },
     deleteUser: (u) => { steps.push(`delete-user ${u}`); return Promise.resolve(); },
@@ -92,7 +96,11 @@ function purgeDeps(over: Partial<PurgeDeps> = {}) {
 Deno.test("groups move before the login goes", async () => {
   const { deps, steps } = purgeDeps({ due: () => Promise.resolve(["a"]) });
   const result = await runPurge(deps, now);
-  assertEquals(steps, ["transfer g-shared c", "delete-group g-alone", "revoke a", "avatars a", "delete-user a", "record a"]);
+  assertEquals(steps, [
+    "transfer g-shared c", "delete-group g-alone",
+    "transfer-project p-shared d", "delete-project p-solo",
+    "revoke a", "avatars a", "delete-user a", "record a",
+  ]);
   assertEquals(result, { deleted: 1, failed: 0 });
 });
 

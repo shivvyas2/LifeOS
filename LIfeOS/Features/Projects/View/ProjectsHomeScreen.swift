@@ -29,6 +29,11 @@ struct ProjectsHomeScreen: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("New project")
                 }
+                if let error = model.syncError {
+                    Text(error).font(LifeOSType.caption.weight(.heavy))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .brutalCard(padding: Space.x1)
+                }
                 contributions
                 if model.projects.isEmpty {
                     VStack(alignment: .leading, spacing: Space.x1) {
