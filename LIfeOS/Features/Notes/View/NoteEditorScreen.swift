@@ -221,6 +221,7 @@ struct NoteEditorScreen: View {
         }
         .buttonStyle(.editorial(.secondary, size: .compact))
         .accessibilityHint("Choose where this page lives")
+        .walkthroughAnchor(.notesFileChip)
         if let date = model.entryDate {
             Text(date, format: .dateTime.month(.abbreviated).day())
         }

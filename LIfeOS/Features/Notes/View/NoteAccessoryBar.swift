@@ -153,6 +153,7 @@ struct NoteAccessoryBar: View {
                 onIndent: onIndent,
                 onToggleInk: onToggleInk
             )
+            .walkthroughAnchor(.notesBlockPicker)
 
             Button(action: onDismissKeyboard) {
                 Image(systemName: "keyboard.chevron.compact.down")

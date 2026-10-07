@@ -14,6 +14,9 @@ struct NotesHubScreen: View {
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
+    @Environment(\.notesWalkthrough) private var walkthrough
+    @AppStorage(NotesWalkthrough.seenKey, store: .currentAccount) private var hasSeenNotesWalkthrough = false
+    @AppStorage("hasSeenFirstRunTour", store: .currentAccount) private var hasSeenFirstRunTour = false
 
     /// Pushed navigation: the phone's whole journey, and the shelf column's
     /// own stack on an iPad. A page is only ever on here when there is no
@@ -54,6 +57,26 @@ struct NotesHubScreen: View {
         }
         .background(LifeOSTokens.canvas.resolve(scheme))
         .focusedSceneValue(\.notesCommands, commandTarget)
+        // Once per account, and never over the welcome tour.
+        .onAppear {
+            guard let walkthrough, !hasSeenNotesWalkthrough, hasSeenFirstRunTour else { return }
+            walkthrough.start(notes: model)
+        }
+        .onChange(of: walkthrough?.request) { _, request in
+            guard let request else { return }
+            switch request {
+            case .showShelf:
+                // The To-dos chip only exists on the Inbox, All and To-dos
+                // selections, and a search hides it too.
+                model.selection = .inbox
+                model.query = ""
+                path.removeAll()
+                openPage = nil
+            case .openPage(let id):
+                open(id, focus: .firstBlock)
+            }
+            walkthrough?.consumeRequest()
+        }
         .sheet(item: $newFolderBucket) { bucket in
             NoteFolderSheet(
                 title: "New folder in \(bucket.title)",
@@ -258,6 +281,7 @@ struct NotesHubScreen: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { isLibraryPresented = true } label: {
                             Image(systemName: "sidebar.left")
+                                .walkthroughAnchor(.notesLibrary)
                         }
                         .accessibilityLabel("Browse folders")
                     }

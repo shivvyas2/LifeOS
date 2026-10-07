@@ -71,6 +71,7 @@ struct RootView: View {
     @State private var openMoney: MoneyDetailFilter?
     @State private var plan = PlanViewModel()
     @State private var notes = NotesViewModel()
+    @State private var notesWalkthrough = NotesWalkthrough()
     @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
@@ -143,6 +144,8 @@ struct RootView: View {
                 compactShell
             }
         }
+        // Above the tabs and the nav bar, below every sheet and cover.
+        .overlay { NotesWalkthroughLayer(walkthrough: notesWalkthrough) }
         // A sheet on an iPad is a centered card, and the live session and
         // the video it pushes would be stuck inside it. Regular width gets
         // the cover Settings and the Coach already use.
@@ -229,6 +232,8 @@ struct RootView: View {
         }
         .environment(\.layout, metrics)
         .environment(\.noteSync, noteSync)
+        .environment(\.walkthroughFrames, notesWalkthrough.frames)
+        .environment(\.notesWalkthrough, notesWalkthrough)
         .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0) })
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
