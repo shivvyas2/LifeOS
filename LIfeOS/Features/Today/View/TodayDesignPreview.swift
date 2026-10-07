@@ -3,6 +3,7 @@ import SwiftUI
 import SwiftData
 import AppSurfaces
 import DesignSystem
+import Integrations
 import Persistence
 
 /// Fixture pages for Today, the calendar screen, the day sheet and Notes,
@@ -65,12 +66,16 @@ struct TodayDesignPreview: View {
                                    initialQuestion: TodayFixture.question)
                 }
                 .modelContainer(fixture.container)
-            case "day", "day-past", "day-future", "day-far", "day-empty", "day-no-location":
+            case "day", "day-past", "day-future", "day-far", "day-empty", "day-no-location",
+                 "day-github", "day-github-issues", "day-github-today-none", "day-github-reconnect", "day-github-stale":
                 NavigationStack { DayScreen(date: fixture.dayDate(for: page)) }
                     .modelContainer(page == "day-empty" ? fixture.emptyContainer : fixture.container)
                     .environment(\.dayProviders, DayProviders(
                         weather: StubWeatherProvider(),
-                        location: StubLocation(access: page == "day-no-location" ? .notDetermined : .granted)))
+                        location: StubLocation(access: page == "day-no-location" ? .notDetermined : .granted),
+                        github: githubState(for: page).map { StubGitHubProvider(state: $0) }))
+                    // `--anchor=center` scrolls the Project section into a capture.
+                    .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=center") ? .center : nil)
             case "today-done":
                 NavigationStack {
                     TodayScreen(snapshot: fixture.doneSnapshot, onSelectDay: { _ in }, onConnectCalendar: {},
@@ -93,6 +98,20 @@ struct TodayDesignPreview: View {
         }
         .environment(\.quickActions, LifeDesignPreview.actions)
         .environment(\.shellProfile, ShellProfile(photo: nil, open: {}))
+    }
+
+    /// The `day-github` pages' card; nil, and no section, for the others.
+    private func githubState(for page: String) -> ProjectCardState? {
+        switch page {
+        case "day-github": .card(StubGitHubProvider.sevenCommits, asOf: nil)
+        case "day-github-issues": .card(StubGitHubProvider.issues, asOf: nil)
+        case "day-github-today-none": .card(StubGitHubProvider.todayNone, asOf: nil)
+        case "day-github-reconnect": .reconnect
+        case "day-github-stale":
+            .card(StubGitHubProvider.sevenCommits,
+                  asOf: Calendar.current.date(bySettingHour: 9, minute: 40, second: 0, of: .now))
+        default: nil
+        }
     }
 }
 
