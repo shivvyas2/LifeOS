@@ -24,11 +24,18 @@ public extension EnvironmentValues {
 private struct WalkthroughAnchorModifier: ViewModifier {
     let anchor: WalkthroughAnchor?
     @Environment(\.walkthroughFrames) private var frames
+    /// A view coming back from under a pushed screen reappears where it was,
+    /// so its geometry does not change and would never report again.
+    @State private var lastFrame: CGRect?
 
     func body(content: Content) -> some View {
         if let anchor, let frames {
             content
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.report(anchor, $0) }
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                    lastFrame = frame
+                    frames.report(anchor, frame)
+                }
+                .onAppear { if let lastFrame { frames.report(anchor, lastFrame) } }
                 .onDisappear { frames.report(anchor, nil) }
         } else {
             content
