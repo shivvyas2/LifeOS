@@ -76,6 +76,20 @@ struct TodayDesignPreview: View {
                         github: githubState(for: page).map { StubGitHubProvider(state: $0) }))
                     // `--anchor=center` scrolls the Project section into a capture.
                     .defaultScrollAnchor(ProcessInfo.processInfo.arguments.contains("--anchor=center") ? .center : nil)
+            // A Today arranged by hand: Month first, tasks and GitHub on the
+            // left, two tiles on the right. `today-arranging` is the same in
+            // the middle of arranging, with Weather in the tray.
+            case "today-custom", "today-arranging", "today-ipad-custom":
+                NavigationStack {
+                    TodayScreen(snapshot: fixture.snapshot, onSelectDay: { _ in }, onConnectCalendar: {},
+                                onAddEvent: {}, onTapEvent: { _ in }, onOpenToday: {}, isHealthConnected: true,
+                                layoutStore: Self.customStore(arranging: page == "today-arranging"))
+                        .shellToolbar()
+                }
+                .modelContainer(fixture.container)
+                .environment(\.dayProviders, DayProviders(
+                    weather: StubWeatherProvider(), location: StubLocation(access: .granted),
+                    github: StubGitHubProvider(state: .card(StubGitHubProvider.sevenCommits, asOf: nil))))
             case "today-done":
                 NavigationStack {
                     TodayScreen(snapshot: fixture.doneSnapshot, onSelectDay: { _ in }, onConnectCalendar: {},
@@ -112,6 +126,22 @@ struct TodayDesignPreview: View {
                   asOf: Calendar.current.date(bySettingHour: 9, minute: 40, second: 0, of: .now))
         default: nil
         }
+    }
+
+    /// A fresh store each launch, so a UI test's arranging never leaks into
+    /// the next run or into the plain `today` page.
+    @MainActor
+    private static func customStore(arranging: Bool) -> TodayLayoutStore {
+        let name = "preview.today.custom"
+        UserDefaults.standard.removePersistentDomain(forName: name)
+        let store = TodayLayoutStore(defaults: UserDefaults(suiteName: name)!)
+        store.layout = TodayLayout(left: [.month, .tasks, .github, .nextUp], right: [.steps, .sleep, .weather])
+        store.hintSeen = true
+        if arranging {
+            store.update { $0.hide(.weather) }
+            store.isArranging = true
+        }
+        return store
     }
 }
 

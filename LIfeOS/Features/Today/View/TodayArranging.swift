@@ -52,10 +52,12 @@ struct ArrangeableModule: ViewModifier {
                     HStack(spacing: Space.half) {
                         ForEach(modules, id: \.self) { module in
                             Button { onHide(module) } label: {
+                                // An ink disc with a paper minus, readable on any card.
                                 Image(systemName: "minus.circle.fill")
                                     .font(LifeOSType.sectionTitle)
-                                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme),
-                                                     LifeOSTokens.canvas.resolve(scheme))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(LifeOSTokens.canvas.resolve(scheme),
+                                                     LifeOSTokens.primaryText.resolve(scheme))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Hide \(module.title)")
