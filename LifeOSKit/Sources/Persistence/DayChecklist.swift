@@ -37,9 +37,10 @@ public enum DayChecklist {
         public let text: String
         public let isChecked: Bool
         public let pageTitle: String
-        public init(documentID: UUID, blockID: UUID, text: String, isChecked: Bool, pageTitle: String) {
+        public let dueDate: Date?
+        public init(documentID: UUID, blockID: UUID, text: String, isChecked: Bool, pageTitle: String, dueDate: Date? = nil) {
             self.documentID = documentID; self.blockID = blockID; self.text = text
-            self.isChecked = isChecked; self.pageTitle = pageTitle
+            self.isChecked = isChecked; self.pageTitle = pageTitle; self.dueDate = dueDate
         }
     }
 
@@ -55,11 +56,11 @@ public enum DayChecklist {
 
     /// The journal page's to-dos in page order, then what is due from other
     /// pages (a journal to-do that also carries the date is not repeated),
-    /// then the habits that existed by the end of the day. A habit tick is a
+    /// then, on today only, what is overdue, then the habits that existed by the end of the day. A habit tick is a
     /// record of the day it is made, so habit rows are editable on today
     /// only, whatever `editable` says for the page rows.
     public static func rows(
-        journal: [NoteBlock], journalID: UUID?, due: [DueTask], habits: [Habit],
+        journal: [NoteBlock], journalID: UUID?, due: [DueTask], overdue: [DueTask] = [], habits: [Habit],
         ticked: Set<UUID>, day: Date, editable: Bool, calendar: Calendar = .current, now: Date = .now
     ) -> [ChecklistRow] {
         var rows: [ChecklistRow] = []
@@ -71,6 +72,16 @@ public enum DayChecklist {
         for task in due where task.documentID != journalID {
             rows.append(ChecklistRow(source: .page(documentID: task.documentID, blockID: task.blockID),
                                      text: task.text, detail: task.pageTitle, isDone: task.isChecked, isEditable: editable))
+        }
+        // Late to-dos join today's list, oldest first; a past day is a record.
+        if calendar.isDate(day, inSameDayAs: now) {
+            let late = overdue.filter { !$0.isChecked && $0.documentID != journalID }
+                .sorted { ($0.dueDate ?? .distantPast) < ($1.dueDate ?? .distantPast) }
+            for task in late {
+                rows.append(ChecklistRow(source: .page(documentID: task.documentID, blockID: task.blockID),
+                                         text: task.text, detail: "overdue · \(task.pageTitle)",
+                                         isDone: false, isEditable: editable))
+            }
         }
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day)) ?? day
         for habit in habits where habit.createdAt < dayEnd {
