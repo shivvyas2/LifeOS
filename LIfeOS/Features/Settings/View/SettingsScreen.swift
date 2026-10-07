@@ -15,6 +15,9 @@ struct SettingsScreen: View {
     var health: HealthConnectionViewModel?
     var plaid: PlaidConnectionViewModel?
     var onSignOut: () -> Void = {}
+    /// Both close Settings first; `RootView` acts once the cover has gone.
+    var onReplayNotesWalkthrough: () -> Void = {}
+    var onReplayTour: () -> Void = {}
     @AppStorage("colorSchemePreference") private var appearance: ColorSchemePreference = .system
     @AppStorage(TierPreference.storageKey) private var tierRaw = TierPreference.automatic.rawValue
     @AppStorage(AssistantVoice.enabledKey) private var speaksReplies = false
@@ -74,6 +77,10 @@ struct SettingsScreen: View {
                         Label("Widgets & Watch", systemImage: "applewatch").font(LifeOSType.rowTitle)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    Divider()
+                    replayRow("Walk me through Notes again", systemImage: "hand.point.up.left", action: onReplayNotesWalkthrough)
+                    Divider()
+                    replayRow("Show the tour again", systemImage: "sparkles", action: onReplayTour)
                 }
             }
 
@@ -437,6 +444,15 @@ struct SettingsScreen: View {
         Text(title)
             .font(LifeOSType.sectionTitle)
             .foregroundStyle(LifeOSTokens.secondaryText.resolve(scheme))
+    }
+
+    /// Drawn like the links above it, but closes Settings rather than pushing.
+    private func replayRow(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage).font(LifeOSType.rowTitle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+        }
     }
 
     private var divider: some View {
