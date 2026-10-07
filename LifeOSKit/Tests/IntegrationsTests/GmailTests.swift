@@ -96,6 +96,12 @@ import Foundation
 }
 
 @Suite struct MailDigestTests {
+    @Test func countLine() {
+        #expect(MailDigest.countLine(0) == "Nothing needs you")
+        #expect(MailDigest.countLine(1) == "1 needs you")
+        #expect(MailDigest.countLine(4) == "4 need you")
+    }
+
     private func item(_ id: String, _ seconds: Double) -> MailItem {
         MailItem(id: id, threadId: id, sender: id, senderEmail: "\(id)@x", subject: "S", snippet: "s",
                  receivedAt: Date(timeIntervalSince1970: seconds), isUnread: true)

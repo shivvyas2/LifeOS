@@ -23,6 +23,15 @@ public struct MailDigest: Equatable, Sendable {
 
     public static let rows = 5
 
+    /// The Inbox header's count.
+    public static func countLine(_ needsYou: Int) -> String {
+        switch needsYou {
+        case 0: "Nothing needs you"
+        case 1: "1 needs you"
+        default: "\(needsYou) need you"
+        }
+    }
+
     public static func make(items: [MailItem], verdicts: [String: MailVerdict]) -> MailDigest {
         let ordered = items.sorted { $0.receivedAt > $1.receivedAt }
         let rows = ordered.map { item -> (Row, MailBucket) in

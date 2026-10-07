@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00F6E2B27A984AF7B6A4F9D2 /* Motion in Frameworks */ = {isa = PBXBuildFile; productRef = 0BEF691ED9A34E748BA71A9C /* Motion */; };
+		0E6624AD648B8093128FA85C /* InboxUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C5B08BD745A6AF603D8705 /* InboxUITests.swift */; };
 		1C653CDFCA5F5F89F00FE2DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */; };
 		204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
 		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
@@ -125,6 +126,7 @@
 		2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutController.swift; sourceTree = "<group>"; };
 		30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWatch.entitlements; sourceTree = "<group>"; };
 		3CEA5E0BAC492E027423BA37 /* DayProjectUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayProjectUITests.swift; sourceTree = "<group>"; };
+		40C5B08BD745A6AF603D8705 /* InboxUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxUITests.swift; sourceTree = "<group>"; };
 		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
 		53B837A02BD3CD136DF62D37 /* HealthWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthWidget.swift; sourceTree = "<group>"; };
 		5A224D947F9F20AEE96E695F /* AlmanacWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlmanacWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -243,6 +245,7 @@
 				65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */,
 				A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */,
 				0D2B6E5FBCF00137F09A65C4 /* ProjectsUITests.swift */,
+				40C5B08BD745A6AF603D8705 /* InboxUITests.swift */,
 			);
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
@@ -540,6 +543,7 @@
 				B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */,
 				B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */,
 				E5A5A0FF98AD8929CEA43E79 /* ProjectsUITests.swift in Sources */,
+				0E6624AD648B8093128FA85C /* InboxUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

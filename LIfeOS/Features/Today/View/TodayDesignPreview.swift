@@ -8,7 +8,7 @@ import Persistence
 
 /// Fixture pages for Today, the calendar screen, the day sheet and Notes,
 /// mounted by `--design-preview` with `--page=today`, `today-empty`,
-/// `today-done`, `month` (the calendar in Monthly), `schedule` (the calendar
+/// `today-done`, `today-inbox`, `month` (the calendar in Monthly), `schedule` (the calendar
 /// in Weekly), `calendar-find` (the calendar with `--query=` live; add
 /// `--weekly` to open it on the bands),
 /// `calendar-ask` (the reply card from a seeded conversation; `--far` makes
@@ -90,6 +90,15 @@ struct TodayDesignPreview: View {
                 .environment(\.dayProviders, DayProviders(
                     weather: StubWeatherProvider(), location: StubLocation(access: .granted),
                     github: StubGitHubProvider(state: .card(StubGitHubProvider.sevenCommits, asOf: nil))))
+            // The Inbox first, with two mails that need you and three FYI.
+            case "today-inbox":
+                NavigationStack {
+                    TodayScreen(snapshot: fixture.snapshot, onSelectDay: { _ in }, onConnectCalendar: {},
+                                onAddEvent: {}, onTapEvent: { _ in }, onOpenToday: {}, isHealthConnected: true,
+                                inboxSource: StubInboxSource(), layoutStore: Self.inboxStore())
+                        .shellToolbar()
+                }
+                .modelContainer(fixture.container)
             case "today-done":
                 NavigationStack {
                     TodayScreen(snapshot: fixture.doneSnapshot, onSelectDay: { _ in }, onConnectCalendar: {},
@@ -126,6 +135,16 @@ struct TodayDesignPreview: View {
                   asOf: Calendar.current.date(bySettingHour: 9, minute: 40, second: 0, of: .now))
         default: nil
         }
+    }
+
+    @MainActor
+    private static func inboxStore() -> TodayLayoutStore {
+        let name = "preview.today.inbox"
+        UserDefaults.standard.removePersistentDomain(forName: name)
+        let store = TodayLayoutStore(defaults: UserDefaults(suiteName: name)!)
+        store.layout = TodayLayout(left: [.inbox, .tasks, .nextUp], right: [.steps, .sleep])
+        store.hintSeen = true
+        return store
     }
 
     /// A fresh store each launch, so a UI test's arranging never leaks into

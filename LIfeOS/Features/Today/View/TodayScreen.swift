@@ -32,6 +32,8 @@ struct TodayScreen: View {
     var onOpenSettings: () -> Void = {}
     /// The Projects module's tap.
     var onOpenProjects: () -> Void = {}
+    /// The preview page's mail; Gmail otherwise.
+    var inboxSource: (any InboxSource)?
 
     /// The arrangement, saved per account on this device.
     @State var store: TodayLayoutStore
@@ -39,6 +41,8 @@ struct TodayScreen: View {
     /// spend, LIFO and GitHub come from it, loading only what is shown.
     @State var day: DayViewModel
     @State var newTask = ""
+    /// What the Inbox module shows; nil until first asked.
+    @State var inbox: InboxState?
     /// While someone types a task, a long-press in the field is theirs (to
     /// select or paste), not the start of arranging.
     @FocusState var taskFieldFocused: Bool
@@ -49,6 +53,7 @@ struct TodayScreen: View {
     @Environment(\.dayProviders) var providers
     @Environment(\.noteSync) var sync
     @Environment(\.github) var github
+    @Environment(\.gmail) var gmail
     @Environment(\.openURL) var openURL
     let calendar = Calendar.current
 
@@ -63,6 +68,7 @@ struct TodayScreen: View {
          onSelectMetric: @escaping (TodayMetric) -> Void = { _ in },
          onOpenSettings: @escaping () -> Void = {},
          onOpenProjects: @escaping () -> Void = {},
+         inboxSource: (any InboxSource)? = nil,
          layoutStore: TodayLayoutStore? = nil) {
         self.snapshot = snapshot
         self.onSelectDay = onSelectDay
@@ -75,6 +81,7 @@ struct TodayScreen: View {
         self.onSelectMetric = onSelectMetric
         self.onOpenSettings = onOpenSettings
         self.onOpenProjects = onOpenProjects
+        self.inboxSource = inboxSource
         _store = State(initialValue: layoutStore ?? TodayLayoutStore())
         _day = State(initialValue: DayViewModel(date: snapshot.date))
     }
@@ -104,6 +111,18 @@ struct TodayScreen: View {
         .onChange(of: github?.state, initial: true) { _, state in
             if case .connected = state { store.offerGitHubOnce() }
         }
+        .onChange(of: gmail?.state, initial: true) { _, state in
+            if case .connected = state { store.offerInboxOnce() }
+        }
+        // Asked when the Inbox is shown, again after a connect or disconnect;
+        // the source answers from its ten-minute cache in between.
+        .task(id: InboxAsk(shown: store.layout.column(of: .inbox) != nil, change: mailSource?.changeCount ?? -1)) {
+            await loadInbox(force: false)
+        }
+        .refreshable {
+            day.load()
+            await loadInbox(force: true)
+        }
         // Past midnight the snapshot moves to the new day; the day model must
         // follow, or Today's tasks would show yesterday, read-only.
         .onChange(of: calendar.startOfDay(for: snapshot.date)) { _, newDay in day.goTo(newDay) }
@@ -113,6 +132,16 @@ struct TodayScreen: View {
             .debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
             day.load()
         }
+    }
+
+    var mailSource: (any InboxSource)? { inboxSource ?? gmail }
+
+    func loadInbox(force: Bool) async {
+        guard store.layout.column(of: .inbox) != nil, let source = mailSource, source.isConnected else {
+            inbox = nil
+            return
+        }
+        inbox = await source.inbox(force: force)
     }
 
     func attachDay() {
@@ -423,4 +452,9 @@ private struct OtherColumnAction: ViewModifier {
             content
         }
     }
+}
+
+private struct InboxAsk: Equatable {
+    let shown: Bool
+    let change: Int
 }

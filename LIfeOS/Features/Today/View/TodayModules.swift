@@ -36,6 +36,7 @@ extension TodayScreen {
             }
         case .spentToday: spendModule
         case .projects: projectsModule
+        case .inbox: inboxModule
         case .fromLifo:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(title: "From LIFO")
@@ -117,6 +118,16 @@ extension TodayScreen {
             ghost(.github, note: "No commits yet today")
         } else {
             ghost(.github, note: "Not connected", action: ("Connect GitHub", onOpenSettings))
+        }
+    }
+
+    /// Hidden outside arranging until Gmail is connected.
+    @ViewBuilder
+    private var inboxModule: some View {
+        if let source = mailSource, source.isConnected {
+            InboxRows(state: inbox ?? .loading, onReconnect: onOpenSettings)
+        } else {
+            ghost(.inbox, note: "Not connected", action: ("Connect Gmail", onOpenSettings))
         }
     }
 

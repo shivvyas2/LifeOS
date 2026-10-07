@@ -37,4 +37,11 @@ final class TodayLayoutStore {
         defaults.set(true, forKey: Self.githubKey)
         update { $0.offerGitHub() }
     }
+
+    /// The first time Gmail connects, once.
+    func offerInboxOnce() {
+        guard !defaults.bool(forKey: Self.inboxOfferKey) else { return }
+        defaults.set(true, forKey: Self.inboxOfferKey)
+        update { $0.offerInbox() }
+    }
 }
