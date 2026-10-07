@@ -471,6 +471,20 @@ final class CoachViewModel {
 
     /// Stops whatever is being said. Asking a new question while the last
     /// answer is still being read out should not produce two voices.
+    /// Forgets this conversation on this phone and starts a new one. The
+    /// calendar assistant's conversations, in the same store, stay.
+    func clearConversation() {
+        stopSpeaking()
+        if let context { try? ChatStore(context: context).deleteConversation(conversationID) }
+        conversationID = UUID()
+        defaults.set(conversationID.uuidString, forKey: "coach.conversationID")
+        history = []
+        answer = ""
+        pendingQuestion = ""
+        pendingSent = nil
+        error = nil
+    }
+
     func stopSpeaking() {
         narrationTasks.forEach { $0.cancel() }
         narrationTasks = []

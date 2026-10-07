@@ -22,6 +22,7 @@ struct LifoCoachScreen: View {
     @Environment(\.openURL) private var openURL
     @FocusState private var typingFocused: Bool
     @State private var showHistory = false
+    @State private var confirmClear = false
     @State private var mode: CoachScreenStyle = .text
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
@@ -99,7 +100,22 @@ struct LifoCoachScreen: View {
             }
             Spacer(minLength: 0)
             if !model.history.isEmpty {
-                glyphButton("clock", label: "Conversation history") { showHistory = true }
+                // History and clearing share one menu, so the header keeps
+                // its two glyphs.
+                Menu {
+                    Button("Conversation history", systemImage: "clock") { showHistory = true }
+                    Button("Clear conversation", systemImage: "trash", role: .destructive) { confirmClear = true }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(LifeOSType.body.weight(.medium))
+                        .foregroundStyle(ink).frame(width: 44, height: 44)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel("Conversation options")
+                .confirmationDialog("Clear this conversation? LIFO forgets it on this phone.",
+                                    isPresented: $confirmClear, titleVisibility: .visible) {
+                    Button("Clear", role: .destructive) { model.clearConversation() }
+                    Button("Cancel", role: .cancel) {}
+                }
             }
             glyphButton("xmark", label: "Close coach") { model.disappear(); onDismiss() }
         }
