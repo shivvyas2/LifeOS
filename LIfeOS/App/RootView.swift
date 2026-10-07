@@ -261,6 +261,7 @@ struct RootView: View {
             Task { await projectSync?.pushPending() }
         }
         .environment(\.github, integrations.github)
+        .environment(\.gmail, integrations.gmail)
         .environment(\.walkthroughFrames, notesWalkthrough.frames)
         .environment(\.notesWalkthrough, notesWalkthrough)
         .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0, github: integrations.github.dayProvider) })

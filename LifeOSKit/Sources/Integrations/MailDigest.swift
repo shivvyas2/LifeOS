@@ -43,6 +43,9 @@ public enum MailFallback {
         MailVerdict(bucket: .fyi, summary: shorten(clean(item.snippet.isEmpty ? item.subject : item.snippet)))
     }
 
+    /// A model's line held to the same rules as the snippet.
+    public static func trimmed(_ text: String) -> String { shorten(clean(text)) }
+
     static func clean(_ text: String) -> String {
         var result = text
         for (entity, character) in [("&#39;", "'"), ("&quot;", "\""), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&nbsp;", " ")] {

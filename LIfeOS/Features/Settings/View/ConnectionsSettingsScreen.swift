@@ -11,6 +11,7 @@ struct ConnectionsSettingsScreen: View {
     @Environment(\.colorScheme) private var scheme
     @State private var showWhoop = false
     @Environment(\.github) private var github
+    @Environment(\.gmail) private var gmail
 
     var body: some View {
         ZStack {
@@ -64,6 +65,28 @@ struct ConnectionsSettingsScreen: View {
                         }
                         .disabled(github.state == .unconfigured)
                         if case .connected = github.state { githubPin(github) }
+                    }
+                    if let gmail {
+                        Label("Mail", systemImage: "envelope").font(LifeOSType.sectionTitle).padding(.top, 12)
+                        connectionCard(
+                            icon: "envelope.fill", hue: .recovery,
+                            title: "Gmail", status: gmail.statusDetail,
+                            chip: gmailChip(gmail)
+                        ) {
+                            if gmail.isConnected, !gmail.needsReconnect {} else { gmail.connect() }
+                        }
+                        .disabled(gmail.state == .unconfigured)
+                        if gmail.isConnected {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Your mail is read and sorted on this iPhone. Nothing about it leaves the phone.")
+                                    .font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
+                                Button("Disconnect") { gmail.disconnect() }
+                                    .buttonStyle(.editorial(.destructive, size: .compact))
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        }
                     }
                     Label("Connections stay with your account.", systemImage: "lock.shield")
                         .font(LifeOSType.caption).foregroundStyle(.secondary).padding(.vertical, 12)
@@ -131,6 +154,15 @@ struct ConnectionsSettingsScreen: View {
         switch github.state {
         // Once connected the card's tap does nothing; Disconnect sits below.
         case .connected: github.needsReconnect ? Chip(text: "Reconnect") : Chip(text: "", standing: true)
+        case .connecting: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Connect")
+        }
+    }
+
+    private func gmailChip(_ gmail: GmailConnectionViewModel) -> Chip {
+        switch gmail.state {
+        case .connected: gmail.needsReconnect ? Chip(text: "Reconnect") : Chip(text: "", standing: true)
         case .connecting: Chip(text: "…")
         case .unconfigured: Chip(text: "Setup")
         default: Chip(text: "Connect")

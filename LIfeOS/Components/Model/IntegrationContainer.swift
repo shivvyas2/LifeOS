@@ -22,6 +22,7 @@ final class IntegrationContainer {
     let whoopTokenStore: any WhoopTokenStoring
     let fitbitAuthStore: any FitbitAuthStoring
     let githubTokens: any GitHubTokenStoring
+    let googleTokens: any GoogleTokenStoring
     let authSessionStore: any AuthSessionStoring
     let userDefaults: UserDefaults
     
@@ -43,6 +44,10 @@ final class IntegrationContainer {
         GitHubConnectionViewModel(tokens: githubTokens, sessions: authSessionStore, defaults: userDefaults)
     }()
 
+    private(set) lazy var gmail: GmailConnectionViewModel = {
+        GmailConnectionViewModel(tokens: googleTokens, defaults: userDefaults)
+    }()
+
     private(set) lazy var plaid: PlaidConnectionViewModel = {
         PlaidConnectionViewModel()
     }()
@@ -61,12 +66,14 @@ final class IntegrationContainer {
         whoopTokenStore: any WhoopTokenStoring = KeychainWhoopTokenStore(),
         fitbitAuthStore: any FitbitAuthStoring = KeychainFitbitAuthStore(),
         githubTokens: any GitHubTokenStoring = KeychainGitHubTokenStore(),
+        googleTokens: any GoogleTokenStoring = KeychainGoogleTokenStore(),
         authSessionStore: any AuthSessionStoring = KeychainAuthSessionStore(),
         userDefaults: UserDefaults = .currentAccount
     ) {
         self.whoopTokenStore = whoopTokenStore
         self.fitbitAuthStore = fitbitAuthStore
         self.githubTokens = githubTokens
+        self.googleTokens = googleTokens
         self.authSessionStore = authSessionStore
         self.userDefaults = userDefaults
     }
@@ -76,6 +83,7 @@ final class IntegrationContainer {
         whoopTokenStore: any WhoopTokenStoring = InMemoryWhoopTokenStore(),
         fitbitAuthStore: any FitbitAuthStoring = InMemoryFitbitAuthStore(),
         githubTokens: any GitHubTokenStoring = InMemoryGitHubTokenStore(),
+        googleTokens: any GoogleTokenStoring = InMemoryGoogleTokenStore(),
         authSessionStore: any AuthSessionStoring = InMemoryAuthSessionStore(),
         userDefaults: UserDefaults = UserDefaults(suiteName: "test")!
     ) -> IntegrationContainer {
@@ -83,6 +91,7 @@ final class IntegrationContainer {
             whoopTokenStore: whoopTokenStore,
             fitbitAuthStore: fitbitAuthStore,
             githubTokens: githubTokens,
+            googleTokens: googleTokens,
             authSessionStore: authSessionStore,
             userDefaults: userDefaults
         )
@@ -105,6 +114,7 @@ final class IntegrationContainer {
         plaid.deactivate()
         health.deactivate()
         github.deactivate()
+        gmail.deactivate()
     }
     
     /// Syncs all integrations if needed.

@@ -9,6 +9,7 @@ final class TodayLayoutStore {
     private let defaults: UserDefaults
     private static let key = "today.layout"
     private static let githubKey = "today.layout.githubOffered"
+    static let inboxOfferKey = "today.layout.inboxOffered"
     private static let hintKey = "today.layout.hintSeen"
 
     var layout: TodayLayout { didSet { defaults.set(layout.encoded(), forKey: Self.key) } }
