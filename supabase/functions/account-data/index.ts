@@ -28,11 +28,16 @@ function store(): AccountStore {
       }
     },
     async schedule(user, at) {
-      const { data } = await db.from("profiles").select("deletion_scheduled_for").eq("user_id", user).maybeSingle();
-      if (data?.deletion_scheduled_for) return new Date(data.deletion_scheduled_for);
-      const { error } = await db.from("profiles").update({ deletion_scheduled_for: at.toISOString() }).eq("user_id", user);
+      const { data, error: readError } = await db.from("profiles").select("deletion_scheduled_for")
+        .eq("user_id", user).maybeSingle();
+      // A failed read must not fall through and move an existing date.
+      if (readError) throw new Error("schedule_read_failed");
+      if (!data) return null;
+      if (data.deletion_scheduled_for) return new Date(data.deletion_scheduled_for);
+      const { data: updated, error } = await db.from("profiles")
+        .update({ deletion_scheduled_for: at.toISOString() }).eq("user_id", user).select("user_id");
       if (error) throw new Error("schedule_failed");
-      return at;
+      return updated && updated.length > 0 ? at : null;
     },
     async cancel(user) {
       const { error } = await db.from("profiles").update({ deletion_scheduled_for: null }).eq("user_id", user);

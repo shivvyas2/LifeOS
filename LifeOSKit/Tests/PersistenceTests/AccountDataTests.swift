@@ -67,4 +67,11 @@ import SwiftData
         wipe.remove(kept.id)
         #expect(wipe.ids.isEmpty)
     }
+
+    @Test func aSignedInAccountIsNeverWipedEvenIfDeleted() {
+        let wipe = PendingAccountWipe(defaults: defaults())
+        #expect(wipe.wipeable(confirmedDeleted: ["a", "b", "c"], signedIn: ["b"]) == ["a", "c"])
+        #expect(wipe.wipeable(confirmedDeleted: [], signedIn: ["b"]).isEmpty)
+    }
 }
+

@@ -53,6 +53,14 @@ Deno.test("deletion is scheduled thirty days out, once, and keep cancels it", as
   assertEquals(status.deletion_scheduled_for, null);
 });
 
+Deno.test("scheduling without a profile says so instead of pretending", async () => {
+  const { store } = fakeStore();
+  store.schedule = () => Promise.resolve(null);
+  const res = await handleAccountData(req("DELETE"), { resolveUser: signedIn, store, now });
+  assertEquals(res.status, 409);
+  assertEquals((await res.json()).error, "no_profile");
+});
+
 Deno.test("the deleted check is anonymous, capped, and names only deleted ids", async () => {
   const { store } = fakeStore();
   const ok = await handleAccountData(req("GET", undefined, "?deleted=gone-1,kept-2", false), { resolveUser: () => Promise.resolve(null), store, now });
@@ -66,6 +74,7 @@ function purgeDeps(over: Partial<PurgeDeps> = {}) {
   const steps: string[] = [];
   const deps: PurgeDeps = {
     due: () => Promise.resolve(["a", "b"]),
+    stillDue: () => Promise.resolve(true),
     ownedGroups: (u) => Promise.resolve(u === "a" ? ["g-shared", "g-alone"] : []),
     heirOf: (g) => Promise.resolve(g === "g-shared" ? "c" : null),
     transfer: (g, h) => { steps.push(`transfer ${g} ${h}`); return Promise.resolve(); },
@@ -109,3 +118,11 @@ Deno.test("the purge answers only its secret", async () => {
   assertEquals(right.status, 200);
   assertEquals(ran, true);
 });
+
+Deno.test("an account kept after the run began is left alone", async () => {
+  const { deps, steps } = purgeDeps({ stillDue: (u) => Promise.resolve(u !== "a") });
+  const result = await runPurge(deps, now);
+  assertEquals(result, { deleted: 1, failed: 0 });
+  assertEquals(steps.some((s) => s.endsWith(" a") || s.includes("g-shared")), false);
+});
+

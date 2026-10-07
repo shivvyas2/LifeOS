@@ -55,32 +55,25 @@ struct AppShell: View {
     var body: some View {
         Group {
             if onboarding.isSignedIn && hasFinishedOnboarding && hasStore {
-                RootView(integrations: integrations, onSignOut: {
-                    // Before the session goes, not after: deleting this
-                    // device's push row needs the access token of the account
-                    // whose row it is. Left behind, that row would push one
-                    // person's sleep data onto a phone now showing somebody
-                    // else's name. The token is captured by value here, so the
-                    // request still authenticates once the keychain is cleared
-                    // a line later.
-                    if let accessToken = KeychainAuthSessionStore().load()?.accessToken {
-                        Task { await PushService.shared.deregister(accessToken: accessToken) }
-                    }
-                    integrations.deactivateAll()
-                    onboarding.signOut()
-                })
+                RootView(integrations: integrations, onSignOut: signOut)
+                // While the keep-or-leave page is up, nothing behind it is
+                // reachable, VoiceOver included.
+                .accessibilityHidden(pendingDeletion != nil)
                 .overlay {
                     if let pendingDeletion {
                         KeepAccountScreen(date: pendingDeletion, onKeep: {
                             do {
+                                _ = await onboarding.restoreSession()
                                 try await AccountDataClient().keep()
                                 if let id = onboarding.session?.userID { PendingAccountWipe().remove(id) }
                                 withAnimation { self.pendingDeletion = nil }
-                            } catch {}
+                                return true
+                            } catch {
+                                return false
+                            }
                         }, onSignOut: {
                             self.pendingDeletion = nil
-                            integrations.deactivateAll()
-                            onboarding.signOut()
+                            signOut()
                         })
                     }
                 }
@@ -129,7 +122,7 @@ struct AppShell: View {
         // sign-in after a deletion request, ask whether it is set for deletion.
         .task(id: onboarding.isSignedIn && hasFinishedOnboarding && hasStore ? onboarding.session?.userID : nil) {
             guard onboarding.isSignedIn, hasFinishedOnboarding, hasStore else { pendingDeletion = nil; return }
-            pendingDeletion = try? await AccountDataClient().scheduledDeletion()
+            await checkDeletion()
         }
         .onChange(of: onboarding.session?.userID) { _, id in
             guard let id, (!hasStore || id != accountID), let account = onboarding.account, let session = onboarding.session else { return }
@@ -140,7 +133,9 @@ struct AppShell: View {
         }
         .preferredColorScheme(appearance.colorScheme)
         .task {
-            await wipeDeletedAccounts()
+            // Off the launch path: a slow network must not hold up the store
+            // or the session.
+            Task { await wipeDeletedAccounts() }
             if hasStore {
                 integrations.attach(context)
             }
@@ -217,6 +212,10 @@ struct AppShell: View {
                 if await onboarding.restoreSession() == false {
                     hasFinishedOnboarding = false
                 }
+                // Asked again on every return: a check that failed at launch
+                // (offline, an expired token) must not let a scheduled
+                // account carry on unasked for weeks.
+                if onboarding.isSignedIn, hasFinishedOnboarding, hasStore { await checkDeletion() }
                 // Before syncing: a sign-in abandoned in Safari leaves the
                 // card spinning, and coming back is the only moment we learn
                 // it was abandoned.
@@ -241,6 +240,32 @@ struct AppShell: View {
         }
     }
 
+    /// The one way out of an account: push deregistered first, while this
+    /// account's token still authenticates (left behind, its row would push
+    /// one person's sleep data onto a phone now showing somebody else's name),
+    /// then the connections stopped and the session removed.
+    private func signOut() {
+        if let accessToken = KeychainAuthSessionStore().load()?.accessToken {
+            Task { await PushService.shared.deregister(accessToken: accessToken) }
+        }
+        integrations.deactivateAll()
+        onboarding.signOut()
+    }
+
+    /// Whether the signed-in account is set for deletion, asked with a fresh
+    /// session (a stored token is often past its hour at launch). A failed
+    /// ask leaves things as they were and is retried on the next return to
+    /// the app.
+    private func checkDeletion() async {
+        _ = await onboarding.restoreSession()
+        guard onboarding.isSignedIn else { return }
+        do {
+            pendingDeletion = try await AccountDataClient().scheduledDeletion()
+        } catch {
+            shellLog.error("deletion check failed; retried on next foreground")
+        }
+    }
+
     /// Accounts signed out by a deletion request keep their data on this
     /// phone until the server confirms the deletion; then it goes: the store
     /// folder, the defaults suite and the account's Keychain items.
@@ -251,7 +276,9 @@ struct AppShell: View {
               let base = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                       appropriateFor: nil, create: false)
         else { return }
-        for id in gone {
+        // Never an account still signed in here: its store may be open.
+        let signedIn = Set(AccountStore().accounts.map(\.userID))
+        for id in pending.wipeable(confirmedDeleted: gone, signedIn: signedIn) {
             try? pending.wipe(id, base: base)
             KeychainWhoopTokenStore(account: id).clear()
             KeychainFitbitAuthStore(account: id).clearPending()

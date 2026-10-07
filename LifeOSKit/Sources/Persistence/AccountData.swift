@@ -83,6 +83,12 @@ public struct PendingAccountWipe {
         defaults.set(ids.filter { $0 != id }, forKey: Self.key)
     }
 
+    /// Of the accounts the server says are gone, the ones safe to wipe: never
+    /// one still signed in on this phone, whose store may be open.
+    public func wipeable(confirmedDeleted: [String], signedIn: Set<String>) -> [String] {
+        confirmedDeleted.filter { !signedIn.contains($0) }
+    }
+
     /// The account's store folder and defaults suite go; then it leaves the list.
     public func wipe(_ id: String, base: URL) throws {
         let scope = UserScope(id: id)
