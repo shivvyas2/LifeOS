@@ -60,7 +60,7 @@ struct ConnectionsSettingsScreen: View {
                             title: "GitHub", status: github.statusDetail,
                             chip: githubChip(github)
                         ) {
-                            if case .connected = github.state {} else { github.connect() }
+                            if case .connected = github.state, !github.needsReconnect {} else { github.connect() }
                         }
                         .disabled(github.state == .unconfigured)
                         if case .connected = github.state { githubPin(github) }
@@ -130,7 +130,7 @@ struct ConnectionsSettingsScreen: View {
     private func githubChip(_ github: GitHubConnectionViewModel) -> Chip {
         switch github.state {
         // Once connected the card's tap does nothing; Disconnect sits below.
-        case .connected: Chip(text: "", standing: true)
+        case .connected: github.needsReconnect ? Chip(text: "Reconnect") : Chip(text: "", standing: true)
         case .connecting: Chip(text: "…")
         case .unconfigured: Chip(text: "Setup")
         default: Chip(text: "Connect")

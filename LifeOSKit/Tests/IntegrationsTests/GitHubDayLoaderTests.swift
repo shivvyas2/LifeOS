@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import Integrations
 
-private final class StubTransport: GitHubTransport, @unchecked Sendable {
+final class StubTransport: GitHubTransport, @unchecked Sendable {
     var routes: [(String, Int, String)] = []   // path prefix, status, body
     private(set) var requested: [URL] = []
     func get(_ url: URL, token: String) async throws -> (Data, Int) {
@@ -137,4 +137,30 @@ private final class StubTransport: GitHubTransport, @unchecked Sendable {
             .queryItems?.first { $0.name == "q" }?.value
         #expect(query == "author:me author-date:2026-10-07T00:00:00Z..2026-10-07T23:59:59Z")
     }
+
+    @Test func anOffsetEastOfUTCIsEncodedSoGitHubDoesNotReadASpace() async throws {
+        var kolkata = Calendar(identifier: .gregorian)
+        kolkata.timeZone = TimeZone(identifier: "Asia/Kolkata")!
+        let transport = StubTransport()
+        transport.routes = [("/search/commits", 200, #"{"items":[]}"#)]
+        _ = try await GitHubDayLoader(transport: transport, connection: connection, pinnedRepo: nil, calendar: kolkata)
+            .load(day: day, isToday: false)
+        let sent = transport.requested[0].absoluteString
+        #expect(sent.contains("%2B05:30"))
+        #expect(!sent.contains("+05:30"))
+    }
+
+    @Test func aRepoWithIssuesOffStillGetsItsCard() async throws {
+        let transport = StubTransport()
+        transport.routes = [
+            ("/search/commits", 200, #"{"items":[\#(commit("a", 9))]}"#),
+            ("/repos/o/a/milestones", 410, #"{"message":"Issues are disabled"}"#),
+            ("/search/issues", 422, ""),
+        ]
+        let result = try await loader(transport).load(day: day, isToday: false)
+        guard case .card(let card, _)? = result.state else { Issue.record("no card"); return }
+        #expect(card.repo == "a")
+        #expect(card.followUp == nil)
+    }
 }
+
