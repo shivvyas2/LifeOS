@@ -465,4 +465,49 @@ import SwiftData
         let allEditable = groups.flatMap(\.rows).allSatisfy(\.isEditable)
         #expect(allEditable)
     }
+
+    @Test func anUntouchedSampleGoes() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Your first page", bucket: .areas)
+        #expect(try store.deleteIfUntouched(page, title: "Your first page"))
+        #expect(page.deletedAt != nil)
+    }
+
+    @Test func aBlankToDoIsStillUntouched() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Your first page", bucket: .areas,
+                                            blocks: [NoteBlock(kind: .todo, text: "  ")])
+        #expect(try store.deleteIfUntouched(page, title: "Your first page"))
+    }
+
+    @Test func theSampleStaysOnceItHoldsWords() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Your first page", bucket: .areas,
+                                            blocks: [NoteBlock(text: "Buy milk")])
+        #expect(try !store.deleteIfUntouched(page, title: "Your first page"))
+        #expect(page.deletedAt == nil)
+    }
+
+    @Test func theSampleStaysOnceRenamed() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Groceries", bucket: .areas)
+        #expect(try !store.deleteIfUntouched(page, title: "Your first page"))
+    }
+
+    @Test func theSampleStaysOnceFiled() throws {
+        let store = try makeStore()
+        let page = try store.createDocument(title: "Your first page", bucket: .areas)
+        try store.move(page, to: .projects, folderID: nil)
+        #expect(try !store.deleteIfUntouched(page, title: "Your first page"))
+    }
+
+    @Test func aDividerOrADrawingIsSomething() throws {
+        let store = try makeStore()
+        let ruled = try store.createDocument(title: "Your first page", bucket: .areas,
+                                             blocks: [NoteBlock(kind: .divider)])
+        #expect(try !store.deleteIfUntouched(ruled, title: "Your first page"))
+        let drawn = try store.createDocument(title: "Your first page", bucket: .areas,
+                                             blocks: [NoteBlock(kind: .sketch, drawing: Data([1, 2, 3]))])
+        #expect(try !store.deleteIfUntouched(drawn, title: "Your first page"))
+    }
 }

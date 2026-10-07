@@ -493,6 +493,17 @@ public struct NotesStore {
         try touch(document)
     }
 
+    /// Deletes a page the app made for someone only if they left it as it was
+    /// made: still titled `title`, still in the Inbox, nothing in its blocks.
+    /// Anything they wrote, renamed or filed is theirs and stays.
+    @discardableResult
+    public func deleteIfUntouched(_ document: NoteDocument, title: String) throws -> Bool {
+        guard document.title == title, document.isInInbox,
+              document.blocks.allSatisfy(\.holdsNothing) else { return false }
+        try delete(document)
+        return true
+    }
+
     public func rename(_ folder: NoteFolder, to name: String) throws {
         folder.name = name
         try touch(folder)

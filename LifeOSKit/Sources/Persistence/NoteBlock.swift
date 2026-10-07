@@ -214,6 +214,16 @@ public struct NoteBlock: Codable, Sendable, Identifiable, Equatable {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Nothing anyone made: no words, no drawing, and not a rule, which is
+    /// something put there on purpose even though it holds no text.
+    public var holdsNothing: Bool {
+        switch kind {
+        case .sketch: isBlankSketch
+        case .divider: false
+        default: isEmpty
+        }
+    }
+
     /// A single empty paragraph: what a brand new note contains, and what is
     /// left behind when the last block is deleted. A document with no blocks at
     /// all has nowhere to put the caret.
