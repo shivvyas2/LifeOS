@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import Combine
 import DesignSystem
 import Persistence
 
@@ -13,7 +15,7 @@ struct TodayScreen: View {
     let onAddEvent: () -> Void
     let onTapEvent: (CalendarEventSnapshot) -> Void
     /// Raised by the agenda's "+N more" row, since only the day screen lists
-    /// everything.
+    /// everything; also by a task's text, which the day screen opens.
     let onOpenToday: () -> Void
     /// Raised from the empty state below. Like the calendar prompt, the
     /// permission sheet fires from a tap and never at launch.
@@ -26,10 +28,49 @@ struct TodayScreen: View {
     /// stops there: what a metric opens is the shell's decision, the same way
     /// a tapped day is.
     var onSelectMetric: (TodayMetric) -> Void = { _ in }
+    /// The GitHub card's reconnect row and the tray's Connect GitHub.
+    var onOpenSettings: () -> Void = {}
 
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.layout) private var layout
-    private let calendar = Calendar.current
+    /// The arrangement, saved per account on this device.
+    @State var store: TodayLayoutStore
+    /// Today's day model, the one behind the day screen: tasks, weather,
+    /// spend, LIFO and GitHub come from it, loading only what is shown.
+    @State var day: DayViewModel
+    @State var newTask = ""
+
+    @Environment(\.colorScheme) var scheme
+    @Environment(\.layout) var layout
+    @Environment(\.modelContext) var context
+    @Environment(\.dayProviders) var providers
+    @Environment(\.noteSync) var sync
+    @Environment(\.github) var github
+    @Environment(\.openURL) var openURL
+    let calendar = Calendar.current
+
+    init(snapshot: TodaySnapshot,
+         onSelectDay: @escaping (Date) -> Void,
+         onConnectCalendar: @escaping () -> Void,
+         onAddEvent: @escaping () -> Void,
+         onTapEvent: @escaping (CalendarEventSnapshot) -> Void,
+         onOpenToday: @escaping () -> Void,
+         onConnectHealth: @escaping () -> Void = {},
+         isHealthConnected: Bool = false,
+         onSelectMetric: @escaping (TodayMetric) -> Void = { _ in },
+         onOpenSettings: @escaping () -> Void = {},
+         layoutStore: TodayLayoutStore? = nil) {
+        self.snapshot = snapshot
+        self.onSelectDay = onSelectDay
+        self.onConnectCalendar = onConnectCalendar
+        self.onAddEvent = onAddEvent
+        self.onTapEvent = onTapEvent
+        self.onOpenToday = onOpenToday
+        self.onConnectHealth = onConnectHealth
+        self.isHealthConnected = isHealthConnected
+        self.onSelectMetric = onSelectMetric
+        self.onOpenSettings = onOpenSettings
+        _store = State(initialValue: layoutStore ?? TodayLayoutStore())
+        _day = State(initialValue: DayViewModel(date: snapshot.date))
+    }
 
     var body: some View {
         ScrollView {
@@ -45,53 +86,72 @@ struct TodayScreen: View {
                 .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+        .task { attachDay() }
+        .onChange(of: store.layout) { attachDay() }
+        .onChange(of: github?.changeCount) { attachDay() }
+        .onChange(of: github?.state) { _, state in
+            if case .connected = state { store.offerGitHubOnce() }
+        }
+        // Saves arrive in bursts (a tick, a health sample, a sync); one reload
+        // a quarter second after the last is enough.
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)) { _ in
+            day.load()
+        }
     }
 
-    /// One column on a phone, two side by side on a wide pane.
+    func attachDay() {
+        day.onlySections = TodayLayout.sections(for: store.layout.phoneOrder)
+        day.attach(context, providers: providers, sync: sync)
+        day.load()
+    }
+
+    /// The masthead, then the arrangement: one list on a phone, the two
+    /// columns side by side on a wide pane.
     ///
-    /// Not just a column count: the month has to be *narrower* than the pane,
-    /// not wider. A dot grid divides whatever width it is given by seven, so a
-    /// full-width month on a 1300pt pane draws 170pt dots and shoves every stat
-    /// below the fold — the opposite of what more room should buy. Standing the
-    /// stats beside it fixes both at once.
+    /// The month has to be *narrower* than a wide pane, not wider: a dot grid
+    /// divides whatever width it is given by seven, so a full-width month on a
+    /// 1300pt pane draws 170pt dots. The left column's cap keeps it in hand.
     @ViewBuilder
     private var layoutBody: some View {
-        if layout.isRegular {
-            HStack(alignment: .top, spacing: Space.x4) {
-                VStack(alignment: .leading, spacing: Space.x3) {
-                    masthead
-                    agendaCard
-                    month
-                    scheduledWorkout
+        VStack(alignment: .leading, spacing: Space.x3) {
+            masthead
+            if layout.isRegular {
+                HStack(alignment: .top, spacing: Space.x4) {
+                    column(store.layout.left, side: .left).frame(maxWidth: 520)
+                    column(store.layout.right, side: .right)
                 }
-                .frame(maxWidth: 520)
-                VStack(alignment: .leading, spacing: Space.x3) {
-                    if showsHealthPrompt { healthPrompt }
-                    statGrid(columns: 2)
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: Space.x3) {
-                masthead
-                agendaCard
-                month
-                scheduledWorkout
-                if showsHealthPrompt { healthPrompt }
-                statGrid(columns: layout.statColumns)
+            } else {
+                column(store.layout.phoneOrder, side: nil)
             }
         }
     }
 
-    private var masthead: some View {
+    /// A column's rows, with the health prompt above its first tile row.
+    private func column(_ modules: [TodayModule], side: TodayColumn?) -> some View {
+        let rows = TodayLayout.rows(modules)
+        let firstTileRow = rows.firstIndex { if case .pair = $0 { true } else { false } }
+        return VStack(alignment: .leading, spacing: Space.x3) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                if index == firstTileRow, showsHealthPrompt { healthPrompt }
+                rowView(row)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("today.module.\(row.modules[0].rawValue)")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    var masthead: some View {
         let headline = TodayHeadline.make(date: snapshot.date, streak: snapshot.streak, calendar: calendar)
         return EditorialMasthead(eyebrow: headline.eyebrow, title: headline.title, detail: headline.detail)
     }
 
-    private var showsHealthPrompt: Bool {
+    var showsHealthPrompt: Bool {
         snapshot.hasNoHealthData && !isHealthConnected
     }
 
-    private var healthPrompt: some View {
+    var healthPrompt: some View {
         VStack(alignment: .leading, spacing: Space.x2) {
             Text("No health data yet").font(LifeOSType.rowTitle)
             Text("Steps, sleep, weight and recovery come from Apple Health and Whoop. Connect one and this fills in.")
@@ -105,7 +165,7 @@ struct TodayScreen: View {
     }
 
     @ViewBuilder
-    private var scheduledWorkout: some View {
+    var scheduledWorkout: some View {
         if let title = snapshot.scheduledWorkoutTitle {
             VStack(alignment: .leading, spacing: Space.half) {
                 EditorialRow("Scheduled workout", value: title)
@@ -116,7 +176,7 @@ struct TodayScreen: View {
         }
     }
 
-    private var agendaCard: some View {
+    var agendaCard: some View {
         AgendaCard(
             access: snapshot.calendarAccess,
             agenda: snapshot.agenda,
@@ -128,7 +188,7 @@ struct TodayScreen: View {
         )
     }
 
-    private var month: some View {
+    var month: some View {
         MonthCalendarView(
             date: snapshot.date,
             cells: snapshot.cells,
@@ -142,32 +202,7 @@ struct TodayScreen: View {
         )
     }
 
-    /// Every tile is a way into that metric's own page, so the grid is built
-    /// from `TodayMetric` rather than written out four times. What each one
-    /// looks like — icon, hue, unit, how the figure is written — belongs to the
-    /// metric, which is what keeps the tile and the page it opens agreeing.
-    /// Ghosted sample figures while nothing is connected: the tiles show
-    /// what they will hold, and the card above says how to fill them.
-    private func statGrid(columns: Int) -> some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns),
-            spacing: 12
-        ) {
-            ForEach(TodayMetric.allCases) { metric in
-                Button { onSelectMetric(metric) } label: {
-                    tile(metric)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(accessibilityLabel(metric))
-                .accessibilityHint("Opens \(metric.title.lowercased()) history")
-            }
-        }
-        .opacity(showsHealthPrompt ? 0.35 : 1)
-        .allowsHitTesting(!showsHealthPrompt)
-        .accessibilityHidden(showsHealthPrompt)
-    }
-
-    private func tile(_ metric: TodayMetric) -> some View {
+    func tile(_ metric: TodayMetric) -> some View {
         TrendStatTile(
             icon: metric.icon,
             hue: metric.hue,
@@ -225,7 +260,7 @@ struct TodayScreen: View {
 
     /// The tile reads as an icon, a word and a numeral, which VoiceOver would
     /// otherwise announce as three separate things inside a button.
-    private func accessibilityLabel(_ metric: TodayMetric) -> String {
+    func accessibilityLabel(_ metric: TodayMetric) -> String {
         guard let value = latest(metric) else { return "\(metric.title), no reading" }
         return "\(metric.title), \(metric.format(value))\(metric.unit.map { " \($0)" } ?? "")"
     }

@@ -44,6 +44,13 @@ public enum TodayRow: Equatable, Identifiable, Sendable {
     case single(TodayModule)
     case pair(TodayModule, TodayModule?)
 
+    public var modules: [TodayModule] {
+        switch self {
+        case .single(let module): [module]
+        case .pair(let first, let second): [first] + (second.map { [$0] } ?? [])
+        }
+    }
+
     public var id: String {
         switch self {
         case .single(let module): module.rawValue
