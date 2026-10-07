@@ -2,6 +2,7 @@ import Foundation
 import AppSurfaces
 import DesignSystem
 import Persistence
+import Integrations
 
 enum WeatherState: Equatable {
     case hidden, needsLocation, denied, loading, unavailable
@@ -47,6 +48,8 @@ struct DayBriefing: Equatable {
     var spend: DaySpending?
     var nudges: [InboxEntry]
     var dayLook: String?
+    /// The day's GitHub card; nil when not connected or nothing to show.
+    var project: ProjectCardState? = nil
 
     var checklistDone: Int { checklist.filter(\.isDone).count }
 }

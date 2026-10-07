@@ -4,6 +4,7 @@ import os
 import AppSurfaces
 import DesignSystem
 import Persistence
+import Integrations
 
 private let dayLog = Logger(subsystem: "com.shivvyas.lifeos", category: "day")
 
@@ -21,6 +22,7 @@ final class DayViewModel {
     private var weatherTask: Task<Void, Never>?
     private var weatherTaskDay: Date?
     private var weatherGeneration = 0
+    private var projectTask: Task<Void, Never>?
 
     init(date: Date, calendar: Calendar = .current) {
         self.date = calendar.startOfDay(for: date)
@@ -56,6 +58,7 @@ final class DayViewModel {
         let sections = DaySections.visible(for: placement)
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: date) ?? date
         let keptWeather: WeatherState = (self.briefing?.date == date) ? (self.briefing?.weather ?? .loading) : .loading
+        let keptProject: ProjectCardState? = (self.briefing?.date == date) ? self.briefing?.project : nil
         var briefing = DayBriefing(
             date: date, placement: placement, sections: sections,
             weather: sections.contains(.weather) ? keptWeather : .hidden,
@@ -103,9 +106,11 @@ final class DayViewModel {
             briefing.nudges = PushService.shared.entries.filter { $0.day == key }
                 .sorted { $0.receivedAt < $1.receivedAt }
         }
+        briefing.project = keptProject
         briefing.dayLook = dayLook(for: briefing)
         self.briefing = briefing
         if sections.contains(.weather) { loadWeather() }
+        if sections.contains(.project) { loadProject() }
     }
 
     private func section<Value>(_ name: String, _ read: () throws -> Value) -> Value? {
@@ -201,6 +206,34 @@ final class DayViewModel {
         briefing.weather = state
         briefing.dayLook = dayLook(for: briefing)
         self.briefing = briefing
+    }
+
+    // MARK: Project
+
+    /// The GitHub card follows the rest of the day, like the weather. No
+    /// provider means not connected: no section, and no prompt.
+    private func loadProject(force: Bool = false) {
+        guard let github = providers?.github else { setProject(nil); return }
+        let day = date
+        let isToday = isOnToday
+        projectTask?.cancel()
+        projectTask = Task {
+            let state = await github.project(for: day, isToday: isToday, force: force)
+            guard !Task.isCancelled, self.date == day else { return }
+            setProject(state)
+        }
+    }
+
+    private func setProject(_ state: ProjectCardState?) {
+        guard var briefing, briefing.project != state else { return }
+        briefing.project = state
+        self.briefing = briefing
+    }
+
+    /// Pull to refresh: the card is fetched again even if fresh.
+    func refreshProject() async {
+        loadProject(force: true)
+        await projectTask?.value
     }
 
     func allowLocation() async {

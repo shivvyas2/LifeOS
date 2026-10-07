@@ -253,7 +253,7 @@ struct RootView: View {
         .environment(\.github, integrations.github)
         .environment(\.walkthroughFrames, notesWalkthrough.frames)
         .environment(\.notesWalkthrough, notesWalkthrough)
-        .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0) })
+        .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0, github: integrations.github.dayProvider) })
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.

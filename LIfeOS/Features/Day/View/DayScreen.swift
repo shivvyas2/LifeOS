@@ -3,6 +3,7 @@ import SwiftData
 import Combine
 import DesignSystem
 import Persistence
+import Integrations
 
 /// One day in full, pushed: where it sits, the weather and what to wear,
 /// what is on, the checklist, the readings, the spend, what LIFO said.
@@ -18,6 +19,8 @@ struct DayScreen: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.shellProfile) private var shellProfile
     @State private var showDatePicker = false
     @State private var newTask = ""
     @State private var openPage: UUID?
@@ -72,6 +75,7 @@ struct DayScreen: View {
             )
         }
         .scrollDismissesKeyboard(.interactively)
+        .refreshable { await model.refreshProject() }
         .background(paper.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -142,8 +146,11 @@ struct DayScreen: View {
 
     /// Numbered from the first numbered section: the weather card carries
     /// no index, so `The day` is `01` whether or not a forecast is shown.
+    /// A day without a project card skips its number, so the rest stay
+    /// consecutive.
     private func number(of section: DaySection, in briefing: DayBriefing) -> Int? {
-        briefing.sections.filter { $0 != .weather }.firstIndex(of: section).map { $0 + 1 }
+        briefing.sections.filter { $0 != .weather && ($0 != .project || briefing.project != nil) }
+            .firstIndex(of: section).map { $0 + 1 }
     }
 
     @ViewBuilder
@@ -201,8 +208,17 @@ struct DayScreen: View {
                 }
             }
         case .project:
-            // Drawn in the next task; nothing to show until then.
-            EmptyView()
+            if let project = briefing.project {
+                VStack(alignment: .leading, spacing: Space.x2) {
+                    EditorialSectionHeader(index: number(of: section, in: briefing), title: "Project") {
+                        if case .card(let card, _) = project {
+                            Button(card.repo) { openURL(card.repoURL) }
+                                .buttonStyle(.plain).font(LifeOSType.label).foregroundStyle(quiet)
+                        }
+                    }
+                    ProjectRows(state: project, onOpen: { openURL($0) }, onReconnect: { shellProfile?.open() })
+                }
+            }
         case .nudges:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(index: number(of: section, in: briefing), title: "From LIFO")
