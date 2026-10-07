@@ -63,7 +63,9 @@ struct NoteBlockRow: View {
             .padding(.vertical, block.kind == .callout || block.kind == .code ? 10 : 3)
             .padding(.horizontal, block.kind == .callout || block.kind == .code ? 12 : 0)
             .background(ground)
-            .gesture(block.kind == .todo ? tickSwipe : nil)
+            // Not while the row is being edited: a drag there is selecting
+            // text, and the box is under the thumb anyway.
+            .gesture(block.kind == .todo && !isFocused ? tickSwipe : nil)
             .sensoryFeedback(.impact(weight: .light), trigger: block.isChecked)
         }
     }

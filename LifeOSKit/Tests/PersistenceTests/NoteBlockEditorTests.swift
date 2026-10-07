@@ -247,6 +247,25 @@ import Foundation
 
         #expect(result.blocks.map(\.kind) == [.divider, .paragraph])
         #expect(result.focus == result.blocks[1].id)
+        #expect(result.blocks[1].text == "Section")
+    }
+
+    /// A sketch under the line, not instead of it: the words move down.
+    @Test func changingToASketchKeepsTheWordsBelowIt() {
+        let line = NoteBlock(text: "Buy milk and ring the dentist")
+        let result = NoteBlockEditor.changeKind(doc(line), at: line.id, to: .sketch)
+
+        #expect(result.blocks.map(\.kind) == [.sketch, .paragraph])
+        #expect(result.blocks[1].text == "Buy milk and ring the dentist")
+        #expect(result.focus == result.blocks[1].id)
+    }
+
+    @Test func changingToTheSameKindIsNotAnEdit() {
+        let line = NoteBlock(kind: .todo, text: "Already a to-do")
+        let result = NoteBlockEditor.changeKind(doc(line), at: line.id, to: .todo)
+
+        #expect(!result.handled)
+        #expect(result.blocks == doc(line))
     }
 
     @Test func changingTheKindOfAMissingBlockDoesNothing() {

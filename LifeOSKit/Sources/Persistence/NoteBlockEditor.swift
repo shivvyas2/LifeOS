@@ -136,9 +136,11 @@ public enum NoteBlockEditor {
         // Neither a rule nor a sketch holds text, so both are followed by an
         // empty paragraph for the caret. Without it, typing `---` or picking
         // Sketch from the menu strands the person with nowhere to type.
+        // The words are not thrown away: they move into that paragraph, so a
+        // sketch picked for a line goes under the line rather than over it.
         if !kind.isTextual {
             blocks[index] = NoteBlock(kind: kind)
-            let paragraph = NoteBlock()
+            let paragraph = NoteBlock(text: text)
             blocks.insert(paragraph, at: index + 1)
             return Result(blocks: blocks, focus: paragraph.id)
         }
@@ -153,7 +155,9 @@ public enum NoteBlockEditor {
     /// `transform` with an empty string instead, since what was typed there
     /// was a command rather than content.
     public static func changeKind(_ blocks: [NoteBlock], at id: UUID, to kind: NoteBlockKind) -> Result {
-        guard let index = blocks.firstIndex(where: { $0.id == id }) else {
+        // The filled chip is the one a person taps to see what it does; the
+        // answer is nothing, not a save and a sync.
+        guard let index = blocks.firstIndex(where: { $0.id == id }), blocks[index].kind != kind else {
             return Result(blocks: blocks, handled: false)
         }
         return transform(blocks, at: id, to: kind, text: blocks[index].text)

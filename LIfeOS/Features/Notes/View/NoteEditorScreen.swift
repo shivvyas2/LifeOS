@@ -85,6 +85,11 @@ struct NoteEditorScreen: View {
         .onChange(of: model.focusedBlockID) { _, id in
             if id != nil { titleFocused = false }
         }
+        // And the other way: a tap back into the title lets the block go, or
+        // the block's text view would pull the caret straight back out.
+        .onChange(of: titleFocused) { _, focused in
+            if focused { model.focusedBlockID = nil }
+        }
     }
 
     private var page: some View {
@@ -187,7 +192,9 @@ struct NoteEditorScreen: View {
                 // A vertical field puts Return into the text instead of
                 // submitting; the editor takes the hint and moves on.
                 .onChange(of: model.title) { _, title in
-                    if title.contains(where: \.isNewline) { leaveTitle() }
+                    // Only a Return the person typed: a title loaded or synced
+                    // with a newline in it is not an invitation to move the caret.
+                    if titleFocused, title.contains(where: \.isNewline) { leaveTitle() }
                 }
 
             metaRow
