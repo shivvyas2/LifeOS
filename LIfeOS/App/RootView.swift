@@ -93,6 +93,8 @@ struct RootView: View {
     /// token. Nil for a guest, which is not an error: notes are local first and
     /// a signed-out person simply never pushes.
     @State private var noteSync: NoteSync?
+    @State private var projectSync: ProjectSync?
+    @State private var projects = ProjectsViewModel()
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -135,7 +137,7 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
-    private enum AppTab: Hashable { case today, health, money, notes, life }
+    private enum AppTab: Hashable { case today, health, money, notes, projects, life }
 
     @State private var tab: AppTab = .today
 
@@ -405,6 +407,7 @@ struct RootView: View {
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
             PillNavItem(value: AppTab.notes, systemImage: "text.book.closed.fill", label: "Notes"),
+            PillNavItem(value: AppTab.projects, systemImage: "square.stack.3d.up.fill", label: "Projects"),
             PillNavItem(value: AppTab.life, systemImage: "square.grid.2x2.fill", label: "Life"),
         ]
     }
@@ -537,6 +540,11 @@ struct RootView: View {
                         showAddPlan = true
                     }
                 )
+            case .projects:
+                NavigationStack {
+                    ProjectsHomeScreen(model: projects)
+                        .shellToolbar()
+                }
             case .life:
                 // `LifeSector.ownsTab` in the Sectors package is the one
                 // decision about which three sectors get this row at all;
@@ -783,6 +791,14 @@ struct RootView: View {
             )
         }
         notes.attach(context, sync: noteSync)
+        if projectSync == nil,
+           let url = AppConfig.supabaseURL, let key = AppConfig.supabaseAnonKey {
+            let sessions = KeychainAuthSessionStore()
+            projectSync = ProjectSync(context: context, rest: SupabaseREST(baseURL: url, anonKey: key),
+                                      accessToken: { sessions.load()?.accessToken })
+        }
+        projects.attach(context, sync: projectSync,
+                        me: KeychainAuthSessionStore().load().flatMap { UUID(uuidString: $0.userID) })
 
         // One-time, and idempotent through the origin id on each page rather
         // than through a flag, so a second device does not produce a second

@@ -224,6 +224,37 @@ final class GitHubConnectionViewModel: NSObject {
         changeCount += 1
     }
 
+    // MARK: Contributions
+
+    /// A year of daily contribution counts, oldest first, from GitHub's
+    /// GraphQL `contributionsCollection`; cached for a day per account.
+    func contributions() async -> (days: [Int], total: Int)? {
+        guard case .connected = state, let connection = tokens.load() else { return nil }
+        let key = "github.contributions"
+        if let cached = defaults.dictionary(forKey: key),
+           let fetched = cached["at"] as? Date, Date.now.timeIntervalSince(fetched) < 86_400,
+           let days = cached["days"] as? [Int], let total = cached["total"] as? Int {
+            return (days, total)
+        }
+        var request = URLRequest(url: URL(string: "https://api.github.com/graphql")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let query = "query { viewer { contributionsCollection { contributionCalendar { totalContributions weeks { contributionDays { contributionCount } } } } } }"
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["query": query])
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let calendar = (((json["data"] as? [String: Any])?["viewer"] as? [String: Any])?["contributionsCollection"]
+                                as? [String: Any])?["contributionCalendar"] as? [String: Any],
+              let weeks = calendar["weeks"] as? [[String: Any]]
+        else { return nil }
+        let days = weeks.flatMap { ($0["contributionDays"] as? [[String: Any]] ?? []).map { $0["contributionCount"] as? Int ?? 0 } }
+        let total = calendar["totalContributions"] as? Int ?? days.reduce(0, +)
+        defaults.set(["at": Date.now, "days": days, "total": total], forKey: key)
+        return (days, total)
+    }
+
     // MARK: Repos for the pin
 
     func loadRepos() async {
