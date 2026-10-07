@@ -441,3 +441,13 @@ verify_jwt = false
 # The handler validates the bearer with resolveUser before accessing account data.
 [functions.whoop-token]
 verify_jwt = false
+
+# The purge is called by pg_cron with PURGE_SECRET, never by an app session;
+# the handler refuses anything without the secret.
+[functions.account-purge]
+verify_jwt = false
+
+# One call is anonymous (which of these ids were deleted, so a phone can wipe
+# what it kept); every other call is gated by resolveUser in the handler.
+[functions.account-data]
+verify_jwt = false
