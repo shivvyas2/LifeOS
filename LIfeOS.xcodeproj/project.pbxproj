@@ -151,8 +151,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A985C674302A34E0002272C5 /* LIfeOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = LIfeOS;
 			sourceTree = "<group>";
 		};
@@ -241,7 +239,6 @@
 				65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */,
 				A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */,
 			);
-			name = LIfeOSUITests;
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
 		};
