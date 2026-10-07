@@ -72,6 +72,9 @@ struct RootView: View {
     @State private var plan = PlanViewModel()
     @State private var notes = NotesViewModel()
     @State private var notesWalkthrough = NotesWalkthrough()
+    /// What a replay row in Settings asked for, done once its cover has gone.
+    @State private var afterSettings: (() -> Void)?
+    @AppStorage("hasSeenFirstRunTour", store: .currentAccount) private var hasSeenFirstRunTour = false
     @State private var life = LifeBoardViewModel()
     @State private var settings = SettingsViewModel()
     @State private var quickLog = QuickLogViewModel()
@@ -174,11 +177,26 @@ struct RootView: View {
         .onChange(of: showSettings) { _, isOpen in
             if !isOpen { profilePhoto = ProfilePhotoStore.load() }
         }
-        .fullScreenCover(isPresented: $showSettings, onDismiss: presentDeferredCoach) {
+        .fullScreenCover(isPresented: $showSettings, onDismiss: {
+            afterSettings?()
+            afterSettings = nil
+            presentDeferredCoach()
+        }) {
             ProfileScreen(
                 settings: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
                 stats: profileStats, highlights: profileHighlights,
-                allTime: profileAllTime, socialActivity: socialActivity, onSignOut: onSignOut
+                allTime: profileAllTime, socialActivity: socialActivity, onSignOut: onSignOut,
+                onReplayNotesWalkthrough: {
+                    afterSettings = {
+                        tab = .notes
+                        notesWalkthrough.start(notes: notes)
+                    }
+                    showSettings = false
+                },
+                onReplayTour: {
+                    afterSettings = { hasSeenFirstRunTour = false }
+                    showSettings = false
+                }
             )
         }
         .fullScreenCover(isPresented: $showCoach) {

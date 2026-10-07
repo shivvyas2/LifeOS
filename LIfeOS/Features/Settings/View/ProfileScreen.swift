@@ -14,6 +14,8 @@ struct ProfileScreen: View {
     var allTime: [ProfileStat] = []
     var socialActivity: SocialActivitySnapshot?
     var onSignOut: () -> Void = {}
+    var onReplayNotesWalkthrough: () -> Void = {}
+    var onReplayTour: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
     @State private var photo: Data? = ProfilePhotoStore.load()
@@ -70,7 +72,8 @@ struct ProfileScreen: View {
 
     private var settingsScreen: some View {
         SettingsScreen(model: settings, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid,
-                       onSignOut: onSignOut)
+                       onSignOut: onSignOut, onReplayNotesWalkthrough: onReplayNotesWalkthrough,
+                       onReplayTour: onReplayTour)
     }
 }
 

@@ -86,6 +86,10 @@ struct AppShell: View {
                         withAnimation(.easeIn(duration: 0.25)) { showTour = true }
                     }
                 }
+                // Settings' "Show the tour again" clears the flag.
+                .onChange(of: hasSeenFirstRunTour) { _, seen in
+                    if !seen { withAnimation(.easeIn(duration: 0.25)) { showTour = true } }
+                }
             } else {
                 OnboardingFlow(
                     model: onboarding,
