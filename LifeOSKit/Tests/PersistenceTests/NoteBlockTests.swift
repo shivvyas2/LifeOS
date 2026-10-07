@@ -135,4 +135,12 @@ import Foundation
         #expect(decoded[0].dueDate == due)
         #expect(decoded[0].goalID == goal)
     }
+
+    @Test func thePickerReachesEveryKindOnce() {
+        let all = NoteBlockKind.barOrder + NoteBlockKind.moreOrder
+        #expect(all.count == NoteBlockKind.allCases.count)
+        #expect(Set(all) == Set(NoteBlockKind.allCases))
+        #expect(NoteBlockKind.barOrder.map(\.chipTitle) == ["Text", "To-do", "Heading", "Bullet", "Numbered", "Quote"])
+        #expect(NoteBlockKind.moreOrder.map(\.chipTitle) == ["Heading 2", "Heading 3", "Callout", "Code", "Sketch", "Divider"])
+    }
 }
