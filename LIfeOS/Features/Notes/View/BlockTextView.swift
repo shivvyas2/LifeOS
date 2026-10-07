@@ -106,6 +106,15 @@ struct BlockTextView: UIViewRepresentable {
         return view
     }
 
+    /// The text wraps at the width the page offers. Without this a long
+    /// paragraph reports its unwrapped width as its size, and the page grows
+    /// past the screen's edges on a phone.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: BlockUITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
+        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: fitted.height)
+    }
+
     func updateUIView(_ view: BlockUITextView, context: Context) {
         context.coordinator.parent = self
 
