@@ -2,7 +2,7 @@ import Foundation
 
 /// A piece of Today the person can place, hide or bring back.
 public enum TodayModule: String, CaseIterable, Codable, Sendable {
-    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo
+    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo, projects
 
     public var title: String {
         switch self {
@@ -18,6 +18,7 @@ public enum TodayModule: String, CaseIterable, Codable, Sendable {
         case .weather: "Weather"
         case .spentToday: "Spent today"
         case .fromLifo: "From LIFO"
+        case .projects: "Projects"
         }
     }
 

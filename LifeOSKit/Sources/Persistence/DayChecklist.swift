@@ -7,6 +7,7 @@ public struct ChecklistRow: Identifiable, Equatable, Sendable {
         case journal(blockID: UUID)
         case page(documentID: UUID, blockID: UUID)
         case habit(entryID: UUID)
+        case project(taskID: UUID)
     }
 
     public let id: String
@@ -23,6 +24,7 @@ public struct ChecklistRow: Identifiable, Equatable, Sendable {
         case .journal(let blockID): "journal|\(blockID.uuidString)"
         case .page(let documentID, let blockID): "page|\(documentID.uuidString)|\(blockID.uuidString)"
         case .habit(let entryID): "habit|\(entryID.uuidString)"
+        case .project(let taskID): "project|\(taskID.uuidString)"
         }
         self.source = source; self.text = text; self.detail = detail
         self.isDone = isDone; self.isEditable = isEditable
@@ -44,6 +46,17 @@ public enum DayChecklist {
         }
     }
 
+    /// A project task assigned to this person for the day.
+    public struct ProjectDue: Equatable, Sendable {
+        public let taskID: UUID
+        public let text: String
+        public let isDone: Bool
+        public let projectName: String
+        public init(taskID: UUID, text: String, isDone: Bool, projectName: String) {
+            self.taskID = taskID; self.text = text; self.isDone = isDone; self.projectName = projectName
+        }
+    }
+
     public struct Habit: Equatable, Sendable {
         public let id: UUID
         public let title: String
@@ -60,7 +73,8 @@ public enum DayChecklist {
     /// record of the day it is made, so habit rows are editable on today
     /// only, whatever `editable` says for the page rows.
     public static func rows(
-        journal: [NoteBlock], journalID: UUID?, due: [DueTask], overdue: [DueTask] = [], habits: [Habit],
+        journal: [NoteBlock], journalID: UUID?, due: [DueTask], overdue: [DueTask] = [],
+        projectTasks: [ProjectDue] = [], habits: [Habit],
         ticked: Set<UUID>, day: Date, editable: Bool, calendar: Calendar = .current, now: Date = .now
     ) -> [ChecklistRow] {
         var rows: [ChecklistRow] = []
@@ -82,6 +96,10 @@ public enum DayChecklist {
                                          text: task.text, detail: "overdue · \(task.pageTitle)",
                                          isDone: false, isEditable: editable))
             }
+        }
+        for task in projectTasks {
+            rows.append(ChecklistRow(source: .project(taskID: task.taskID), text: task.text, detail: task.projectName,
+                                     isDone: task.isDone, isEditable: editable))
         }
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: day)) ?? day
         for habit in habits where habit.createdAt < dayEnd {
