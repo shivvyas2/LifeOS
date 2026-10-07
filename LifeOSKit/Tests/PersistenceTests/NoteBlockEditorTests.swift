@@ -318,4 +318,41 @@ import Foundation
         ))
         #expect(markdown.contains("[sketch]"))
     }
+
+    // MARK: - The bar's pick
+
+    @Test func changingTheKindKeepsTheWords() {
+        let line = NoteBlock(text: "Buy oat milk")
+        let result = NoteBlockEditor.changeKind(doc(line), at: line.id, to: .todo)
+
+        #expect(result.handled)
+        #expect(result.blocks[0].kind == .todo)
+        #expect(result.blocks[0].text == "Buy oat milk")
+        #expect(result.focus == line.id)
+    }
+
+    @Test func changingToARuleKeepsACaretBelow() {
+        let line = NoteBlock(text: "Section")
+        let result = NoteBlockEditor.changeKind(doc(line), at: line.id, to: .divider)
+
+        #expect(result.blocks.map(\.kind) == [.divider, .paragraph])
+        #expect(result.focus == result.blocks[1].id)
+    }
+
+    @Test func changingTheKindOfAMissingBlockDoesNothing() {
+        let line = NoteBlock(text: "Here")
+        let result = NoteBlockEditor.changeKind(doc(line), at: UUID(), to: .todo)
+
+        #expect(!result.handled)
+        #expect(result.blocks == doc(line))
+    }
+
+    // MARK: - The title's Return
+
+    @Test func aReturnTypedInTheTitleIsStrippedAndNoticed() {
+        #expect(NoteBlockEditor.titleWithoutReturn("Weekend\n") == "Weekend")
+        #expect(NoteBlockEditor.titleWithoutReturn("Week\nend reset") == "Weekend reset")
+        #expect(NoteBlockEditor.titleWithoutReturn("Weekend reset") == nil)
+        #expect(NoteBlockEditor.titleWithoutReturn("\n") == "")
+    }
 }

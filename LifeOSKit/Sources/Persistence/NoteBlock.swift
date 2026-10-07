@@ -106,6 +106,35 @@ public enum NoteBlockKind: String, Codable, Sendable, CaseIterable, Identifiable
         [.paragraph, .heading1, .heading2, .heading3, .todo, .bulleted, .numbered,
          .quote, .callout, .code, .sketch, .divider]
     }
+
+    /// The six kinds on the block picker's bar, in order, and the six behind
+    /// its `More` menu. Together they are every kind once; a test holds
+    /// them to it.
+    public static var barOrder: [NoteBlockKind] {
+        [.paragraph, .todo, .heading1, .bulleted, .numbered, .quote]
+    }
+
+    public static var moreOrder: [NoteBlockKind] {
+        [.heading2, .heading3, .callout, .code, .sketch, .divider]
+    }
+
+    /// The word on a chip: shorter than the menu's title, so six fit a phone.
+    public var chipTitle: String {
+        switch self {
+        case .paragraph: "Text"
+        case .heading1:  "Heading"
+        case .heading2:  "Heading 2"
+        case .heading3:  "Heading 3"
+        case .bulleted:  "Bullet"
+        case .numbered:  "Numbered"
+        case .todo:      "To-do"
+        case .quote:     "Quote"
+        case .callout:   "Callout"
+        case .code:      "Code"
+        case .divider:   "Divider"
+        case .sketch:    "Sketch"
+        }
+    }
 }
 
 /// One line of a note.

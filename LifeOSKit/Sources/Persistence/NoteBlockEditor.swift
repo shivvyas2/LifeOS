@@ -148,6 +148,25 @@ public enum NoteBlockEditor {
         return Result(blocks: blocks, focus: id)
     }
 
+    /// A kind picked from the bar for a block that already has words: the
+    /// kind changes, the words stay. The slash menu's pick goes through
+    /// `transform` with an empty string instead, since what was typed there
+    /// was a command rather than content.
+    public static func changeKind(_ blocks: [NoteBlock], at id: UUID, to kind: NoteBlockKind) -> Result {
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else {
+            return Result(blocks: blocks, handled: false)
+        }
+        return transform(blocks, at: id, to: kind, text: blocks[index].text)
+    }
+
+    /// The title field takes Return as a newline before the editor hears of
+    /// it; the editor reads it as "go to the body". The title without its
+    /// newlines when one was typed, nil when none was.
+    public static func titleWithoutReturn(_ title: String) -> String? {
+        guard title.contains(where: \.isNewline) else { return nil }
+        return title.filter { !$0.isNewline }
+    }
+
     public static func toggleCheck(_ blocks: [NoteBlock], at id: UUID) -> Result {
         guard let index = blocks.firstIndex(where: { $0.id == id }) else {
             return Result(blocks: blocks, handled: false)
