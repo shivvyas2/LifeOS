@@ -235,6 +235,26 @@ final class NoteEditorViewModel {
         slashQuery = nil
     }
 
+    /// The bar's pick: the focused block changes kind and keeps its words.
+    /// A rule or a sketch still gets a paragraph below for the caret.
+    func pickBlockKind(_ kind: NoteBlockKind) {
+        guard let id = focusedBlockID else { return }
+        let result = NoteBlockEditor.changeKind(blocks, at: id, to: kind)
+        guard result.handled else { return }
+        blocks = result.blocks
+        if let focus = result.focus { focusedBlockID = focus }
+        slashQuery = nil
+        scheduleSave()
+    }
+
+    /// Return in the title. The vertical field has already put a newline
+    /// into the text by the time this runs, so the title is read back
+    /// without it, and the caret goes to the first block.
+    func submitTitle() {
+        if let stripped = NoteBlockEditor.titleWithoutReturn(title) { title = stripped }
+        focusedBlockID = blocks.first?.id
+    }
+
     /// Completes an open `[[` with a page title.
     func completeLink(with title: String) {
         guard let id = focusedBlockID else { return }

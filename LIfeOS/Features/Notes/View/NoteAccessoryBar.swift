@@ -15,6 +15,9 @@ struct NoteAccessoryBar: View {
     let currentKind: NoteBlockKind
 
     var onPickBlock: (NoteBlockKind) -> Void
+    /// The bar's pick: the block keeps its words. The slash menu's pick above
+    /// does not, which is why they are two callbacks.
+    var onChangeKind: (NoteBlockKind) -> Void
     var onPickLink: (String) -> Void
     var onIndent: (Int) -> Void
     var onToggleInk: () -> Void
@@ -139,57 +142,17 @@ struct NoteAccessoryBar: View {
         .scrollIndicators(.hidden)
     }
 
-    // MARK: - Formatting bar
+    // MARK: - Block picker
 
     private var formattingBar: some View {
         HStack(spacing: 0) {
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    ForEach(NoteBlockKind.menuOrder) { kind in
-                        Button { onPickBlock(kind) } label: {
-                            Image(systemName: kind.systemImage)
-                                .font(LifeOSType.secondary.weight(.medium))
-                                .foregroundStyle(kind == currentKind ? LifeOSTokens.accent : primary)
-                                .frame(width: 34, height: 34)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(kind == currentKind
-                                              ? LifeOSTokens.accent.opacity(0.14)
-                                              : Color.clear)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(kind.title)
-                    }
-
-                    Divider().frame(height: 20).padding(.horizontal, 4)
-
-                    Button { onIndent(-1) } label: {
-                        Image(systemName: "decrease.indent").frame(width: 34, height: 34)
-                    }
-                    .accessibilityLabel("Outdent")
-
-                    Button { onIndent(1) } label: {
-                        Image(systemName: "increase.indent").frame(width: 34, height: 34)
-                    }
-                    .accessibilityLabel("Indent")
-
-                    Button(action: onToggleInk) {
-                        Image(systemName: "scribble.variable")
-                            .frame(width: 34, height: 34)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isInking ? LifeOSTokens.accent.opacity(0.14) : .clear)
-                            )
-                    }
-                    .accessibilityLabel(isInking ? "Stop drawing" : "Draw")
-                }
-                .font(LifeOSType.secondary.weight(.medium))
-                .foregroundStyle(primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-            }
-            .scrollIndicators(.hidden)
+            NoteBlockPicker(
+                currentKind: currentKind,
+                isInking: isInking,
+                onPick: onChangeKind,
+                onIndent: onIndent,
+                onToggleInk: onToggleInk
+            )
 
             Button(action: onDismissKeyboard) {
                 Image(systemName: "keyboard.chevron.compact.down")
