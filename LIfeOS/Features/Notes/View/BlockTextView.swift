@@ -61,6 +61,9 @@ struct BlockTextView: UIViewRepresentable {
     let placeholder: String
     let linkColor: UIColor
     let textColor: UIColor
+    /// A checked to-do: struck through in the quiet colour. An attribute on
+    /// the whole buffer, so typing into a struck line stays struck.
+    let strikethrough: Bool
 
     /// Split at the caret: everything before it stays, everything after it
     /// becomes the new block.
@@ -99,7 +102,7 @@ struct BlockTextView: UIViewRepresentable {
         view.onDeleteBackwardAtStart = { onBackspaceAtStart() }
         view.onShiftTab = { onIndent(-1) }
 
-        context.coordinator.apply(text: text, to: view, kind: kind, linkColor: linkColor, textColor: textColor)
+        context.coordinator.apply(text: text, to: view, kind: kind, linkColor: linkColor, textColor: textColor, strikethrough: strikethrough)
         return view
     }
 
@@ -111,13 +114,13 @@ struct BlockTextView: UIViewRepresentable {
         // into a fight.
         if view.text != text {
             let selection = view.selectedRange
-            context.coordinator.apply(text: text, to: view, kind: kind, linkColor: linkColor, textColor: textColor)
+            context.coordinator.apply(text: text, to: view, kind: kind, linkColor: linkColor, textColor: textColor, strikethrough: strikethrough)
             view.selectedRange = NSRange(
                 location: min(selection.location, (text as NSString).length),
                 length: 0
             )
         } else {
-            context.coordinator.restyle(view, kind: kind, linkColor: linkColor, textColor: textColor)
+            context.coordinator.restyle(view, kind: kind, linkColor: linkColor, textColor: textColor, strikethrough: strikethrough)
         }
 
         view.placeholderLabel.text = placeholder
@@ -141,40 +144,49 @@ struct BlockTextView: UIViewRepresentable {
 
         init(_ parent: BlockTextView) { self.parent = parent }
 
-        func apply(text: String, to view: BlockUITextView, kind: NoteBlockKind, linkColor: UIColor, textColor: UIColor) {
+        func apply(text: String, to view: BlockUITextView, kind: NoteBlockKind, linkColor: UIColor,
+                   textColor: UIColor, strikethrough: Bool) {
             view.attributedText = Coordinator.attributed(
-                text, kind: kind, linkColor: linkColor, textColor: textColor
+                text, kind: kind, linkColor: linkColor, textColor: textColor, strikethrough: strikethrough
             )
+            view.appliedKind = kind
+            view.appliedTextColor = textColor
+            view.appliedStrikethrough = strikethrough
         }
 
-        func restyle(_ view: BlockUITextView, kind: NoteBlockKind, linkColor: UIColor, textColor: UIColor) {
-            guard view.appliedKind != kind || view.appliedTextColor != textColor else { return }
+        func restyle(_ view: BlockUITextView, kind: NoteBlockKind, linkColor: UIColor,
+                     textColor: UIColor, strikethrough: Bool) {
+            guard view.appliedKind != kind || view.appliedTextColor != textColor
+                    || view.appliedStrikethrough != strikethrough else { return }
             let selection = view.selectedRange
             view.attributedText = Coordinator.attributed(
-                view.text, kind: kind, linkColor: linkColor, textColor: textColor
+                view.text, kind: kind, linkColor: linkColor, textColor: textColor, strikethrough: strikethrough
             )
             view.selectedRange = selection
             view.appliedKind = kind
             view.appliedTextColor = textColor
+            view.appliedStrikethrough = strikethrough
         }
 
         /// Body text plus the one piece of live syntax highlighting this editor
         /// does: `[[a link]]` in the accent colour, brackets included, so it is
         /// obvious the link is closed.
         static func attributed(
-            _ text: String, kind: NoteBlockKind, linkColor: UIColor, textColor: UIColor
+            _ text: String, kind: NoteBlockKind, linkColor: UIColor, textColor: UIColor, strikethrough: Bool
         ) -> NSAttributedString {
             let paragraph = NSMutableParagraphStyle()
             paragraph.lineSpacing = BlockStyle.lineSpacing(kind)
 
-            let attributed = NSMutableAttributedString(
-                string: text,
-                attributes: [
-                    .font: BlockStyle.font(kind),
-                    .foregroundColor: textColor,
-                    .paragraphStyle: paragraph,
-                ]
-            )
+            var base: [NSAttributedString.Key: Any] = [
+                .font: BlockStyle.font(kind),
+                .foregroundColor: textColor,
+                .paragraphStyle: paragraph,
+            ]
+            if strikethrough {
+                base[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+                base[.strikethroughColor] = textColor
+            }
+            let attributed = NSMutableAttributedString(string: text, attributes: base)
 
             let nsText = text as NSString
             for range in NoteLinkScanner.ranges(in: text) {
@@ -244,6 +256,7 @@ final class BlockUITextView: UITextView {
     var onShiftTab: (() -> Void)?
     var appliedKind: NoteBlockKind?
     var appliedTextColor: UIColor?
+    var appliedStrikethrough = false
 
     let placeholderLabel = UILabel()
 
