@@ -23,8 +23,40 @@ struct EditorialDesignPreview: View {
                 ])
                 .padding(.bottom, 24)
             }
+        // The phone shell with a field focused, so the keyboard is up: the
+        // bar must not sit on top of it.
+        case "nav-keyboard":
+            ZStack(alignment: .bottomTrailing) {
+                KeyboardFixture()
+                PillNavBar(selection: $tab, items: [
+                    PillNavItem(value: 0, systemImage: "sun.max.fill", label: "Today"),
+                    PillNavItem(value: 1, systemImage: "heart.fill", label: "Health"),
+                    PillNavItem(value: 2, systemImage: "dollarsign", label: "Money"),
+                    PillNavItem(value: 3, systemImage: "text.book.closed.fill", label: "Notes"),
+                    PillNavItem(value: 4, systemImage: "square.grid.2x2.fill", label: "Life"),
+                ])
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 12)
+                .tucksUnderKeyboard()
+            }
         default:
             NavigationStack { MoneyScreen(snapshot: Self.money) }
+        }
+    }
+
+    /// A page of writing with the field focused on appear.
+    private struct KeyboardFixture: View {
+        @State private var text = "Groceries for the week, and a call to the dentist before Friday."
+        @FocusState private var focused: Bool
+        var body: some View {
+            ZStack {
+                LifeOSTokens.canvas.resolve(.light).ignoresSafeArea()
+                TextEditor(text: $text)
+                    .focused($focused)
+                    .scrollContentBackground(.hidden)
+                    .padding(22)
+            }
+            .task { try? await Task.sleep(for: .milliseconds(400)); focused = true }
         }
     }
 
