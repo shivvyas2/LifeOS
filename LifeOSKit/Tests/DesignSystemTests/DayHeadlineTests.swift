@@ -44,8 +44,8 @@ import Foundation
     }
 
     @Test func sectionsFollowThePlacement() {
-        #expect(DaySections.visible(for: .today) == DaySection.allCases)
-        #expect(DaySections.visible(for: .past(daysAgo: 3)) == [.agenda, .checklist, .readings, .money, .nudges])
+        #expect(DaySections.visible(for: .today) == [.weather, .agenda, .checklist, .project, .readings, .money, .nudges])
+        #expect(DaySections.visible(for: .past(daysAgo: 3)) == [.agenda, .checklist, .project, .readings, .money, .nudges])
         #expect(DaySections.visible(for: .future(daysAhead: 3)) == [.weather, .agenda, .checklist])
         #expect(DaySections.visible(for: .future(daysAhead: 9)) == [.weather, .agenda, .checklist])
         #expect(DaySections.visible(for: .future(daysAhead: 10)) == [.agenda, .checklist])

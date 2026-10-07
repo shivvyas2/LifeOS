@@ -59,7 +59,7 @@ public struct DayHeadline: Equatable, Sendable {
 
 /// The parts of the day screen, in order.
 public enum DaySection: CaseIterable, Equatable, Sendable {
-    case weather, agenda, checklist, readings, money, nudges
+    case weather, agenda, checklist, project, readings, money, nudges
 }
 
 /// Which parts a day shows. A past day is a record without a forecast; a
@@ -70,7 +70,7 @@ public enum DaySections {
 
     public static func visible(for placement: DayPlacement) -> [DaySection] {
         switch placement {
-        case .past: [.agenda, .checklist, .readings, .money, .nudges]
+        case .past: [.agenda, .checklist, .project, .readings, .money, .nudges]
         case .today: DaySection.allCases
         case .future(let days): days < forecastDays ? [.weather, .agenda, .checklist] : [.agenda, .checklist]
         }
