@@ -15,6 +15,7 @@ struct NotesDesignPreview: View {
     var page: String = ""
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var fixture = NotesPreviewFixture()
+    @State private var frames = WalkthroughFrames()
 
     var body: some View {
         Group {
@@ -35,6 +36,10 @@ struct NotesDesignPreview: View {
                 NavigationStack {
                     NoteEditorScreen(model: fixture.editor, focusOnAppear: .firstBlock, onOpenLinked: { _ in })
                 }
+            // `--step=N`, 1 to 5: the overlay over the shelf (1, 4, 5) or the
+            // sample page with its picker up (2, 3).
+            case "notes-walkthrough":
+                walkthroughPage
             default:
                 if showEditor {
                     NavigationStack {
@@ -54,6 +59,31 @@ struct NotesDesignPreview: View {
                     .font(.caption2).tracking(1).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity).padding(.vertical, 6)
                     .background(LifeOSTokens.canvas.light)
+            }
+        }
+    }
+
+    private var step: Int {
+        let raw = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--step=") }?.dropFirst(7)
+        return min(max(Int(raw ?? "1") ?? 1, 1), 5)
+    }
+
+    @ViewBuilder private var walkthroughPage: some View {
+        let current = WalkthroughScript.notes[step - 1]
+        Group {
+            if step == 2 || step == 3 {
+                NavigationStack {
+                    NoteEditorScreen(model: fixture.editor, focusOnAppear: .firstBlock, onOpenLinked: { _ in })
+                }
+            } else {
+                NotesHubScreen(model: fixture.notes, plan: fixture.plan, onAddHabit: {})
+            }
+        }
+        .environment(\.walkthroughFrames, frames)
+        .overlay {
+            if let frame = frames.frames[current.anchor] {
+                WalkthroughOverlay(step: current, frame: frame, isLast: step == 5, onNext: {}, onSkip: {})
+                    .ignoresSafeArea()
             }
         }
     }
