@@ -1,10 +1,12 @@
+import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import { json, serviceClient } from "../_shared/supabase.ts";
 import {
-  classifyOpenAIFailure,
+  billedTokens,
+  classifyFailure,
   LifoRefusal,
   NUDGE_TOKEN_CAP,
-  openAIBody,
   parseOutput,
+  taskBody,
 } from "../_shared/lifo.ts";
 import {
   apnsConfigFromEnv,
@@ -247,7 +249,7 @@ async function phrase(
   fallback: string,
   prompt: string,
 ): Promise<string | null> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return fallback;
 
   const { data: usage } = await db
@@ -259,38 +261,29 @@ async function phrase(
     .maybeSingle();
   if ((usage?.tokens ?? 0) >= NUDGE_TOKEN_CAP) return fallback;
 
-  let reply: Response;
+  let reply: Anthropic.Message;
   try {
-    reply = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(openAIBody("nudge", prompt)),
-    });
-  } catch {
-    console.error("lifo-nudge openai fetch failed");
-    return fallback;
-  }
-  if (!reply.ok) {
-    console.error(`lifo-nudge openai failed status=${reply.status} kind=${classifyOpenAIFailure(reply.status)}`);
+    reply = await new Anthropic({ apiKey }).messages.create(taskBody("nudge", prompt));
+  } catch (error) {
+    if (error instanceof Anthropic.APIError && error.status !== undefined) {
+      console.error(`lifo-nudge provider failed status=${error.status} kind=${classifyFailure(error.status)}`);
+    } else {
+      console.error("lifo-nudge provider call failed");
+    }
     return fallback;
   }
 
-  const body = await reply.json();
-  const tokens = (body as { usage?: { total_tokens?: number } })?.usage?.total_tokens ?? 0;
   // Debited on every path that got as far as a billable call, exactly as the
   // chat path does, and against the nudge kind so it cannot eat chat's budget.
   const { error: debitError } = await db.rpc("lifo_debit", {
     p_user: userID,
-    p_tokens: tokens,
+    p_tokens: billedTokens(reply.usage),
     p_kind: "nudge",
   });
   if (debitError) console.error(`lifo-nudge debit failed: ${debitError.code}`);
 
   try {
-    const { output } = parseOutput("nudge", body);
+    const { output } = parseOutput("nudge", reply);
     const text = output.text as string;
     return text.trim().length > 0 ? text.trim() : fallback;
   } catch (failure) {

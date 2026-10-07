@@ -1,8 +1,22 @@
 // The server side of LIFO's brain: model choice, guardrails, schema, and
 // reply parsing. Pure functions only, so every decision here is testable
-// without a network. index.ts owns the door (auth, budget, fetch).
+// without a network. index.ts owns the door (auth, budget, the call).
 
-export const DAILY_TOKEN_CAP = 150_000;
+import type Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
+
+/// One model for every task. Claude Opus 5.5 thinks on every request; effort
+/// is the only dial on how much, and therefore on latency and spend.
+export const MODEL = "claude-opus-5-5";
+
+/// The daily chat allowance, in billed tokens (see `billedTokens`), not raw
+/// tokens.
+///
+/// Sized from the cost ceiling rather than from a usage guess: LifeOS ships
+/// free and has to stay under about $2 per user per month. A user who spends
+/// this every day for 30 days costs about $1.92 at Opus 5.5's $4 per million
+/// input tokens. The old figure, 150,000 raw tokens, was the same ceiling
+/// worked out at gpt-5-mini's prices.
+export const DAILY_TOKEN_CAP = 16_000;
 
 export class LifoRefusal extends Error {}
 
@@ -19,26 +33,30 @@ investments or securities; keep money talk at budgeting and pattern level.
 Cite only numbers that appear in the data given to you; never invent one.`;
 
 // `schema` is optional because the chat task genuinely has none. A chat
-// completion may come back as prose or as tool calls, so there is no single
+// reply may come back as prose or as tool calls, so there is no single
 // output shape to validate it against, and `parseChatReply` does not try.
 // Pointing chat at the answer task's schema, as this used to, made the entry
 // read as though chat replies were validated when nothing ever looked at it.
-const TASKS: Record<string, { model: string; system: string; schema?: Record<string, unknown> }> = {
+//
+// `maxTokens` covers the thinking as well as the reply, because thinking
+// counts toward the limit even though its text is never returned. The limits
+// are tight on purpose: at $20 per million output tokens one runaway reply
+// at a generous limit would spend several days of the allowance at once.
+const TASKS: Record<
+  string,
+  { system: string; maxTokens: number; schema?: Record<string, unknown> }
+> = {
   answer: {
-    model: "gpt-5-mini",
     system: `${SCOPE}
 
 Answer the user's question in one short, direct paragraph. No preamble,
 no restating the question.`,
+    maxTokens: 8_000,
     schema: {
-      name: "coach_answer",
-      strict: true,
-      schema: {
-        type: "object",
-        properties: { answer: { type: "string" } },
-        required: ["answer"],
-        additionalProperties: false,
-      },
+      type: "object",
+      properties: { answer: { type: "string" } },
+      required: ["answer"],
+      additionalProperties: false,
     },
   },
 };
@@ -67,8 +85,8 @@ When you genuinely need something in order to answer well, ask one question back
 // prompt lives on the server, and the conversational permissions are added
 // behind it rather than in place of it.
 TASKS.chat = {
-  model: "gpt-5-mini",
   system: `${SCOPE}\n\n${CONVERSATION}`,
+  maxTokens: 8_000,
 };
 
 // The nudge task: one sentence for a lock screen, from numbers a rule already
@@ -80,10 +98,9 @@ TASKS.chat = {
 // no better on a lock screen than it does in a bubble.
 //
 // The model's whole job here is phrasing. It is not given the rows, only the
-// figures the fired trigger carried, which is what keeps this call on the
-// order of 300 tokens in and 60 out.
+// figures the fired trigger carried, which keeps the reply to a sentence and
+// the thinking at low effort short.
 TASKS.nudge = {
-  model: "gpt-5-mini",
   system: `${SCOPE}
 
 ${CONVERSATION}
@@ -91,19 +108,17 @@ ${CONVERSATION}
 You are writing a single notification. At most two sentences, under 180
 characters. Do not greet them and do not sign off. Use only the figures you
 are given; if a figure is not there, do not mention it.`,
+  maxTokens: 2_000,
   schema: {
-    name: "lifo_nudge",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: { text: { type: "string" } },
-      required: ["text"],
-      additionalProperties: false,
-    },
+    type: "object",
+    properties: { text: { type: "string" } },
+    required: ["text"],
+    additionalProperties: false,
   },
 };
 
-/// The nudge's own daily allowance, separate from DAILY_TOKEN_CAP.
+/// The nudge's own daily allowance, separate from DAILY_TOKEN_CAP, and in
+/// the same billed units.
 ///
 /// The phrasing call is tiny, so this is not really a spend limit: it is a
 /// runaway guard. The reason it is a separate budget at all is that a heavy
@@ -114,7 +129,16 @@ export function taskConfig(task: string) {
   return TASKS[task] ?? null;
 }
 
-export function openAIBody(task: string, prompt: string): Record<string, unknown> {
+/// The one setting that is worth having and is not worth an outage.
+///
+/// Opus 5.5 defaults to medium effort, and medium is most of the wait. A
+/// coaching question over a week of the user's own numbers is not a
+/// reasoning problem; the thinking that matters already happened on the
+/// device when the digest was built. Low also spends fewer tokens, which is
+/// the same lever as the daily cap pulled from the other end.
+const EFFORT = "low" as const;
+
+export function taskBody(task: string, prompt: string): Anthropic.MessageCreateParamsNonStreaming {
   const config = taskConfig(task);
   if (!config) throw new Error(`unknown task: ${task}`);
   // A one-shot task without a schema would be asked for typed JSON and given
@@ -122,17 +146,69 @@ export function openAIBody(task: string, prompt: string): Record<string, unknown
   // this could serve. The chat task never comes through here.
   if (!config.schema) throw new Error(`task has no schema: ${task}`);
   return {
-    model: config.model,
-    messages: [
-      { role: "system", content: config.system },
-      { role: "user", content: prompt },
-    ],
-    response_format: { type: "json_schema", json_schema: config.schema },
+    model: MODEL,
+    max_tokens: config.maxTokens,
+    system: config.system,
+    messages: [{ role: "user", content: prompt }],
+    output_config: {
+      effort: EFFORT,
+      format: { type: "json_schema", schema: config.schema },
+    },
   };
 }
 
-export function classifyOpenAIFailure(status: number): "rate_limited" | "upstream_failure" {
+/// The same body with the effort removed, for the one retry after a 400.
+///
+/// A model that stops accepting the setting must cost a slower answer, never
+/// no answer at all. Only the effort goes: the output format is the task's
+/// contract and the retry still needs it.
+export function withoutTuning<T extends Anthropic.MessageCreateParams>(body: T): T {
+  if (!body.output_config) return body;
+  const { effort: _effort, ...rest } = body.output_config;
+  return { ...body, output_config: rest };
+}
+
+export function classifyFailure(status: number | undefined): "rate_limited" | "upstream_failure" {
   return status === 429 ? "rate_limited" : "upstream_failure";
+}
+
+/// What a request cost, in the units the daily caps are written in: tokens
+/// at the base input price.
+///
+/// Raw token counts misprice this model in both directions. A cache read
+/// costs a twentieth of a fresh input token and an output token five times
+/// one, so a cap on raw tokens would punish a long conversation that is
+/// mostly cached and undercharge a short one that writes a lot. Weighting by
+/// price keeps the cap a cap on money, which is what it is for.
+export function billedTokens(usage: {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): number {
+  const weighted = (usage.input_tokens ?? 0) +
+    (usage.cache_creation_input_tokens ?? 0) * 1.25 +
+    (usage.cache_read_input_tokens ?? 0) * 0.05 +
+    (usage.output_tokens ?? 0) * 5;
+  return Math.ceil(weighted);
+}
+
+/// The reason to hand the user when the model declines.
+///
+/// A refusal arrives as a successful reply with stop_reason "refusal", not
+/// as an error, and its explanation is optional, so it is read rather than
+/// assumed.
+function refusalReason(message: Anthropic.Message): string {
+  return message.stop_details?.explanation ?? "That is not something I can help with.";
+}
+
+function replyText(message: Anthropic.Message): string {
+  // By block type, never by position: a reply opens with thinking blocks,
+  // whose text is empty because it is never returned.
+  return message.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("");
 }
 
 // Validates the parsed reply against the task's own schema, rather than a
@@ -142,7 +218,7 @@ export function classifyOpenAIFailure(status: number): "rate_limited" | "upstrea
 // schemas actually declare (string); anything else throws loudly, so a
 // future schema addition can't silently skip validation.
 function validateShape(schema: Record<string, unknown>, output: Record<string, unknown>): void {
-  const inner = schema.schema as {
+  const inner = schema as {
     properties?: Record<string, { type?: string }>;
     required?: string[];
   };
@@ -163,83 +239,112 @@ function validateShape(schema: Record<string, unknown>, output: Record<string, u
 
 export function parseOutput(
   task: string,
-  body: unknown,
+  message: Anthropic.Message,
 ): { output: Record<string, unknown>; tokens: number } {
   const config = taskConfig(task);
   if (!config) throw new Error(`unknown task: ${task}`);
   if (!config.schema) throw new Error(`task has no schema: ${task}`);
 
-  const reply = body as {
-    choices?: { message?: { content?: string; refusal?: string } }[];
-    usage?: { total_tokens?: number };
-  };
-  const message = reply.choices?.[0]?.message;
-  if (!message) throw new Error("no choices in reply");
-  if (message.refusal) throw new LifoRefusal(message.refusal);
-  if (!message.content) throw new Error("empty content");
-  const output = JSON.parse(message.content) as Record<string, unknown>;
+  if (message.stop_reason === "refusal") throw new LifoRefusal(refusalReason(message));
+  const text = replyText(message);
+  if (!text) throw new Error("empty content");
+  const output = JSON.parse(text) as Record<string, unknown>;
   validateShape(config.schema, output);
-  return { output, tokens: reply.usage?.total_tokens ?? 0 };
+  return { output, tokens: billedTokens(message.usage) };
 }
 
-// The device's own wire format keeps tool_calls flat: {id, name, arguments}.
-// That is our format, not OpenAI's; the phone never learns OpenAI's message
-// schema, matching how parseChatReply already hands tool calls back flat.
-// OpenAI's chat completions API requires the nested {id, type, function}
-// shape, so this is the seam that translates outbound, right before the
-// request leaves for the provider. Everything else, including a tool result
-// message ({role: "tool", tool_call_id, content}), is already in OpenAI's
-// shape and passes through untouched.
-function toOpenAIMessage(message: unknown): unknown {
-  if (typeof message !== "object" || message === null) return message;
-  const raw = message as Record<string, unknown>;
-  if (!Array.isArray(raw.tool_calls)) return message;
+// The device's own wire format for a thread. It is OpenAI's chat message
+// shape with tool_calls kept flat, because that is what the phone shipped
+// with, and the phone never learns the provider's message schema: that is
+// what lets the provider change without an app release. Everything below
+// translates it, right before the request leaves.
+interface WireMessage {
+  role: "user" | "assistant" | "tool";
+  content: string;
+  tool_calls?: { id: string; name: string; arguments: string }[];
+  tool_call_id?: string;
+}
+
+function toolInput(argumentsJSON: string): Record<string, unknown> {
+  // These are arguments the model itself produced and the phone echoed back,
+  // so they parse in practice. If one does not, an empty input still keeps
+  // the call paired with its result, which the provider requires.
+  try {
+    const parsed = JSON.parse(argumentsJSON);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/// The device's thread, in Claude's message shape.
+///
+/// A tool result is a block in a user turn rather than a role of its own,
+/// and every result answering one assistant turn has to arrive in the same
+/// user turn, so consecutive turns of one role are merged. Empty text is
+/// dropped because the provider rejects an empty text block, and the device
+/// sends one on every assistant turn that only carries tool calls.
+export function toClaudeMessages(messages: unknown[]): Anthropic.MessageParam[] {
+  const thread: { role: "user" | "assistant"; content: Anthropic.ContentBlockParam[] }[] = [];
+  for (const message of messages as WireMessage[]) {
+    let role: "user" | "assistant";
+    const blocks: Anthropic.ContentBlockParam[] = [];
+    if (message.role === "tool") {
+      role = "user";
+      blocks.push({
+        type: "tool_result",
+        tool_use_id: message.tool_call_id ?? "",
+        content: message.content,
+      });
+    } else {
+      role = message.role;
+      if (message.content) blocks.push({ type: "text", text: message.content });
+      for (const call of message.tool_calls ?? []) {
+        blocks.push({ type: "tool_use", id: call.id, name: call.name, input: toolInput(call.arguments) });
+      }
+    }
+    if (blocks.length === 0) continue;
+    const previous = thread[thread.length - 1];
+    if (previous && previous.role === role) previous.content.push(...blocks);
+    else thread.push({ role, content: blocks });
+  }
+  // The device sends a sliding window, and a window can open part way
+  // through an exchange: on an assistant turn, or on tool results whose call
+  // fell off the front. Neither is a valid first turn, so the thread starts
+  // at the first thing the person actually said.
+  while (
+    thread.length > 0 &&
+    (thread[0].role !== "user" || thread[0].content[0].type === "tool_result")
+  ) {
+    thread.shift();
+  }
+  return thread;
+}
+
+/// A device tool declaration ({type: "function", function: {...}}) as a
+/// Claude tool. Validated already by `parseRequest`.
+function toClaudeTool(tool: unknown): Anthropic.Tool {
+  const fn = (tool as { function: { name: string; description?: string; parameters?: unknown } })
+    .function;
   return {
-    ...raw,
-    tool_calls: raw.tool_calls.map((call: unknown) => {
-      if (typeof call !== "object" || call === null || !("name" in call)) return call;
-      const flat = call as { id: string; name: string; arguments: string };
-      return {
-        id: flat.id,
-        type: "function",
-        function: { name: flat.name, arguments: flat.arguments },
-      };
-    }),
+    name: fn.name,
+    ...(fn.description ? { description: fn.description } : {}),
+    input_schema: (fn.parameters ?? { type: "object", properties: {} }) as Anthropic.Tool.InputSchema,
   };
 }
 
 // `context` is the device's rendered view of the user's own data, or the
 // calendar assistant's rules and the current date. It arrives in a field of
-// its own, never as a message, and it is placed here: a system message
-// behind SCOPE. Order is the point. SCOPE stays first so the guardrail is
-// never displaced by anything the client sent, and the context sits behind
-// it because the model is told to cite only numbers it was given, which
+// its own, never as a message, and it is placed here: a system block behind
+// SCOPE. Order is the point. SCOPE stays first so the guardrail is never
+// displaced by anything the client sent, and the context sits behind it
+// because the model is told to cite only numbers it was given, which
 // requires actually giving it some.
-/// The two parameters that are worth having and are not worth an outage.
-///
-/// Split out and named so `withoutTuning` below can lift them back off a body
-/// the provider rejected. A model that stops accepting one of these must cost
-/// a slower answer, never no answer at all.
-const TUNING = {
-  reasoning_effort: "low",
-  verbosity: "low",
-} as const;
-
-/// The same body with the tuning removed, for the one retry after a 400.
-export function withoutTuning(
-  body: Record<string, unknown>,
-): Record<string, unknown> {
-  const stripped = { ...body };
-  for (const key of Object.keys(TUNING)) delete stripped[key];
-  return stripped;
-}
-
 export function chatBody(
   messages: unknown[],
   tools: unknown[],
   context = "",
-  stream = false,
-): Record<string, unknown> {
+): Anthropic.MessageCreateParamsNonStreaming {
   const structuredCoach = context.includes("LIFEOS_STRUCTURED_COACH_V1") && tools.length === 0;
   const coachStyle = `${SCOPE}
 
@@ -248,123 +353,107 @@ Use brief Markdown tables for supplied metrics or comparisons, and at most three
 Use at most three sections. No greeting, filler, repeated conclusion, or invented numbers.
 Keep units and time periods. Say when data is missing. Follow the requested presentation format.
 When the presentation format asks for a SAY: line, write it first, on its own line, before anything else.`;
-  const system = [{ role: "system", content: structuredCoach ? coachStyle : TASKS.chat.system }];
-  if (context) system.push({ role: "system", content: context });
+  const system: Anthropic.TextBlockParam[] = [
+    { type: "text", text: structuredCoach ? coachStyle : TASKS.chat.system },
+  ];
+  if (context) system.push({ type: "text", text: context });
+  // A cache breakpoint at the end of the system prompt. The thread is a
+  // sliding window, so once it starts sliding the messages stop matching the
+  // previous request; this breakpoint keeps the tools, guardrail and context
+  // cached through that, and the top-level one below caches the thread while
+  // it is still growing.
+  system[system.length - 1].cache_control = { type: "ephemeral" };
 
-  const body: Record<string, unknown> = {
-    model: TASKS.chat.model,
-    messages: [
-      ...system,
-      ...messages.map(toOpenAIMessage),
-    ],
-    // The default is medium, and medium is most of the wait. A coaching
-    // question over a week of the user's own numbers is not a reasoning
-    // problem; the thinking that matters already happened on the device when
-    // the digest was built. Low also spends fewer tokens, which is the same
-    // lever as the daily cap pulled from the other end.
-    ...TUNING,
+  const body: Anthropic.MessageCreateParamsNonStreaming = {
+    model: MODEL,
+    max_tokens: TASKS.chat.maxTokens,
+    system,
+    messages: toClaudeMessages(messages),
+    cache_control: { type: "ephemeral" },
+    output_config: { effort: EFFORT },
   };
-  if (stream) {
-    body.stream = true;
-    // Usage arrives only in a final chunk, and without it a streamed turn
-    // would cost the user nothing against the daily cap: an unmetered path
-    // is a free one, and the cap is what keeps this affordable.
-    body.stream_options = { include_usage: true };
-  }
-  // Absent rather than empty. The two are not the same to the provider, and
-  // an empty array is rejected outright by some versions.
+  // Absent rather than empty: a thread with no tools has nothing to declare.
   if (tools.length > 0) {
-    body.tools = tools;
-    body.tool_choice = "auto";
+    body.tools = tools.map(toClaudeTool);
+    body.tool_choice = { type: "auto" };
   }
   return body;
 }
 
-/// One chunk of the provider's stream, reduced to what we forward.
+/// One event of the provider's stream, reduced to what we act on.
 ///
-/// Pure, so the reassembly is testable without a network — the same division
-/// the rest of this file keeps. A chunk carries at most one of these: a piece
-/// of text, a refusal, or the usage that closes the stream.
-export function parseStreamChunk(
-  chunk: unknown,
-): { delta?: string; refusal?: string; tokens?: number } {
-  const body = chunk as {
-    choices?: { delta?: { content?: string; refusal?: string } }[];
-    usage?: { total_tokens?: number };
-  };
-  const out: { delta?: string; refusal?: string; tokens?: number } = {};
-  const delta = body.choices?.[0]?.delta;
-  // Deliberately not `if (delta.content)`: an empty string is a real chunk and
-  // dropping it is harmless, but a nullish check that also swallows "0" is the
-  // bug this shape invites.
-  if (typeof delta?.content === "string" && delta.content.length > 0) {
-    out.delta = delta.content;
-  }
-  if (typeof delta?.refusal === "string" && delta.refusal.length > 0) {
-    out.refusal = delta.refusal;
-  }
-  // The final chunk, sent because `stream_options.include_usage` asked for it.
-  // It carries no choices, which is why usage is read independently above.
-  if (typeof body.usage?.total_tokens === "number") {
-    out.tokens = body.usage.total_tokens;
-  }
-  return out;
-}
-
-/// Pulls complete `data:` payloads out of a growing buffer.
-///
-/// Returns the payloads found and whatever tail is left over, because an SSE
-/// frame is split across network reads far more often than not and a parser
-/// that forgets the tail silently loses a word in the middle of a sentence.
-export function drainSSE(
-  buffer: string,
-): { payloads: string[]; rest: string } {
-  const payloads: string[] = [];
-  let rest = buffer;
-  let index = rest.indexOf("\n\n");
-  while (index !== -1) {
-    const frame = rest.slice(0, index);
-    rest = rest.slice(index + 2);
-    for (const line of frame.split("\n")) {
-      if (line.startsWith("data:")) payloads.push(line.slice(5).trim());
+/// Pure, so the reassembly is testable without a network, the same division
+/// the rest of this file keeps. Usage arrives in two halves: the input side
+/// in `message_start`, and running totals in each `message_delta`.
+export function parseStreamEvent(event: Anthropic.RawMessageStreamEvent): {
+  delta?: string;
+  stopReason?: string;
+  refusal?: string;
+  usage?: Parameters<typeof billedTokens>[0];
+} {
+  switch (event.type) {
+    case "message_start":
+      return { usage: event.message.usage };
+    case "content_block_delta":
+      // Only text reaches the person. Thinking deltas carry nothing under
+      // the default display, and tool input never streams because a turn
+      // with tools is never streamed.
+      if (event.delta.type === "text_delta" && event.delta.text.length > 0) {
+        return { delta: event.delta.text };
+      }
+      return {};
+    case "message_delta": {
+      const out: ReturnType<typeof parseStreamEvent> = { usage: event.usage };
+      if (event.delta.stop_reason) out.stopReason = event.delta.stop_reason;
+      if (event.delta.stop_reason === "refusal") {
+        out.refusal = event.delta.stop_details?.explanation ??
+          "That is not something I can help with.";
+      }
+      return out;
     }
-    index = rest.indexOf("\n\n");
+    default:
+      return {};
   }
-  return { payloads, rest };
 }
 
-export function parseChatReply(body: unknown) {
-  const reply = body as {
-    choices?: {
-      message?: {
-        content?: string;
-        refusal?: string;
-        tool_calls?: { id: string; function: { name: string; arguments: string } }[];
-      };
-    }[];
-    usage?: { total_tokens?: number };
-  };
-  const message = reply.choices?.[0]?.message;
-  if (!message) throw new Error("no choices in reply");
-  if (message.refusal) throw new LifoRefusal(message.refusal);
+/// Folds a later usage report over an earlier one. A field the later report
+/// leaves null keeps its earlier value, because `message_delta` only
+/// restates what it knows.
+export function mergeUsage(
+  earlier: Parameters<typeof billedTokens>[0],
+  later: Parameters<typeof billedTokens>[0],
+): Parameters<typeof billedTokens>[0] {
+  const merged = { ...earlier };
+  for (const [key, value] of Object.entries(later)) {
+    if (typeof value === "number") (merged as Record<string, number>)[key] = value;
+  }
+  return merged;
+}
 
-  const tokens = reply.usage?.total_tokens ?? 0;
+export function parseChatReply(message: Anthropic.Message) {
+  if (message.stop_reason === "refusal") throw new LifoRefusal(refusalReason(message));
 
-  // Tool calls before content. A completion carrying both wants the tool run
-  // before it commits to prose, and answering with the prose strands it.
-  if (message.tool_calls && message.tool_calls.length > 0) {
+  const tokens = billedTokens(message.usage);
+
+  // Tool calls before text. A reply carrying both wants the tool run before
+  // it commits to prose, and answering with the prose strands it.
+  const calls = message.content.filter(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+  );
+  if (calls.length > 0) {
     return {
       kind: "tool_calls" as const,
-      toolCalls: message.tool_calls.map((call) => ({
+      toolCalls: calls.map((call) => ({
         id: call.id,
-        name: call.function.name,
-        arguments: call.function.arguments,
+        name: call.name,
+        arguments: JSON.stringify(call.input),
       })),
       tokens,
     };
   }
-  if (!message.content) throw new Error("empty content");
-  return { kind: "text" as const, text: message.content, tokens };
+  const text = replyText(message);
+  if (!text) throw new Error("empty content");
+  return { kind: "text" as const, text, tokens };
 }
 
 // What a client is allowed to put in the thread. Notably not "system": a
@@ -374,7 +463,7 @@ export function parseChatReply(body: unknown) {
 // exists so a client never needs to write a system message at all.
 const ALLOWED_CHAT_ROLES = new Set(["user", "assistant", "tool"]);
 
-// Bounds, not tuning knobs. Without them this endpoint is a general OpenAI
+// Bounds, not tuning knobs. Without them this endpoint is a general model
 // proxy on our key for any authenticated user: an unbounded thread, an
 // unbounded tool list, and an unbounded context are three ways to spend the
 // whole daily allowance in one request on something that is not coaching.
@@ -383,6 +472,13 @@ const ALLOWED_CHAT_ROLES = new Set(["user", "assistant", "tool"]);
 export const MAX_CHAT_MESSAGES = 64;
 export const MAX_CHAT_TOOLS = 16;
 export const MAX_CONTEXT_LENGTH = 32_000;
+
+function isWireToolCall(call: unknown): boolean {
+  if (typeof call !== "object" || call === null) return false;
+  const raw = call as Record<string, unknown>;
+  return typeof raw.id === "string" && typeof raw.name === "string" &&
+    typeof raw.arguments === "string";
+}
 
 function isAllowedChatMessage(message: unknown): boolean {
   if (typeof message !== "object" || message === null || Array.isArray(message)) {
@@ -394,6 +490,14 @@ function isAllowedChatMessage(message: unknown): boolean {
   // empty one that carries tool calls. Anything else is a shape we would be
   // forwarding to the provider without having read it.
   if (typeof raw.content !== "string") return false;
+  // The tool fields are read now, to translate them, so they are checked
+  // like everything else that is read: a result must name the call it
+  // answers, and a call must carry the three strings the device writes.
+  if (raw.role === "tool" && typeof raw.tool_call_id !== "string") return false;
+  if (raw.tool_calls !== undefined) {
+    if (raw.role !== "assistant" || !Array.isArray(raw.tool_calls)) return false;
+    if (!raw.tool_calls.every(isWireToolCall)) return false;
+  }
   return true;
 }
 
@@ -431,7 +535,7 @@ export function parseRequest(body: unknown) {
 
     // Streaming is the client asking to be handed text as it arrives, and it
     // is only ever honoured for a turn with no tools. A tool call arrives in
-    // a stream as fragments of a JSON argument string spread across chunks,
+    // a stream as fragments of a JSON argument string spread across events,
     // and reassembling those on the server would put half the device's round
     // loop up here. The coach passes no tools and is the screen someone
     // watches; the calendar assistant passes tools and is not.
