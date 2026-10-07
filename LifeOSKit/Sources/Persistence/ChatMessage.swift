@@ -127,6 +127,12 @@ public struct ChatStore {
         return try context.fetch(descriptor).reversed().map { $0.snapshot() }
     }
 
+    /// Forgets one conversation; the others in the store stay.
+    public func deleteConversation(_ id: UUID) throws {
+        try context.delete(model: ChatMessage.self, where: #Predicate { $0.conversationID == id })
+        try context.save()
+    }
+
     public func latestConversationID() throws -> UUID? {
         var descriptor = FetchDescriptor<ChatMessage>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
