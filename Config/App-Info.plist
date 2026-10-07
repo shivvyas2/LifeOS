@@ -57,6 +57,8 @@
 	<string>$(FITBIT_CLIENT_ID)</string>
 	<key>FitbitRedirectURI</key>
 	<string>$(FITBIT_REDIRECT_URI)</string>
+	<key>GitHubClientID</key>
+	<string>$(GITHUB_CLIENT_ID)</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 </dict>

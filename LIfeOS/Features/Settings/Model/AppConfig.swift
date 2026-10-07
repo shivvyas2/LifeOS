@@ -49,6 +49,15 @@ enum AppConfig {
     /// secret are deliberately absent: they exist only in the function
     /// environment, because anything in the app bundle can be read out of the
     /// `.ipa`, and a Plaid secret reads every connected bank account.
+    /// Public by OAuth design; the secret lives only in the function's environment.
+    static var githubClientID: String? { string("GitHubClientID") }
+
+    static var githubTokenEndpoint: URL? {
+        supabaseURL?.appendingPathComponent("functions/v1/github-token")
+    }
+
+    static var isGitHubConfigured: Bool { githubClientID != nil && githubTokenEndpoint != nil }
+
     static var plaidFunctionsBase: URL? {
         supabaseURL?.appendingPathComponent("functions/v1")
     }

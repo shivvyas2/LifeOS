@@ -1,5 +1,6 @@
 import SwiftUI
 import DesignSystem
+import Integrations
 
 /// Account connections grouped by purpose, with a status and action for each source.
 struct ConnectionsSettingsScreen: View {
@@ -9,6 +10,7 @@ struct ConnectionsSettingsScreen: View {
     @Bindable var plaid: PlaidConnectionViewModel
     @Environment(\.colorScheme) private var scheme
     @State private var showWhoop = false
+    @Environment(\.github) private var github
 
     var body: some View {
         ZStack {
@@ -49,6 +51,19 @@ struct ConnectionsSettingsScreen: View {
                         chip: bankChip
                     ) {
                         if case .connected = plaid.state {} else { plaid.connect() }
+                    }
+                    if let github {
+                        Label("Work", systemImage: "chevron.left.forwardslash.chevron.right")
+                            .font(LifeOSType.sectionTitle).padding(.top, 12)
+                        connectionCard(
+                            icon: "chevron.left.forwardslash.chevron.right", hue: .recovery,
+                            title: "GitHub", status: github.statusDetail,
+                            chip: githubChip(github)
+                        ) {
+                            if case .connected = github.state {} else { github.connect() }
+                        }
+                        .disabled(github.state == .unconfigured)
+                        if case .connected = github.state { githubPin(github) }
                     }
                     Label("Connections stay with your account.", systemImage: "lock.shield")
                         .font(LifeOSType.caption).foregroundStyle(.secondary).padding(.vertical, 12)
@@ -112,6 +127,42 @@ struct ConnectionsSettingsScreen: View {
     /// track one and a woman past menopause may not want to. Defaulting it and
     /// then letting it be changed is the only arrangement that is right for
     /// both of them.
+    private func githubChip(_ github: GitHubConnectionViewModel) -> Chip {
+        switch github.state {
+        // Once connected the card's tap does nothing; Disconnect sits below.
+        case .connected: Chip(text: "", standing: true)
+        case .connecting: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Connect")
+        }
+    }
+
+    /// Which repo the day's card is about, and the way out.
+    private func githubPin(_ github: GitHubConnectionViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Pin a repo", selection: Binding(get: { github.pinnedRepo }, set: { github.pinnedRepo = $0 })) {
+                Text("Automatic").tag(String?.none)
+                ForEach(github.repos, id: \.fullName) { repo in
+                    Text(repo.fullName).tag(String?.some(repo.fullName))
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(LifeOSTokens.primaryText.resolve(scheme))
+            .font(LifeOSType.rowTitle)
+            if github.pinMissing {
+                Text("Pinned repo not found")
+                    .font(LifeOSType.caption)
+                    .foregroundStyle(Editorial.quietInk(scheme))
+            }
+            Button("Disconnect") { github.disconnect() }
+                .buttonStyle(.editorial(.destructive, size: .compact))
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .task { await github.loadRepos() }
+    }
+
     private var cycleToggle: some View {
         Toggle(isOn: Binding(
             get: { health.readsCycleTracking },
