@@ -135,6 +135,9 @@ struct NoteEditorScreen: View {
                     isInking: model.isInking,
                     onDismissKeyboard: { model.focusedBlockID = nil }
                 )
+                // The whole bar, so the slash menu and the link picker that
+                // take its place keep the walkthrough's step on screen.
+                .walkthroughAnchor(.notesBlockPicker)
                 .transition(.move(edge: .bottom))
             }
         }

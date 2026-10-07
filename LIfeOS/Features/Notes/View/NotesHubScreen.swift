@@ -41,6 +41,11 @@ struct NotesHubScreen: View {
     @State private var isLibraryPresented = false
     @State private var pendingNewFolder: NoteBucket?
     @State private var pendingRename: UUID?
+    /// The last walkthrough request carried out, so one arriving both on
+    /// appear and as a change is done once.
+    @State private var handledRequest = 0
+    /// Bumped to scroll the shelf back to its masthead.
+    @State private var shelfTop = 0
 
     enum NoteRoute: Hashable {
         case page(UUID, focus: NoteEditorFocus)
@@ -59,24 +64,13 @@ struct NotesHubScreen: View {
         .focusedSceneValue(\.notesCommands, commandTarget)
         // Once per account, and never over the welcome tour.
         .onAppear {
-            guard let walkthrough, !hasSeenNotesWalkthrough, hasSeenFirstRunTour else { return }
-            walkthrough.start(notes: model)
-        }
-        .onChange(of: walkthrough?.request) { _, request in
-            guard let request else { return }
-            switch request {
-            case .showShelf:
-                // The To-dos chip only exists on the Inbox, All and To-dos
-                // selections, and a search hides it too.
-                model.selection = .inbox
-                model.query = ""
-                path.removeAll()
-                openPage = nil
-            case .openPage(let id):
-                open(id, focus: .firstBlock)
+            if let walkthrough, !hasSeenNotesWalkthrough, hasSeenFirstRunTour {
+                walkthrough.start(notes: model)
             }
-            walkthrough?.consumeRequest()
+            // A replay from Settings on another tab asks before this exists.
+            if walkthrough?.isRunning == true { handle(walkthrough?.request) }
         }
+        .onChange(of: walkthrough?.request) { _, request in handle(request) }
         .sheet(item: $newFolderBucket) { bucket in
             NoteFolderSheet(
                 title: "New folder in \(bucket.title)",
@@ -343,7 +337,8 @@ struct NotesHubScreen: View {
             // Offered only where there is a library to collapse.
             onToggleLibrary: layout.isRegular ? { isLibraryVisible.toggle() } : nil,
             isLibraryVisible: isLibraryVisible,
-            isSearchFocused: $isSearchFocused
+            isSearchFocused: $isSearchFocused,
+            scrollToTop: shelfTop
         )
         .navigationBarTitleDisplayMode(.inline)
         .shellToolbar()
@@ -401,6 +396,25 @@ struct NotesHubScreen: View {
         }
     }
 
+    private func handle(_ request: NotesWalkthrough.Request?) {
+        guard let request, request.id > handledRequest else { return }
+        handledRequest = request.id
+        switch request.kind {
+        case .showShelf:
+            // The To-dos chip only exists on the Inbox, All and To-dos
+            // selections, a search hides it, and a scrolled list hides both
+            // it and New.
+            model.selection = .inbox
+            model.query = ""
+            path.removeAll()
+            openPage = nil
+            shelfTop += 1
+        case .openPage(let id):
+            open(id, focus: .firstBlock)
+        }
+        walkthrough?.consumeRequest()
+    }
+
     private func startRename(_ id: UUID) {
         folderName = model.folderSnapshot(id)?.name ?? ""
         renamingFolder = id
@@ -421,6 +435,7 @@ struct NoteEditorHost: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.noteSync) private var sync
+    @Environment(\.notesWalkthrough) private var walkthrough
     @State private var model: NoteEditorViewModel?
 
     var body: some View {
@@ -437,6 +452,7 @@ struct NoteEditorHost: View {
             editor.attach(context, sync: sync)
             editor.load()
             model = editor
+            walkthrough?.editorOpened(editor, for: documentID)
         }
         // A tick from the To-dos chip or the day screen beside this page
         // must reach it before its next save writes the old blocks back.

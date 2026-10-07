@@ -37,4 +37,10 @@ import Foundation
         #expect(WalkthroughScript.cardSitsBelow(CGRect(x: 300, y: 60, width: 60, height: 32), in: 800))
         #expect(!WalkthroughScript.cardSitsBelow(CGRect(x: 0, y: 700, width: 390, height: 44), in: 800))
     }
+
+    /// VoiceOver cannot see the cut-out, so the card names what it points at.
+    @Test func everyStepNamesWhatItPointsAt() {
+        #expect(WalkthroughScript.notes.map(\.target) == ["New button", "File chip", "Block picker", "To-dos tab", "Library button"])
+    }
 }
+
