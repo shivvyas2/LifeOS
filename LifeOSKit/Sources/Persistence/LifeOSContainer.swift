@@ -23,6 +23,10 @@ public enum LifeOSContainer {
         NoteLink.self,
         CatalogVideo.self,
         WorkoutBookmark.self,
+        ProjectRecord.self,
+        ProjectMemberRecord.self,
+        MilestoneRecord.self,
+        ProjectTaskRecord.self,
     ])
 
     /// In memory, for tests and previews.
