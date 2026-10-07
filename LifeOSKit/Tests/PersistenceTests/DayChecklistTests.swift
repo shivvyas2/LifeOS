@@ -21,7 +21,7 @@ import Foundation
             due: [DayChecklist.DueTask(documentID: UUID(), blockID: UUID(), text: "Buy oat milk", isChecked: false, pageTitle: "Groceries")],
             habits: [DayChecklist.Habit(id: run, title: "5km run", createdAt: day.addingTimeInterval(-86_400 * 30), streak: 6),
                      DayChecklist.Habit(id: read, title: "Read 10 pages", createdAt: day.addingTimeInterval(-86_400), streak: 0)],
-            ticked: [run], day: day, editable: true, calendar: calendar
+            ticked: [run], day: day, editable: true, calendar: calendar, now: day.addingTimeInterval(3_600 * 15)
         )
         #expect(rows.map(\.text) == ["Call the dentist", "Draft the plan", "Buy oat milk", "5km run", "Read 10 pages"])
         #expect(rows.map(\.isDone) == [true, false, false, true, false])
