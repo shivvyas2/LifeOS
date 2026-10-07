@@ -60,6 +60,12 @@ import Foundation
                 == [.single(.month), .pair(.steps, .sleep), .pair(.weight, nil), .single(.nextUp), .pair(.recovery, nil)])
     }
 
+    @Test func aRowNamesItsModules() {
+        #expect(TodayRow.single(.month).modules == [.month])
+        #expect(TodayRow.pair(.steps, .sleep).modules == [.steps, .sleep])
+        #expect(TodayRow.pair(.weight, nil).modules == [.weight])
+    }
+
     @Test func decodingKeepsNewModulesHiddenAndDropsUnknownOnes() {
         let data = Data(#"{"left":["month","inbox","nextUp"],"right":["steps"]}"#.utf8)
         let layout = TodayLayout.decoded(data)

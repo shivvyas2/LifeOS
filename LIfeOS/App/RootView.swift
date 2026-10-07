@@ -431,7 +431,8 @@ struct RootView: View {
                         onOpenToday: { openDay = Calendar.current.startOfDay(for: .now) },
                         onConnectHealth: { Task { await health.connect() } },
                         isHealthConnected: health.isConnected,
-                        onSelectMetric: { openMetric = $0 }
+                        onSelectMetric: { openMetric = $0 },
+                        onOpenSettings: { showSettings = true }
                     )
                     // Applied before the bar items below, so the actions sit
                     // inboard of the avatar rather than being pushed past it:
