@@ -17,6 +17,8 @@ struct NoteShelfScreen: View {
     var onToggleLibrary: (() -> Void)?
     var isLibraryVisible = true
     var isSearchFocused: Binding<Bool>?
+    /// Bumped by the hub to bring the masthead back into view.
+    var scrollToTop = 0
     @FocusState private var searchFocused: Bool
     @State private var filing: NoteCardSnapshot?
     @Environment(\.colorScheme) private var scheme
@@ -25,21 +27,25 @@ struct NoteShelfScreen: View {
     private var quiet: Color { Editorial.quietInk(scheme) }
 
     var body: some View {
-        List {
-            Group {
-                mastheadRow
-                searchField
-                if model.isStream, !model.isSearching {
-                    chips
-                } else if !model.isSearching {
-                    pagesHeader
+        ScrollViewReader { proxy in
+            List {
+                Group {
+                    mastheadRow
+                        .id(Self.topRow)
+                    searchField
+                    if model.isStream, !model.isSearching {
+                        chips
+                    } else if !model.isSearching {
+                        pagesHeader
+                    }
+                    content
+                    Color.clear.frame(height: layout.contentBottomInset)
                 }
-                content
-                Color.clear.frame(height: layout.contentBottomInset)
+                .listRowInsets(EdgeInsets(top: 0, leading: layout.gutter, bottom: Space.x3, trailing: layout.gutter))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
-            .listRowInsets(EdgeInsets(top: 0, leading: layout.gutter, bottom: Space.x3, trailing: layout.gutter))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
+            .onChange(of: scrollToTop) { proxy.scrollTo(Self.topRow, anchor: .top) }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -60,6 +66,8 @@ struct NoteShelfScreen: View {
             if !focused { isSearchFocused?.wrappedValue = false }
         }
     }
+
+    private static let topRow = "shelf.top"
 
     // MARK: Rows above the cards
 
