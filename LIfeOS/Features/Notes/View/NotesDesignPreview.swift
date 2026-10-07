@@ -16,6 +16,9 @@ struct NotesDesignPreview: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var fixture = NotesPreviewFixture()
     @State private var frames = WalkthroughFrames()
+    /// The real driver, for `notes-walkthrough-live`, which the UI tests tap through.
+    @State private var live = NotesWalkthrough()
+    @State private var showsLiveHub = true
 
     var body: some View {
         Group {
@@ -40,6 +43,12 @@ struct NotesDesignPreview: View {
             // sample page with its picker up (2, 3).
             case "notes-walkthrough":
                 walkthroughPage
+            // The whole walkthrough, driver and all, over the fixture's shelf.
+            // `--from-folder` starts it with a folder and a search showing;
+            // `--start-before-hub` starts it before the hub is on screen, as a
+            // replay from Settings on another tab does.
+            case "notes-walkthrough-live":
+                livePage
             default:
                 if showEditor {
                     NavigationStack {
@@ -59,6 +68,35 @@ struct NotesDesignPreview: View {
                     .font(.caption2).tracking(1).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity).padding(.vertical, 6)
                     .background(LifeOSTokens.canvas.light)
+            }
+        }
+    }
+
+    private var livePage: some View {
+        ZStack {
+            if showsLiveHub {
+                NotesHubScreen(model: fixture.notes, plan: fixture.plan, onAddHabit: {})
+            } else {
+                LifeOSTokens.canvas.light.ignoresSafeArea()
+            }
+        }
+        .environment(\.walkthroughFrames, live.frames)
+        .environment(\.notesWalkthrough, live)
+        .overlay { NotesWalkthroughLayer(walkthrough: live) }
+        .task {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--from-folder") {
+                fixture.notes.selection = .folder(fixture.personalFolderID)
+                fixture.notes.query = "weekend"
+            }
+            if arguments.contains("--start-before-hub") {
+                showsLiveHub = false
+                live.start(notes: fixture.notes)
+                try? await Task.sleep(for: .milliseconds(800))
+                showsLiveHub = true
+            } else {
+                try? await Task.sleep(for: .milliseconds(500))
+                live.start(notes: fixture.notes)
             }
         }
     }
@@ -95,12 +133,14 @@ struct NotesDesignPreview: View {
     let plan = PlanViewModel()
     let editor: NoteEditorViewModel
     let blankEditor: NoteEditorViewModel
+    let personalFolderID: UUID
 
     init() {
         container = try! LifeOSContainer.make(inMemory: true)
         let context = container.mainContext
         let store = NotesStore(context: context)
         let personal = try! store.createFolder(name: "Personal", bucket: .areas)
+        personalFolderID = personal.id
         let work = try! store.createFolder(name: "Ideas & projects", bucket: .projects)
         let page = try! store.createDocument(title: "Weekend reset", bucket: .areas, folderID: personal.id,
             blocks: [
