@@ -82,6 +82,9 @@ struct NoteEditorScreen: View {
             }
             if openFilingOnAppear { showFiling = true }
         }
+        .onChange(of: model.focusedBlockID) { _, id in
+            if id != nil { titleFocused = false }
+        }
     }
 
     private var page: some View {
@@ -118,6 +121,7 @@ struct NoteEditorScreen: View {
                     linkQuery: model.linkQuery,
                     currentKind: focusedKind,
                     onPickBlock: { model.applySlashCommand($0) },
+                    onChangeKind: { model.pickBlockKind($0) },
                     onPickLink: { model.completeLink(with: $0) },
                     onIndent: { delta in
                         if let id = model.focusedBlockID { model.indent(id, by: delta) }
@@ -157,6 +161,11 @@ struct NoteEditorScreen: View {
         return model.blocks[index].kind
     }
 
+    private func leaveTitle() {
+        titleFocused = false
+        model.submitTitle()
+    }
+
     // MARK: - Header
 
     private var header: some View {
@@ -173,6 +182,13 @@ struct NoteEditorScreen: View {
                 .textFieldStyle(.plain)
                 .lineLimit(1...3)
                 .focused($titleFocused)
+                .submitLabel(.next)
+                .onSubmit { leaveTitle() }
+                // A vertical field puts Return into the text instead of
+                // submitting; the editor takes the hint and moves on.
+                .onChange(of: model.title) { _, title in
+                    if title.contains(where: \.isNewline) { leaveTitle() }
+                }
 
             metaRow
         }
