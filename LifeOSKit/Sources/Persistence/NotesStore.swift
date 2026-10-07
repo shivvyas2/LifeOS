@@ -213,11 +213,14 @@ public struct NotesStore {
         }
     }
 
-    /// Open to-dos due before the day began, across every page: today's
-    /// overdue list.
+    /// Open to-dos due before the day began, on live pages: today's overdue
+    /// list. An archived or deleted page's late to-dos are not owed.
     public func tasks(dueBefore date: Date) throws -> [NoteTask] {
         let day = calendar.startOfDay(for: date)
-        return try indexedTasks(openOnly: true).filter { ($0.dueDate ?? .distantFuture) < day }
+        let live = Set(try documents().map(\.id))
+        return try indexedTasks(openOnly: true).filter {
+            ($0.dueDate ?? .distantFuture) < day && live.contains($0.documentID)
+        }
     }
 
     /// Every link edge. The mindmap's input.

@@ -62,7 +62,7 @@ extension TodayScreen {
 
     func tileButton(_ module: TodayModule) -> some View {
         let metric = TodayMetric(module: module)
-        return Button { onSelectMetric(metric) } label: { tile(metric) }
+        return Button { if !store.isArranging { onSelectMetric(metric) } } label: { tile(metric) }
             .buttonStyle(.plain)
             .opacity(showsHealthPrompt ? 0.35 : 1)
             .allowsHitTesting(!showsHealthPrompt)
@@ -86,8 +86,13 @@ extension TodayScreen {
                     .font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
             }
             // A row's text opens today's day screen, which opens pages.
-            ChecklistRows(rows: rows, onTick: { day.tick($0) }, onOpen: { _ in onOpenToday() })
+            // Checked as well as hit-testing: a long-press that starts arranging
+            // can still release onto a row, and VoiceOver ignores hit-testing.
+            ChecklistRows(rows: rows,
+                          onTick: { if !store.isArranging { day.tick($0) } },
+                          onOpen: { _ in if !store.isArranging { onOpenToday() } })
             HairlineField(text: $newTask, placeholder: "Add a task", glyph: "plus", submitLabel: .done,
+                          focus: $taskFieldFocused,
                           onSubmit: {
                               // The text stays if the write failed, so nothing typed is lost.
                               if day.add(newTask) { newTask = "" }
