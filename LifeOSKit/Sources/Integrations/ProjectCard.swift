@@ -25,6 +25,12 @@ public struct ProjectCard: Codable, Equatable, Sendable {
     public let commits: [ProjectCommit]
     public let isTodayWithoutCommits: Bool
     public let followUp: ProjectFollowUp?
+
+    public init(repo: String, repoURL: URL, commitCount: Int, commits: [ProjectCommit],
+                isTodayWithoutCommits: Bool, followUp: ProjectFollowUp?) {
+        self.repo = repo; self.repoURL = repoURL; self.commitCount = commitCount; self.commits = commits
+        self.isTodayWithoutCommits = isTodayWithoutCommits; self.followUp = followUp
+    }
 }
 
 public enum ProjectCardState: Equatable, Sendable {

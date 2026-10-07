@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import AppSurfaces
 import DesignSystem
+import Integrations
 import Persistence
 
 /// The weather card: the feels-like high as the figure, the condition, three
@@ -208,6 +209,62 @@ struct NudgeRows: View {
                 EditorialRow(nudge.receivedAt.formatted(.dateTime.hour().minute())) {
                     Text(nudge.text).lineLimit(3)
                 }
+            }
+        }
+    }
+}
+
+/// The day's work on GitHub: the count, the first three commit subjects with
+/// the rest a tap away, then the milestone or the open issues.
+struct ProjectRows: View {
+    let state: ProjectCardState
+    var onOpen: (URL) -> Void
+    var onReconnect: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    @State private var showsAll = false
+
+    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
+    private var quiet: Color { Editorial.quietInk(scheme) }
+
+    var body: some View {
+        switch state {
+        case .reconnect:
+            Button("GitHub needs reconnecting", action: onReconnect)
+                .buttonStyle(.plain).font(LifeOSType.body).foregroundStyle(ink)
+        case .card(let card, let asOf):
+            VStack(alignment: .leading, spacing: Space.x1) {
+                Text(ProjectHeadline.commits(card.commitCount, isTodayWithoutCommits: card.isTodayWithoutCommits))
+                    .font(LifeOSType.body).foregroundStyle(ink)
+                ForEach(Array((showsAll ? card.commits : Array(card.commits.prefix(3))).enumerated()), id: \.offset) { _, commit in
+                    Button(commit.subject) { onOpen(commit.url) }
+                        .buttonStyle(.plain).font(LifeOSType.secondary).foregroundStyle(quiet)
+                        .lineLimit(1).truncationMode(.tail)
+                }
+                if !showsAll, card.commits.count > 3 {
+                    Button(ProjectHeadline.more(card.commits.count - 3)) { showsAll = true }
+                        .buttonStyle(.editorial(.quiet, size: .compact))
+                }
+                if let followUp = card.followUp {
+                    Hairline().padding(.vertical, Space.half)
+                    followUpRows(followUp)
+                }
+                if let asOf {
+                    Text(ProjectHeadline.asOf(asOf, calendar: .current)).font(LifeOSType.caption).foregroundStyle(quiet)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func followUpRows(_ followUp: ProjectFollowUp) -> some View {
+        switch followUp {
+        case .milestone(let title, let open, let total, let due, let url):
+            Button(ProjectHeadline.milestone(title: title, open: open, total: total, due: due, calendar: .current)) { onOpen(url) }
+                .buttonStyle(.plain).font(LifeOSType.secondary).foregroundStyle(ink)
+        case .issues(let count, let newest):
+            Text(ProjectHeadline.issues(count)).font(LifeOSType.secondary).foregroundStyle(ink)
+            ForEach(Array(newest.enumerated()), id: \.offset) { _, issue in
+                Button(issue.title) { onOpen(issue.url) }
+                    .buttonStyle(.plain).font(LifeOSType.secondary).foregroundStyle(quiet).lineLimit(1)
             }
         }
     }
