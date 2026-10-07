@@ -87,6 +87,21 @@ struct SettingsScreen: View {
             sectionLabel("Connections")
             connectionsRow
 
+            sectionLabel("Your data")
+            AccountPanel {
+                VStack(spacing: 18) {
+                    NavigationLink { ClearDataScreen() } label: {
+                        Label("Clear data…", systemImage: "eraser").font(LifeOSType.rowTitle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Divider()
+                    NavigationLink { DeleteAccountScreen(onDeleted: onSignOut) } label: {
+                        Label("Delete account…", systemImage: "person.crop.circle.badge.xmark").font(LifeOSType.rowTitle)
+                            .foregroundStyle(LifeOSTokens.alertText.resolve(scheme))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
 
             signOutButton
                 .padding(.top, 8)
