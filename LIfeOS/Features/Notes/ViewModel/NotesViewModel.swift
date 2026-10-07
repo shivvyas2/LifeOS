@@ -275,6 +275,28 @@ final class NotesViewModel {
         }
     }
 
+    /// The walkthrough's page: unfiled, so it sits in the Inbox the first
+    /// step talks about.
+    func createWalkthroughSample() -> UUID? {
+        guard let store else { return nil }
+        do {
+            let document = try store.createDocument(title: NotesWalkthrough.sampleTitle, bucket: .areas)
+            load()
+            requestSync()
+            return document.id
+        } catch {
+            assertionFailure("Walkthrough page create failed: \(error)")
+            return nil
+        }
+    }
+
+    /// Throws the walkthrough's page away unless the person made it theirs.
+    func discardWalkthroughSample(_ id: UUID) {
+        mutate(id) { store, document in
+            try store.deleteIfUntouched(document, title: NotesWalkthrough.sampleTitle)
+        }
+    }
+
     func createFolder(named name: String, in bucket: NoteBucket, icon: String = "") {
         guard let store, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do {
