@@ -20,6 +20,7 @@ struct TaskSheet: View {
     let target: Target
     let members: [ProjectMemberSnapshot]
     let milestones: [MilestoneSnapshot]
+    var features: [FeatureSnapshot] = []
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
@@ -28,6 +29,7 @@ struct TaskSheet: View {
     @State private var status: ProjectStatus = .todo
     @State private var owner: UUID?
     @State private var milestone: UUID?
+    @State private var feature: UUID?
     @State private var hasDue = false
     @State private var due = Date.now
     @State private var hasBlock = false
@@ -59,6 +61,12 @@ struct TaskSheet: View {
                     Picker("Milestone", selection: $milestone) {
                         Text("None").tag(UUID?.none)
                         ForEach(milestones) { Text($0.title).tag(UUID?.some($0.id)) }
+                    }
+                    if !features.isEmpty {
+                        Picker("Feature", selection: $feature) {
+                            Text("None").tag(UUID?.none)
+                            ForEach(features) { Text($0.title).tag(UUID?.some($0.id)) }
+                        }
                     }
                 }
                 Section {
@@ -106,6 +114,7 @@ struct TaskSheet: View {
         if let task = existing {
             title = task.title; notes = task.notes; status = task.status; owner = task.ownerID
             milestone = task.milestoneID
+            feature = task.featureID
             if let d = task.dueOn { hasDue = true; due = d }
             if let s = task.startsAt { hasBlock = true; start = s; end = task.endsAt ?? s.addingTimeInterval(3_600) }
         } else if case .new(let slot) = target {
@@ -122,7 +131,7 @@ struct TaskSheet: View {
         case .new: id = model.createTask(in: projectID, title: trimmed)
         }
         guard let id else { return }
-        model.updateTask(id, title: trimmed, notes: notes, ownerID: .some(owner), milestoneID: .some(milestone),
+        model.updateTask(id, title: trimmed, notes: notes, ownerID: .some(owner), milestoneID: .some(milestone), featureID: .some(feature),
                          dueOn: .some(hasDue ? due : nil), startsAt: .some(hasBlock ? start : nil),
                          endsAt: .some(hasBlock ? end : nil))
         if existing?.status != status { model.moveTask(id, to: status, at: .max) }

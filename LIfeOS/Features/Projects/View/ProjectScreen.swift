@@ -2,27 +2,34 @@ import SwiftUI
 import DesignSystem
 import Persistence
 
-/// One project: its header, then Board, Schedule, Milestones and List.
+/// One project: its header, then Plan, Board, Schedule, Milestones and List.
 struct ProjectScreen: View {
     @Bindable var model: ProjectsViewModel
     let projectID: UUID
 
-    enum Pane: String, CaseIterable { case board = "BOARD", schedule = "SCHEDULE", milestones = "MILESTONES", list = "LIST" }
+    enum Pane: String, CaseIterable {
+        case plan = "PLAN", board = "BOARD", schedule = "SCHEDULE", milestones = "MILESTONES", list = "LIST"
+    }
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
     @Environment(\.dismiss) private var dismiss
     @State private var pane: Pane
 
-    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane = .board) {
+    /// Nil opens the plan for a project with a repo and the board otherwise.
+    private let initialPaneWasDefault: Bool
+
+    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane? = nil) {
         self.model = model
         self.projectID = projectID
-        _pane = State(initialValue: initialPane)
+        initialPaneWasDefault = initialPane == nil
+        _pane = State(initialValue: initialPane ?? .board)
     }
     @State private var editing: TaskSheet.Target?
     @State private var showMembers = false
     @State private var newMilestone = ""
     @State private var revision = 0
+    @State private var openFeature: UUID?
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var project: ProjectSnapshot? { _ = revision; _ = model.projects; return try? model.store?.project(id: projectID) }
@@ -30,6 +37,11 @@ struct ProjectScreen: View {
     private var milestones: [MilestoneSnapshot] { _ = revision; _ = model.projects; return (try? model.store?.milestones(projectID: projectID)) ?? [] }
     private var members: [ProjectMemberSnapshot] { _ = revision; _ = model.projects; return (try? model.store?.members(projectID: projectID)) ?? [] }
     private var isOwner: Bool { project?.ownerID == model.me }
+    private var features: [FeatureSnapshot] { _ = revision; _ = model.projects; return (try? model.store?.features(projectID: projectID)) ?? [] }
+    private var featureProgress: FeatureProgress {
+        _ = revision; _ = model.projects
+        return (try? model.store?.featureProgress(projectID: projectID)) ?? .of([])
+    }
 
     var body: some View {
         ScrollView {
@@ -39,6 +51,8 @@ struct ProjectScreen: View {
                     header(project, colour: colour)
                     panePicker
                     switch pane {
+                    case .plan:
+                        planView
                     case .board:
                         ProjectBoardView(tasks: tasks, colour: colour, name: model.name,
                                          onOpen: { editing = .task($0) },
@@ -66,11 +80,23 @@ struct ProjectScreen: View {
             ToolbarItem(placement: .topBarTrailing) { ownerMenu }
         }
         .sheet(item: $editing, onDismiss: { revision += 1 }) { target in
-            TaskSheet(model: model, projectID: projectID, target: target, members: members, milestones: milestones)
+            TaskSheet(model: model, projectID: projectID, target: target, members: members, milestones: milestones,
+                      features: features)
         }
         .sheet(isPresented: $showMembers, onDismiss: { revision += 1 }) {
             ProjectMembersSheet(model: model, projectID: projectID, isOwner: isOwner)
         }
+        .navigationDestination(item: $openFeature) { id in
+            ScrollView {
+                FeatureDetailView(model: model, featureID: id, commits: { EmptyView() })
+                    .padding(.horizontal, layout.gutter)
+                    .padding(.leading, layout.railInset)
+                    .padding(.vertical, Space.x2)
+            }
+            .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
+            .onDisappear { revision += 1 }
+        }
+        .task { if initialPaneWasDefault, project?.repo != nil { pane = .plan } }
     }
 
     private func header(_ project: ProjectSnapshot, colour: ProjectColour) -> some View {
@@ -103,13 +129,34 @@ struct ProjectScreen: View {
         .brutalCard(header: colour.fill.resolve(scheme))
     }
 
-    private var panePicker: some View {
+    private var planView: some View {
+        ProjectPlanView(
+            features: features, progress: featureProgress,
+            header: { EmptyView() },
+            onOpen: { openFeature = $0 },
+            onAdd: { title in model.createFeature(in: projectID, title: title); revision += 1 },
+            onMove: { id, index in model.moveFeature(id, to: index); revision += 1 },
+            onDelete: { id in model.deleteFeature(id); revision += 1 },
+            footer: { EmptyView() })
+    }
+
+    /// Five panes do not fit a phone's width evenly, so there the row scrolls.
+    @ViewBuilder private var panePicker: some View {
+        if layout.isRegular {
+            paneRow(minWidth: nil)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) { paneRow(minWidth: 76) }
+        }
+    }
+
+    private func paneRow(minWidth: CGFloat?) -> some View {
         HStack(spacing: 0) {
             ForEach(Pane.allCases, id: \.self) { option in
                 Button { pane = option } label: {
                     Text(option.rawValue)
                         .font(LifeOSType.caption.weight(.heavy)).tracking(0.8)
-                        .frame(maxWidth: .infinity).padding(.vertical, Space.x1)
+                        .frame(minWidth: minWidth, maxWidth: minWidth == nil ? .infinity : nil)
+                        .padding(.vertical, Space.x1).padding(.horizontal, Space.x1)
                         .foregroundStyle(pane == option ? LifeOSTokens.canvas.resolve(scheme) : ink)
                         .background(pane == option ? ink : .clear)
                 }
