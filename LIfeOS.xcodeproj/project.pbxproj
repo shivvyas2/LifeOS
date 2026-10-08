@@ -33,6 +33,7 @@
 		A985C6B1302A34E0002272C5 /* Insights in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6B2302A34E0002272C5 /* Insights */; };
 		A985C6C1302A34E0002272C5 /* Sectors in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6C2302A34E0002272C5 /* Sectors */; };
 		A985C6E0302A34E0002272C5 /* Assistant in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6E1302A34E0002272C5 /* Assistant */; };
+		AFB1FC33EEEFCF67F7CE927F /* RailUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E991DB8B28033641AC617E /* RailUITests.swift */; };
 		B2D8AC37220AF59954D72135 /* AlmanacWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5A224D947F9F20AEE96E695F /* AlmanacWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */; };
 		B7710CA5AC0DA4F764F5277A /* AlmanacWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */; };
@@ -134,6 +135,7 @@
 		65C0CC243BDD2E3A83313257 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayLayoutUITests.swift; sourceTree = "<group>"; };
 		6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		79E991DB8B28033641AC617E /* RailUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RailUITests.swift; sourceTree = "<group>"; };
 		841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivity.swift; sourceTree = "<group>"; };
 		9136293255DF75D09FEAE189 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AccountControlsUITests.swift; sourceTree = "<group>"; };
@@ -243,6 +245,7 @@
 				65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */,
 				A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */,
 				0D2B6E5FBCF00137F09A65C4 /* ProjectsUITests.swift */,
+				79E991DB8B28033641AC617E /* RailUITests.swift */,
 			);
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
@@ -540,6 +543,7 @@
 				B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */,
 				B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */,
 				E5A5A0FF98AD8929CEA43E79 /* ProjectsUITests.swift in Sources */,
+				AFB1FC33EEEFCF67F7CE927F /* RailUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -50,6 +50,12 @@ struct RootView: View {
         .metrics(for: sizeClass == .regular ? .regular : .compact)
     }
 
+    /// What the screens lay out against: the rail's room is theirs while it
+    /// is put away.
+    private var contentMetrics: LayoutMetrics {
+        isRailVisible ? metrics : metrics.withoutRail()
+    }
+
     @State private var today = TodayViewModel()
     @State private var weight = BodyViewModel()
     @State private var activity = ActivityViewModel()
@@ -124,15 +130,16 @@ struct RootView: View {
     @State private var locationOnce: LocationOnce?
     @State private var eventSheet: EventSheetPresentation?
 
-    /// Wide panes only. The rail floats over the content rather than taking
-    /// layout room from it, so on an iPad in landscape it sits on top of the
-    /// thing being read or written. It withdraws while the pane is being worked
-    /// with and comes back when that stops.
+    /// Wide panes only. Out, the rail sits beside the content, which is padded
+    /// clear of it; put away, the content takes the full width. It moves only
+    /// when asked: it no longer covers anything, so there is nothing to step
+    /// aside from while scrolling or typing, and the content reflowing under a
+    /// finger would be worse than either. Remembered, so someone who reads
+    /// with it away keeps it away.
     ///
     /// Compact width never hides it: the bar lies along the bottom there, where
     /// it overlaps nothing that is being read.
-    @State private var isRailVisible = true
-    @State private var railReturnTask: Task<Void, Never>?
+    @AppStorage("isRailVisible", store: .currentAccount) private var isRailVisible = true
 
     /// The tab bar's selection, stated rather than inferred from ordering.
     /// Deliberately not persisted: the requirement is that a cold launch lands
@@ -251,7 +258,7 @@ struct RootView: View {
                 }
             )
         }
-        .environment(\.layout, metrics)
+        .environment(\.layout, contentMetrics)
         .environment(\.noteSync, noteSync)
         // A project task ticked on Today or the day screen goes up without
         // waiting for the Projects tab: push only, and only when something
@@ -269,27 +276,7 @@ struct RootView: View {
         // attached inside the stack it belongs to.
         .environment(\.quickActions, quickActions)
         .environment(\.shellProfile, ShellProfile(photo: profilePhoto, open: { showSettings = true }))
-        // Typing is the other way of working with the pane, and the one where
-        // the rail is most in the way: on a landscape iPad the keyboard takes
-        // half the height and the note being written is what is left.
-        .task {
-            for await _ in NotificationCenter.default.notifications(
-                named: UIResponder.keyboardWillShowNotification
-            ) {
-                guard metrics.isRegular else { continue }
-                withdrawRail()
-            }
-        }
-        .task {
-            for await _ in NotificationCenter.default.notifications(
-                named: UIResponder.keyboardWillHideNotification
-            ) {
-                showRail()
-            }
-        }
-        // A tab change is navigation, not content work, so the rail is wanted.
         .onChange(of: tab) { _, selected in
-            showRail()
             // Life loads when its tab comes up, not on every save elsewhere
             // (see `reloadAll`).
             if selected == .life { life.load() }
@@ -362,52 +349,65 @@ struct RootView: View {
     /// Wide pane: the bar stands on end against the left edge, and the actions
     /// keep the bottom corner they hold on a phone.
     ///
-    /// Both are overlays, so a screen's canvas runs the full width underneath
-    /// them and there is no bare strip down the side. Overlays claim no layout
-    /// room, though, so the rail's clearance is `railInset`, which the screens
-    /// apply themselves. Nothing is reserved for the actions: they float over
-    /// the content here exactly as they do on a phone.
+    /// The rail is an overlay, so a screen's canvas still runs the full width
+    /// underneath it and there is no bare strip down the side. The content is
+    /// kept clear of it by `railInset`, which the screens apply themselves and
+    /// which drops to zero while the rail is put away (`contentMetrics`), so
+    /// the content sits beside the rail when it is out and fills the pane when
+    /// it is not. Nothing is reserved for the actions: they float over the
+    /// content here exactly as they do on a phone.
     private var wideShell: some View {
         ZStack {
             content
-                // Scrolling or dragging anywhere in the pane counts as working
-                // with the content, so the rail steps aside. Simultaneous, not
-                // exclusive: it observes the touch rather than claiming it, so
-                // scroll views, text selection and Pencil strokes all still see
-                // it. Minimum distance keeps a plain tap from tripping it.
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 12)
-                        .onChanged { _ in withdrawRail() }
-                        .onEnded { _ in scheduleRailReturn() }
-                )
                 .overlay(alignment: .leading) {
-                    PillNavBar(selection: $tab, items: navItems, axis: .vertical)
-                        .padding(.leading, metrics.gutter)
-                        .opacity(isRailVisible ? 1 : 0)
-                        // Slid out rather than only faded, so the eye reads it
-                        // as parked off the edge and knows where it went.
-                        .offset(x: isRailVisible ? 0 : -(metrics.gutter + 76))
-                        .allowsHitTesting(isRailVisible)
-                        .animation(.easeInOut(duration: 0.22), value: isRailVisible)
+                    VStack(spacing: 12) {
+                        PillNavBar(selection: $tab, items: navItems, axis: .vertical)
+                        railToggle(showing: false)
+                    }
+                    .padding(.leading, metrics.gutter)
+                    .opacity(isRailVisible ? 1 : 0)
+                    // Slid out rather than only faded, so the eye reads it as
+                    // parked off the edge and knows where it went.
+                    .offset(x: isRailVisible ? 0 : -(metrics.gutter + 76))
+                    .allowsHitTesting(isRailVisible)
+                    .accessibilityHidden(!isRailVisible)
                 }
-                // The strip the rail parks behind. Bringing it back has to be
-                // possible without first scrolling something, or a person who
-                // hid it on a full-screen page has no way back to the tabs.
+                // The tab the rail parks behind. It sits in the gutter, which
+                // the content leaves empty at every width, so it covers nothing.
                 .overlay(alignment: .leading) {
                     if !isRailVisible {
-                        Color.clear
-                            .frame(width: 28)
-                            .frame(maxHeight: .infinity)
-                            .contentShape(.rect)
-                            .onTapGesture { showRail() }
-                            .accessibilityLabel("Show navigation")
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityAction { showRail() }
+                        railToggle(showing: true)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
                     }
                 }
 
             whoopModal
         }
+    }
+
+    /// Puts the rail away or brings it back. Both ends answer Control-Command-S,
+    /// iPadOS's shortcut for a sidebar, so a keyboard user never has to reach.
+    private func railToggle(showing: Bool) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) { isRailVisible = showing }
+        } label: {
+            Image(systemName: showing ? "chevron.right" : "sidebar.left")
+                .font(LifeOSType.label.weight(.semibold))
+                .foregroundStyle(LifeOSTokens.canvas.resolve(.light).opacity(showing ? 1 : 0.62))
+                .frame(width: showing ? 22 : 44, height: showing ? 64 : 44)
+                .background(
+                    // The rail's own ink, so the tab reads as a piece of it.
+                    Capsule().fill(scheme == .dark ? Color(white: 0.16) : LifeOSTokens.primaryText.resolve(.light))
+                        .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.18), radius: 10, y: 4)
+                )
+                .padding(.leading, showing ? 4 : 0)
+                // A 22pt tab is narrow to aim at; the tap reaches further.
+                .frame(minWidth: 44, minHeight: 64, alignment: .leading)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut("s", modifiers: [.command, .control])
+        .accessibilityLabel(showing ? "Show navigation" : "Hide navigation")
     }
 
     private var navItems: [PillNavItem<AppTab>] {
@@ -635,32 +635,6 @@ struct RootView: View {
         weight.select(date)
         recovery.select(date)
         wellness.select(date)
-    }
-
-    /// Parks the rail off the leading edge. Cancels any pending return so a
-    /// long scroll does not have it reappear mid-gesture.
-    private func withdrawRail() {
-        railReturnTask?.cancel()
-        railReturnTask = nil
-        guard isRailVisible else { return }
-        isRailVisible = false
-    }
-
-    /// Brings it back a beat after the interaction ends. The delay is what
-    /// stops it flickering between the flicks of a fast scroll.
-    private func scheduleRailReturn() {
-        railReturnTask?.cancel()
-        railReturnTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1400))
-            guard !Task.isCancelled else { return }
-            isRailVisible = true
-        }
-    }
-
-    private func showRail() {
-        railReturnTask?.cancel()
-        railReturnTask = nil
-        isRailVisible = true
     }
 
     /// What the profile shows under the name.
