@@ -31,11 +31,11 @@ extension ActivityRecorder {
         notice = Self.waitingForWatch
         try? await WatchSessionBridge.startWatchApp(configuration)
         let deadline = Date.now.addingTimeInterval(watchHandoffTimeout)
-        while Date.now < deadline, watch.session == nil, active {
+        while Date.now < deadline, watch.session.map(WatchSessionBridge.isFocus) ?? true, active {
             try? await Task.sleep(for: .milliseconds(100))
         }
         guard active else { return true }
-        if let mirrored = watch.session {
+        if let mirrored = watch.session, !WatchSessionBridge.isFocus(mirrored) {
             // `adoptMirroredSession` normally ran from the bridge's callback as
             // the session arrived; adopt here if that callback was missed.
             if timer == nil { adoptMirroredSession(mirrored) }

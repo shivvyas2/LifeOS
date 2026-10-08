@@ -490,6 +490,16 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         catch { mirroringFailed = true }
     }
     private func finish(at date: Date) async {
+        // A focus session is heart rate only: whatever stopped it, it is
+        // thrown away, never saved to Health or handed to the phone.
+        if isFocus {
+            session?.delegate = nil
+            builder?.delegate = nil
+            builder?.discardWorkout()
+            session?.end()
+            resetAfterEnd()
+            return
+        }
         guard !finishing else { return }
         finishing = true
         defer { finishing = false }

@@ -86,6 +86,10 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
 
     func send(_ command: PhoneCommand, maxHeartRate: Int? = nil, badminton: BadmintonSession? = nil,
               athlete: ActivityAthleteProfile? = nil, completion: ((Bool) -> Void)? = nil) {
+        // A focus session takes only discard; a workout command that reached
+        // it (an Activity screen still holding a stale timer) would end and
+        // save it as a workout.
+        guard WatchWire.phoneMayDrive(command, focusSession: isFocusSession) else { completion?(false); return }
         guard let session, let data = try? WatchWire.encode(PhoneCommandEnvelope(command: command, sentAt: .now,
                                                                                   maxHeartRate: maxHeartRate, badminton: badminton,
                                                                                   athlete: athlete)) else {

@@ -86,10 +86,7 @@ struct FocusSessionScreen: View {
 
     private var controls: some View {
         HStack(spacing: Space.x2) {
-            Menu {
-                ForEach(Mood.allCases, id: \.self) { mood in Button(mood.title) { model.changeMood(mood) } }
-            } label: { Image(systemName: "waveform").frame(width: 44, height: 44) }
-                .accessibilityLabel("Change mood").accessibilityIdentifier("focus.changeMood")
+            MoodMenu(model: model)
             Button {
                 if model.reading?.isPaused == true { model.resume() }
                 else if !model.soundPlaying { model.resumeSound() }
@@ -112,5 +109,18 @@ struct FocusSessionScreen: View {
         let seconds = Int((reading.remaining ?? reading.focusedSeconds).rounded(.up))
         let h = seconds / 3600, m = seconds / 60 % 60, s = seconds % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%02d:%02d", m, s)
+    }
+}
+
+/// Its own view so the clock's once-a-second redraw of the screen never
+/// rebuilds an open menu and swallows the tap.
+private struct MoodMenu: View {
+    let model: FocusSessionModel
+
+    var body: some View {
+        Menu {
+            ForEach(Mood.allCases, id: \.self) { mood in Button(mood.title) { model.changeMood(mood) } }
+        } label: { Image(systemName: "waveform").frame(width: 44, height: 44) }
+            .accessibilityLabel("Change mood").accessibilityIdentifier("focus.changeMood")
     }
 }

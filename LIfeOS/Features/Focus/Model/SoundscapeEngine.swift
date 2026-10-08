@@ -11,6 +11,25 @@ final class SoundscapeEngine {
     private var fade: Task<Void, Never>?
     private var light = false
     private(set) var isRunning = false
+    /// The engine stopped on its own (a route or sample-rate change it
+    /// could not recover from), so the screen can offer Play.
+    var onStopped: (() -> Void)?
+    private var configurationObserver: NSObjectProtocol?
+
+    init() {
+        // Headphones, CarPlay or a new sample rate stop the engine without
+        // telling anyone; start it again on the new configuration.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reconfigured() }
+        }
+    }
+
+    private func reconfigured() {
+        guard isRunning else { return }
+        for slot in slots { engine.connect(slot.node, to: engine.mainMixerNode, format: format) }
+        do { try engine.start() } catch { isRunning = false; onStopped?() }
+    }
 
     func start(mood: Mood, parameters: SoundParameters) throws {
         let session = AVAudioSession.sharedInstance()

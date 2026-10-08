@@ -284,6 +284,9 @@ struct RootView: View {
         .fullScreenCover(isPresented: Binding(get: { focus.isPresented }, set: { _ in })) {
             FocusSessionScreen(model: focus)
         }
+        // A session the app was closed or killed during carries on, or is
+        // recorded and summarised if its time ran out.
+        .task { await focus.restore(context: context, providers: dayProviders) }
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.

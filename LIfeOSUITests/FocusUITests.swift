@@ -36,6 +36,8 @@ final class FocusUITests: XCTestCase {
         shot("2-session")
 
         app.buttons["focus.changeMood"].tap()
+        // The menu animates in; tap its item only once it is there.
+        XCTAssertTrue(app.buttons["Relax"].waitForExistence(timeout: 3))
         app.buttons["Relax"].tap()
         shot("2b-mood")
         XCTAssertTrue(app.staticTexts["RELAX"].waitForExistence(timeout: 3))

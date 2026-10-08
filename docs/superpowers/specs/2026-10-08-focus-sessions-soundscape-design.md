@@ -239,7 +239,11 @@ textures, syncing focus sessions to the server.
   (conditions, source fallback, phase mapping, the timer) lives in the kit
   and is tested there; the app's session model is thin glue covered by the
   UI test.
-- Apple Music offers no volume control to the app, so breaks pause the
-  music and the next work block resumes it.
+- Apple Music offers no volume control to the app, and a paused player
+  lets iOS suspend the app with nothing left to restart the music at the
+  next block, so Apple Music plays straight through breaks and stops only
+  when the person pauses.
+- A running session is saved as it changes; reopening the app carries it
+  on, or records it and shows the summary if its time ran out.
 - LIFO does not call App Intents today, so starting a session from LIFO is
   left out of this build; Siri and Shortcuts get the intent.
