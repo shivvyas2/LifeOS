@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Soundscape
 
 /// A task's title, notes, status, owner, milestone, due date and time block.
 struct TaskSheet: View {
@@ -68,6 +69,14 @@ struct TaskSheet: View {
                     if hasBlock {
                         DatePicker("Starts", selection: $start)
                         DatePicker("Ends", selection: $end, in: start.addingTimeInterval(60)...)
+                    }
+                }
+                if let existing {
+                    Section {
+                        Button("Focus on this") {
+                            dismiss()
+                            FocusLauncher.shared.open(mood: .focus, taskID: existing.id, taskTitle: existing.title)
+                        }
                     }
                 }
                 if existing != nil {

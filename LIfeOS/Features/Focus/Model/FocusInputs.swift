@@ -11,7 +11,7 @@ struct FocusInputs {
     var recovery: RecoveryLevel?
     var restingHeartRate: Double?
 
-    static func gather(context: ModelContext, providers: DayProviders) async -> FocusInputs {
+    static func gather(context: ModelContext, providers: DayProviders?) async -> FocusInputs {
         var inputs = FocusInputs()
         let today = Calendar.current.startOfDay(for: .now)
         if let metrics = try? MetricsStore(context: context, calendar: .current).metrics(from: today, to: today).first {
@@ -20,7 +20,7 @@ struct FocusInputs {
         }
         // Weather only when location is already allowed, and only if it comes
         // back within five seconds; the session never waits longer than that.
-        if providers.location.access == .granted {
+        if let providers, providers.location.access == .granted {
             let began = Date.now
             let fetch = Task { @MainActor () -> WeatherInput? in
                 guard let location = try? await providers.location.currentLocation(),

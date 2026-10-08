@@ -6,6 +6,7 @@ import DesignSystem
 import Persistence
 import Insights
 import Integrations
+import Soundscape
 import OSLog
 
 private let rootLog = Logger(subsystem: "com.shivvyas.lifeos", category: "root")
@@ -96,6 +97,8 @@ struct RootView: View {
     @State private var noteSync: NoteSync?
     @State private var projectSync: ProjectSync?
     @State private var projects = ProjectsViewModel()
+    @State private var focus = FocusSessionModel()
+    @State private var focusLauncher = FocusLauncher.shared
 
     @State private var healthSection = HealthSection.health
     @State private var healthDate = Date()
@@ -122,6 +125,9 @@ struct RootView: View {
     @State private var openHabitsFromDay = false
     /// Built in `attachAll()`; the day screen's location, asked for on first use.
     @State private var locationOnce: LocationOnce?
+    private var dayProviders: DayProviders? {
+        locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0, github: integrations.github.dayProvider) }
+    }
     @State private var eventSheet: EventSheetPresentation?
 
     /// Wide panes only. The rail floats over the content rather than taking
@@ -263,7 +269,21 @@ struct RootView: View {
         .environment(\.github, integrations.github)
         .environment(\.walkthroughFrames, notesWalkthrough.frames)
         .environment(\.notesWalkthrough, notesWalkthrough)
-        .environment(\.dayProviders, locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0, github: integrations.github.dayProvider) })
+        .environment(\.dayProviders, dayProviders)
+        .sheet(item: $focusLauncher.request) { request in
+            let mood = request.mood ?? focus.preferences.lastMood
+            FocusSetupSheet(initial: focus.preferences.setup(for: mood), preferences: focus.preferences,
+                            taskTitle: request.taskTitle) { setup in
+                Task {
+                    let inputs = await FocusInputs.gather(context: context, providers: dayProviders)
+                    await focus.start(setup, inputs: inputs, context: context,
+                                      taskID: request.taskID, taskTitle: request.taskTitle)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: Binding(get: { focus.isPresented }, set: { _ in })) {
+            FocusSessionScreen(model: focus)
+        }
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.

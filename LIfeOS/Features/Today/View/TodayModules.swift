@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import Persistence
 import Integrations
+import Soundscape
 
 /// Each module Today can show, drawn from the pieces Today already had and
 /// the day screen's rows.
@@ -36,7 +37,7 @@ extension TodayScreen {
             }
         case .spentToday: spendModule
         case .projects: projectsModule
-        case .focus: EmptyView()
+        case .focus: focusModule
         case .fromLifo:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(title: "From LIFO")
@@ -118,6 +119,25 @@ extension TodayScreen {
             ghost(.github, note: "No commits yet today")
         } else {
             ghost(.github, note: "Not connected", action: ("Connect GitHub", onOpenSettings))
+        }
+    }
+
+    /// Four moods and how long you've focused today; a tap opens the setup.
+    @ViewBuilder
+    private var focusModule: some View {
+        let focused = (try? FocusStore(context: context).focusedSeconds(on: .now)) ?? 0
+        VStack(alignment: .leading, spacing: Space.x2) {
+            EditorialSectionHeader(title: "Focus") {
+                if focused >= 60 { Text("\(Int(focused / 60)) min today").font(LifeOSType.caption) }
+            }
+            HStack(spacing: Space.x1) {
+                ForEach(Mood.allCases, id: \.self) { mood in
+                    Button(mood.title) { if !self.store.isArranging { FocusLauncher.shared.open(mood: mood) } }
+                        .buttonStyle(.editorial(.secondary, size: .compact, fullWidth: true))
+                }
+            }
+            Button("Resume last") { if !self.store.isArranging { FocusLauncher.shared.open() } }
+                .buttonStyle(.editorial(.quiet, size: .compact, fullWidth: false))
         }
     }
 
