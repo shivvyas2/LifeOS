@@ -35,4 +35,24 @@ final class ProjectPlanUITests: XCTestCase {
         row.tap()
         XCTAssertTrue(app.staticTexts["feat/credit-cards"].waitForExistence(timeout: 4))
     }
+
+    /// Review fixes 5 and 6: the title can be renamed, and a note typed on
+    /// the feature page is kept when the page is left without pressing Return.
+    func testRenamingAFeatureAndKeepingItsNote() {
+        let app = launch("project-plan")
+        let row = app.buttons["Widgets"]
+        XCTAssertTrue(row.waitForExistence(timeout: 6))
+        row.tap()
+        let title = app.textFields["Feature title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 4))
+        title.tap()
+        title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12) + "Home widgets\n")
+        let note = app.textFields["Note"]
+        note.tap()
+        note.typeText("Small and medium")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.buttons["Home widgets"].waitForExistence(timeout: 4), "the rename did not stick")
+        app.buttons["Home widgets"].tap()
+        XCTAssertEqual(app.textFields["Note"].value as? String, "Small and medium", "the note was lost")
+    }
 }

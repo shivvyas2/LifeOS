@@ -15,7 +15,13 @@ struct FeatureDetailView<Commits: View>: View {
     @ViewBuilder var commits: () -> Commits
 
     @Environment(\.colorScheme) private var scheme
+    @State private var title = ""
     @State private var note = ""
+    /// Text is saved when focus leaves a field and when the page goes, not
+    /// on Return alone: Return in the note adds a line, and leaving the page
+    /// without it must not lose what was typed.
+    @FocusState private var focus: Field?
+    enum Field { case title, note }
     @State private var branch = ""
     @State private var newTask = ""
     @State private var revision = 0
@@ -37,7 +43,12 @@ struct FeatureDetailView<Commits: View>: View {
                 VStack(alignment: .leading, spacing: Space.x1) {
                     Text("Feature").editorialEyebrow()
                     HStack(alignment: .firstTextBaseline) {
-                        Text(feature.title).font(Editorial.headline(30))
+                        TextField("Feature title", text: $title)
+                            .font(Editorial.headline(30))
+                            .focused($focus, equals: .title)
+                            .submitLabel(.done)
+                            .onSubmit(saveTitle)
+                            .accessibilityLabel("Feature title")
                         Spacer()
                         StageTag(stage: feature.stage)
                     }
@@ -50,7 +61,8 @@ struct FeatureDetailView<Commits: View>: View {
                 VStack(alignment: .leading, spacing: Space.x2) {
                     TextField("Note", text: $note, axis: .vertical)
                         .font(LifeOSType.body)
-                        .onSubmit { model.updateFeature(featureID, note: note) }
+                        .focused($focus, equals: .note)
+                        .accessibilityLabel("Note")
                     Hairline()
                     EditorialRow("Milestone") {
                         Picker("Milestone", selection: Binding(
@@ -123,11 +135,30 @@ struct FeatureDetailView<Commits: View>: View {
                     }
                 }
             }
+            .onChange(of: focus) { left, _ in
+                if left == .title { saveTitle() }
+                if left == .note { saveNote() }
+            }
+            .onDisappear { saveTitle(); saveNote() }
             .onAppear {
+                title = feature.title
                 note = feature.note
                 branch = FeatureStageResolver.suggestedBranch(feature.title)
             }
         }
+    }
+
+    /// An empty title is not saved; the field goes back to the last one.
+    private func saveTitle() {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let feature else { return }
+        guard !trimmed.isEmpty else { title = feature.title; return }
+        if trimmed != feature.title { model.updateFeature(featureID, title: trimmed); revision += 1 }
+    }
+
+    private func saveNote() {
+        guard let feature, note != feature.note else { return }
+        model.updateFeature(featureID, note: note)
     }
 
     private func linkTypedBranch() {
