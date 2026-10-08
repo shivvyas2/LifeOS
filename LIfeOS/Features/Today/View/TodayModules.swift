@@ -36,6 +36,7 @@ extension TodayScreen {
             }
         case .spentToday: spendModule
         case .projects: projectsModule
+        case .focus: EmptyView()
         case .fromLifo:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(title: "From LIFO")

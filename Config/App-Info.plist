@@ -12,7 +12,10 @@
 	<array>
 		<string>remote-notification</string>
 		<string>bluetooth-central</string>
+		<string>audio</string>
 	</array>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Almanac plays Apple Music playlists during focus sessions when you choose Apple Music as the sound.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Almanac connects to your chosen heart-rate sensor, including WHOOP Heart Rate Broadcast, to show live beats during an activity.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

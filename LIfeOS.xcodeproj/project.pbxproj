@@ -30,6 +30,7 @@
 		A985C690302A34E0002272C5 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A985C692302A34E0002272C5 /* DesignSystem */; };
 		A985C691302A34E0002272C5 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = A985C693302A34E0002272C5 /* Persistence */; };
 		A985C6A1302A34E0002272C5 /* Integrations in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6A2302A34E0002272C5 /* Integrations */; };
+		31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */ = {isa = PBXBuildFile; productRef = 09700010460E46BB90667E51 /* Soundscape */; };
 		A985C6B1302A34E0002272C5 /* Insights in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6B2302A34E0002272C5 /* Insights */; };
 		A985C6C1302A34E0002272C5 /* Sectors in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6C2302A34E0002272C5 /* Sectors */; };
 		A985C6E0302A34E0002272C5 /* Assistant in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6E1302A34E0002272C5 /* Assistant */; };
@@ -189,6 +190,7 @@
 				A985C690302A34E0002272C5 /* DesignSystem in Frameworks */,
 				A985C691302A34E0002272C5 /* Persistence in Frameworks */,
 				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
+				31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */,
 				A985C6B1302A34E0002272C5 /* Insights in Frameworks */,
 				A985C6C1302A34E0002272C5 /* Sectors in Frameworks */,
 				A985C6E0302A34E0002272C5 /* Assistant in Frameworks */,
@@ -395,6 +397,7 @@
 				A985C692302A34E0002272C5 /* DesignSystem */,
 				A985C693302A34E0002272C5 /* Persistence */,
 				A985C6A2302A34E0002272C5 /* Integrations */,
+				09700010460E46BB90667E51 /* Soundscape */,
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
 				A985C6D3302A34E0002272C5 /* LinkKit */,
@@ -1139,6 +1142,10 @@
 		A985C6A2302A34E0002272C5 /* Integrations */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Integrations;
+		};
+		09700010460E46BB90667E51 /* Soundscape */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Soundscape;
 		};
 		A985C6B2302A34E0002272C5 /* Insights */ = {
 			isa = XCSwiftPackageProductDependency;
