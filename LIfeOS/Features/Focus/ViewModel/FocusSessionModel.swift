@@ -172,7 +172,9 @@ final class FocusSessionModel {
     func phaseTitle(_ phase: TimerPhase) -> String {
         switch phase {
         case .work(let block):
-            if case .pomodoro(_, _, _, _, let blocks) = setup.plan, let blocks { return "Focus \(block) of \(blocks)" }
+            // The running timer's plan, not one rebuilt from the setup: a mood
+            // change keeps the clock, so it must keep the block count too.
+            if case .pomodoro(_, _, _, _, let blocks) = timer?.plan ?? setup.plan, let blocks { return "Focus \(block) of \(blocks)" }
             return "Focus \(block)"
         case .rest: return "Break"
         case .longRest: return "Long break"

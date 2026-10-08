@@ -27,6 +27,9 @@ struct FocusSummaryView: View {
                 .accessibilityIdentifier("focus.summary.done")
         }
         .padding(Space.x3)
+        // A container, so the identifier names the summary without
+        // overriding the identifiers of the buttons inside it.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("focus.summary")
     }
 
