@@ -120,3 +120,31 @@ public enum ProjectMerge {
         return unsynced && localUpdatedAt > remoteUpdatedAt
     }
 }
+
+/// Where a feature stands, worked out from its branch and PRs.
+public enum FeatureStage: String, CaseIterable, Sendable {
+    case planned, building, review, done
+
+    public var label: String {
+        switch self {
+        case .planned: "PLANNED"
+        case .building: "BUILDING"
+        case .review: "IN REVIEW"
+        case .done: "DONE"
+        }
+    }
+}
+
+/// Done features over all of them, and how many sit at each stage.
+public struct FeatureProgress: Equatable, Sendable {
+    public let done: Int
+    public let total: Int
+    public let counts: [FeatureStage: Int]
+    public var fraction: Double { total == 0 ? 0 : Double(done) / Double(total) }
+
+    public static func of(_ stages: [FeatureStage]) -> FeatureProgress {
+        var counts: [FeatureStage: Int] = [:]
+        for stage in stages { counts[stage, default: 0] += 1 }
+        return FeatureProgress(done: counts[.done] ?? 0, total: stages.count, counts: counts)
+    }
+}

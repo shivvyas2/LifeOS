@@ -64,6 +64,7 @@ public final class ProjectTaskRecord {
     public var id: UUID = UUID()
     public var projectID: UUID = UUID()
     public var milestoneID: UUID?
+    public var featureID: UUID?
     public var title: String = ""
     public var notes: String = ""
     public var status: String = "todo"
@@ -74,6 +75,28 @@ public final class ProjectTaskRecord {
     public var position: Int = 0
     public var doneAt: Date?
     public var createdAt: Date = Date.now
+    public var updatedAt: Date = Date.now
+    public var syncedAt: Date?
+    public var deletedAt: Date?
+
+    public init(id: UUID = UUID(), projectID: UUID, title: String, position: Int) {
+        self.id = id; self.projectID = projectID; self.title = title; self.position = position
+    }
+}
+
+@Model
+public final class FeatureRecord {
+    public var id: UUID = UUID()
+    public var projectID: UUID = UUID()
+    public var milestoneID: UUID?
+    public var title: String = ""
+    public var note: String = ""
+    public var position: Int = 0
+    public var branch: String?
+    public var stage: String = "planned"
+    public var stageDetail: String = ""
+    public var prNumber: Int?
+    public var stageCheckedAt: Date?
     public var updatedAt: Date = Date.now
     public var syncedAt: Date?
     public var deletedAt: Date?
@@ -107,6 +130,7 @@ public struct ProjectTaskSnapshot: Identifiable, Equatable, Sendable {
     public let projectName: String
     public let colour: String
     public let milestoneID: UUID?
+    public let featureID: UUID?
     public let title: String
     public let notes: String
     public let status: ProjectStatus
@@ -126,6 +150,22 @@ public struct MilestoneSnapshot: Identifiable, Equatable, Sendable {
     public let position: Int
     public let done: Int
     public let total: Int
+}
+
+public struct FeatureSnapshot: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let projectID: UUID
+    public let milestoneID: UUID?
+    public let title: String
+    public let note: String
+    public let position: Int
+    public let branch: String?
+    public let stage: FeatureStage
+    public let stageDetail: String
+    public let prNumber: Int?
+    public let stageCheckedAt: Date?
+    public let openTasks: Int
+    public let doneTasks: Int
 }
 
 public struct ProjectMemberSnapshot: Identifiable, Equatable, Sendable {

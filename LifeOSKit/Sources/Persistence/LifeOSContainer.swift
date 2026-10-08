@@ -26,6 +26,7 @@ public enum LifeOSContainer {
         ProjectRecord.self,
         ProjectMemberRecord.self,
         MilestoneRecord.self,
+        FeatureRecord.self,
         ProjectTaskRecord.self,
     ])
 
