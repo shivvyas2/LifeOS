@@ -53,6 +53,9 @@ Deno.serve(async (req: Request) => {
         access_token: exchanged.access_token,
         institution_id: body.institution_id ?? null,
         institution_name: body.institution_name ?? "Bank",
+        // The link token carried this URL, so the item already has it and
+        // plaid-sync has nothing to move over.
+        webhook_url: Deno.env.get("PLAID_WEBHOOK_URL") ?? null,
       });
       if (error) {
         // Never log the row: it holds the credential.

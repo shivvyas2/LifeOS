@@ -20,6 +20,11 @@ Deno.serve(async (req: Request) => {
       ...(Deno.env.get("PLAID_REDIRECT_URI")
         ? { redirect_uri: Deno.env.get("PLAID_REDIRECT_URI") }
         : {}),
+      // Where Plaid says the bank has something new, so the phone hears about
+      // a purchase without waiting to be opened. See plaid-webhook.
+      ...(Deno.env.get("PLAID_WEBHOOK_URL")
+        ? { webhook: Deno.env.get("PLAID_WEBHOOK_URL") }
+        : {}),
     });
     return json({ link_token: result.link_token }, 200);
   } catch (error) {

@@ -20,7 +20,7 @@ Deno.serve(async (req: Request) => {
   const db = serviceClient();
   const { data: rows, error } = await db
     .from("plaid_items")
-    .select("item_id, access_token, institution_name")
+    .select("item_id, access_token, institution_name, webhook_url")
     .eq("user_id", userID);
 
   if (error) {
@@ -30,6 +30,7 @@ Deno.serve(async (req: Request) => {
 
   const items = [];
   for (const row of rows ?? []) {
+    await adoptWebhook(db, row);
     // One expired bank login must not fail the sync for every other bank, so
     // a per-item failure is reported in the item rather than thrown.
     try {
@@ -49,6 +50,28 @@ Deno.serve(async (req: Request) => {
 
   return json({ items }, 200);
 });
+
+/// Points a bank connected before webhooks existed at plaid-webhook, once.
+///
+/// Items carry the webhook URL they were linked with, and every connection
+/// made before PLAID_WEBHOOK_URL was set has none. Rather than a one-off
+/// script, the next ordinary sync moves each one over and records it, so a
+/// changed URL is picked up the same way. A failure is logged and retried on
+/// the next sync; it never blocks the sync itself.
+async function adoptWebhook(
+  db: ReturnType<typeof serviceClient>,
+  row: { item_id: string; access_token: string; webhook_url: string | null },
+) {
+  const url = Deno.env.get("PLAID_WEBHOOK_URL");
+  if (!url || row.webhook_url === url) return;
+  try {
+    await callPlaid("/item/webhook/update", { access_token: row.access_token, webhook: url });
+    await db.from("plaid_items").update({ webhook_url: url }).eq("item_id", row.item_id);
+  } catch (failure) {
+    const kind = failure instanceof PlaidError ? failure.kind : "upstream_failure";
+    console.error(`plaid webhook update failed for item: ${kind}`);
+  }
+}
 
 async function syncItem(
   row: { item_id: string; access_token: string; institution_name: string },

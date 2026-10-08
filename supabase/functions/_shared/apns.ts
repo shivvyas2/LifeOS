@@ -67,11 +67,33 @@ export function notificationPayload(
   };
 }
 
+/// What kind of push this is. A nudge is an alert. A sync wake-up is a
+/// background push: Apple requires the "background" type and priority 5 for
+/// a content-available payload, and throttles or drops it otherwise.
+export type PushKind = "alert" | "background";
+
+/// A wake-up an hour late is still worth having, but one from yesterday is
+/// not: the next app open syncs anyway.
+export const BACKGROUND_EXPIRATION_SECONDS = 60 * 60;
+
 export function pushHeaders(
   token: string,
   bundleID: string,
   now: Date,
+  kind: PushKind = "alert",
 ): Record<string, string> {
+  if (kind === "background") {
+    return {
+      authorization: `bearer ${token}`,
+      "apns-topic": bundleID,
+      "apns-push-type": "background",
+      "apns-priority": "5",
+      // Ten bank updates while the phone was off are one sync, not ten.
+      "apns-collapse-id": "plaid-sync",
+      "apns-expiration": String(Math.floor(now.getTime() / 1000) + BACKGROUND_EXPIRATION_SECONDS),
+      "content-type": "application/json",
+    };
+  }
   return {
     authorization: `bearer ${token}`,
     "apns-topic": bundleID,
@@ -186,11 +208,12 @@ export async function sendPush(
   deviceToken: string,
   payload: Record<string, unknown>,
   now: Date,
+  kind: PushKind = "alert",
 ): Promise<PushResult> {
   const token = await providerToken(config, now);
   const reply = await fetch(`${config.host}/3/device/${deviceToken}`, {
     method: "POST",
-    headers: pushHeaders(token, config.bundleID, now),
+    headers: pushHeaders(token, config.bundleID, now, kind),
     body: JSON.stringify(payload),
   });
   if (reply.ok) return { status: reply.status, unregistered: false };
