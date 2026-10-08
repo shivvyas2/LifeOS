@@ -27,7 +27,7 @@ Decisions, in the order they were made:
 - **Three slices, one PR each**: features and Plan; GitHub; Draft with LIFO.
 
 Cost: one small table, the existing sync pattern, GitHub's API (free), and
-at most ten plan drafts per person per day through `lifo-agent`. Well under
+about ten plan drafts per person per day through `lifo-agent`. Well under
 the ~$2 per person per month ceiling.
 
 ## 1. The feature
@@ -100,7 +100,8 @@ A project with no features shows no bar.
 `GitHubProjectSource` in `Integrations`, given the token and `owner/name`:
 
 - `GET /repos/{repo}` for the default branch (once, cached with the rest).
-- `GET /repos/{repo}/branches?per_page=100`, following `Link` pages.
+- `GET /repos/{repo}/branches?per_page=100&page=N`, next page while a page
+  comes back full (the transport returns no headers, so no `Link`).
 - `GET /repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page=50`.
 - `GET /repos/{repo}/compare/{default}...{branch}` for each **linked**
   branch with no merged PR (ahead count, last commit date).
@@ -123,7 +124,9 @@ Failures:
   "Connect GitHub to update" link when not connected. Nothing is reset.
 - **401**: the existing `needsReconnect` path; the Plan header offers
   Reconnect.
-- **403 with rate-limit headers**: keep the cache, retry after the reset time.
+- **403 or 429** (rate limit; the transport carries no headers to tell a
+  reset time): keep the cache and the last state, try again on the next
+  5-minute tick.
 - **Anything else**: logged through `githubLog`, last state kept.
 
 The repo picker in the new-project sheet moves to the same source: search
@@ -174,7 +177,8 @@ A new request kind, `plan`, in `lifo-agent`:
 - Output, by schema: 3 to 12 features, each `title`, `note`, `branch`
   (suggested), `milestone` (one of the given titles or null), in order.
 - Bounds: input sizes above enforced server side; ten `plan` requests per
-  person per day, counted in `lifo_usage` under kind `plan`.
+  person per day, enforced as a daily token allowance of 10 × the task's
+  `maxTokens` in `lifo_usage` under kind `plan`, separate from chat's.
 - The phone shows the draft as an editable preview. **Keep** saves the
   features; **Redraft** asks again with the nudge; leaving discards it.
 - A refusal, a failure, or the daily limit shows one plain sentence and
@@ -185,7 +189,8 @@ A new request kind, `plan`, in `lifo-agent`:
 - **Package**: `FeatureStage.resolve` for every row of the table above,
   including merged-then-deleted and merged-then-reopened; slug and
   auto-link rules (one match, several, none); progress; decoding branches,
-  compare, pulls and commits from recorded fixtures; `Link` header paging.
+  compare, pulls and commits from recorded fixtures; paging stops on a short
+  page.
 - **Deno**: `plan` input bounds, output schema validation, daily limit.
 - **Sync**: features round-trip like milestones, including a new member's
   whole-project fetch and a stage written by one member arriving at another.
