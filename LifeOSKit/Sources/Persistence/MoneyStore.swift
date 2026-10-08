@@ -124,7 +124,8 @@ public struct MoneyStore {
         merchant: String,
         category: String? = nil,
         source: MoneySource = .manual,
-        externalID: String? = nil
+        externalID: String? = nil,
+        cardKey: String? = nil
     ) throws -> MoneyEntry {
         let entry = MoneyEntry(
             date: calendar.startOfDay(for: date),
@@ -132,7 +133,8 @@ public struct MoneyStore {
             merchant: merchant,
             category: category,
             source: source,
-            externalID: externalID
+            externalID: externalID,
+            cardOverrideKey: cardKey
         )
         context.insert(entry)
         try context.save()
@@ -306,6 +308,201 @@ public struct MoneyStore {
         bucket.claimedRaw.removeAll { $0 == key }
         bucket.updatedAt = .now
         try context.save()
+    }
+}
+
+// MARK: - Cards
+
+extension MoneyStore {
+    public func entry(id: UUID) throws -> MoneyEntry? {
+        var descriptor = FetchDescriptor<MoneyEntry>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    /// A card Plaid cannot see. Stored as a credit account with no balance:
+    /// the app does not know what is owed on it, and a zero balance leaves
+    /// net worth exactly where it was rather than inventing a debt.
+    @discardableResult
+    public func addManualCard(name: String, productID: String?, mask: String?,
+                              colorHex: String?) throws -> MoneyAccount {
+        let card = MoneyAccount(
+            name: name, type: "credit", subtype: "credit card",
+            mask: Self.cleanMask(mask), currentBalance: 0,
+            cardProductID: productID, faceColorHex: colorHex, isManual: true
+        )
+        context.insert(card)
+        try context.save()
+        return card
+    }
+
+    /// Changes how a card looks. A Plaid card keeps the name and mask its bank
+    /// reports, since the next sync would put them back anyway; only a
+    /// hand-added card takes a new name and last four.
+    public func updateCard(_ card: MoneyAccount, name: String? = nil, productID: String?,
+                           mask: String? = nil, colorHex: String?) throws {
+        card.cardProductID = productID
+        card.faceColorHex = colorHex
+        if card.isManual {
+            if let name, !name.trimmingCharacters(in: .whitespaces).isEmpty { card.name = name }
+            card.mask = Self.cleanMask(mask)
+        }
+        card.updatedAt = .now
+        try context.save()
+    }
+
+    /// Removes a hand-added card, and everything that pointed at it: rows
+    /// picked onto it fall back to what Plaid said, and its rules go. A Plaid
+    /// card is never deleted here; disconnecting the bank owns that.
+    public func deleteManualCard(_ card: MoneyAccount) throws {
+        guard card.isManual else { return }
+        let key: String? = card.cardKey
+        for entry in try context.fetch(FetchDescriptor<MoneyEntry>(
+            predicate: #Predicate { $0.cardOverrideKey == key })) {
+            entry.cardOverrideKey = nil
+        }
+        let ruleKey = card.cardKey
+        for rule in try context.fetch(FetchDescriptor<MerchantCardRule>(
+            predicate: #Predicate { $0.cardKey == ruleKey })) {
+            context.delete(rule)
+        }
+        context.delete(card)
+        try context.save()
+    }
+
+    /// Says which card paid for one row. Nil clears the choice, and the row
+    /// goes back to its merchant rule or Plaid's account.
+    public func setCard(_ cardKey: String?, for entry: MoneyEntry) throws {
+        entry.cardOverrideKey = cardKey
+        entry.updatedAt = .now
+        try context.save()
+    }
+
+    public func cardRules() throws -> [MerchantCardRule] {
+        try context.fetch(FetchDescriptor<MerchantCardRule>(sortBy: [SortDescriptor(\.createdAt)]))
+    }
+
+    /// "Always use this card for this merchant". One rule per merchant: a
+    /// second one replaces the first.
+    public func setCardRule(merchant: String, cardKey: String) throws {
+        let key = CardResolver.merchantKey(merchant)
+        let existing = try context.fetch(FetchDescriptor<MerchantCardRule>(
+            predicate: #Predicate { $0.merchantKey == key }))
+        if let rule = existing.first {
+            rule.cardKey = cardKey
+            for extra in existing.dropFirst() { context.delete(extra) }
+        } else {
+            context.insert(MerchantCardRule(merchantKey: key, cardKey: cardKey))
+        }
+        try context.save()
+    }
+
+    public func removeCardRule(merchant: String) throws {
+        let key = CardResolver.merchantKey(merchant)
+        for rule in try context.fetch(FetchDescriptor<MerchantCardRule>(
+            predicate: #Predicate { $0.merchantKey == key })) {
+            context.delete(rule)
+        }
+        try context.save()
+    }
+
+    public func cardResolver() throws -> CardResolver {
+        CardResolver(rules: try cardRules())
+    }
+
+    /// Adds a statement's rows to one card. Each row's id is built from the
+    /// card, day, cents and merchant, so importing the same statement twice
+    /// updates the rows it already made instead of doubling the month.
+    @discardableResult
+    public func importStatement(_ lines: [StatementLine], cardKey: String) throws -> Int {
+        let ids: Set<String?> = Set(lines.map { $0.importID(cardKey: cardKey, calendar: calendar) as String? })
+        var existing = try context.fetch(
+            FetchDescriptor<MoneyEntry>(predicate: #Predicate<MoneyEntry> { ids.contains($0.externalID) })
+        ).reduce(into: [String: MoneyEntry]()) { result, entry in
+            if let id = entry.externalID { result[id] = entry }
+        }
+
+        for line in lines {
+            let id = line.importID(cardKey: cardKey, calendar: calendar)
+            if let entry = existing[id] {
+                entry.cardOverrideKey = cardKey
+                entry.updatedAt = .now
+                continue
+            }
+            let entry = MoneyEntry(
+                date: calendar.startOfDay(for: line.date), amount: line.amount,
+                merchant: line.merchant, source: .manual, externalID: id,
+                cardOverrideKey: cardKey
+            )
+            context.insert(entry)
+            existing[id] = entry
+        }
+        try context.save()
+        return lines.count
+    }
+
+    /// The last four, digits only. A bank's "xxxx-4821" and a typed "4821 "
+    /// both store as "4821"; nothing at all stores as nil.
+    static func cleanMask(_ mask: String?) -> String? {
+        let digits = (mask ?? "").filter(\.isNumber)
+        return digits.isEmpty ? nil : String(digits.suffix(4))
+    }
+}
+
+/// One row read off a card statement, before it is saved.
+public struct StatementLine: Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public let date: Date
+    /// Our sign: negative is money spent, positive a refund or payment.
+    public let amount: Double
+    public let merchant: String
+
+    public init(id: UUID = UUID(), date: Date, amount: Double, merchant: String) {
+        self.id = id
+        self.date = date
+        self.amount = amount
+        self.merchant = merchant
+    }
+
+    /// Whole cents, so 12.3 and 12.30000001 are the same charge.
+    public var cents: Int { Int((amount * 100).rounded()) }
+
+    func importID(cardKey: String, calendar: Calendar) -> String {
+        let day = calendar.startOfDay(for: date).timeIntervalSince1970
+        return "import:\(cardKey):\(Int(day)):\(cents):\(CardResolver.merchantKey(merchant))"
+    }
+}
+
+/// Which statement rows are probably already in the app.
+///
+/// A purchase quick-added on the day comes back on the statement a few days
+/// later, posted on a slightly different date and under the bank's spelling
+/// of the merchant. So the match is the exact cents within a few days, not
+/// the name.
+public enum StatementDedupe {
+    public static let windowDays = 3
+
+    /// Ids of `lines` that look like a row already in `existing`. Each existing
+    /// row can only explain one line, so two genuine $5 coffees on a statement
+    /// against one quick-added coffee flag one of them, not both.
+    public static func duplicates(_ lines: [StatementLine], existing: [MoneyEntry],
+                                  calendar: Calendar = .current) -> Set<UUID> {
+        var unused = existing.map { (cents: Int(($0.amount * 100).rounded()),
+                                     day: calendar.startOfDay(for: $0.date)) }
+        var flagged: Set<UUID> = []
+        for line in lines {
+            let day = calendar.startOfDay(for: line.date)
+            let index = unused.firstIndex { candidate in
+                guard candidate.cents == line.cents else { return false }
+                let apart = abs(calendar.dateComponents([.day], from: candidate.day, to: day).day ?? .max)
+                return apart <= windowDays
+            }
+            if let index {
+                flagged.insert(line.id)
+                unused.remove(at: index)
+            }
+        }
+        return flagged
     }
 }
 

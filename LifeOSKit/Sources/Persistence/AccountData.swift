@@ -53,6 +53,10 @@ public struct LocalDataEraser {
             case .money:
                 try context.delete(model: MoneyEntry.self)
                 try context.delete(model: SpendBucket.self)
+                try context.delete(model: MerchantCardRule.self)
+                // Hand-added cards are money the person typed in. A Plaid
+                // card stays: the bank connection owns it, not this button.
+                try context.delete(model: MoneyAccount.self, where: #Predicate { $0.isManual })
             case .chats:
                 try context.delete(model: ChatMessage.self)
                 defaults.removeObject(forKey: "coach.conversationID")
