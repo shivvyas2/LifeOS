@@ -59,6 +59,39 @@ no restating the question.`,
       additionalProperties: false,
     },
   },
+  plan: {
+    system: `You plan software projects for one developer. From the project's
+name, scope, dates, milestones, README and recent commit subjects, list the
+features to build, in the order to build them. Each feature is something a
+person can see working when it is done, small enough for one branch and one
+pull request. Give 3 to 12. For each: a title of at most 8 words, a one
+sentence note, a branch name of the form feat/<words-with-dashes>, and the
+title of the milestone it belongs to from the given list, or an empty string.
+Do not repeat work the commits show is already done. If the owner adds a
+nudge, follow it.`,
+    maxTokens: 6_000,
+    schema: {
+      type: "object",
+      properties: {
+        features: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              note: { type: "string" },
+              branch: { type: "string" },
+              milestone: { type: "string" },
+            },
+            required: ["title", "note", "branch", "milestone"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["features"],
+      additionalProperties: false,
+    },
+  },
 };
 
 // A verbatim copy of ResponseStyle.conversation in LifeOSKit. The two tiers
@@ -124,6 +157,42 @@ are given; if a figure is not there, do not mention it.`,
 /// runaway guard. The reason it is a separate budget at all is that a heavy
 /// chat evening must not be able to eat the next morning's nudge.
 export const NUDGE_TOKEN_CAP = 4_000;
+
+/// Ten drafts a day at the task's ceiling, kept apart from chat so planning
+/// a project never eats the evening's coaching.
+export const PLAN_TOKEN_CAP = 60_000;
+export const MAX_PLAN_PROMPT = 12_000;
+
+type Parsed = NonNullable<ReturnType<typeof parseRequest>>;
+
+export function usageKind(parsed: Parsed | { kind: "prompt"; task: string; prompt: string }): "chat" | "plan" {
+  return parsed.kind === "prompt" && parsed.task === "plan" ? "plan" : "chat";
+}
+
+export function usageCap(kind: "chat" | "plan"): number {
+  return kind === "plan" ? PLAN_TOKEN_CAP : DAILY_TOKEN_CAP;
+}
+
+/// Cuts a plan to what the features table accepts (title 80, note 280,
+/// branch 255, counted in code points like char_length) and to twelve.
+export function cleanPlan(output: Record<string, unknown>) {
+  if (!Array.isArray(output.features)) throw new Error("plan without features");
+  const cut = (value: unknown, max: number) => [...String(value ?? "").trim()].slice(0, max).join("");
+  const features = output.features
+    .map((raw) => {
+      const item = (raw ?? {}) as Record<string, unknown>;
+      return {
+        title: cut(item.title, 80),
+        note: cut(item.note, 280),
+        branch: cut(item.branch, 255),
+        milestone: cut(item.milestone, 80),
+      };
+    })
+    .filter((item) => item.title.length > 0)
+    .slice(0, 12);
+  if (features.length === 0) throw new Error("empty plan");
+  return { features };
+}
 
 export function taskConfig(task: string) {
   return TASKS[task] ?? null;
@@ -231,6 +300,8 @@ function validateShape(schema: Record<string, unknown>, output: Record<string, u
       if (typeof value !== "string") {
         throw new Error(`output missing required property "${key}"`);
       }
+    } else if (declaredType === "array") {
+      if (!Array.isArray(value)) throw new Error(`output missing required property "${key}"`);
     } else {
       throw new Error(`unsupported schema type "${declaredType}" for property "${key}"`);
     }
@@ -546,5 +617,6 @@ export function parseRequest(body: unknown) {
 
   const prompt = String(raw.prompt ?? "");
   if (!prompt) return null;
+  if (task === "plan" && prompt.length > MAX_PLAN_PROMPT) return null;
   return { kind: "prompt" as const, task, prompt };
 }

@@ -4,20 +4,25 @@ import {
   billedTokens,
   chatBody,
   classifyFailure,
+  cleanPlan,
   DAILY_TOKEN_CAP,
   LifoRefusal,
   MAX_CHAT_MESSAGES,
   MAX_CHAT_TOOLS,
   MAX_CONTEXT_LENGTH,
+  MAX_PLAN_PROMPT,
   mergeUsage,
   MODEL,
   parseChatReply,
   parseOutput,
   parseRequest,
   parseStreamEvent,
+  PLAN_TOKEN_CAP,
   taskBody,
   taskConfig,
   toClaudeMessages,
+  usageCap,
+  usageKind,
   withoutTuning,
 } from "./lifo.ts";
 
@@ -669,4 +674,40 @@ Deno.test("a tool result must name its call, and a call must carry three strings
       `accepted: ${JSON.stringify(message)}`,
     );
   }
+});
+
+Deno.test("plan is a task with a schema", () => {
+  const config = taskConfig("plan");
+  assertEquals(config?.maxTokens, 6_000);
+  assertEquals((config?.schema as { required: string[] }).required, ["features"]);
+});
+
+Deno.test("a plan prompt over the cap is refused", () => {
+  assertEquals(parseRequest({ task: "plan", prompt: "x".repeat(MAX_PLAN_PROMPT + 1) }), null);
+  assertEquals(parseRequest({ task: "plan", prompt: "Scope: ship it" })?.kind, "prompt");
+});
+
+Deno.test("plans are billed to their own allowance", () => {
+  assertEquals(usageKind({ kind: "prompt", task: "plan", prompt: "p" }), "plan");
+  assertEquals(usageKind({ kind: "prompt", task: "answer", prompt: "p" }), "chat");
+  assertEquals(usageCap("plan"), PLAN_TOKEN_CAP);
+  assertEquals(PLAN_TOKEN_CAP, 60_000);
+});
+
+Deno.test("a plan is trimmed to the server's limits and to twelve", () => {
+  const long = "é".repeat(100);
+  const features = Array.from({ length: 15 }, (_, i) => ({
+    title: i === 0 ? long : ` Feature ${i} `, note: "n".repeat(400), branch: `feat/f-${i}`, milestone: "",
+  }));
+  features.push({ title: "   ", note: "", branch: "", milestone: "" });
+  const cleaned = cleanPlan({ features });
+  assertEquals(cleaned.features.length, 12);
+  assertEquals([...cleaned.features[0].title].length, 80);
+  assertEquals(cleaned.features[1].title, "Feature 1");
+  assertEquals(cleaned.features[1].note.length, 280);
+});
+
+Deno.test("an empty plan is an error, not an empty list", () => {
+  assertThrows(() => cleanPlan({ features: [{ title: " ", note: "", branch: "", milestone: "" }] }));
+  assertThrows(() => cleanPlan({ features: "nope" }));
 });

@@ -4,7 +4,7 @@ import {
   billedTokens,
   chatBody,
   classifyFailure,
-  DAILY_TOKEN_CAP,
+  cleanPlan,
   LifoRefusal,
   mergeUsage,
   parseChatReply,
@@ -12,6 +12,8 @@ import {
   parseRequest,
   parseStreamEvent,
   taskBody,
+  usageCap,
+  usageKind,
   withoutTuning,
 } from "../_shared/lifo.ts";
 
@@ -120,23 +122,24 @@ Deno.serve(async (req: Request) => {
   if (!parsed) return json({ error: "unknown_task" }, 400);
 
   const db = serviceClient();
-  // Scoped to the chat kind. `lifo_usage` is keyed on (user_id, day, kind)
-  // since the nudge job got its own allowance, so a day with a nudge on it has
-  // two rows and an unscoped maybeSingle() would fail rather than read one.
-  // Chat and nudges do not share a budget on purpose: a heavy chat evening
-  // must not eat the next morning's nudge.
+  // Scoped to the request's kind. `lifo_usage` is keyed on (user_id, day,
+  // kind), so chat, nudges and plan drafts each have their own allowance and
+  // an unscoped maybeSingle() would fail rather than read one. They do not
+  // share a budget on purpose: a heavy chat evening must not eat the next
+  // morning's nudge, and drafting a project's plan must not eat either.
+  const kind = usageKind(parsed);
   const { data: usage, error: usageError } = await db
     .from("lifo_usage")
     .select("tokens")
     .eq("user_id", userID)
     .eq("day", new Date().toISOString().slice(0, 10))
-    .eq("kind", "chat")
+    .eq("kind", kind)
     .maybeSingle();
   if (usageError) {
     console.error(`lifo usage lookup failed: ${usageError.code}`);
     return json({ error: "storage_failed" }, 500);
   }
-  if ((usage?.tokens ?? 0) >= DAILY_TOKEN_CAP) return json({ error: "exhausted" }, 429);
+  if ((usage?.tokens ?? 0) >= usageCap(kind)) return json({ error: "exhausted" }, 429);
 
   const streaming = parsed.kind === "chat" && parsed.stream;
   const payload = parsed.kind === "chat"
@@ -152,7 +155,7 @@ Deno.serve(async (req: Request) => {
     const { error } = await db.rpc("lifo_debit", {
       p_user: userID,
       p_tokens: tokens,
-      p_kind: "chat",
+      p_kind: kind,
     });
     if (error) console.error(`lifo debit failed: ${error.code}`);
   };
@@ -222,8 +225,12 @@ Deno.serve(async (req: Request) => {
         : json({ tool_calls: parsedChat.toolCalls, tokens }, 200);
     }
     const { output } = parseOutput(parsed.task, reply);
+    // A plan is cut to what the features table accepts; an empty one throws
+    // into the catch below and reaches the phone as a failure, after the
+    // debit above.
+    const shaped = parsed.task === "plan" ? cleanPlan(output) : output;
     console.log(`lifo task=${parsed.task} tokens=${tokens} ms=${Date.now() - started}`);
-    return json({ output, tokens }, 200);
+    return json({ output: shaped, tokens }, 200);
   } catch (failure) {
     if (failure instanceof LifoRefusal) {
       return json({ error: "refused", message: failure.message }, 403);
