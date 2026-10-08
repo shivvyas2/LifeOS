@@ -40,6 +40,7 @@
 		B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */; };
 		BAAF9FF43B6B8674032C7B8C /* NotesWalkthroughUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C67EF6A283A8C832853650 /* NotesWalkthroughUITests.swift */; };
 		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
+		1F895236E1EC46DD9CDD9D34 /* WatchFocusScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC2855E0F14AE6BCA99FE4 /* WatchFocusScreen.swift */; };
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
 		C1A644C6813581BB160BA976 /* HealthWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B837A02BD3CD136DF62D37 /* HealthWidget.swift */; };
 		CA27C4365C4AD46424035E01 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
@@ -127,6 +128,7 @@
 		30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWatch.entitlements; sourceTree = "<group>"; };
 		3CEA5E0BAC492E027423BA37 /* DayProjectUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayProjectUITests.swift; sourceTree = "<group>"; };
 		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
+		EBCC2855E0F14AE6BCA99FE4 /* WatchFocusScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchFocusScreen.swift; sourceTree = "<group>"; };
 		53B837A02BD3CD136DF62D37 /* HealthWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthWidget.swift; sourceTree = "<group>"; };
 		5A224D947F9F20AEE96E695F /* AlmanacWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlmanacWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A24A20B31209601FBC9A414 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 				AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */,
 				2495087A2A33423AA2A49172 /* WatchWorkoutController.swift */,
 				4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */,
+				EBCC2855E0F14AE6BCA99FE4 /* WatchFocusScreen.swift */,
 				65C0CC243BDD2E3A83313257 /* Info.plist */,
 				30D473914CA96DD7A6CAE287 /* AlmanacWatch.entitlements */,
 				F99CEA62E9FE796BD5BA81FE /* Assets.xcassets */,
@@ -581,6 +584,7 @@
 				24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */,
 				90261B2890C34AE7A9718E2D /* WatchWorkoutController.swift in Sources */,
 				BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */,
+				1F895236E1EC46DD9CDD9D34 /* WatchFocusScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

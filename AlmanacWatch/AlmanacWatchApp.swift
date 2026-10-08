@@ -21,7 +21,7 @@ struct AlmanacWatchApp: App {
         WindowGroup {
             NavigationStack {
                 if workout.state != .idle {
-                    WatchWorkoutScreen(workout: workout)
+                    if workout.isFocus { WatchFocusScreen(workout: workout) } else { WatchWorkoutScreen(workout: workout) }
                 } else {
                     WatchDashboard(bridge: bridge, workout: workout, onStartWorkout: { type in workout.start(type: type) })
                 }

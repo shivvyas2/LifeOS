@@ -176,7 +176,7 @@ final class ActivityRecorder: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutB
         // A session that arrived while HealthKit was launching the app in the
         // background is already held by the bridge: replay it once the draft
         // below has been restored, whichever way this returns.
-        defer { if let mirrored = watch?.session { adoptMirroredSession(mirrored) } }
+        defer { if let mirrored = watch?.session, !WatchSessionBridge.isFocus(mirrored) { adoptMirroredSession(mirrored) } }
         guard let data = defaults.data(forKey: Self.draftKey),
               let draft = try? JSONDecoder().decode(Draft.self, from: data) else { return }
         // A demo does not survive a relaunch: nothing it held was worth keeping.

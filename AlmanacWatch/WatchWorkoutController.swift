@@ -24,6 +24,8 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
     private(set) var accumulated: TimeInterval = 0
     private(set) var runningSince: Date?
     private(set) var heartRate: Int?
+    /// A focus session from the phone: heart rate only, never saved.
+    private(set) var isFocus = false
     private(set) var energyKcal: Double?
     private(set) var distanceMeters: Double?
     private(set) var heartHistory: [Double] = []
@@ -122,6 +124,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         // Synchronous, before the Task: the authorization prompt can take a
         // while and a second Start tap must not open a second session.
         state = .starting
+        isFocus = configuration.activityType == .mindAndBody
         lastError = nil; result = nil
         workoutID = UUID(); ownerID = accountID
         activity = ActivityCatalog.type(healthRawValue: configuration.activityType.rawValue) ?? ActivityCatalog.other
@@ -204,6 +207,7 @@ final class WatchWorkoutController: NSObject, HKWorkoutSessionDelegate, HKLiveWo
         self.session = session; self.builder = builder
         activity = ActivityCatalog.type(healthRawValue: session.workoutConfiguration.activityType.rawValue) ?? ActivityCatalog.other
         activityName = activity?.name ?? "Other"
+        isFocus = session.workoutConfiguration.activityType == .mindAndBody
         let started = recovered.startDate ?? .now
         startedAt = started
         let saved = UserDefaults.standard.data(forKey: checkpointKey).flatMap { try? JSONDecoder().decode(Checkpoint.self, from: $0) }

@@ -29,6 +29,12 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
     /// of range, or the session failed. The workout carries on on the wrist;
     /// this only means the phone can no longer see or steer it.
     var onDisconnect: (() -> Void)?
+    /// A focus session listens for heart rate only. A mind-and-body session
+    /// is always a focus session: it never reaches `onSession` or the other
+    /// workout callbacks, so no recorder adopts it and nothing is saved to Health.
+    var onFocusPacket: ((Data) -> Void)?
+    nonisolated static func isFocus(_ session: HKWorkoutSession) -> Bool { session.workoutConfiguration.activityType == .mindAndBody }
+    var isFocusSession: Bool { session.map(Self.isFocus) ?? false }
     var hasSession: Bool { session != nil && !dropping }
 
     /// Call once at launch, before any session can arrive.
@@ -43,7 +49,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
                 // adopt its id when a screen finally attaches.
                 let unattended = bridge.onSession == nil
                 bridge.adopt(session)
-                if unattended { bridge.requestPlaceholderActivity(for: session) }
+                if unattended, !isFocus(session) { bridge.requestPlaceholderActivity(for: session) }
             }
         }
     }
@@ -69,6 +75,12 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         dropping = false
         self.session = session
         session.delegate = self
+        if Self.isFocus(session) {
+            // No focus session is listening (the app was relaunched): end it
+            // on the wrist rather than leave it running.
+            if onFocusPacket == nil { end(after: .discard) }
+            return
+        }
         onSession?(session)
     }
 
@@ -149,7 +161,7 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
             guard !self.dropping else { return }
-            self.onStateChange?(toState, date)
+            if !self.isFocusSession { self.onStateChange?(toState, date) }
             if toState == .ended { self.endPlaceholderActivity(); self.end() }
         }
     }
@@ -158,21 +170,25 @@ final class WatchSessionBridge: NSObject, HKWorkoutSessionDelegate {
             guard self.session === workoutSession else { return }
             // Dropped silently before: the recorder kept a running timer for
             // a session that no longer existed, with every control failing.
+            let focus = self.isFocusSession
             self.end()
-            self.onDisconnect?()
+            if !focus { self.onDisconnect?() }
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didDisconnectFromRemoteDeviceWithError error: Error?) {
         Task { @MainActor in
             guard self.session === workoutSession, !self.dropping else { return }
+            let focus = self.isFocusSession
             self.end()
-            self.onDisconnect?()
+            if !focus { self.onDisconnect?() }
         }
     }
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didReceiveDataFromRemoteWorkoutSession data: [Data]) {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
-            for item in data { self.onPacket?(item) }
+            for item in data {
+                if self.isFocusSession { self.onFocusPacket?(item) } else { self.onPacket?(item) }
+            }
         }
     }
 }
