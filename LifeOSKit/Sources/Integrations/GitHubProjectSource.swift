@@ -54,7 +54,8 @@ public struct GitHubProjectSource: Sendable {
             guard let state = GitHubPullState.State(rawValue: node.state.lowercased()) else { return nil }
             return GitHubPullState(number: node.number, title: node.title, state: state, url: node.url,
                                    mergedAt: node.mergedAt, headBranch: node.headRefName,
-                                   headRepo: node.headRepository?.nameWithOwner)
+                                   headRepo: node.headRepository?.nameWithOwner,
+                                   isCrossRepository: node.isCrossRepository ?? (node.headRepository == nil))
         }
         return GitHubProjectStatus(defaultBranch: base, branches: branches, pulls: pulls)
     }
@@ -70,7 +71,7 @@ public struct GitHubProjectSource: Sendable {
           nodes { name target { ... on Commit { committedDate } } compare(headRef: $base) { aheadBy behindBy } }
         }
         pullRequests(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
-          nodes { number title state url mergedAt headRefName headRepository { nameWithOwner } }
+          nodes { number title state url mergedAt headRefName isCrossRepository headRepository { nameWithOwner } }
         }
       }
     }
@@ -99,7 +100,8 @@ public struct GitHubProjectSource: Sendable {
                 struct Node: Decodable {
                     struct Head: Decodable { let nameWithOwner: String }
                     let number: Int; let title: String; let state: String; let url: URL
-                    let mergedAt: Date?; let headRefName: String; let headRepository: Head?
+                    let mergedAt: Date?; let headRefName: String; let isCrossRepository: Bool?
+                    let headRepository: Head?
                 }
                 let nodes: [Node]
             }

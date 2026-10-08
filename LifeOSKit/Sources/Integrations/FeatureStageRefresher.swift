@@ -18,6 +18,12 @@ public enum FeatureStageRefresher {
                 changed = true
             }
             let resolved = FeatureStageResolver.resolve(branch: branch, repo: repo, status: status, now: now)
+            // A merged PR older than the read's window is missing, not
+            // unmerged: a done feature never moves back for want of data.
+            if feature.stage == .done, let number = feature.prNumber, resolved.stage != .done,
+               !status.pulls.contains(where: { $0.number == number }) {
+                continue
+            }
             if try store.applyStage(featureID: feature.id, stage: resolved.stage, detail: resolved.detail,
                                     prNumber: resolved.prNumber, checkedAt: now) {
                 changed = true

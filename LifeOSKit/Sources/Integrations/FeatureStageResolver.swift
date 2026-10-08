@@ -24,9 +24,15 @@ public struct GitHubPullState: Equatable, Sendable {
     /// `owner/name` of the repo the head branch lives in; nil when GitHub
     /// no longer knows it (a deleted fork).
     public let headRepo: String?
-    public init(number: Int, title: String, state: State, url: URL, mergedAt: Date?, headBranch: String, headRepo: String?) {
+    /// GitHub's own word on whether the head is in another repo (a fork).
+    /// Asked rather than worked out from `headRepo`, which after a rename or
+    /// a transfer no longer matches the name the project stored.
+    public let isCrossRepository: Bool
+    public init(number: Int, title: String, state: State, url: URL, mergedAt: Date?, headBranch: String,
+                headRepo: String?, isCrossRepository: Bool = false) {
         self.number = number; self.title = title; self.state = state; self.url = url
         self.mergedAt = mergedAt; self.headBranch = headBranch; self.headRepo = headRepo
+        self.isCrossRepository = isCrossRepository
     }
 }
 
@@ -57,17 +63,13 @@ public enum FeatureStageResolver {
         guard let branch else { return ResolvedStage(stage: .planned, detail: "Not started", prNumber: nil) }
         // A PR beats the branch, and of the open and merged ones the newest
         // decides. A fork's PR from a branch of the same name is not ours.
-        let ours = status.pulls.filter {
-            $0.headBranch == branch && $0.state != .closed
-                && $0.headRepo?.caseInsensitiveCompare(repo) == .orderedSame
-        }
+        let ours = status.pulls.filter { $0.headBranch == branch && $0.state != .closed && !$0.isCrossRepository }
         if let latest = ours.max(by: { $0.number < $1.number }) {
             switch latest.state {
             case .open:
                 return ResolvedStage(stage: .review, detail: "PR #\(latest.number) open", prNumber: latest.number)
             case .merged:
-                let when = latest.mergedAt.map { GitHubRelative.short($0, now: now) } ?? "recently"
-                return ResolvedStage(stage: .done, detail: "Merged \(when) · PR #\(latest.number)", prNumber: latest.number)
+                return ResolvedStage(stage: .done, detail: "Merged · PR #\(latest.number)", prNumber: latest.number)
             case .closed:
                 break
             }
@@ -78,9 +80,10 @@ public enum FeatureStageResolver {
         guard state.ahead > 0 else {
             return ResolvedStage(stage: .planned, detail: "Branch made, no commits yet", prNumber: nil)
         }
-        let count = state.ahead == 1 ? "1 commit" : "\(state.ahead) commits"
-        let when = state.lastCommitAt.map { " · " + GitHubRelative.short($0, now: now) } ?? ""
-        return ResolvedStage(stage: .building, detail: count + when, prNumber: nil)
+        // No clock in a detail: it is synced, so a time in it would make
+        // every read an edit and every member's phone push it again.
+        return ResolvedStage(stage: .building, detail: state.ahead == 1 ? "1 commit" : "\(state.ahead) commits",
+                             prNumber: nil)
     }
 
     /// Lower-case ASCII words joined by `-`, at most 40 characters.

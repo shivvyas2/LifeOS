@@ -7,11 +7,11 @@ import Persistence
     private let now = Date(timeIntervalSince1970: 1_791_000_000)
     private let repo = "shivvyas2/LifeOS"
     private func pr(_ number: Int, _ state: GitHubPullState.State, branch: String = "feat/cards",
-                    repo: String? = "shivvyas2/LifeOS", mergedHoursAgo: Double? = nil) -> GitHubPullState {
+                    repo: String? = "shivvyas2/LifeOS", cross: Bool = false, mergedHoursAgo: Double? = nil) -> GitHubPullState {
         GitHubPullState(number: number, title: "PR \(number)", state: state,
                         url: URL(string: "https://github.com/\(self.repo)/pull/\(number)")!,
                         mergedAt: mergedHoursAgo.map { now.addingTimeInterval(-$0 * 3_600) },
-                        headBranch: branch, headRepo: repo)
+                        headBranch: branch, headRepo: repo, isCrossRepository: cross)
     }
     private func status(branches: [GitHubBranchState] = [], pulls: [GitHubPullState] = []) -> GitHubProjectStatus {
         GitHubProjectStatus(defaultBranch: "main", branches: branches, pulls: pulls)
@@ -38,10 +38,10 @@ import Persistence
     @Test func commitsAheadAreBuilding() {
         #expect(FeatureStageResolver.resolve(branch: "feat/cards", repo: repo,
                                              status: status(branches: [branch(ahead: 12)]), now: now)
-                == ResolvedStage(stage: .building, detail: "12 commits · 2h ago", prNumber: nil))
+                == ResolvedStage(stage: .building, detail: "12 commits", prNumber: nil))
         #expect(FeatureStageResolver.resolve(branch: "feat/cards", repo: repo,
                                              status: status(branches: [branch(ahead: 1)]), now: now).detail
-                == "1 commit · 2h ago")
+                == "1 commit")
     }
 
     @Test func anOpenPRIsInReview() {
@@ -53,7 +53,7 @@ import Persistence
     @Test func aMergedPRIsDoneEvenAfterTheBranchIsDeleted() {
         #expect(FeatureStageResolver.resolve(branch: "feat/cards", repo: repo,
                                              status: status(pulls: [pr(42, .merged, mergedHoursAgo: 50)]), now: now)
-                == ResolvedStage(stage: .done, detail: "Merged 2d ago · PR #42", prNumber: 42))
+                == ResolvedStage(stage: .done, detail: "Merged · PR #42", prNumber: 42))
     }
 
     @Test func aNewerOpenPRAfterAMergeIsInReview() {
@@ -71,7 +71,7 @@ import Persistence
     /// Review Focus 4: a fork's PR from a branch of the same name is not ours.
     @Test func aForksPRDoesNotMoveTheFeature() {
         let resolved = FeatureStageResolver.resolve(branch: "feat/cards", repo: repo,
-            status: status(pulls: [pr(42, .merged, repo: "someone/LifeOS", mergedHoursAgo: 1)]), now: now)
+            status: status(pulls: [pr(42, .merged, repo: "someone/LifeOS", cross: true, mergedHoursAgo: 1)]), now: now)
         #expect(resolved.stage == .planned)
     }
 
@@ -108,5 +108,15 @@ import Persistence
     @Test func theLastCommitIsTheNewestBranchCommit() {
         let s = status(branches: [branch("a", ahead: 1, hoursAgo: 5), branch("b", ahead: 1, hoursAgo: 1)])
         #expect(s.lastCommitAt == now.addingTimeInterval(-3_600))
+    }
+
+    /// Review fix 7: after a rename GitHub reports the new name; a PR from
+    /// this repo still counts, and a fork's still does not.
+    @Test func aRenamedRepoStillCountsItsOwnPRs() {
+        let renamed = GitHubPullState(number: 42, title: "Cards", state: .open, url: URL(string: "https://x")!,
+                                      mergedAt: nil, headBranch: "feat/cards", headRepo: "shivvyas2/Almanac",
+                                      isCrossRepository: false)
+        #expect(FeatureStageResolver.resolve(branch: "feat/cards", repo: repo, status: status(pulls: [renamed]), now: now).stage
+                == .review)
     }
 }

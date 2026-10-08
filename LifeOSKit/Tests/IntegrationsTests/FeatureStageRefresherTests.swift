@@ -59,4 +59,33 @@ import SwiftData
         try FeatureStageRefresher.apply(status(["main"], pulls: [merged]), repo: "o/r", projectID: p, store: store, now: now)
         #expect(try store.feature(id: f)?.stage == .done)
     }
+
+    /// Review fix 1: a read minutes later with nothing new on GitHub writes
+    /// nothing. Details must not carry a clock, or every tick is an edit.
+    @Test func aLaterReadWithNothingNewWritesNothing() throws {
+        let (store, p) = try setUp()
+        _ = try store.createFeature(projectID: p, title: "Cards", branch: "feat/cards")
+        let merged = GitHubPullState(number: 40, title: "Sign in", state: .merged, url: URL(string: "https://x")!,
+                                     mergedAt: now.addingTimeInterval(-86_400), headBranch: "feat/sign-in",
+                                     headRepo: "o/r", isCrossRepository: false)
+        _ = try store.createFeature(projectID: p, title: "Sign in", branch: "feat/sign-in")
+        try FeatureStageRefresher.apply(status(["main", "feat/cards"], pulls: [merged]), repo: "o/r",
+                                        projectID: p, store: store, now: now)
+        try store.markSynced(at: now)
+        let changed = try FeatureStageRefresher.apply(status(["main", "feat/cards"], pulls: [merged]), repo: "o/r",
+                                                      projectID: p, store: store, now: now.addingTimeInterval(6 * 60))
+        #expect(changed == false)
+        #expect(try store.pending().isEmpty)
+    }
+
+    /// Review fix 2: a done feature whose PR has dropped out of the read and
+    /// whose branch was deleted stays done.
+    @Test func aDoneFeatureStaysDoneWhenItsPRIsOutOfTheWindow() throws {
+        let (store, p) = try setUp()
+        let f = try store.createFeature(projectID: p, title: "Sign in", branch: "feat/sign-in")
+        try store.applyStage(featureID: f, stage: .done, detail: "Merged · PR #40", prNumber: 40, checkedAt: now)
+        try FeatureStageRefresher.apply(status(["main"]), repo: "o/r", projectID: p, store: store, now: now)
+        let feature = try #require(try store.feature(id: f))
+        #expect(feature.stage == .done && feature.prNumber == 40)
+    }
 }

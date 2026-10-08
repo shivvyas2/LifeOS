@@ -34,7 +34,7 @@ final class ProjectStubTransport: GitHubTransport, @unchecked Sendable {
       ]},
       "pullRequests":{"nodes":[
         {"number":42,"title":"Cards","state":"OPEN","url":"https://github.com/o/r/pull/42","mergedAt":null,
-         "headRefName":"feat/cards","headRepository":{"nameWithOwner":"o/r"}},
+         "headRefName":"feat/cards","isCrossRepository":false,"headRepository":{"nameWithOwner":"o/r"}},
         {"number":40,"title":"Old","state":"MERGED","url":"https://github.com/o/r/pull/40","mergedAt":"2026-10-01T09:00:00Z",
          "headRefName":"feat/sign-in","headRepository":null}
       ]}
