@@ -99,14 +99,22 @@ A project with no features shows no bar.
 
 `GitHubProjectSource` in `Integrations`, given the token and `owner/name`:
 
-- `GET /repos/{repo}` for the default branch (once, cached with the rest).
-- `GET /repos/{repo}/branches?per_page=100&page=N`, next page while a page
-  comes back full (the transport returns no headers, so no `Link`).
-- `GET /repos/{repo}/pulls?state=all&sort=updated&direction=desc&per_page=50`.
-- `GET /repos/{repo}/compare/{default}...{branch}` for each **linked**
-  branch with no merged PR (ahead count, last commit date).
-- `GET /repos/{repo}/commits?sha={default}&per_page=30&page=N` for the
-  history, on demand.
+- **Status, two GraphQL queries.** The first reads the default branch's
+  name (kept for the session). The second reads, in one call, the 100 most
+  recently committed branches, each with its last commit time and its
+  ahead/behind count against the default branch, and the 50 most recently
+  updated PRs (number, title, state, merged time, head branch and head repo).
+  This replaces a REST call per branch. A linked branch outside those 100 is
+  treated as not existing, which only matters for a branch with no commit in
+  a long while and no PR.
+- **A feature's commits**: `GET /repos/{repo}/compare/{default}...{branch}`,
+  on the feature page only.
+- **History**: `GET /repos/{repo}/commits?sha={default}&per_page=30&page=N`,
+  on demand. An empty repository answers 409, which reads as no commits.
+- **Repo picker**: `GET /user/repos?per_page=100&page=N`, next page while a
+  page comes back full, up to 10 pages.
+
+`GitHubTransport` gains a `post` for GraphQL beside its `get`.
 
 When: when a project opens, every 5 minutes while one of its views is on
 screen, and on pull to refresh. Results are cached per repo in memory for 5
@@ -155,10 +163,9 @@ the view switcher otherwise):
 - **Commits**: the default branch's history, newest first: message's first
   line, author, relative time, short SHA; tap opens it on GitHub. 30 at a
   time, more on scroll.
-- **Branches**: every branch with ahead/behind against the default branch
-  (compare calls only for the 20 most recently pushed, the rest load when
-  scrolled to), last commit time, and its feature if any. No commit in 30
-  days dims it.
+- **Branches**: the 100 most recently committed, newest first, each with
+  ahead/behind against the default branch, last commit time, and its
+  feature if any. No commit in 30 days dims it.
 - **Pull requests**: open, then the last five merged.
 
 **Projects home**: a card whose project has features gets a thin progress
