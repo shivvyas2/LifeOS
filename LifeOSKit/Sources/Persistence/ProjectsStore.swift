@@ -60,6 +60,23 @@ public struct ProjectsStore {
             }
     }
 
+    public func features(projectID: UUID) throws -> [FeatureSnapshot] {
+        let tasks = try liveTasks().filter { $0.projectID == projectID }
+        return try liveFeatures().filter { $0.projectID == projectID }
+            .sorted { $0.position < $1.position }
+            .map { snapshot($0, tasks: tasks) }
+    }
+
+    public func feature(id: UUID) throws -> FeatureSnapshot? {
+        guard let row = try liveFeatures().first(where: { $0.id == id }) else { return nil }
+        return snapshot(row, tasks: try liveTasks().filter { $0.projectID == row.projectID })
+    }
+
+    public func featureProgress(projectID: UUID) throws -> FeatureProgress {
+        FeatureProgress.of(try liveFeatures().filter { $0.projectID == projectID }
+            .map { FeatureStage(rawValue: $0.stage) ?? .planned })
+    }
+
     public func members(projectID: UUID) throws -> [ProjectMemberSnapshot] {
         try context.fetch(FetchDescriptor<ProjectMemberRecord>(sortBy: [SortDescriptor(\.addedAt)]))
             .filter { $0.projectID == projectID && $0.deletedAt == nil }
@@ -138,13 +155,14 @@ public struct ProjectsStore {
     }
 
     public func updateTask(id: UUID, title: String? = nil, notes: String? = nil, ownerID: UUID?? = nil,
-                           milestoneID: UUID?? = nil, dueOn: Date?? = nil,
+                           milestoneID: UUID?? = nil, featureID: UUID?? = nil, dueOn: Date?? = nil,
                            startsAt: Date?? = nil, endsAt: Date?? = nil) throws {
         guard let row = try taskRecord(id) else { return }
         if let title { row.title = Self.limit(title, 120) }
         if let notes { row.notes = Self.limit(notes, 2000) }
         if let ownerID { row.ownerID = ownerID }
         if let milestoneID { row.milestoneID = milestoneID }
+        if let featureID { row.featureID = featureID }
         if let dueOn { row.dueOn = dueOn }
         if let startsAt { row.startsAt = startsAt }
         if let endsAt { row.endsAt = endsAt }
@@ -204,6 +222,75 @@ public struct ProjectsStore {
         try context.save()
     }
 
+    @discardableResult
+    public func createFeature(projectID: UUID, title: String, note: String = "", branch: String? = nil,
+                              milestoneID: UUID? = nil) throws -> UUID {
+        let position = try liveFeatures().filter { $0.projectID == projectID }.count
+        let row = FeatureRecord(projectID: projectID, title: Self.limit(title, 80), position: position)
+        row.note = Self.limit(note, 280)
+        row.branch = branch.map { Self.limit($0, 255) }.flatMap { $0.isEmpty ? nil : $0 }
+        row.milestoneID = milestoneID
+        context.insert(row)
+        try context.save()
+        return row.id
+    }
+
+    public func updateFeature(id: UUID, title: String? = nil, note: String? = nil,
+                              milestoneID: UUID?? = nil, branch: String?? = nil) throws {
+        guard let row = try featureRecord(id) else { return }
+        if let title { row.title = Self.limit(title, 80) }
+        if let note { row.note = Self.limit(note, 280) }
+        if let milestoneID { row.milestoneID = milestoneID }
+        if let branch { row.branch = branch.map { Self.limit($0, 255) }.flatMap { $0.isEmpty ? nil : $0 } }
+        row.updatedAt = .now
+        try context.save()
+    }
+
+    public func moveFeature(id: UUID, to index: Int) throws {
+        guard let moving = try featureRecord(id) else { return }
+        var list = try liveFeatures().filter { $0.projectID == moving.projectID && $0.id != id }
+            .sorted { $0.position < $1.position }
+        list.insert(moving, at: min(max(index, 0), list.count))
+        for (position, row) in list.enumerated() where row.position != position {
+            row.position = position
+            row.updatedAt = .now
+        }
+        try context.save()
+    }
+
+    /// Tombstones the feature and unlinks its tasks, as the server's
+    /// `on delete set null` would.
+    public func deleteFeature(id: UUID) throws {
+        guard let row = try featureRecord(id) else { return }
+        row.deletedAt = .now
+        row.updatedAt = .now
+        for task in try liveTasks() where task.featureID == id {
+            task.featureID = nil
+            task.updatedAt = .now
+        }
+        try context.save()
+    }
+
+    /// Writes a stage worked out from GitHub. Only a change is an edit: an
+    /// unchanged stage would otherwise be pushed by every member who opens
+    /// the project. The check time is kept here either way, for "as of".
+    @discardableResult
+    public func applyStage(featureID: UUID, stage: FeatureStage, detail: String, prNumber: Int?,
+                           checkedAt: Date) throws -> Bool {
+        guard let row = try featureRecord(featureID) else { return false }
+        let detail = Self.limit(detail, 80)
+        let changed = row.stage != stage.rawValue || row.stageDetail != detail || row.prNumber != prNumber
+        row.stageCheckedAt = checkedAt
+        if changed {
+            row.stage = stage.rawValue
+            row.stageDetail = detail
+            row.prNumber = prNumber
+            row.updatedAt = .now
+        }
+        try context.save()
+        return changed
+    }
+
     public func addMember(projectID: UUID, userID: UUID) throws {
         guard try !members(projectID: projectID).contains(where: { $0.userID == userID }) else { return }
         context.insert(ProjectMemberRecord(projectID: projectID, userID: userID, role: "member"))
@@ -221,12 +308,16 @@ public struct ProjectsStore {
 
     // MARK: Sync
 
+    // Pending: add the field and include it in isEmpty
     public struct Pending {
         public let projects: [ProjectRecord]
         public let members: [ProjectMemberRecord]
         public let milestones: [MilestoneRecord]
+        public let features: [FeatureRecord]
         public let tasks: [ProjectTaskRecord]
-        public var isEmpty: Bool { projects.isEmpty && members.isEmpty && milestones.isEmpty && tasks.isEmpty }
+        public var isEmpty: Bool {
+            projects.isEmpty && members.isEmpty && milestones.isEmpty && features.isEmpty && tasks.isEmpty
+        }
     }
 
     public func pending() throws -> Pending {
@@ -235,6 +326,7 @@ public struct ProjectsStore {
             projects: try context.fetch(FetchDescriptor<ProjectRecord>()).filter { dirty($0.updatedAt, $0.syncedAt) },
             members: try context.fetch(FetchDescriptor<ProjectMemberRecord>()).filter { dirty($0.updatedAt, $0.syncedAt) },
             milestones: try context.fetch(FetchDescriptor<MilestoneRecord>()).filter { dirty($0.updatedAt, $0.syncedAt) },
+            features: try context.fetch(FetchDescriptor<FeatureRecord>()).filter { dirty($0.updatedAt, $0.syncedAt) },
             tasks: try context.fetch(FetchDescriptor<ProjectTaskRecord>()).filter { dirty($0.updatedAt, $0.syncedAt) }
         )
     }
@@ -248,6 +340,7 @@ public struct ProjectsStore {
             pending.projects.forEach { stamps[$0.id] = $0.updatedAt }
             pending.members.forEach { stamps[$0.id] = $0.updatedAt }
             pending.milestones.forEach { stamps[$0.id] = $0.updatedAt }
+            pending.features.forEach { stamps[$0.id] = $0.updatedAt }
             pending.tasks.forEach { stamps[$0.id] = $0.updatedAt }
             self.stamps = stamps
         }
@@ -259,6 +352,7 @@ public struct ProjectsStore {
         func unchanged(_ id: UUID, _ updated: Date) -> Bool { pushed.stamps[id] == updated }
         for row in try context.fetch(FetchDescriptor<ProjectRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
         for row in try context.fetch(FetchDescriptor<MilestoneRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
+        for row in try context.fetch(FetchDescriptor<FeatureRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
         for row in try context.fetch(FetchDescriptor<ProjectTaskRecord>()) where unchanged(row.id, row.updatedAt) { row.syncedAt = row.updatedAt }
         for row in try context.fetch(FetchDescriptor<ProjectMemberRecord>()) where unchanged(row.id, row.updatedAt) {
             if row.deletedAt != nil { context.delete(row) } else { row.syncedAt = row.updatedAt }
@@ -278,6 +372,7 @@ public struct ProjectsStore {
     /// no longer shows it to this person (they left or were removed).
     public func forgetProject(_ id: UUID) throws {
         for row in try context.fetch(FetchDescriptor<ProjectTaskRecord>()) where row.projectID == id { context.delete(row) }
+        for row in try context.fetch(FetchDescriptor<FeatureRecord>()) where row.projectID == id { context.delete(row) }
         for row in try context.fetch(FetchDescriptor<MilestoneRecord>()) where row.projectID == id { context.delete(row) }
         for row in try context.fetch(FetchDescriptor<ProjectMemberRecord>()) where row.projectID == id { context.delete(row) }
         for row in try context.fetch(FetchDescriptor<ProjectRecord>()) where row.id == id { context.delete(row) }
@@ -316,9 +411,27 @@ public struct ProjectsStore {
         try context.save()
     }
 
-    public func applyRemoteTask(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, notes: String,
-                                status: String, ownerID: UUID?, dueOn: Date?, startsAt: Date?, endsAt: Date?,
-                                position: Int, doneAt: Date?, updatedAt: Date, deletedAt: Date?) throws {
+    public func applyRemoteFeature(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String,
+                                   position: Int, branch: String?, stage: String, stageDetail: String,
+                                   prNumber: Int?, stageCheckedAt: Date?, updatedAt: Date, deletedAt: Date?) throws {
+        let existing = try featureRecord(id)
+        if let existing, ProjectMerge.keepLocal(localUpdatedAt: existing.updatedAt, localSyncedAt: existing.syncedAt,
+                                                remoteUpdatedAt: updatedAt) { return }
+        let row = existing ?? {
+            let made = FeatureRecord(id: id, projectID: projectID, title: title, position: position)
+            context.insert(made)
+            return made
+        }()
+        row.milestoneID = milestoneID; row.title = title; row.note = note; row.position = position
+        row.branch = branch; row.stage = stage; row.stageDetail = stageDetail; row.prNumber = prNumber
+        row.stageCheckedAt = stageCheckedAt
+        row.deletedAt = deletedAt; row.updatedAt = updatedAt; row.syncedAt = updatedAt
+        try context.save()
+    }
+
+    public func applyRemoteTask(id: UUID, projectID: UUID, milestoneID: UUID?, featureID: UUID? = nil, title: String,
+                                notes: String, status: String, ownerID: UUID?, dueOn: Date?, startsAt: Date?,
+                                endsAt: Date?, position: Int, doneAt: Date?, updatedAt: Date, deletedAt: Date?) throws {
         let existing = try taskRecord(id)
         if let existing, ProjectMerge.keepLocal(localUpdatedAt: existing.updatedAt, localSyncedAt: existing.syncedAt,
                                                 remoteUpdatedAt: updatedAt) { return }
@@ -327,7 +440,7 @@ public struct ProjectsStore {
             context.insert(made)
             return made
         }()
-        row.milestoneID = milestoneID; row.title = title; row.notes = notes; row.status = status
+        row.milestoneID = milestoneID; row.featureID = featureID; row.title = title; row.notes = notes; row.status = status
         row.ownerID = ownerID; row.dueOn = dueOn; row.startsAt = startsAt; row.endsAt = endsAt
         row.position = position; row.doneAt = doneAt
         row.deletedAt = deletedAt; row.updatedAt = updatedAt; row.syncedAt = updatedAt
@@ -383,6 +496,24 @@ public struct ProjectsStore {
         try context.fetch(FetchDescriptor<MilestoneRecord>()).filter { $0.deletedAt == nil }
     }
 
+    private func featureRecord(_ id: UUID) throws -> FeatureRecord? {
+        try context.fetch(FetchDescriptor<FeatureRecord>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func liveFeatures() throws -> [FeatureRecord] {
+        try context.fetch(FetchDescriptor<FeatureRecord>()).filter { $0.deletedAt == nil }
+    }
+
+    private func snapshot(_ row: FeatureRecord, tasks: [ProjectTaskRecord]) -> FeatureSnapshot {
+        let theirs = tasks.filter { $0.featureID == row.id }
+        let done = theirs.filter { $0.status == ProjectStatus.done.rawValue }.count
+        return FeatureSnapshot(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID, title: row.title,
+                               note: row.note, position: row.position, branch: row.branch,
+                               stage: FeatureStage(rawValue: row.stage) ?? .planned, stageDetail: row.stageDetail,
+                               prNumber: row.prNumber, stageCheckedAt: row.stageCheckedAt,
+                               openTasks: theirs.count - done, doneTasks: done)
+    }
+
     private func projectIndex() throws -> [UUID: ProjectRecord] {
         Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<ProjectRecord>())
             .filter { $0.deletedAt == nil && $0.archivedAt == nil }
@@ -392,7 +523,7 @@ public struct ProjectsStore {
     private func snapshot(_ row: ProjectTaskRecord, projects: [UUID: ProjectRecord]) -> ProjectTaskSnapshot? {
         guard let project = projects[row.projectID] else { return nil }
         return ProjectTaskSnapshot(id: row.id, projectID: row.projectID, projectName: project.name,
-                                   colour: project.colour, milestoneID: row.milestoneID, title: row.title,
+                                   colour: project.colour, milestoneID: row.milestoneID, featureID: row.featureID, title: row.title,
                                    notes: row.notes, status: ProjectStatus(rawValue: row.status) ?? .todo,
                                    ownerID: row.ownerID, dueOn: row.dueOn, startsAt: row.startsAt,
                                    endsAt: row.endsAt, position: row.position, doneAt: row.doneAt)

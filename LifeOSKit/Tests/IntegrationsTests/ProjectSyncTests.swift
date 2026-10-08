@@ -4,7 +4,7 @@ import SwiftData
 @testable import Integrations
 @testable import Persistence
 
-/// A small in-memory stand-in for the four project tables.
+/// A small in-memory stand-in for the five project tables.
 final class FakeProjectServer: ProjectRemote, @unchecked Sendable {
     var tables: [String: [String: [String: Any]]] = [:]   // table → id → row
     var rejectIDs: Set<String> = []
@@ -174,4 +174,48 @@ final class FakeProjectServer: ProjectRemote, @unchecked Sendable {
             #expect(delete < insert)
         }
     }
+    @Test func featuresGoUpAndComeBack() async throws {
+        let (_, store, server, sync) = try setUp()
+        let project = try store.createProject(name: "P", scope: "", colour: "moss", ownerID: me)
+        let f = try store.createFeature(projectID: project, title: "Sign in", branch: "feat/sign-in")
+        let t = try store.createTask(projectID: project, title: "Button")
+        try store.updateTask(id: t, featureID: .some(f))
+        await sync.sync()
+        let row = try #require(server.tables["project_features"]?[id(f)])
+        #expect(row["title"] as? String == "Sign in")
+        #expect(row["branch"] as? String == "feat/sign-in")
+        #expect(row["stage"] as? String == "planned")
+        #expect(server.tables["project_tasks"]?[id(t)]?["feature_id"] as? String == id(f))
+        #expect(try store.pending().isEmpty)
+    }
+
+    /// A member with no access to the repo receives the stage another wrote.
+    @Test func aStageWrittenElsewhereArrives() async throws {
+        let (_, store, server, sync) = try setUp()
+        let project = try store.createProject(name: "P", scope: "", colour: "moss", ownerID: me)
+        let f = try store.createFeature(projectID: project, title: "Sign in")
+        await sync.sync()
+        var row = try #require(server.tables["project_features"]?[id(f)])
+        row["stage"] = "review"; row["stage_detail"] = "PR #42 open"; row["pr_number"] = 42
+        server.seed("project_features", row, at: .now.addingTimeInterval(60))
+        await sync.sync()
+        let feature = try #require(try store.feature(id: f))
+        #expect(feature.stage == .review && feature.prNumber == 42 && feature.stageDetail == "PR #42 open")
+    }
+
+    @Test func aFriendAddedLaterReceivesTheFeaturesToo() async throws {
+        let (_, store, server, sync) = try setUp()
+        await sync.sync()
+        let p = UUID(), f = UUID()
+        let long = Date(timeIntervalSince1970: 1_000_000_000)
+        server.seed("projects", ["id": id(p), "name": "Old", "scope": "", "colour": "iris", "owner_id": id(friend)], at: long)
+        server.seed("project_features", ["id": id(f), "project_id": id(p), "title": "Old feature", "note": "",
+                                         "position": 0, "stage": "done", "stage_detail": "Merged", "pr_number": 3], at: long)
+        server.seed("project_members", ["id": id(UUID()), "project_id": id(p), "user_id": id(me), "role": "member"],
+                    at: Date(timeIntervalSince1970: 1_900_000_000))
+        await sync.sync()
+        #expect(try store.features(projectID: p).map(\.title) == ["Old feature"])
+        #expect(try store.features(projectID: p).first?.stage == .done)
+    }
+
 }

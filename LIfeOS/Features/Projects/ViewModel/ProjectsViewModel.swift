@@ -122,9 +122,10 @@ final class ProjectsViewModel {
     }
 
     func updateTask(_ id: UUID, title: String? = nil, notes: String? = nil, ownerID: UUID?? = nil,
-                    milestoneID: UUID?? = nil, dueOn: Date?? = nil, startsAt: Date?? = nil, endsAt: Date?? = nil) {
+                    milestoneID: UUID?? = nil, featureID: UUID?? = nil, dueOn: Date?? = nil,
+                    startsAt: Date?? = nil, endsAt: Date?? = nil) {
         try? store?.updateTask(id: id, title: title, notes: notes, ownerID: ownerID, milestoneID: milestoneID,
-                               dueOn: dueOn, startsAt: startsAt, endsAt: endsAt)
+                               featureID: featureID, dueOn: dueOn, startsAt: startsAt, endsAt: endsAt)
         requestSync()
     }
 
@@ -145,6 +146,33 @@ final class ProjectsViewModel {
 
     func moveMilestone(_ id: UUID, to index: Int) {
         try? store?.moveMilestone(id: id, to: index)
+        requestSync()
+    }
+
+    @discardableResult
+    func createFeature(in project: UUID, title: String, note: String = "", branch: String? = nil,
+                       milestoneID: UUID? = nil) -> UUID? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let store else { return nil }
+        let id = try? store.createFeature(projectID: project, title: trimmed, note: note, branch: branch,
+                                          milestoneID: milestoneID)
+        requestSync()
+        return id
+    }
+
+    func updateFeature(_ id: UUID, title: String? = nil, note: String? = nil, milestoneID: UUID?? = nil,
+                       branch: String?? = nil) {
+        try? store?.updateFeature(id: id, title: title, note: note, milestoneID: milestoneID, branch: branch)
+        requestSync()
+    }
+
+    func moveFeature(_ id: UUID, to index: Int) {
+        try? store?.moveFeature(id: id, to: index)
+        requestSync()
+    }
+
+    func deleteFeature(_ id: UUID) {
+        try? store?.deleteFeature(id: id)
         requestSync()
     }
 

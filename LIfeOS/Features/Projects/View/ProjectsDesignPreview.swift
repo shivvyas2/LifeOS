@@ -17,6 +17,7 @@ struct ProjectsDesignPreview: View {
             case "project-schedule": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .schedule)
             case "project-milestones": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .milestones)
             case "project-list": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .list)
+            case "project-plan": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .plan)
             case "project-task":
                 ProjectScreen(model: fixture.model, projectID: fixture.launch)
                     .sheet(isPresented: .constant(true)) {
@@ -38,6 +39,7 @@ private final class ProjectsFixture {
     let me = UUID()
     let launch: UUID
     let wireframes: UUID
+    let design: UUID
 
     init() {
         let context = container.mainContext
@@ -50,10 +52,15 @@ private final class ProjectsFixture {
         launch = try! store.createProject(name: "LifeOS 1.1", scope: "Ship Notes, Today layout and the GitHub card",
                                           colour: "tomato", ownerID: me, startsOn: today,
                                           endsOn: Calendar.current.date(byAdding: .day, value: 21, to: today))
-        let design = try! store.createProject(name: "Portfolio site", scope: "Case studies and a contact form",
+        design = try! store.createProject(name: "Portfolio site", scope: "Case studies and a contact form",
                                               colour: "lagoon", ownerID: me)
         let alpha = try! store.createMilestone(projectID: launch, title: "Alpha", dueOn: today.addingTimeInterval(5 * 86_400))
         let beta = try! store.createMilestone(projectID: launch, title: "Beta", dueOn: today.addingTimeInterval(14 * 86_400))
+        let signIn = try! store.createFeature(projectID: launch, title: "Sign in", branch: "feat/sign-in")
+        try! store.applyStage(featureID: signIn, stage: .done, detail: "Merged 3d ago · PR #40", prNumber: 40, checkedAt: today)
+        let cards = try! store.createFeature(projectID: launch, title: "Credit cards", branch: "feat/credit-cards")
+        try! store.applyStage(featureID: cards, stage: .review, detail: "PR #42 open", prNumber: 42, checkedAt: today)
+        _ = try! store.createFeature(projectID: launch, title: "Widgets")
         wireframes = try! store.createTask(projectID: launch, title: "Wireframing and brainstorming")
         try! store.updateTask(id: wireframes, notes: "Simplify the login flow; tighten the sidebar.", ownerID: .some(me),
                               milestoneID: .some(alpha), startsAt: .some(at(9, 15)), endsAt: .some(at(10, 15)))
