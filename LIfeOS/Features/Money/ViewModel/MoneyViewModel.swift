@@ -61,8 +61,10 @@ final class MoneyViewModel {
             default: bankNames = []
             }
 
+            let resolver = try store.cardResolver()
+            let cardIndex = Self.cardIndex(accounts: accounts)
             let logos = Self.logoMap(from: entries)
-            let rows = Self.rows(from: entries, logos: logos)
+            let rows = Self.rows(from: entries, logos: logos, resolver: resolver, cards: cardIndex)
             let categories = Self.categories(from: entries, expenses: summary.expenses)
 
             snapshot = MoneySnapshot(
@@ -88,28 +90,179 @@ final class MoneyViewModel {
                 hasConnectedBank: !bankNames.isEmpty,
                 isFetchingHistory: connection?.isFetchingHistory ?? false,
                 reconnectPrompt: reconnect,
-                lastSyncedAt: connection?.lastSyncedAt
+                lastSyncedAt: connection?.lastSyncedAt,
+                cards: Self.strip(accounts: accounts, entries: entries, resolver: resolver),
+                pickableCards: Self.pickable(accounts: accounts)
             )
         } catch {
             assertionFailure("Money load failed: \(error)")
         }
     }
 
-    /// Manual entry until Plaid is wired. `isIncome` decides the sign here so
-    /// the rest of the app never has to guess at a bare number's direction.
-    func add(merchant: String, amount: Double, isIncome: Bool, category: String?) {
+    /// Manual entry, for cash and for cards Plaid cannot see. `isIncome`
+    /// decides the sign here so the rest of the app never has to guess at a
+    /// bare number's direction.
+    func add(merchant: String, amount: Double, isIncome: Bool, category: String?,
+             cardKey: String? = nil, connection: PlaidConnectionViewModel? = nil) {
         guard let context, !merchant.isEmpty, amount > 0 else { return }
         do {
             try MoneyStore(context: context, calendar: calendar).add(
                 date: .now,
                 amount: isIncome ? amount : -amount,
                 merchant: merchant,
-                category: category
+                category: category,
+                cardKey: cardKey
             )
-            load()
+            if let cardKey { lastCardKey = cardKey }
+            load(connection: connection)
         } catch {
             assertionFailure("Money add failed: \(error)")
         }
+    }
+
+    // MARK: - Cards
+
+    /// The card quick add starts on: whichever was used last, while it still
+    /// exists.
+    var lastCardKey: String? {
+        get {
+            let key = UserDefaults.currentAccount.string(forKey: Self.lastCardKeyKey)
+            return snapshot.pickableCards.contains { $0.id == key } ? key : nil
+        }
+        set { UserDefaults.currentAccount.set(newValue, forKey: Self.lastCardKeyKey) }
+    }
+
+    static let lastCardKeyKey = "money.lastCardKey"
+
+    /// Says which card paid for one row, and optionally for every row from
+    /// that merchant. Nil clears the row's choice and drops the merchant's
+    /// rule, so "No card" really means Plaid's word stands.
+    func setCard(_ cardKey: String?, for row: MoneyRow, always: Bool,
+                 connection: PlaidConnectionViewModel? = nil) {
+        guard let context else { return }
+        let store = MoneyStore(context: context, calendar: calendar)
+        do {
+            guard let entry = try store.entry(id: row.id) else { return }
+            if always, let cardKey {
+                try store.setCardRule(merchant: row.merchant, cardKey: cardKey)
+                // The rule speaks for this row now; a stale choice on it
+                // would otherwise outrank the rule just made.
+                try store.setCard(nil, for: entry)
+            } else {
+                if cardKey == nil { try store.removeCardRule(merchant: row.merchant) }
+                try store.setCard(cardKey, for: entry)
+            }
+            if let cardKey { lastCardKey = cardKey }
+            load(connection: connection)
+        } catch {
+            assertionFailure("Card choice failed: \(error)")
+        }
+    }
+
+    /// Whether the merchant on this row already has an "always" rule.
+    func hasCardRule(for merchant: String) -> Bool {
+        guard let context else { return false }
+        let key = CardResolver.merchantKey(merchant)
+        return ((try? MoneyStore(context: context).cardRules()) ?? []).contains { $0.merchantKey == key }
+    }
+
+    /// Adds a hand-added card or restyles an existing one.
+    func saveCard(_ draft: CardDraft, connection: PlaidConnectionViewModel? = nil) {
+        guard let context else { return }
+        let store = MoneyStore(context: context, calendar: calendar)
+        do {
+            if let key = draft.existingKey,
+               let account = try store.accounts().first(where: { $0.cardKey == key }) {
+                try store.updateCard(account, name: draft.name, productID: draft.productID,
+                                     mask: draft.mask, colorHex: draft.colorHex)
+            } else {
+                let card = try store.addManualCard(name: draft.name, productID: draft.productID,
+                                                   mask: draft.mask, colorHex: draft.colorHex)
+                lastCardKey = card.cardKey
+            }
+            load(connection: connection)
+        } catch {
+            assertionFailure("Card save failed: \(error)")
+        }
+    }
+
+    func deleteCard(key: String, connection: PlaidConnectionViewModel? = nil) {
+        guard let context else { return }
+        let store = MoneyStore(context: context, calendar: calendar)
+        do {
+            guard let account = try store.accounts().first(where: { $0.cardKey == key }) else { return }
+            try store.deleteManualCard(account)
+            load(connection: connection)
+        } catch {
+            assertionFailure("Card delete failed: \(error)")
+        }
+    }
+
+    /// Which of a statement's rows already look like something in the app,
+    /// from the same card or none, in the statement's own date range.
+    func duplicates(in lines: [StatementLine], cardKey: String) -> Set<UUID> {
+        guard let context, let first = lines.map(\.date).min(), let last = lines.map(\.date).max() else { return [] }
+        let store = MoneyStore(context: context, calendar: calendar)
+        let window = TimeInterval(StatementDedupe.windowDays * 86_400)
+        guard let resolver = try? store.cardResolver(),
+              let nearby = try? store.entries(from: first.addingTimeInterval(-window),
+                                              to: last.addingTimeInterval(window))
+        else { return [] }
+        // A row on another card is a different purchase, even at the same
+        // price. A row with no card at all might be this one.
+        let candidates = nearby.filter {
+            let key = resolver.cardKey(for: $0)
+            return key == nil || key == cardKey
+        }
+        return StatementDedupe.duplicates(lines, existing: candidates, calendar: calendar)
+    }
+
+    func importStatement(_ lines: [StatementLine], cardKey: String,
+                         connection: PlaidConnectionViewModel? = nil) {
+        guard let context, !lines.isEmpty else { return }
+        do {
+            try MoneyStore(context: context, calendar: calendar).importStatement(lines, cardKey: cardKey)
+            lastCardKey = cardKey
+            load(connection: connection)
+        } catch {
+            assertionFailure("Statement import failed: \(error)")
+        }
+    }
+
+    /// Every account by its card key, as the screens draw it.
+    static func cardIndex(accounts: [MoneyAccount]) -> [String: MoneyCardSummary] {
+        accounts.reduce(into: [:]) { $0[$1.cardKey] = MoneyCardSummary($1) }
+    }
+
+    /// The strip: every card, plus any other account that paid for something
+    /// this month (a debit card spends from checking). Most spent first, so
+    /// the card doing the damage is the first one you see.
+    static func strip(accounts: [MoneyAccount], entries: [MoneyEntry],
+                      resolver: CardResolver) -> [MoneyCardSummary] {
+        var spend: [String: (Double, Int)] = [:]
+        for entry in entries where entry.isSpending {
+            guard let key = resolver.cardKey(for: entry) else { continue }
+            let current = spend[key] ?? (0, 0)
+            spend[key] = (current.0 + abs(entry.amount), current.1 + 1)
+        }
+        return accounts
+            .filter { $0.isCard || spend[$0.cardKey] != nil }
+            .map { account in
+                var card = MoneyCardSummary(account)
+                card.monthSpend = spend[card.id]?.0 ?? 0
+                card.monthCount = spend[card.id]?.1 ?? 0
+                return card
+            }
+            .sorted { ($0.monthSpend, $1.title) > ($1.monthSpend, $0.title) }
+    }
+
+    /// What a charge can be put on: cards first, then the bank accounts a
+    /// debit card draws from. Investments and loans never pay for a coffee.
+    static func pickable(accounts: [MoneyAccount]) -> [MoneyCardSummary] {
+        accounts
+            .filter { $0.isCard || $0.type == "depository" }
+            .sorted { ($0.isCard ? 0 : 1, $0.name) < ($1.isCard ? 0 : 1, $1.name) }
+            .map(MoneyCardSummary.init)
     }
 
     // MARK: - Bucket editing
@@ -242,11 +395,14 @@ final class MoneyViewModel {
         return logos[Self.logoKey(merchant: entry.merchant)]
     }
 
-    static func rows(from entries: [MoneyEntry], logos: [String: URL]) -> [MoneyRow] {
+    static func rows(from entries: [MoneyEntry], logos: [String: URL],
+                     resolver: CardResolver = CardResolver(),
+                     cards: [String: MoneyCardSummary] = [:]) -> [MoneyRow] {
         entries.map {
             MoneyRow(id: $0.id, merchant: $0.merchant, category: $0.category,
                      amount: $0.amount, date: $0.date, pending: $0.pending,
-                     logoURL: Self.logo(for: $0, in: logos), accountName: $0.accountName)
+                     logoURL: Self.logo(for: $0, in: logos), accountName: $0.accountName,
+                     card: resolver.cardKey(for: $0).flatMap { cards[$0] })
         }
     }
 
@@ -294,6 +450,16 @@ final class MoneyViewModel {
 
     static let goalTargetKey = "savingsGoalTarget"
     static let goalNameKey = "savingsGoalName"
+}
+
+/// What the card editor hands back.
+struct CardDraft: Equatable {
+    /// The card being restyled, or nil for a new hand-added card.
+    var existingKey: String?
+    var name: String
+    var productID: String?
+    var mask: String?
+    var colorHex: String?
 }
 
 struct ClaimableCategory: Equatable, Identifiable {

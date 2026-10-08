@@ -35,7 +35,9 @@ final class MoneyDetailViewModel {
         do {
             let all = try store.entries(from: start, to: now)
             let logos = MoneyViewModel.logoMap(from: all)
-            let matching = all.filter { Self.matches($0, filter) }
+            let resolver = try store.cardResolver()
+            let cards = MoneyViewModel.cardIndex(accounts: try store.accounts())
+            let matching = all.filter { Self.matches($0, filter, resolver: resolver) }
             let spend = matching.filter(\.isSpending)
             let thisMonth = matching.filter { $0.date >= month.start }
             let spentThisMonth = spend.filter { $0.date >= month.start }
@@ -58,8 +60,10 @@ final class MoneyDetailViewModel {
                                isCurrent: index == months.count - 1)
                 },
                 average: completed.isEmpty ? nil : completed.reduce(0, +) / Double(completed.count),
-                transactions: MoneyViewModel.rows(from: thisMonth, logos: logos),
-                monthLabel: now.formatted(.dateTime.month(.wide).year())
+                transactions: MoneyViewModel.rows(from: thisMonth, logos: logos,
+                                                  resolver: resolver, cards: cards),
+                monthLabel: now.formatted(.dateTime.month(.wide).year()),
+                card: { if case .card(let key, _) = filter { cards[key] } else { nil } }()
             )
         } catch {
             assertionFailure("Money detail load failed: \(error)")
@@ -68,9 +72,13 @@ final class MoneyDetailViewModel {
 
     /// A category page matches on the display label the list was grouped by,
     /// so "Uncategorised" opens the rows with no category. A merchant page
-    /// matches the name, case-insensitively, since the ledger showed it.
-    static func matches(_ entry: MoneyEntry, _ filter: MoneyDetailFilter) -> Bool {
+    /// matches the name, case-insensitively, since the ledger showed it. A
+    /// card page matches the card after the person's choices are applied.
+    static func matches(_ entry: MoneyEntry, _ filter: MoneyDetailFilter,
+                        resolver: CardResolver = CardResolver()) -> Bool {
         switch filter {
+        case .card(let key, _):
+            resolver.cardKey(for: entry) == key
         case .category(let name):
             (entry.category ?? "Uncategorised") == name && entry.amount < 0
         case .merchant(let name):

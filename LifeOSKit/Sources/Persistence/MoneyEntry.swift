@@ -49,6 +49,11 @@ public final class MoneyEntry {
     public var logoURL: String?
     public var accountID: String?
     public var accountName: String?
+    /// The card the person said paid, as a `MoneyAccount.cardKey`. Kept apart
+    /// from `accountID` because `MoneyStore.ingest` rewrites that on every
+    /// resend from Plaid, and a correction stored there would quietly vanish
+    /// on the next sync. Optional, so installed stores migrate in place.
+    public var cardOverrideKey: String?
     public var pending: Bool
 
     public var createdAt: Date
@@ -67,6 +72,7 @@ public final class MoneyEntry {
         externalID: String? = nil,
         accountID: String? = nil,
         accountName: String? = nil,
+        cardOverrideKey: String? = nil,
         pending: Bool = false
     ) {
         self.id = UUID()
@@ -82,6 +88,7 @@ public final class MoneyEntry {
         self.logoURL = logoURL
         self.accountID = accountID
         self.accountName = accountName
+        self.cardOverrideKey = cardOverrideKey
         self.pending = pending
         self.createdAt = .now
         self.updatedAt = .now
@@ -139,6 +146,14 @@ public final class MoneyAccount {
     public var currentBalance: Double
     public var currencyCode: String
     public var updatedAt: Date
+    /// Which `CardCatalog` card this is, chosen by the person or guessed from
+    /// the account name. Nil draws a plain face. Sync never writes it.
+    public var cardProductID: String?
+    /// The face colour for a card the catalog does not know, as `#RRGGBB`.
+    public var faceColorHex: String?
+    /// Added by hand for a card Plaid cannot connect. Defaulted so an
+    /// installed store opens without a migration step.
+    public var isManual: Bool = false
 
     public init(
         name: String,
@@ -149,10 +164,16 @@ public final class MoneyAccount {
         creditLimit: Double? = nil,
         currentBalance: Double,
         currencyCode: String = "USD",
-        externalID: String? = nil
+        externalID: String? = nil,
+        cardProductID: String? = nil,
+        faceColorHex: String? = nil,
+        isManual: Bool = false
     ) {
         self.id = UUID()
         self.externalID = externalID
+        self.cardProductID = cardProductID
+        self.faceColorHex = faceColorHex
+        self.isManual = isManual
         self.name = name
         self.type = type
         self.subtype = subtype
@@ -163,6 +184,15 @@ public final class MoneyAccount {
         self.currencyCode = currencyCode
         self.updatedAt = .now
     }
+
+    /// How a transaction names this card. Plaid's `account_id` where there is
+    /// one, because that is what `MoneyEntry.accountID` already holds, and a
+    /// stable made-up key for a card added by hand.
+    public var cardKey: String { externalID ?? "manual:\(id.uuidString)" }
+
+    /// Whether this belongs in the cards strip: a credit card, or anything
+    /// the person added there by hand.
+    public var isCard: Bool { isManual || type == "credit" }
 
     /// Credit and loan balances are money owed, so they subtract from net worth.
     public var netWorthContribution: Double {

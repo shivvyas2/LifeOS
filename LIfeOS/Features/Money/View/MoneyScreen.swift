@@ -22,6 +22,9 @@ struct MoneyScreen: View {
     var onConnectCard: () -> Void = {}
     var onSync: () -> Void = {}
     var onEditBudgets: () -> Void = {}
+    /// Add a card by hand, or restyle one (nil is a new card).
+    var onEditCard: (MoneyCardSummary?) -> Void = { _ in }
+    var onImportStatement: () -> Void = {}
     /// A category, merchant or transaction was tapped. The stack that owns
     /// this screen pushes the detail page.
     var onOpen: (MoneyDetailFilter) -> Void = { _ in }
@@ -51,6 +54,9 @@ struct MoneyScreen: View {
             VStack(alignment: .leading, spacing: Space.x3) {
                 masthead
                 if snapshot.reconnectPrompt != nil { reconnectBanner }
+                MoneyCardsStrip(cards: snapshot.cards,
+                                onOpen: { onOpen(.card($0.id, $0.title)) },
+                                onEdit: onEditCard)
                 IndexedTabStrip(selection: $section,
                                 options: MoneySection.allCases.map { ($0, $0.title) })
                 sections
@@ -75,9 +81,15 @@ struct MoneyScreen: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("Money · \(snapshot.monthLabel)").editorialEyebrow()
                 Spacer(minLength: Space.x1)
-                Button(action: onAdd) { Label("Add", systemImage: "plus") }
-                    .buttonStyle(.editorial(.secondary, size: .compact))
-                    .accessibilityLabel("Add a transaction")
+                Menu {
+                    Button("Add a transaction", systemImage: "plus", action: onAdd)
+                    Button("Add a card", systemImage: "creditcard") { onEditCard(nil) }
+                    Button("Import a statement", systemImage: "doc.text", action: onImportStatement)
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .buttonStyle(.editorial(.secondary, size: .compact))
+                .accessibilityLabel("Add a transaction, card or statement")
             }
             MoneyFigure(amount: snapshot.net, size: 64, showsSign: true)
             HStack(spacing: Space.x1) {
@@ -127,6 +139,8 @@ struct MoneyScreen: View {
                 .buttonStyle(.editorial(.secondary, size: .compact))
 
             Button("Add a transaction", action: onAdd)
+                .buttonStyle(.editorial(.secondary, size: .compact))
+            Button("Add a card Plaid can't connect") { onEditCard(nil) }
                 .buttonStyle(.editorial(.secondary, size: .compact))
             Spacer()
         }
@@ -180,6 +194,69 @@ struct MoneyScreen: View {
     static func signed(_ value: Double) -> String {
         let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(2)))
         return value >= 0 ? "+\(formatted)" : "-\(formatted)"
+    }
+}
+
+/// Every card side by side, each with what went on it this month, and a tile
+/// to add one Plaid cannot see. Tap a card for its charges; hold it to change
+/// how it looks.
+struct MoneyCardsStrip: View {
+    let cards: [MoneyCardSummary]
+    var onOpen: (MoneyCardSummary) -> Void = { _ in }
+    var onEdit: (MoneyCardSummary?) -> Void = { _ in }
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.layout) private var layout
+
+    private var faceWidth: CGFloat { layout.isRegular ? 196 : 156 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.x1) {
+            Text("Cards").moneyEyebrow(scheme)
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: Space.x2) {
+                    ForEach(cards) { card in
+                        Button { onOpen(card) } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                CardFace(card: card, width: faceWidth)
+                                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                    MoneyFigure(amount: card.monthSpend, size: 15).fixedSize()
+                                    Text(card.monthCount == 1 ? "1 charge" : "\(card.monthCount) charges")
+                                        .font(LifeOSType.caption)
+                                        .foregroundStyle(MoneyPalette.quietInk(scheme))
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Change how it looks", systemImage: "paintpalette") { onEdit(card) }
+                        }
+                        .accessibilityHint("Opens this month's charges on this card")
+                    }
+                    addTile
+                }
+                .padding(.vertical, Space.half)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var addTile: some View {
+        Button { onEdit(nil) } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(LifeOSType.body.weight(.semibold))
+                Text("Add a card")
+                    .font(LifeOSType.caption.weight(.semibold))
+            }
+            .foregroundStyle(MoneyPalette.quietInk(scheme))
+            .frame(width: faceWidth * 0.62, height: faceWidth / 1.586)
+            .overlay(RoundedRectangle(cornerRadius: faceWidth * 0.07, style: .continuous)
+                .strokeBorder(MoneyPalette.quietInk(scheme), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add a card")
     }
 }
 

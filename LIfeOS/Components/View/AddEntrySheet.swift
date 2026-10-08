@@ -55,13 +55,17 @@ struct AddPlanEntrySheet: View {
 /// Manual money entry. Direction is an explicit choice rather than a signed
 /// number, so nobody has to remember which way the sign points.
 struct AddMoneySheet: View {
-    let onSave: (String, Double, Bool, String?) -> Void
+    /// What a charge can go on, and the one to start on.
+    var cards: [MoneyCardSummary] = []
+    var initialCard: String? = nil
+    let onSave: (String, Double, Bool, String?, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var merchant = ""
     @State private var amount = ""
     @State private var category = ""
     @State private var isIncome = false
+    @State private var cardKey: String?
 
     private var parsedAmount: Double? {
         guard let value = Double(amount), value > 0 else { return nil }
@@ -82,7 +86,16 @@ struct AddMoneySheet: View {
                     TextField("Amount", text: $amount).keyboardType(.decimalPad)
                     TextField("Category (optional)", text: $category)
                 }
+
+                if !cards.isEmpty && !isIncome {
+                    Section {
+                        CardPickerRow(cards: cards, selection: $cardKey)
+                    } footer: {
+                        Text("Starts on the card you used last.")
+                    }
+                }
             }
+            .onAppear { cardKey = initialCard }
             .navigationTitle("Add transaction")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -91,7 +104,8 @@ struct AddMoneySheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         if let parsedAmount {
-                            onSave(merchant, parsedAmount, isIncome, category.isEmpty ? nil : category)
+                            onSave(merchant, parsedAmount, isIncome, category.isEmpty ? nil : category,
+                                   isIncome ? nil : cardKey)
                         }
                         dismiss()
                     }
