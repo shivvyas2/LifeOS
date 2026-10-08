@@ -2,6 +2,13 @@ import Foundation
 
 public protocol GitHubTransport: Sendable {
     func get(_ url: URL, token: String) async throws -> (Data, Int)
+    func post(_ url: URL, body: Data, token: String) async throws -> (Data, Int)
+}
+
+public extension GitHubTransport {
+    /// Transports that only ever served GETs (the day card's) answer GraphQL
+    /// as unimplemented rather than failing to compile.
+    func post(_ url: URL, body: Data, token: String) async throws -> (Data, Int) { (Data(), 501) }
 }
 
 public struct URLSessionGitHubTransport: GitHubTransport {
@@ -11,6 +18,16 @@ public struct URLSessionGitHubTransport: GitHubTransport {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
+    }
+
+    public func post(_ url: URL, body: Data, token: String) async throws -> (Data, Int) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await URLSession.shared.data(for: request)
         return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
     }
