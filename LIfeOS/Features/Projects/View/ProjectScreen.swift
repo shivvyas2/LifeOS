@@ -2,6 +2,7 @@ import SwiftUI
 import DesignSystem
 import Persistence
 import Integrations
+import Insights
 
 /// One project: its header, then Plan, Board, Schedule, Milestones and List.
 struct ProjectScreen: View {
@@ -26,8 +27,10 @@ struct ProjectScreen: View {
     /// previews with a fixed read.
     @State private var github: ProjectGitHubModel?
 
-    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane? = nil, github: ProjectGitHubModel? = nil) {
+    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane? = nil, github: ProjectGitHubModel? = nil,
+         presetDraft: [PlanDraft.Item]? = nil) {
         self.model = model
+        self.presetDraft = presetDraft
         self.projectID = projectID
         initialPaneWasDefault = initialPane == nil
         _pane = State(initialValue: initialPane ?? .board)
@@ -38,6 +41,9 @@ struct ProjectScreen: View {
     @State private var newMilestone = ""
     @State private var revision = 0
     @State private var openFeature: UUID?
+    @State private var drafting = false
+    /// Previews open the draft sheet on a fixed draft instead of asking LIFO.
+    private let presetDraft: [PlanDraft.Item]?
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var project: ProjectSnapshot? { _ = revision; _ = model.projects; return try? model.store?.project(id: projectID) }
@@ -117,6 +123,10 @@ struct ProjectScreen: View {
             .onDisappear { revision += 1 }
         }
         .task { if initialPaneWasDefault, project?.repo != nil { pane = .plan } }
+        .sheet(isPresented: $drafting, onDismiss: { revision += 1 }) {
+            PlanDraftSheet(model: model, projectID: projectID, github: github, preset: presetDraft)
+        }
+        .onAppear { if presetDraft != nil { drafting = true } }
     }
 
     private func header(_ project: ProjectSnapshot, colour: ProjectColour) -> some View {
@@ -213,7 +223,10 @@ struct ProjectScreen: View {
             onAdd: { title in model.createFeature(in: projectID, title: title); revision += 1 },
             onMove: { id, index in model.moveFeature(id, to: index); revision += 1 },
             onDelete: { id in model.deleteFeature(id); revision += 1 },
-            footer: { EmptyView() })
+            footer: {
+                Button(features.isEmpty ? "Draft with LIFO" : "Draft more with LIFO") { drafting = true }
+                    .buttonStyle(.editorial(features.isEmpty ? .primary : .secondary))
+            })
     }
 
     /// Five panes do not fit a phone's width evenly, so there the row scrolls.

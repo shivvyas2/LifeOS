@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import Integrations
 import Persistence
+import Insights
 
 /// The Projects tab's state: your projects, today's tasks across them, the
 /// contribution grid, and every write, each followed by a sync.
@@ -176,6 +177,40 @@ final class ProjectsViewModel {
 
     func deleteFeature(_ id: UUID) {
         try? store?.deleteFeature(id: id)
+        requestSync()
+    }
+
+    enum DraftFailure: Error, Equatable { case exhausted, refused(String), unavailable, notSignedIn }
+
+    func draftPlan(projectID: UUID, nudge: String?, github: ProjectGitHubModel?) async -> Result<[PlanDraft.Item], DraftFailure> {
+        guard let store, let project = try? store.project(id: projectID),
+              let base = AppConfig.supabaseURL, let anon = AppConfig.supabaseAnonKey,
+              let token = KeychainAuthSessionStore().load()?.accessToken else { return .failure(.notSignedIn) }
+        if let github, github.history.isEmpty { await github.loadMoreHistory() }
+        let prompt = PlanPrompt.make(
+            name: project.name, scope: project.scope, startsOn: project.startsOn, endsOn: project.endsOn,
+            milestones: ((try? store.milestones(projectID: projectID)) ?? []).map(\.title),
+            readme: await github?.readme(), commits: github?.history.map(\.subject) ?? [], nudge: nudge)
+        do {
+            return .success(try await PlanDrafter.draft(prompt: prompt, baseURL: base, anonKey: anon, accessToken: token).features)
+        } catch RemoteEngineError.exhausted {
+            return .failure(.exhausted)
+        } catch RemoteEngineError.refused(let message) {
+            return .failure(.refused(message))
+        } catch {
+            return .failure(.unavailable)
+        }
+    }
+
+    /// Adds the kept features after any already planned, matching milestones by title.
+    func keepDraft(_ items: [PlanDraft.Item], in projectID: UUID) {
+        guard let store else { return }
+        let milestones = (try? store.milestones(projectID: projectID)) ?? []
+        for item in items where !item.title.trimmingCharacters(in: .whitespaces).isEmpty {
+            let milestone = milestones.first { $0.title.caseInsensitiveCompare(item.milestone) == .orderedSame }?.id
+            _ = try? store.createFeature(projectID: projectID, title: item.title, note: item.note,
+                                         branch: item.branch.isEmpty ? nil : item.branch, milestoneID: milestone)
+        }
         requestSync()
     }
 

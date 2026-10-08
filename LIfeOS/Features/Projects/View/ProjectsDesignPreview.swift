@@ -4,10 +4,11 @@ import SwiftData
 import DesignSystem
 import Persistence
 import Integrations
+import Insights
 
 /// Projects without a server: `--page=projects`, `project-board`,
 /// `project-schedule`, `project-milestones`, `project-list`, `project-task`,
-/// `project-plan`, `project-github`.
+/// `project-plan`, `project-github`, `project-draft`.
 struct ProjectsDesignPreview: View {
     let page: String
     @State private var fixture = ProjectsFixture()
@@ -38,6 +39,12 @@ struct ProjectsDesignPreview: View {
             case "project-list": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .list)
             case "project-plan": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .plan,
                                                github: Self.githubFixture)
+            case "project-draft":
+                ProjectScreen(model: fixture.model, projectID: fixture.design, initialPane: .plan, presetDraft: [
+                    .init(title: "Sign in", note: "Apple and email", branch: "feat/sign-in", milestone: ""),
+                    .init(title: "Case studies", note: "Three, with images", branch: "feat/case-studies", milestone: ""),
+                    .init(title: "Widgets", note: "", branch: "feat/widgets", milestone: ""),
+                ])
             case "project-github": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .github,
                                                  github: Self.githubFixture)
             case "project-task":
