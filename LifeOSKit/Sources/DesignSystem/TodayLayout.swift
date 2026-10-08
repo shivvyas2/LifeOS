@@ -2,7 +2,7 @@ import Foundation
 
 /// A piece of Today the person can place, hide or bring back.
 public enum TodayModule: String, CaseIterable, Codable, Sendable {
-    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo, projects
+    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo, projects, focus
 
     public var title: String {
         switch self {
@@ -19,6 +19,7 @@ public enum TodayModule: String, CaseIterable, Codable, Sendable {
         case .spentToday: "Spent today"
         case .fromLifo: "From LIFO"
         case .projects: "Projects"
+        case .focus: "Focus"
         }
     }
 
@@ -74,7 +75,7 @@ public struct TodayLayout: Equatable, Sendable {
 
     /// The approved iPad estate arrangement; GitHub, Weather, Spent today and
     /// From LIFO wait in the tray.
-    public static let standard = TodayLayout(left: [.nextUp, .month, .tasks, .scheduledWorkout],
+    public static let standard = TodayLayout(left: [.nextUp, .month, .tasks, .focus, .scheduledWorkout],
                                              right: [.steps, .sleep, .weight, .recovery])
 
     public var hidden: [TodayModule] { TodayModule.allCases.filter { column(of: $0) == nil } }

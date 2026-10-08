@@ -5,7 +5,7 @@ import Foundation
 @Suite struct TodayLayoutTests {
     @Test func theDefaultIsTheIPadEstate() {
         let layout = TodayLayout.standard
-        #expect(layout.left == [.nextUp, .month, .tasks, .scheduledWorkout])
+        #expect(layout.left == [.nextUp, .month, .tasks, .focus, .scheduledWorkout])
         #expect(layout.right == [.steps, .sleep, .weight, .recovery])
         #expect(layout.hidden == [.github, .weather, .spentToday, .fromLifo, .projects])
         #expect(layout.phoneOrder == layout.left + layout.right)
@@ -14,9 +14,9 @@ import Foundation
     @Test func moveWithinAndAcross() {
         var layout = TodayLayout.standard
         layout.move(.month, to: .left, at: 0)
-        #expect(layout.left == [.month, .nextUp, .tasks, .scheduledWorkout])
+        #expect(layout.left == [.month, .nextUp, .tasks, .focus, .scheduledWorkout])
         layout.move(.tasks, to: .right, at: 1)
-        #expect(layout.left == [.month, .nextUp, .scheduledWorkout])
+        #expect(layout.left == [.month, .nextUp, .focus, .scheduledWorkout])
         #expect(layout.right == [.steps, .tasks, .sleep, .weight, .recovery])
         layout.move(.weather, to: .left, at: 99)
         #expect(layout.left.last == .weather)
@@ -116,6 +116,13 @@ import Foundation
         #expect(TodayLayout.decoded(data).hidden.contains(.projects))
         #expect(TodayModule.projects.title == "Projects")
         #expect(TodayModule.projects.daySection == nil)
+    }
+
+    @Test func aLayoutSavedBeforeFocusKeepsItHidden() {
+        let data = Data(#"{"left":["month","nextUp"],"right":["steps"]}"#.utf8)
+        #expect(TodayLayout.decoded(data).hidden.contains(.focus))
+        #expect(TodayModule.focus.title == "Focus")
+        #expect(TodayModule.focus.daySection == nil)
     }
 
     @Test func titlesAndTiles() {

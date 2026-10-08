@@ -27,6 +27,7 @@ public enum LifeOSContainer {
         ProjectMemberRecord.self,
         MilestoneRecord.self,
         ProjectTaskRecord.self,
+        FocusSessionRecord.self,
     ])
 
     /// In memory, for tests and previews.
