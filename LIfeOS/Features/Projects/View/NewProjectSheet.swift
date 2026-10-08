@@ -14,6 +14,7 @@ struct NewProjectSheet: View {
     @State private var hasDates = false
     @State private var starts = Date.now
     @State private var ends = Calendar.current.date(byAdding: .day, value: 30, to: .now) ?? .now
+    @State private var repoQuery = ""
     @State private var repo: String?
 
     var body: some View {
@@ -45,9 +46,13 @@ struct NewProjectSheet: View {
                     if case .connected = github?.state {
                         VStack(alignment: .leading, spacing: Space.x1) {
                             Text("LINK A REPO").brutalLabel()
+                            TextField("Search repos", text: $repoQuery)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
                             Picker("Repo", selection: $repo) {
                                 Text("None").tag(String?.none)
-                                ForEach(github?.repos ?? [], id: \.fullName) { Text($0.fullName).tag(String?.some($0.fullName)) }
+                                ForEach((github?.repos ?? []).filter {
+                                    repoQuery.isEmpty || $0.fullName.localizedCaseInsensitiveContains(repoQuery)
+                                }, id: \.fullName) { Text($0.fullName).tag(String?.some($0.fullName)) }
                             }
                             .pickerStyle(.menu)
                             .task { await github?.loadRepos() }

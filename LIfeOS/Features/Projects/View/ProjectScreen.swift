@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Integrations
 
 /// One project: its header, then Plan, Board, Schedule, Milestones and List.
 struct ProjectScreen: View {
@@ -9,21 +10,28 @@ struct ProjectScreen: View {
 
     enum Pane: String, CaseIterable {
         case plan = "PLAN", board = "BOARD", schedule = "SCHEDULE", milestones = "MILESTONES", list = "LIST"
+        case github = "GITHUB"
     }
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
+    @Environment(\.github) private var githubConnection
     @Environment(\.dismiss) private var dismiss
     @State private var pane: Pane
 
     /// Nil opens the plan for a project with a repo and the board otherwise.
     private let initialPaneWasDefault: Bool
 
-    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane? = nil) {
+    /// The repo as last read; built from the project's repo, or handed in by
+    /// previews with a fixed read.
+    @State private var github: ProjectGitHubModel?
+
+    init(model: ProjectsViewModel, projectID: UUID, initialPane: Pane? = nil, github: ProjectGitHubModel? = nil) {
         self.model = model
         self.projectID = projectID
         initialPaneWasDefault = initialPane == nil
         _pane = State(initialValue: initialPane ?? .board)
+        _github = State(initialValue: github)
     }
     @State private var editing: TaskSheet.Target?
     @State private var showMembers = false
@@ -52,7 +60,7 @@ struct ProjectScreen: View {
                     panePicker
                     switch pane {
                     case .plan:
-                        planView
+                        planPane
                     case .board:
                         ProjectBoardView(tasks: tasks, colour: colour, name: model.name,
                                          onOpen: { editing = .task($0) },
@@ -63,6 +71,8 @@ struct ProjectScreen: View {
                                             onCreateAt: { start in editing = .new(start: start) })
                     case .milestones:
                         milestonesPane(colour: colour)
+                    case .github:
+                        if let github { ProjectGitHubView(github: github, features: features) }
                     case .list:
                         ProjectListView(tasks: tasks, milestones: milestones, members: members, colour: colour,
                                         name: model.name, onOpen: { editing = .task($0) })
@@ -75,7 +85,17 @@ struct ProjectScreen: View {
             }
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .refreshable { await model.refresh(); revision += 1 }
+        .refreshable { await model.refresh(); await refreshStages(force: true); revision += 1 }
+        // Every five minutes while the project is on screen, as well as on
+        // open and on pull to refresh.
+        .task(id: project?.repo) {
+            guard let repo = project?.repo else { return }
+            if github?.repo != repo { github = ProjectGitHubModel(repo: repo, github: githubConnection) }
+            while !Task.isCancelled {
+                await refreshStages(force: false)
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { ownerMenu }
         }
@@ -86,9 +106,9 @@ struct ProjectScreen: View {
         .sheet(isPresented: $showMembers, onDismiss: { revision += 1 }) {
             ProjectMembersSheet(model: model, projectID: projectID, isOwner: isOwner)
         }
-        .navigationDestination(item: $openFeature) { id in
+        .navigationDestination(item: layout.isRegular ? .constant(nil) : $openFeature) { id in
             ScrollView {
-                FeatureDetailView(model: model, featureID: id, commits: { EmptyView() })
+                featureDetail(id)
                     .padding(.horizontal, layout.gutter)
                     .padding(.leading, layout.railInset)
                     .padding(.vertical, Space.x2)
@@ -129,10 +149,66 @@ struct ProjectScreen: View {
         .brutalCard(header: colour.fill.resolve(scheme))
     }
 
+    /// On an iPad the plan and the open feature sit side by side.
+    @ViewBuilder private var planPane: some View {
+        if layout.isRegular {
+            HStack(alignment: .top, spacing: Space.x4) {
+                planView.frame(maxWidth: 420)
+                if let selected = openFeature {
+                    featureDetail(selected).id(selected)
+                } else {
+                    Text("Pick a feature to see its branch, commits and tasks.")
+                        .font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
+                        .editorialCard()
+                }
+            }
+        } else {
+            planView
+        }
+    }
+
+    private func featureDetail(_ id: UUID) -> some View {
+        let feature = try? model.store?.feature(id: id)
+        let candidates = feature.flatMap { f in github?.status.map { FeatureStageRefresher.candidates(for: f, in: $0) } } ?? []
+        return FeatureDetailView(model: model, featureID: id, candidates: candidates, branches: branchNames,
+                                 commits: { FeatureCommits(github: github, feature: try? model.store?.feature(id: id)) })
+    }
+
+    private var branchNames: [String] {
+        guard let status = github?.status else { return [] }
+        return status.branches.map(\.name).filter { $0 != status.defaultBranch }
+    }
+
+    private func refreshStages(force: Bool) async {
+        guard let github, let repo = project?.repo, let store = model.store else { return }
+        await github.refresh(force: force)
+        guard let status = github.status else { return }
+        if (try? FeatureStageRefresher.apply(status, repo: repo, projectID: projectID, store: store, now: .now)) == true {
+            model.syncAfterStages()
+        }
+        revision += 1
+    }
+
+    /// Where the stages came from, or why they could not be refreshed.
+    @ViewBuilder private var planGitHubLine: some View {
+        if let github {
+            if let problem = github.problem {
+                ProjectGitHubProblem(problem: problem)
+                if let checked = features.compactMap(\.stageCheckedAt).max() {
+                    Text("As of \(GitHubRelative.short(checked, now: .now))").font(LifeOSType.caption)
+                        .foregroundStyle(Editorial.quietInk(scheme))
+                }
+            } else if let fetched = github.fetchedAt {
+                Text("From GitHub · \(GitHubRelative.short(fetched, now: .now))").font(LifeOSType.caption)
+                    .foregroundStyle(Editorial.quietInk(scheme))
+            }
+        }
+    }
+
     private var planView: some View {
         ProjectPlanView(
             features: features, progress: featureProgress,
-            header: { EmptyView() },
+            header: { planGitHubLine },
             onOpen: { openFeature = $0 },
             onAdd: { title in model.createFeature(in: projectID, title: title); revision += 1 },
             onMove: { id, index in model.moveFeature(id, to: index); revision += 1 },
@@ -151,7 +227,7 @@ struct ProjectScreen: View {
 
     private func paneRow(minWidth: CGFloat?) -> some View {
         HStack(spacing: 0) {
-            ForEach(Pane.allCases, id: \.self) { option in
+            ForEach(Pane.allCases.filter { $0 != .github || project?.repo != nil }, id: \.self) { option in
                 Button { pane = option } label: {
                     Text(option.rawValue)
                         .font(LifeOSType.caption.weight(.heavy)).tracking(0.8)

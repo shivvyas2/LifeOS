@@ -64,6 +64,9 @@ final class ProjectsViewModel {
         await loadNames()
     }
 
+    /// Stages written from GitHub go up like any other edit.
+    func syncAfterStages() { requestSync() }
+
     private func requestSync() {
         load()
         Task { await sync?.sync(); load() }

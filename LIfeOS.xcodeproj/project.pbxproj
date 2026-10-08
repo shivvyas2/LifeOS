@@ -12,6 +12,7 @@
 		1C653CDFCA5F5F89F00FE2DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */; };
 		204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
 		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
+		2B95A1DB9F7DD2FC14C1B7BC /* ProjectGitHubUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4F9451D72816087ECF416011 /* ProjectPlanUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A446557345552872D28C633 /* ProjectPlanUITests.swift */; };
@@ -124,6 +125,7 @@
 /* Begin PBXFileReference section */
 		00035EA195241A950768EEEE /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AlmanacWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectGitHubUITests.swift; sourceTree = "<group>"; };
 		0BB1D631B325075AAB0B16BF /* AlmanacWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = AlmanacWidgets.entitlements; sourceTree = "<group>"; };
 		0D2B6E5FBCF00137F09A65C4 /* ProjectsUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProjectsUITests.swift; sourceTree = "<group>"; };
 		0D534F91C4824E3686A2198C /* FocusUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FocusUITests.swift; sourceTree = "<group>"; };
@@ -259,6 +261,7 @@
 				40C5B08BD745A6AF603D8705 /* InboxUITests.swift */,
 				79E991DB8B28033641AC617E /* RailUITests.swift */,
 				2A446557345552872D28C633 /* ProjectPlanUITests.swift */,
+				0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */,
 			);
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
@@ -562,6 +565,7 @@
 				0E6624AD648B8093128FA85C /* InboxUITests.swift in Sources */,
 				AFB1FC33EEEFCF67F7CE927F /* RailUITests.swift in Sources */,
 				4F9451D72816087ECF416011 /* ProjectPlanUITests.swift in Sources */,
+				2B95A1DB9F7DD2FC14C1B7BC /* ProjectGitHubUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

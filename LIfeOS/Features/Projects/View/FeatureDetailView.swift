@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Integrations
 
 /// One feature: its note, milestone, branch, and tasks, in the editorial
 /// style. `commits` is where the branch's commits and its PR go.
@@ -124,7 +125,7 @@ struct FeatureDetailView<Commits: View>: View {
             }
             .onAppear {
                 note = feature.note
-                branch = ""
+                branch = FeatureStageResolver.suggestedBranch(feature.title)
             }
         }
     }

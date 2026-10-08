@@ -1,6 +1,7 @@
 import SwiftUI
 import DesignSystem
 import Persistence
+import Integrations
 
 /// The Projects tab: contributions, your projects, and today's tasks across
 /// them. Hard edges and colour, unlike the rest of the app.
@@ -82,6 +83,10 @@ struct ProjectsHomeScreen: View {
             model.load()
             await model.refresh()
             await model.loadContributions(from: github)
+            // Read each linked repo once, so the cards can say when it last moved.
+            for repo in Set(model.projects.compactMap(\.repo)) {
+                await ProjectGitHubModel(repo: repo, github: github).refresh()
+            }
         }
         .sheet(isPresented: $creating) {
             NewProjectSheet { name, scope, colour, starts, ends, repo in
@@ -116,6 +121,13 @@ struct ProjectsHomeScreen: View {
             HStack(spacing: Space.x2) {
                 BrutalProgress(fraction: project.fraction, colour: colour)
                 Text("\(Int((project.fraction * 100).rounded()))%").font(LifeOSType.label.weight(.heavy)).monospacedDigit()
+            }
+            if let progress = try? model.store?.featureProgress(projectID: project.id), progress.total > 0 {
+                Text("\(progress.done) of \(progress.total) features done").font(LifeOSType.caption)
+            }
+            if let repo = project.repo, let last = ProjectGitHubModel.cached(repo)?.lastCommitAt {
+                Text("Last commit \(GitHubRelative.short(last, now: .now))").font(LifeOSType.caption)
+                    .foregroundStyle(Editorial.quietInk(scheme))
             }
             HStack {
                 if let next = project.nextMilestone {

@@ -225,6 +225,17 @@ final class GitHubConnectionViewModel: NSObject {
         changeCount += 1
     }
 
+    /// The token for a project's own reads, while the connection is good.
+    var connection: GitHubConnection? {
+        guard case .connected = state, !needsReconnect else { return nil }
+        return tokens.load()
+    }
+
+    func markNeedsReconnect() {
+        defaults.set(true, forKey: GitHubDaySource.needsReconnectKey)
+        needsReconnect = true
+    }
+
     // MARK: Contributions
 
     static let contributionsKey = "github.contributions"
@@ -278,12 +289,9 @@ final class GitHubConnectionViewModel: NSObject {
     func loadRepos() async {
         guard let connection = tokens.load() else { return }
         do {
-            repos = try await get(GitHubAPI.url("/user/repos", query: [
-                ("sort", "pushed"), ("per_page", "50"), ("affiliation", "owner,collaborator,organization_member"),
-            ]), token: connection.token)
-        } catch GitHubConnectionError.unauthorized {
-            defaults.set(true, forKey: GitHubDaySource.needsReconnectKey)
-            needsReconnect = true
+            repos = try await GitHubProjectSource.repos(transport: transport, token: connection.token)
+        } catch GitHubProjectError.unauthorized {
+            markNeedsReconnect()
         } catch {
             githubLog.error("github repos failed: \(error)")
         }

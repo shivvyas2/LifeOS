@@ -3,12 +3,31 @@ import SwiftUI
 import SwiftData
 import DesignSystem
 import Persistence
+import Integrations
 
 /// Projects without a server: `--page=projects`, `project-board`,
-/// `project-schedule`, `project-milestones`, `project-list`, `project-task`.
+/// `project-schedule`, `project-milestones`, `project-list`, `project-task`,
+/// `project-plan`, `project-github`.
 struct ProjectsDesignPreview: View {
     let page: String
     @State private var fixture = ProjectsFixture()
+
+    static let githubFixture: ProjectGitHubModel = {
+        let now = Date.now
+        let status = GitHubProjectStatus(defaultBranch: "main", branches: [
+            GitHubBranchState(name: "feat/credit-cards", lastCommitAt: now.addingTimeInterval(-7_200), ahead: 5, behind: 0),
+            GitHubBranchState(name: "old/spike", lastCommitAt: now.addingTimeInterval(-40 * 86_400), ahead: 1, behind: 30),
+        ], pulls: [
+            GitHubPullState(number: 42, title: "Credit cards", state: .open, url: URL(string: "https://github.com")!,
+                            mergedAt: nil, headBranch: "feat/credit-cards", headRepo: "shivvyas2/LifeOS"),
+            GitHubPullState(number: 40, title: "Sign in", state: .merged, url: URL(string: "https://github.com")!,
+                            mergedAt: now.addingTimeInterval(-3 * 86_400), headBranch: "feat/sign-in", headRepo: "shivvyas2/LifeOS"),
+        ])
+        let history = try! GitHubWire.decoder.decode([GitHubCommitItem].self, from: Data("""
+        [{"sha":"a1b2c3d4e5","html_url":"https://github.com","commit":{"message":"feat: cards in Settings","author":{"name":"Shiv","date":"2026-10-07T10:00:00Z"}}}]
+        """.utf8))
+        return ProjectGitHubModel(fixture: status, history: history)
+    }()
 
     var body: some View {
         NavigationStack {
@@ -17,7 +36,10 @@ struct ProjectsDesignPreview: View {
             case "project-schedule": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .schedule)
             case "project-milestones": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .milestones)
             case "project-list": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .list)
-            case "project-plan": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .plan)
+            case "project-plan": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .plan,
+                                               github: Self.githubFixture)
+            case "project-github": ProjectScreen(model: fixture.model, projectID: fixture.launch, initialPane: .github,
+                                                 github: Self.githubFixture)
             case "project-task":
                 ProjectScreen(model: fixture.model, projectID: fixture.launch)
                     .sheet(isPresented: .constant(true)) {
@@ -51,7 +73,8 @@ private final class ProjectsFixture {
         }
         launch = try! store.createProject(name: "LifeOS 1.1", scope: "Ship Notes, Today layout and the GitHub card",
                                           colour: "tomato", ownerID: me, startsOn: today,
-                                          endsOn: Calendar.current.date(byAdding: .day, value: 21, to: today))
+                                          endsOn: Calendar.current.date(byAdding: .day, value: 21, to: today),
+                                          repo: "shivvyas2/LifeOS")
         design = try! store.createProject(name: "Portfolio site", scope: "Case studies and a contact form",
                                               colour: "lagoon", ownerID: me)
         let alpha = try! store.createMilestone(projectID: launch, title: "Alpha", dueOn: today.addingTimeInterval(5 * 86_400))
