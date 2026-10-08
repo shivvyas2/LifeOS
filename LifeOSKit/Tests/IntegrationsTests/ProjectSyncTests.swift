@@ -218,4 +218,14 @@ final class FakeProjectServer: ProjectRemote, @unchecked Sendable {
         #expect(try store.features(projectID: p).first?.stage == .done)
     }
 
+
+    /// An unlink made on one phone reaches the others, so theirs do not link it again.
+    @Test func anUnlinkTravels() async throws {
+        let (_, store, server, sync) = try setUp()
+        let project = try store.createProject(name: "P", scope: "", colour: "moss", ownerID: me)
+        let f = try store.createFeature(projectID: project, title: "Cards", branch: "feat/cards")
+        try store.updateFeature(id: f, branch: .some(nil))
+        await sync.sync()
+        #expect(server.tables["project_features"]?[id(f)]?["auto_link"] as? Bool == false)
+    }
 }

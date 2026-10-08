@@ -238,14 +238,14 @@ public final class ProjectSync {
         try store.applyRemoteFeature(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID,
                                      title: row.title, note: row.note, position: row.position, branch: row.branch,
                                      stage: row.stage, stageDetail: row.stageDetail, prNumber: row.prNumber,
-                                     stageCheckedAt: row.stageCheckedAt, updatedAt: row.updatedAt,
+                                     stageCheckedAt: row.stageCheckedAt, autoLink: row.autoLink, updatedAt: row.updatedAt,
                                      deletedAt: row.deletedAt)
     }
 
     private static func featureRow(_ r: FeatureRecord) -> [String: Any] {
         FeatureRow(id: r.id, projectID: r.projectID, milestoneID: r.milestoneID, title: r.title, note: r.note,
                    position: r.position, branch: r.branch, stage: r.stage, stageDetail: r.stageDetail,
-                   prNumber: r.prNumber, stageCheckedAt: r.stageCheckedAt, updatedAt: r.updatedAt,
+                   prNumber: r.prNumber, stageCheckedAt: r.stageCheckedAt, autoLink: r.autoLink, updatedAt: r.updatedAt,
                    deletedAt: r.deletedAt).payload()
     }
 

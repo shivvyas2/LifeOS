@@ -88,4 +88,18 @@ import SwiftData
         let feature = try #require(try store.feature(id: f))
         #expect(feature.stage == .done && feature.prNumber == 40)
     }
+
+    /// Review fix 4: unlinking a branch by hand holds, though a branch is
+    /// still named for the feature.
+    @Test func anUnlinkedFeatureIsNotLinkedAgain() throws {
+        let (store, p) = try setUp()
+        let f = try store.createFeature(projectID: p, title: "Credit cards")
+        try FeatureStageRefresher.apply(status(["feat/credit-cards"]), repo: "o/r", projectID: p, store: store, now: now)
+        #expect(try store.feature(id: f)?.branch == "feat/credit-cards")
+        try store.updateFeature(id: f, branch: .some(nil))
+        try FeatureStageRefresher.apply(status(["feat/credit-cards"]), repo: "o/r", projectID: p, store: store, now: now)
+        #expect(try store.feature(id: f)?.branch == nil)
+        try store.updateFeature(id: f, branch: .some("feat/credit-cards"))
+        #expect(try store.feature(id: f)?.autoLink == true)
+    }
 }

@@ -12,7 +12,7 @@ public enum FeatureStageRefresher {
         let names = status.branches.map(\.name).filter { $0 != status.defaultBranch }
         for feature in try store.features(projectID: projectID) {
             var branch = feature.branch
-            if branch == nil, case .one(let match) = FeatureStageRefresher.link(feature, names) {
+            if branch == nil, feature.autoLink, case .one(let match) = FeatureStageRefresher.link(feature, names) {
                 try store.updateFeature(id: feature.id, branch: .some(match))
                 branch = match
                 changed = true

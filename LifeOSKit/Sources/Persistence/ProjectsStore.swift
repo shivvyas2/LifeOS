@@ -241,7 +241,10 @@ public struct ProjectsStore {
         if let title { row.title = Self.limit(title, 80) }
         if let note { row.note = Self.limit(note, 280) }
         if let milestoneID { row.milestoneID = milestoneID }
-        if let branch { row.branch = branch.map { Self.limit($0, 255) }.flatMap { $0.isEmpty ? nil : $0 } }
+        if let branch {
+            row.branch = branch.map { Self.limit($0, 255) }.flatMap { $0.isEmpty ? nil : $0 }
+            row.autoLink = row.branch != nil
+        }
         row.updatedAt = .now
         try context.save()
     }
@@ -413,7 +416,8 @@ public struct ProjectsStore {
 
     public func applyRemoteFeature(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String,
                                    position: Int, branch: String?, stage: String, stageDetail: String,
-                                   prNumber: Int?, stageCheckedAt: Date?, updatedAt: Date, deletedAt: Date?) throws {
+                                   prNumber: Int?, stageCheckedAt: Date?, autoLink: Bool = true,
+                                   updatedAt: Date, deletedAt: Date?) throws {
         let existing = try featureRecord(id)
         if let existing, ProjectMerge.keepLocal(localUpdatedAt: existing.updatedAt, localSyncedAt: existing.syncedAt,
                                                 remoteUpdatedAt: updatedAt) { return }
@@ -424,7 +428,7 @@ public struct ProjectsStore {
         }()
         row.milestoneID = milestoneID; row.title = title; row.note = note; row.position = position
         row.branch = branch; row.stage = stage; row.stageDetail = stageDetail; row.prNumber = prNumber
-        row.stageCheckedAt = stageCheckedAt
+        row.stageCheckedAt = stageCheckedAt; row.autoLink = autoLink
         row.deletedAt = deletedAt; row.updatedAt = updatedAt; row.syncedAt = updatedAt
         try context.save()
     }
@@ -508,7 +512,7 @@ public struct ProjectsStore {
         let theirs = tasks.filter { $0.featureID == row.id }
         let done = theirs.filter { $0.status == ProjectStatus.done.rawValue }.count
         return FeatureSnapshot(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID, title: row.title,
-                               note: row.note, position: row.position, branch: row.branch,
+                               note: row.note, position: row.position, branch: row.branch, autoLink: row.autoLink,
                                stage: FeatureStage(rawValue: row.stage) ?? .planned, stageDetail: row.stageDetail,
                                prNumber: row.prNumber, stageCheckedAt: row.stageCheckedAt,
                                openTasks: theirs.count - done, doneTasks: done)

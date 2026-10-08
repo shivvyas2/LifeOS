@@ -91,11 +91,13 @@ public struct MilestoneRow: Equatable, Sendable {
 public struct FeatureRow: Equatable, Sendable {
     public var id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String, position: Int
     public var branch: String?, stage: String, stageDetail: String, prNumber: Int?, stageCheckedAt: Date?
+    public var autoLink: Bool
     public var updatedAt: Date, deletedAt: Date?
 
     public init(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String, position: Int,
                 branch: String?, stage: String, stageDetail: String, prNumber: Int?, stageCheckedAt: Date?,
-                updatedAt: Date, deletedAt: Date?) {
+                autoLink: Bool = true, updatedAt: Date, deletedAt: Date?) {
+        self.autoLink = autoLink
         self.id = id; self.projectID = projectID; self.milestoneID = milestoneID; self.title = title
         self.note = note; self.position = position; self.branch = branch; self.stage = stage
         self.stageDetail = stageDetail; self.prNumber = prNumber; self.stageCheckedAt = stageCheckedAt
@@ -110,7 +112,7 @@ public struct FeatureRow: Equatable, Sendable {
                   position: json["position"] as? Int ?? 0, branch: json["branch"] as? String,
                   stage: json["stage"] as? String ?? "planned", stageDetail: json["stage_detail"] as? String ?? "",
                   prNumber: json["pr_number"] as? Int, stageCheckedAt: WireDate.read(json["stage_checked_at"]),
-                  updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
+                  autoLink: json["auto_link"] as? Bool ?? true, updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
     }
 
     public func payload() -> [String: Any] {
@@ -118,6 +120,7 @@ public struct FeatureRow: Equatable, Sendable {
          "milestone_id": WireDate.string(milestoneID), "title": title, "note": note, "position": position,
          "branch": branch ?? NSNull(), "stage": stage, "stage_detail": stageDetail,
          "pr_number": prNumber ?? NSNull(), "stage_checked_at": WireDate.instant(stageCheckedAt),
+         "auto_link": autoLink,
          "updated_at": WireDate.instant(updatedAt), "deleted_at": WireDate.instant(deletedAt)]
     }
 }

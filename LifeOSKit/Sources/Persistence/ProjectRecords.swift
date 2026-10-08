@@ -93,6 +93,9 @@ public final class FeatureRecord {
     public var note: String = ""
     public var position: Int = 0
     public var branch: String?
+    /// False once someone unlinks the branch by hand; auto-linking then
+    /// leaves the feature alone until a branch is linked by hand again.
+    public var autoLink: Bool = true
     public var stage: String = "planned"
     public var stageDetail: String = ""
     public var prNumber: Int?
@@ -160,6 +163,7 @@ public struct FeatureSnapshot: Identifiable, Equatable, Sendable {
     public let note: String
     public let position: Int
     public let branch: String?
+    public let autoLink: Bool
     public let stage: FeatureStage
     public let stageDetail: String
     public let prNumber: Int?
