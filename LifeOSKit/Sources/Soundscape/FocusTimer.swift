@@ -46,6 +46,9 @@ public struct FocusTimer: Codable, Equatable, Sendable {
     private var pausedAt: Date?
     /// Focused seconds from segments before `segment`.
     private var banked: TimeInterval = 0
+    /// Work blocks cut short by a skip: they count as focus time, not as
+    /// completed blocks.
+    private var skippedBlocks = 0
 
     public init(plan: TimerPlan, startedAt: Date) {
         self.plan = plan
@@ -88,7 +91,7 @@ public struct FocusTimer: Codable, Equatable, Sendable {
 
     private func completed(before index: Int) -> Int {
         guard case .pomodoro = plan else { return 0 }
-        return (index + 1) / 2
+        return max(0, (index + 1) / 2 - skippedBlocks)
     }
 
     /// The segment holding `clock`, its start, and the focus banked before it.
@@ -143,6 +146,7 @@ public struct FocusTimer: Codable, Equatable, Sendable {
         if counts(segment) {
             let elapsed = max(0, clock.timeIntervalSince(segmentStart))
             banked += min(elapsed, length(of: segment) ?? elapsed)
+            if case .pomodoro = plan, let length = length(of: segment), elapsed < length { skippedBlocks += 1 }
         }
         segment += 1
         segmentStart = clock

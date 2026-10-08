@@ -38,6 +38,14 @@ public struct WatchPacket: Codable, Equatable, Sendable {
 /// `scoreUs`, `scoreThem` and `undoRally` are the phone's scoreboard taps on a
 /// watch-owned badminton match. Like `addRep`, they echo back in the next
 /// packet rather than changing the phone's copy, so the two cannot disagree.
+extension WatchWire {
+    /// A focus session is heart rate only: the phone may only throw it away,
+    /// never end (and so save), pause or configure it like a workout.
+    public static func phoneMayDrive(_ command: PhoneCommand, focusSession: Bool) -> Bool {
+        !focusSession || command == .discard
+    }
+}
+
 public enum PhoneCommand: String, Codable, Sendable {
     case configure, pause, resume, end, nextSet, addRep, removeRep, discard
     case scoreUs, scoreThem, undoRally

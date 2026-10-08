@@ -62,6 +62,18 @@ import Foundation
         #expect(r.focusedSeconds == 100)
     }
 
+    @Test func aSkippedBlockIsNotCompleted() {
+        var timer = FocusTimer(plan: classic, startedAt: t0)
+        timer.skip(at: at(100))
+        #expect(timer.reading(at: at(100)).completedBlocks == 0)
+        // Break ends at 400; block 2 runs in full to 1900.
+        #expect(timer.reading(at: at(1900)).completedBlocks == 1)
+        // Skipping a break never takes a block away.
+        var other = FocusTimer(plan: classic, startedAt: t0)
+        other.skip(at: at(1600))
+        #expect(other.reading(at: at(1600)).completedBlocks == 1)
+    }
+
     @Test func skipWhilePausedStaysPaused() {
         var timer = FocusTimer(plan: classic, startedAt: t0)
         timer.pause(at: at(200))
