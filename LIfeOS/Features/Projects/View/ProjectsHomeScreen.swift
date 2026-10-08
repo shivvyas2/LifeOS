@@ -72,8 +72,13 @@ struct ProjectsHomeScreen: View {
             .padding(.bottom, layout.contentBottomInset)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .refreshable { await model.refresh() }
-        .task {
+        .refreshable {
+            await model.refresh()
+            await model.loadContributions(from: github)
+        }
+        // Keyed to the connection, so connecting or disconnecting GitHub with
+        // this tab open swaps the wall without leaving and coming back.
+        .task(id: github?.changeCount) {
             model.load()
             await model.refresh()
             await model.loadContributions(from: github)

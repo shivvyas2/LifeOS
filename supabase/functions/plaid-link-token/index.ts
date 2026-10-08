@@ -1,10 +1,18 @@
-import { callPlaid, json, PlaidError, resolveUser } from "../_shared/plaid.ts";
+import { accountFilters, callPlaid, json, linkKind, PlaidError, resolveUser } from "../_shared/plaid.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const userID = await resolveUser(req);
   if (!userID) return json({ error: "unauthorized" }, 401);
+
+  // The body is optional: an empty or unreadable one is a bank session.
+  let kind = linkKind(undefined);
+  try {
+    kind = linkKind((await req.json())?.kind);
+  } catch {
+    // No body.
+  }
 
   try {
     const result = await callPlaid("/link/token/create", {
@@ -15,6 +23,7 @@ Deno.serve(async (req: Request) => {
       products: ["transactions"],
       country_codes: ["US"],
       language: "en",
+      ...accountFilters(kind),
       // Banks that use OAuth send the browser here and the app picks it up.
       // Absent in sandbox, where no institution needs it.
       ...(Deno.env.get("PLAID_REDIRECT_URI")
@@ -23,7 +32,7 @@ Deno.serve(async (req: Request) => {
     });
     return json({ link_token: result.link_token }, 200);
   } catch (error) {
-    const kind = error instanceof PlaidError ? error.kind : "upstream_failure";
-    return json({ error: kind }, 502);
+    const failure = error instanceof PlaidError ? error.kind : "upstream_failure";
+    return json({ error: failure }, 502);
   }
 });

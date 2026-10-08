@@ -68,6 +68,18 @@ import Foundation
         #expect(LayoutMetrics.metrics(for: .regular).railInset > 0)
     }
 
+    /// Put away, the rail hands its room back and nothing else moves, so the
+    /// content widens to the edge rather than reflowing in other ways.
+    @Test func withoutTheRailOnlyTheRailInsetChanges() {
+        let regular = LayoutMetrics.metrics(for: .regular)
+        let hidden = regular.withoutRail()
+        #expect(hidden.railInset == 0)
+        #expect(hidden.gutter == regular.gutter)
+        #expect(hidden.maxContentWidth == regular.maxContentWidth)
+        #expect(hidden.tileColumns == regular.tileColumns)
+        #expect(hidden.isRegular)
+    }
+
     @Test func metricsReportTheWidthClassTheyCameFrom() {
         #expect(LayoutMetrics.metrics(for: .regular).isRegular)
         #expect(LayoutMetrics.metrics(for: .compact).isRegular == false)

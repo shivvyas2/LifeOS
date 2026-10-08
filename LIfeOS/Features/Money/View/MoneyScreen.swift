@@ -19,6 +19,7 @@ struct MoneyScreen: View {
     let snapshot: MoneySnapshot
     var onAdd: () -> Void = {}
     var onConnect: () -> Void = {}
+    var onConnectCard: () -> Void = {}
     var onSync: () -> Void = {}
     var onEditBudgets: () -> Void = {}
     /// A category, merchant or transaction was tapped. The stack that owns
@@ -114,13 +115,16 @@ struct MoneyScreen: View {
             Text("Nothing here yet")
                 .font(LifeOSType.screenTitle)
                 .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-            Text("Connect a bank, or log a transaction by hand to get started.")
+            Text("Connect a bank or a credit card, or log a transaction by hand to get started.")
                 .font(LifeOSType.label.weight(.regular))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
 
             Button("Connect your bank", action: onConnect)
                 .buttonStyle(.editorial(.primary))
+
+            Button("Connect a credit card", action: onConnectCard)
+                .buttonStyle(.editorial(.secondary, size: .compact))
 
             Button("Add a transaction", action: onAdd)
                 .buttonStyle(.editorial(.secondary, size: .compact))

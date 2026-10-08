@@ -23,10 +23,18 @@ public enum PlaidClientError: Error, Equatable {
     case transport
 }
 
+/// What a Link session is for. A bank session shows every account the bank
+/// has, cards included; a card session shows only credit cards, so someone
+/// adding a card does not wade through banks that issue none.
+public enum PlaidLinkKind: String, Sendable {
+    case bank
+    case creditCard = "credit_card"
+}
+
 /// The seam the sync runner and the connection view model talk to, so both are
 /// testable without a network or a Plaid account.
 public protocol PlaidAPI: Sendable {
-    func createLinkToken() async throws -> String
+    func createLinkToken(for kind: PlaidLinkKind) async throws -> String
     func exchange(publicToken: String, institutionID: String?,
                   institutionName: String?) async throws -> PlaidExchangeResult
     func sync(cursors: [String: String]) async throws -> PlaidSyncResponse
@@ -47,9 +55,9 @@ public struct PlaidClient: PlaidAPI {
         self.accessToken = accessToken
     }
 
-    public func createLinkToken() async throws -> String {
+    public func createLinkToken(for kind: PlaidLinkKind = .bank) async throws -> String {
         struct Response: Decodable { let link_token: String }
-        let response: Response = try await post("plaid-link-token", body: [:])
+        let response: Response = try await post("plaid-link-token", body: ["kind": kind.rawValue])
         return response.link_token
     }
 

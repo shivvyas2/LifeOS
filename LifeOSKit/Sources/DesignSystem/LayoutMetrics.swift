@@ -89,6 +89,17 @@ public struct LayoutMetrics: Sendable, Equatable {
         }
     }
 
+    /// The same metrics with the rail's room handed back to the content, for
+    /// when the rail is put away. The screens already pad by `railInset`, so
+    /// zeroing it is what lets every one of them run the full width.
+    public func withoutRail() -> LayoutMetrics {
+        LayoutMetrics(gutter: gutter, sectionSpacing: sectionSpacing,
+                      maxContentWidth: maxContentWidth, heroScale: heroScale,
+                      fabBottomInset: fabBottomInset, contentBottomInset: contentBottomInset,
+                      railInset: 0,
+                      statColumns: statColumns, tileColumns: tileColumns, isRegular: isRegular)
+    }
+
 }
 
 public extension EnvironmentValues {

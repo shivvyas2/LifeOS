@@ -10,9 +10,18 @@ struct ContributionGrid: View {
     var weeks: Int? = nil
     @Environment(\.colorScheme) private var scheme
 
-    private var columns: [[Int]] {
+    /// Weeks as columns, each row a fixed weekday. `counts` ends today, so
+    /// the front is padded with blanks (nil) until the last count lands on
+    /// today's row: cut in plain sevens from the oldest day instead, every
+    /// row's weekday drifted with however many days the year happened to
+    /// start mid-week, and the newest column was not this week.
+    private var columns: [[Int?]] {
         let levels = ContributionScale.levels(counts)
-        var cols = stride(from: 0, to: levels.count, by: 7).map { Array(levels[$0..<min($0 + 7, levels.count)]) }
+        let calendar = Calendar.current
+        let todayRow = (calendar.component(.weekday, from: .now) - calendar.firstWeekday + 7) % 7
+        let lead = ((todayRow + 1 - levels.count) % 7 + 7) % 7
+        let cells: [Int?] = Array(repeating: nil, count: lead) + levels.map { Optional($0) }
+        var cols = stride(from: 0, to: cells.count, by: 7).map { Array(cells[$0..<min($0 + 7, cells.count)]) }
         if let weeks { cols = Array(cols.suffix(weeks)) }
         return cols
     }
@@ -26,7 +35,7 @@ struct ContributionGrid: View {
                 ForEach(Array(cols.enumerated()), id: \.offset) { _, week in
                     VStack(spacing: gap) {
                         ForEach(Array(week.enumerated()), id: \.offset) { _, level in
-                            Rectangle().fill(colour.ramp(level: level).resolve(scheme))
+                            Rectangle().fill(level.map { colour.ramp(level: $0).resolve(scheme) } ?? .clear)
                                 .frame(width: side, height: side)
                         }
                     }
