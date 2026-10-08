@@ -9,6 +9,7 @@ final class TodayLayoutStore {
     private let defaults: UserDefaults
     private static let key = "today.layout"
     private static let githubKey = "today.layout.githubOffered"
+    static let inboxOfferKey = "today.layout.inboxOffered"
     private static let hintKey = "today.layout.hintSeen"
 
     var layout: TodayLayout { didSet { defaults.set(layout.encoded(), forKey: Self.key) } }
@@ -35,5 +36,12 @@ final class TodayLayoutStore {
         guard !defaults.bool(forKey: Self.githubKey) else { return }
         defaults.set(true, forKey: Self.githubKey)
         update { $0.offerGitHub() }
+    }
+
+    /// The first time Gmail connects, once.
+    func offerInboxOnce() {
+        guard !defaults.bool(forKey: Self.inboxOfferKey) else { return }
+        defaults.set(true, forKey: Self.inboxOfferKey)
+        update { $0.offerInbox() }
     }
 }

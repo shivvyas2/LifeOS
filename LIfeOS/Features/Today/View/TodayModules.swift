@@ -38,6 +38,7 @@ extension TodayScreen {
         case .spentToday: spendModule
         case .projects: projectsModule
         case .focus: focusModule
+        case .inbox: inboxModule
         case .fromLifo:
             VStack(alignment: .leading, spacing: Space.x2) {
                 EditorialSectionHeader(title: "From LIFO")
@@ -138,6 +139,16 @@ extension TodayScreen {
             }
             Button("Resume last") { if !self.store.isArranging { FocusLauncher.shared.open() } }
                 .buttonStyle(.editorial(.quiet, size: .compact, fullWidth: false))
+        }
+    }
+
+    /// Hidden outside arranging until Gmail is connected.
+    @ViewBuilder
+    private var inboxModule: some View {
+        if let source = mailSource, source.isConnected {
+            InboxRows(state: inbox ?? .loading, onReconnect: onOpenSettings)
+        } else {
+            ghost(.inbox, note: "Not connected", action: ("Connect Gmail", onOpenSettings))
         }
     }
 

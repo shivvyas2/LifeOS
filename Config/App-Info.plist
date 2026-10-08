@@ -62,6 +62,12 @@
 	<string>$(FITBIT_REDIRECT_URI)</string>
 	<key>GitHubClientID</key>
 	<string>$(GITHUB_CLIENT_ID)</string>
+	<key>GoogleClientID</key>
+	<string>$(GOOGLE_CLIENT_ID)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>googlegmail</string>
+	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 </dict>

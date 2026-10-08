@@ -2,7 +2,7 @@ import Foundation
 
 /// A piece of Today the person can place, hide or bring back.
 public enum TodayModule: String, CaseIterable, Codable, Sendable {
-    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo, projects, focus
+    case nextUp, month, tasks, github, scheduledWorkout, steps, sleep, weight, recovery, weather, spentToday, fromLifo, projects, focus, inbox
 
     public var title: String {
         switch self {
@@ -20,6 +20,7 @@ public enum TodayModule: String, CaseIterable, Codable, Sendable {
         case .fromLifo: "From LIFO"
         case .projects: "Projects"
         case .focus: "Focus"
+        case .inbox: "Inbox"
         }
     }
 
@@ -151,6 +152,9 @@ public struct TodayLayout: Equatable, Sendable {
 
     /// The first time GitHub connects, its card joins the left column.
     public mutating func offerGitHub() { add(.github, to: .left) }
+
+    /// The first time Gmail connects, the Inbox joins the left column.
+    public mutating func offerInbox() { add(.inbox, to: .left) }
 
     /// Consecutive tiles share a row, two at a time.
     public static func rows(_ modules: [TodayModule]) -> [TodayRow] {

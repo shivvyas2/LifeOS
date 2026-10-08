@@ -7,7 +7,7 @@ import Foundation
         let layout = TodayLayout.standard
         #expect(layout.left == [.nextUp, .month, .tasks, .focus, .scheduledWorkout])
         #expect(layout.right == [.steps, .sleep, .weight, .recovery])
-        #expect(layout.hidden == [.github, .weather, .spentToday, .fromLifo, .projects])
+        #expect(layout.hidden == [.github, .weather, .spentToday, .fromLifo, .projects, .inbox])
         #expect(layout.phoneOrder == layout.left + layout.right)
     }
 
@@ -82,7 +82,7 @@ import Foundation
     }
 
     @Test func decodingKeepsNewModulesHiddenAndDropsUnknownOnes() {
-        let data = Data(#"{"left":["month","inbox","nextUp"],"right":["steps"]}"#.utf8)
+        let data = Data(#"{"left":["month","notAModule","nextUp"],"right":["steps"]}"#.utf8)
         let layout = TodayLayout.decoded(data)
         #expect(layout.left == [.month, .nextUp])
         #expect(layout.right == [.steps])
@@ -123,6 +123,18 @@ import Foundation
         #expect(TodayLayout.decoded(data).hidden.contains(.focus))
         #expect(TodayModule.focus.title == "Focus")
         #expect(TodayModule.focus.daySection == nil)
+    }
+
+    @Test func aLayoutSavedBeforeTheInboxKeepsItHiddenUntilOffered() {
+        let data = Data(#"{"left":["month","nextUp"],"right":["steps"]}"#.utf8)
+        var layout = TodayLayout.decoded(data)
+        #expect(layout.hidden.contains(.inbox))
+        #expect(TodayModule.inbox.title == "Inbox")
+        #expect(TodayModule.inbox.daySection == nil)
+        layout.offerInbox()
+        layout.offerInbox()
+        #expect(layout.left.filter { $0 == .inbox }.count == 1)
+        #expect(layout.left.last == .inbox)
     }
 
     @Test func titlesAndTiles() {

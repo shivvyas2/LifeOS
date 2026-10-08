@@ -58,6 +58,11 @@ enum AppConfig {
 
     static var isGitHubConfigured: Bool { githubClientID != nil && githubTokenEndpoint != nil }
 
+    /// Google's iOS client id. Public by design: an iOS client has no secret.
+    static var googleClientID: String? { string("GoogleClientID") }
+
+    static var isGoogleConfigured: Bool { googleClientID?.hasSuffix(".apps.googleusercontent.com") == true }
+
     static var plaidFunctionsBase: URL? {
         supabaseURL?.appendingPathComponent("functions/v1")
     }
