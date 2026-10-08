@@ -137,6 +137,7 @@ struct HealthActivityDesignPreview: View {
             else if ["coach", "coach-empty", "coach-voice"].contains(page) { CoachDesignPreview(page: page) }
             else if ["settings-clear-data", "settings-delete-account", "keep-account"].contains(page) { AccountControlsDesignPreview(page: page) }
             else if page == "projects" || page.hasPrefix("project-") { ProjectsDesignPreview(page: page) }
+            else if page == "focus" || page.hasPrefix("focus-") { FocusDesignPreview(page: page) }
             else if ["assistant", "assistant-confirm", "assistant-empty"].contains(page) { AssistantDesignPreview(page: page) }
             else if page == "library" || page == "library-empty" {
                 NavigationStack {
