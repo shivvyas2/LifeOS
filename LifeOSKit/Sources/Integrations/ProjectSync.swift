@@ -97,6 +97,8 @@ public final class ProjectSync {
             }
         }
         refused += try await send("project_milestones", pending.milestones.map(Self.milestoneRow), token: token)
+        // Before tasks, which point at features.
+        refused += try await send("project_features", pending.features.map(Self.featureRow), token: token)
         for batch in stride(from: 0, to: pending.tasks.count, by: 100).map({
             Array(pending.tasks[$0..<min($0 + 100, pending.tasks.count)])
         }) {
@@ -172,6 +174,11 @@ public final class ProjectSync {
             try Self.apply(row, store)
             return row.updatedAt
         }
+        try await pullTable("project_features", token: token) { json in
+            guard let row = FeatureRow(json: json) else { return nil }
+            try Self.apply(row, store)
+            return row.updatedAt
+        }
         try await pullTable("project_tasks", token: token) { json in
             guard let row = ProjectTaskRow(json: json) else { return nil }
             try Self.apply(row, store)
@@ -210,6 +217,10 @@ public final class ProjectSync {
                                                                equals: key, accessToken: token, limit: 1_000)) {
             if let row = MilestoneRow(json: json) { try Self.apply(row, store) }
         }
+        for json in SupabaseREST.decode(try await remote.fetch(table: "project_features", column: "project_id",
+                                                               equals: key, accessToken: token, limit: 1_000)) {
+            if let row = FeatureRow(json: json) { try Self.apply(row, store) }
+        }
         for json in SupabaseREST.decode(try await remote.fetch(table: "project_tasks", column: "project_id",
                                                                equals: key, accessToken: token, limit: 5_000)) {
             if let row = ProjectTaskRow(json: json) { try Self.apply(row, store) }
@@ -223,8 +234,24 @@ public final class ProjectSync {
                                        position: row.position, updatedAt: row.updatedAt, deletedAt: row.deletedAt)
     }
 
+    private static func apply(_ row: FeatureRow, _ store: ProjectsStore) throws {
+        try store.applyRemoteFeature(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID,
+                                     title: row.title, note: row.note, position: row.position, branch: row.branch,
+                                     stage: row.stage, stageDetail: row.stageDetail, prNumber: row.prNumber,
+                                     stageCheckedAt: row.stageCheckedAt, updatedAt: row.updatedAt,
+                                     deletedAt: row.deletedAt)
+    }
+
+    private static func featureRow(_ r: FeatureRecord) -> [String: Any] {
+        FeatureRow(id: r.id, projectID: r.projectID, milestoneID: r.milestoneID, title: r.title, note: r.note,
+                   position: r.position, branch: r.branch, stage: r.stage, stageDetail: r.stageDetail,
+                   prNumber: r.prNumber, stageCheckedAt: r.stageCheckedAt, updatedAt: r.updatedAt,
+                   deletedAt: r.deletedAt).payload()
+    }
+
     private static func apply(_ row: ProjectTaskRow, _ store: ProjectsStore) throws {
-        try store.applyRemoteTask(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID, title: row.title,
+        try store.applyRemoteTask(id: row.id, projectID: row.projectID, milestoneID: row.milestoneID, featureID: row.featureID,
+                                  title: row.title,
                                   notes: row.notes, status: row.status, ownerID: row.ownerID, dueOn: row.dueOn,
                                   startsAt: row.startsAt, endsAt: row.endsAt, position: row.position, doneAt: row.doneAt,
                                   updatedAt: row.updatedAt, deletedAt: row.deletedAt)
@@ -242,7 +269,8 @@ public final class ProjectSync {
     }
 
     private static func taskRow(_ r: ProjectTaskRecord) -> [String: Any] {
-        ProjectTaskRow(id: r.id, projectID: r.projectID, milestoneID: r.milestoneID, title: r.title, notes: r.notes,
+        ProjectTaskRow(id: r.id, projectID: r.projectID, milestoneID: r.milestoneID, featureID: r.featureID,
+                       title: r.title, notes: r.notes,
                        status: r.status, ownerID: r.ownerID, dueOn: r.dueOn, startsAt: r.startsAt, endsAt: r.endsAt,
                        position: r.position, doneAt: r.doneAt, updatedAt: r.updatedAt, deletedAt: r.deletedAt).payload()
     }

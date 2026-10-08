@@ -88,15 +88,50 @@ public struct MilestoneRow: Equatable, Sendable {
     }
 }
 
+public struct FeatureRow: Equatable, Sendable {
+    public var id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String, position: Int
+    public var branch: String?, stage: String, stageDetail: String, prNumber: Int?, stageCheckedAt: Date?
+    public var updatedAt: Date, deletedAt: Date?
+
+    public init(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, note: String, position: Int,
+                branch: String?, stage: String, stageDetail: String, prNumber: Int?, stageCheckedAt: Date?,
+                updatedAt: Date, deletedAt: Date?) {
+        self.id = id; self.projectID = projectID; self.milestoneID = milestoneID; self.title = title
+        self.note = note; self.position = position; self.branch = branch; self.stage = stage
+        self.stageDetail = stageDetail; self.prNumber = prNumber; self.stageCheckedAt = stageCheckedAt
+        self.updatedAt = updatedAt; self.deletedAt = deletedAt
+    }
+
+    public init?(json: [String: Any]) {
+        guard let id = WireDate.uuid(json["id"]), let project = WireDate.uuid(json["project_id"]),
+              let updated = WireDate.read(json["updated_at"]) else { return nil }
+        self.init(id: id, projectID: project, milestoneID: WireDate.uuid(json["milestone_id"]),
+                  title: json["title"] as? String ?? "", note: json["note"] as? String ?? "",
+                  position: json["position"] as? Int ?? 0, branch: json["branch"] as? String,
+                  stage: json["stage"] as? String ?? "planned", stageDetail: json["stage_detail"] as? String ?? "",
+                  prNumber: json["pr_number"] as? Int, stageCheckedAt: WireDate.read(json["stage_checked_at"]),
+                  updatedAt: updated, deletedAt: WireDate.read(json["deleted_at"]))
+    }
+
+    public func payload() -> [String: Any] {
+        ["id": WireDate.string(id), "project_id": WireDate.string(projectID),
+         "milestone_id": WireDate.string(milestoneID), "title": title, "note": note, "position": position,
+         "branch": branch ?? NSNull(), "stage": stage, "stage_detail": stageDetail,
+         "pr_number": prNumber ?? NSNull(), "stage_checked_at": WireDate.instant(stageCheckedAt),
+         "updated_at": WireDate.instant(updatedAt), "deleted_at": WireDate.instant(deletedAt)]
+    }
+}
+
 public struct ProjectTaskRow: Equatable, Sendable {
-    public var id: UUID, projectID: UUID, milestoneID: UUID?, title: String, notes: String, status: String
+    public var id: UUID, projectID: UUID, milestoneID: UUID?, featureID: UUID?, title: String, notes: String, status: String
     public var ownerID: UUID?, dueOn: Date?, startsAt: Date?, endsAt: Date?, position: Int, doneAt: Date?
     public var updatedAt: Date, deletedAt: Date?
 
-    public init(id: UUID, projectID: UUID, milestoneID: UUID?, title: String, notes: String, status: String,
-                ownerID: UUID?, dueOn: Date?, startsAt: Date?, endsAt: Date?, position: Int, doneAt: Date?,
-                updatedAt: Date, deletedAt: Date?) {
-        self.id = id; self.projectID = projectID; self.milestoneID = milestoneID; self.title = title; self.notes = notes
+    public init(id: UUID, projectID: UUID, milestoneID: UUID?, featureID: UUID? = nil, title: String, notes: String,
+                status: String, ownerID: UUID?, dueOn: Date?, startsAt: Date?, endsAt: Date?, position: Int,
+                doneAt: Date?, updatedAt: Date, deletedAt: Date?) {
+        self.id = id; self.projectID = projectID; self.milestoneID = milestoneID; self.featureID = featureID
+        self.title = title; self.notes = notes
         self.status = status; self.ownerID = ownerID; self.dueOn = dueOn; self.startsAt = startsAt; self.endsAt = endsAt
         self.position = position; self.doneAt = doneAt; self.updatedAt = updatedAt; self.deletedAt = deletedAt
     }
@@ -105,6 +140,7 @@ public struct ProjectTaskRow: Equatable, Sendable {
         guard let id = WireDate.uuid(json["id"]), let project = WireDate.uuid(json["project_id"]),
               let updated = WireDate.read(json["updated_at"]) else { return nil }
         self.init(id: id, projectID: project, milestoneID: WireDate.uuid(json["milestone_id"]),
+                  featureID: WireDate.uuid(json["feature_id"]),
                   title: json["title"] as? String ?? "", notes: json["notes"] as? String ?? "",
                   status: json["status"] as? String ?? "todo", ownerID: WireDate.uuid(json["owner_id"]),
                   dueOn: WireDate.readDay(json["due_on"]), startsAt: WireDate.read(json["starts_at"]),
@@ -113,7 +149,7 @@ public struct ProjectTaskRow: Equatable, Sendable {
     }
 
     public func payload() -> [String: Any] {
-        ["id": WireDate.string(id), "project_id": WireDate.string(projectID), "milestone_id": WireDate.string(milestoneID),
+        ["id": WireDate.string(id), "project_id": WireDate.string(projectID), "milestone_id": WireDate.string(milestoneID), "feature_id": WireDate.string(featureID),
          "title": title, "notes": notes, "status": status, "owner_id": WireDate.string(ownerID),
          "due_on": WireDate.day(dueOn), "starts_at": WireDate.instant(startsAt), "ends_at": WireDate.instant(endsAt),
          "position": position, "done_at": WireDate.instant(doneAt), "updated_at": WireDate.instant(updatedAt),
