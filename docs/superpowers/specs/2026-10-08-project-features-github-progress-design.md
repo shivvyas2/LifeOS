@@ -79,9 +79,12 @@ network:
 | A merged PR whose head is the branch | Done | "Merged <relative date> · PR #N" |
 | Only closed, unmerged PRs | as if there were no PR | |
 
-Precedence: merged beats open beats branch. A branch deleted after its PR
-merged stays Done, so tidying branches never undoes progress. A merged PR
-followed by a new open PR from the same branch shows In review.
+Precedence: a PR beats the branch, and of a branch's open and merged PRs
+the newest (highest number) decides, so a merged PR followed by a new open
+PR from the same branch shows In review. A branch deleted after its PR
+merged stays Done, so tidying branches never undoes progress. Only PRs whose
+head repo is this repo count: a fork's PR from a branch of the same name is
+someone else's work.
 
 **Branch suggestion**: a new feature proposes `feat/<slug>`, the title
 lower-cased, ASCII-folded, non-alphanumerics collapsed to `-`, trimmed to 40
