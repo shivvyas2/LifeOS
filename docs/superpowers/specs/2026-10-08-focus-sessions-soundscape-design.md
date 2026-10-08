@@ -226,3 +226,20 @@ to Soundscape.
 
 Live Activity and Dynamic Island, music during workouts, recorded field
 textures, syncing focus sessions to the server.
+
+## Changes made while planning
+
+- The Watch focus session is marked by its mind-and-body activity type on
+  both sides; there is no new phone command, and the phone ends it with the
+  existing discard command.
+- A render that cannot keep up does not output silence: after sustained
+  overruns, or at the `serious` thermal state, the engine drops into a light
+  mode (no reverb, no bells, plucks or pulses) and keeps playing.
+- The app has no unit-test target, so the session logic a test needs
+  (conditions, source fallback, phase mapping, the timer) lives in the kit
+  and is tested there; the app's session model is thin glue covered by the
+  UI test.
+- Apple Music offers no volume control to the app, so breaks pause the
+  music and the next work block resumes it.
+- LIFO does not call App Intents today, so starting a session from LIFO is
+  left out of this build; Siri and Shortcuts get the intent.
