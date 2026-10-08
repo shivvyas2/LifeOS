@@ -130,7 +130,7 @@ struct HealthActivityDesignPreview: View {
                 }
             }
             else if page == "profile" { ProfileDesignPreview() }
-            else if page == "money" || page.hasPrefix("nav") { EditorialDesignPreview(page: page) }
+            else if page.hasPrefix("money") || page.hasPrefix("card-") || page.hasPrefix("nav") { EditorialDesignPreview(page: page) }
             else if page.hasPrefix("life") || page == "shell" { LifeDesignPreview(page: page) }
             else if ["today", "today-empty", "today-done", "today-custom", "today-arranging", "today-ipad-custom", "month", "schedule", "calendar-find", "calendar-ask", "day", "day-past", "day-future", "day-far", "day-empty", "day-no-location", "day-github", "day-github-issues", "day-github-today-none", "day-github-reconnect", "day-github-stale", "notes", "notes-empty"].contains(page) { TodayDesignPreview(page: page) }
             else if ["notes-editor-new", "notes-filing", "notes-editor", "notes-editor-picker", "notes-walkthrough", "notes-walkthrough-live"].contains(page) { NotesDesignPreview(page: page) }

@@ -6,17 +6,20 @@ import DesignSystem
 enum MoneyDetailFilter: Hashable, Identifiable {
     case category(String)
     case merchant(String)
+    /// A card's key and the name its face shows.
+    case card(String, String)
 
     var id: String {
         switch self {
         case .category(let name): "category:\(name)"
         case .merchant(let name): "merchant:\(name)"
+        case .card(let key, _): "card:\(key)"
         }
     }
 
     var title: String {
         switch self {
-        case .category(let name), .merchant(let name): name
+        case .category(let name), .merchant(let name), .card(_, let name): name
         }
     }
 }
@@ -72,6 +75,7 @@ struct MoneyTransactionRow: View {
     let row: MoneyRow
     var onOpen: ((MoneyDetailFilter) -> Void)? = nil
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.moneyPickCard) private var pickCard
 
     var body: some View {
         if let onOpen {
@@ -102,6 +106,7 @@ struct MoneyTransactionRow: View {
                     .minimumScaleFactor(0.8)
             }
             Spacer(minLength: Space.x1)
+            cardChip
             VStack(alignment: .trailing, spacing: 2) {
                 MoneyFigure(amount: row.amount, size: 18, showsSign: true)
                     .fixedSize()
@@ -121,9 +126,32 @@ struct MoneyTransactionRow: View {
         .contentShape(Rectangle())
     }
 
-    private var detail: String {
-        [row.category ?? "Uncategorised", row.accountName].compactMap { $0 }.joined(separator: " · ")
+    /// The card that paid. Its own button inside the row: the row opens the
+    /// merchant, the chip says which card it was.
+    @ViewBuilder
+    private var cardChip: some View {
+        if let pickCard {
+            Button { pickCard(row) } label: { CardChip(card: row.card) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Choose which card paid")
+        } else {
+            CardChip(card: row.card)
+        }
     }
+
+    /// The category, then the card's name where the chip alone is not enough
+    /// to say it.
+    private var detail: String {
+        [row.category ?? "Uncategorised", row.card?.title ?? row.accountName]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+extension EnvironmentValues {
+    /// Opens the card picker for a row. Set once by the Money stack, so every
+    /// row on the ledger and the detail pages offers it without each screen
+    /// passing a closure down.
+    @Entry var moneyPickCard: ((MoneyRow) -> Void)? = nil
 }
 
 /// Rows grouped by day, most recent day first, with the label the header

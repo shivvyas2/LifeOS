@@ -39,20 +39,11 @@ struct MoneyDetailScreen: View {
 
     private var headline: some View {
         MoneyBand {
-            HStack(spacing: Space.x2 - 4) {
-                MerchantTile(logoURL: snapshot.logoURL,
-                             glyph: MoneyLedgerSection.glyph(for: snapshot.category),
-                             size: 48)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(filter.title)
-                        .font(LifeOSType.sectionTitle.weight(.bold))
-                        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if case .merchant = filter, let category = snapshot.category {
-                        Text(category).moneyEyebrow(scheme)
-                    }
-                }
+            if let card = snapshot.card {
+                CardFace(card: card, width: layout.isRegular ? 260 : 220)
+                    .padding(.bottom, Space.x1)
+            } else {
+                merchantHeader
             }
             Text("This month").moneyEyebrow(scheme).padding(.top, Space.x1)
             MoneyFigure(amount: snapshot.monthTotal, size: 46)
@@ -61,6 +52,24 @@ struct MoneyDetailScreen: View {
                  : "\(snapshot.monthCount) charge\(snapshot.monthCount == 1 ? "" : "s") in \(snapshot.monthLabel)")
                 .font(LifeOSType.label.weight(.semibold))
                 .foregroundStyle(MoneyPalette.quietInk(scheme))
+        }
+    }
+
+    private var merchantHeader: some View {
+        HStack(spacing: Space.x2 - 4) {
+            MerchantTile(logoURL: snapshot.logoURL,
+                         glyph: MoneyLedgerSection.glyph(for: snapshot.category),
+                         size: 48)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(filter.title)
+                    .font(LifeOSType.sectionTitle.weight(.bold))
+                    .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if case .merchant = filter, let category = snapshot.category {
+                    Text(category).moneyEyebrow(scheme)
+                }
+            }
         }
     }
 

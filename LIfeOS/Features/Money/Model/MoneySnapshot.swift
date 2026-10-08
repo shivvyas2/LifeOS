@@ -1,4 +1,5 @@
 import Foundation
+import Persistence
 
 struct MoneySnapshot: Equatable {
     var income: Double = 0
@@ -35,6 +36,11 @@ struct MoneySnapshot: Equatable {
     /// Set when a bank has invalidated its stored login.
     var reconnectPrompt: String?
     var lastSyncedAt: Date?
+    /// The cards strip: credit cards, hand-added cards, and any other account
+    /// that paid for something this month, most spent first.
+    var cards: [MoneyCardSummary] = []
+    /// Every account a charge could be put on, for the card picker.
+    var pickableCards: [MoneyCardSummary] = []
 
     var verdict: String {
         guard let savingsRate else { return "No income logged" }
@@ -53,6 +59,50 @@ struct MoneyRow: Equatable, Identifiable {
     /// same merchant. Nil shows the category glyph.
     var logoURL: URL? = nil
     var accountName: String? = nil
+    /// The card that paid, after the person's choices are applied. Nil when
+    /// nobody, Plaid included, has said.
+    var card: MoneyCardSummary? = nil
+}
+
+/// One card as the screens draw it: the face, the name, and the month on it.
+struct MoneyCardSummary: Equatable, Identifiable, Hashable {
+    /// `MoneyAccount.cardKey`.
+    let id: String
+    /// What the face says: the catalog product's name, else the account name.
+    let title: String
+    let issuer: String
+    let mask: String?
+    let network: CardNetwork
+    let style: CardFaceStyle
+    let productID: String?
+    let isManual: Bool
+    /// The bank's own name for the account, which can differ from `title`.
+    let accountName: String
+    var monthSpend: Double = 0
+    var monthCount: Int = 0
+
+    var initials: String {
+        String(title.split(separator: " ").prefix(2).compactMap(\.first)).uppercased()
+    }
+
+    var accessibilityName: String {
+        [title, mask.map { "ending \($0)" }].compactMap { $0 }.joined(separator: " ")
+    }
+
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+    init(_ account: MoneyAccount) {
+        let product = account.cardProduct
+        id = account.cardKey
+        title = product?.name ?? account.name
+        issuer = product?.issuer ?? ""
+        mask = account.mask
+        network = product?.network ?? .other
+        style = account.faceStyle
+        productID = account.cardProductID
+        isManual = account.isManual
+        accountName = account.name
+    }
 }
 
 struct BudgetBandRow: Equatable, Identifiable {

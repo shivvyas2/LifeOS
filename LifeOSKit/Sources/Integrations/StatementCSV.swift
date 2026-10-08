@@ -70,7 +70,7 @@ public enum StatementCSV {
     }
 
     /// "Payment Thank You", "AUTOPAY PAYMENT", "Online payment, thank you".
-    static func isCardPayment(_ description: String) -> Bool {
+    public static func isCardPayment(_ description: String) -> Bool {
         let text = description.lowercased()
         return text.contains("payment") || text.contains("autopay") || text.contains("thank you")
     }
@@ -124,7 +124,7 @@ public enum StatementCSV {
 
     private static let dateFormats = ["MM/dd/yyyy", "M/d/yyyy", "yyyy-MM-dd", "MM/dd/yy", "M/d/yy", "MMM d, yyyy", "dd MMM yyyy"]
 
-    static func date(_ text: String) -> Date? {
+    public static func date(_ text: String) -> Date? {
         let value = text.trimmingCharacters(in: .whitespaces)
         guard !value.isEmpty else { return nil }
         let formatter = DateFormatter()

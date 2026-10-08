@@ -14,4 +14,6 @@ struct MoneyDetailSnapshot: Equatable {
     /// This month's matching rows, most recent first.
     var transactions: [MoneyRow] = []
     var monthLabel: String = ""
+    /// The card, on a card page.
+    var card: MoneyCardSummary?
 }

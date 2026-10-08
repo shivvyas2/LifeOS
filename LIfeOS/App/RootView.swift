@@ -70,6 +70,11 @@ struct RootView: View {
     @State private var money = MoneyViewModel()
     @State private var moneyDetail = MoneyDetailViewModel()
     @State private var openMoney: MoneyDetailFilter?
+    /// The row whose card is being chosen.
+    @State private var pickingCardFor: MoneyRow?
+    /// The card editor: a card to restyle, or a new one.
+    @State private var editingCard: CardEditorTarget?
+    @State private var showImportStatement = false
     @State private var plan = PlanViewModel()
     @State private var notes = NotesViewModel()
     @State private var notesWalkthrough = NotesWalkthrough()
@@ -226,9 +231,50 @@ struct RootView: View {
             JournalEntrySheet { text in wellness.addJournal(text) }
         }
         .sheet(isPresented: $showAddMoney) {
-            AddMoneySheet { merchant, amount, isIncome, category in
-                money.add(merchant: merchant, amount: amount, isIncome: isIncome, category: category)
+            AddMoneySheet(cards: money.snapshot.pickableCards, initialCard: money.lastCardKey) {
+                merchant, amount, isIncome, category, cardKey in
+                money.add(merchant: merchant, amount: amount, isIncome: isIncome, category: category,
+                          cardKey: cardKey, connection: plaid)
             }
+        }
+        .sheet(item: $pickingCardFor) { row in
+            CardPickerSheet(
+                row: row,
+                cards: money.snapshot.pickableCards,
+                hasRule: money.hasCardRule(for: row.merchant),
+                onPick: { key, always in
+                    money.setCard(key, for: row, always: always, connection: plaid)
+                    reloadMoneyDetail()
+                },
+                onAddCard: { editingCard = CardEditorTarget(card: nil) }
+            )
+        }
+        .sheet(item: $editingCard) { target in
+            CardEditorSheet(
+                existing: target.card,
+                onSave: { draft in
+                    money.saveCard(draft, connection: plaid)
+                    reloadMoneyDetail()
+                },
+                onDelete: target.card.map { card in
+                    {
+                        money.deleteCard(key: card.id, connection: plaid)
+                        if case .card(let key, _) = openMoney, key == card.id { openMoney = nil }
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showImportStatement) {
+            StatementImportSheet(
+                cards: money.snapshot.pickableCards,
+                initialCard: money.lastCardKey,
+                duplicates: { lines, key in money.duplicates(in: lines, cardKey: key) },
+                onImport: { lines, key in
+                    money.importStatement(lines, cardKey: key, connection: plaid)
+                    reloadMoneyDetail()
+                },
+                onAddCard: { editingCard = CardEditorTarget(card: nil) }
+            )
         }
         .sheet(isPresented: $showBudgets, onDismiss: { money.load(connection: plaid) }) {
             BucketEditorSheet(model: money)
@@ -531,6 +577,8 @@ struct RootView: View {
                         onConnect: { plaid.connect() },
                         onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
                         onEditBudgets: { showBudgets = true },
+                        onEditCard: { editingCard = CardEditorTarget(card: $0) },
+                        onImportStatement: { showImportStatement = true },
                         onOpen: { openMoney = $0 }
                     )
                     .shellToolbar()
@@ -538,6 +586,7 @@ struct RootView: View {
                         MoneyDetailScreen(filter: filter, model: moneyDetail)
                     }
                 }
+                .environment(\.moneyPickCard) { pickingCardFor = $0 }
             case .notes:
                 NotesHubScreen(
                     model: notes,
