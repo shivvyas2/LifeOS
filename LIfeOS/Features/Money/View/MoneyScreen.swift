@@ -20,6 +20,8 @@ struct MoneyScreen: View {
     var onAdd: () -> Void = {}
     var onConnect: () -> Void = {}
     var onSync: () -> Void = {}
+    /// Pull to refresh: a sync right now, whatever the last one was.
+    var onRefresh: () async -> Void = {}
     var onEditBudgets: () -> Void = {}
     /// A category, merchant or transaction was tapped. The stack that owns
     /// this screen pushes the detail page.
@@ -65,6 +67,7 @@ struct MoneyScreen: View {
             .padding(.bottom, layout.contentBottomInset)
         }
         .scrollIndicators(.hidden)
+        .refreshable { await onRefresh() }
     }
 
     /// The month in one figure. Net is what every section below explains, so
