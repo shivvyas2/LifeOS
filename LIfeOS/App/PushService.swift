@@ -95,9 +95,11 @@ final class PushService {
     func refreshInbox() async {
         let center = UNUserNotificationCenter.current()
         authorization = await center.notificationSettings().authorizationStatus
-        if authorization == .authorized || authorization == .provisional {
-            UIApplication.shared.registerForRemoteNotifications()
-        }
+        // Registered whatever the answer. A silent push needs no permission,
+        // and it is how a new card purchase reaches the Money tab without the
+        // app being opened (see plaid-webhook). Alerts still need the person's
+        // yes: iOS will not show a nudge banner to someone who said no.
+        UIApplication.shared.registerForRemoteNotifications()
         let delivered = await center.deliveredNotifications()
         for notification in delivered {
             if let entry = Self.entry(from: notification) { _ = receive(entry) }
@@ -146,8 +148,8 @@ final class PushService {
                 return
             }
         case .denied:
-            // Registering anyway would silently succeed and produce a token
-            // that can never deliver anything.
+            // No banners, but the deferred refresh still registers the token
+            // for silent sync pushes.
             return
         default:
             break
@@ -214,6 +216,10 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         WatchSessionBridge.installMirroringHandler()
+        // Every launch, as Apple recommends: the token can change, and a
+        // silent sync push needs no permission, so there is nothing to wait
+        // for. The token only goes up to the server once someone is signed in.
+        application.registerForRemoteNotifications()
         return true
     }
 
@@ -232,6 +238,19 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         Task { @MainActor in await PushService.shared.adopt(deviceToken: deviceToken) }
+    }
+
+    /// A silent push. Today there is one kind: Plaid has something new for a
+    /// connected bank, so sync now rather than at the next open. iOS gives
+    /// this about thirty seconds, which one sync fits in.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any]
+    ) async -> UIBackgroundFetchResult {
+        guard userInfo["kind"] as? String == "plaid-sync" else { return .noData }
+        let synced = await MoneyLiveSync.shared.run()
+        pushLog.info("plaid sync push handled synced=\(synced, privacy: .public)")
+        return synced ? .newData : .failed
     }
 
     func application(
@@ -262,5 +281,35 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     ) async {
         guard let entry = PushService.entry(from: response.notification) else { return }
         await MainActor.run { _ = PushService.shared.receive(entry, open: true) }
+    }
+}
+
+/// The bridge from a silent push to the Plaid sync.
+///
+/// The push arrives at the app delegate, which knows nothing about the view
+/// models. RootView installs the handler once its integrations are attached
+/// to a store. A push that lands before then, on a launch straight into the
+/// background, is remembered and run as soon as the handler appears.
+@MainActor
+final class MoneyLiveSync {
+    static let shared = MoneyLiveSync()
+
+    private var handler: (() async -> Bool)?
+    private var pending = false
+
+    func install(_ handler: @escaping () async -> Bool) {
+        self.handler = handler
+        if pending {
+            pending = false
+            Task { _ = await handler() }
+        }
+    }
+
+    func run() async -> Bool {
+        guard let handler else {
+            pending = true
+            return false
+        }
+        return await handler()
     }
 }

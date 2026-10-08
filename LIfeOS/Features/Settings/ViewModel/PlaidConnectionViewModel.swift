@@ -165,10 +165,12 @@ final class PlaidConnectionViewModel {
         defaults.set(true, forKey: Self.logoReplayKey)
     }
 
-    func syncIfDue() async {
+    /// `staleAfter` is an hour for ordinary reloads, and much less when
+    /// someone opens the Money tab to see what they just spent.
+    func syncIfDue(staleAfter: TimeInterval = 3_600) async {
         replayHistoryOnce(defaults: defaults)
         guard active, sessions.load() != nil,
-              SyncStalenessPolicy.shouldSync(lastSync: lastAttemptAt) else { return }
+              SyncStalenessPolicy.shouldSync(lastSync: lastAttemptAt, staleAfter: staleAfter) else { return }
         // The server owns the link. Ask it even when this device has no cache.
         if case .connecting = state { return }
         if case .unconfigured = state { return }

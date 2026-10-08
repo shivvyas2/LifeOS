@@ -451,3 +451,8 @@ verify_jwt = false
 # what it kept); every other call is gated by resolveUser in the handler.
 [functions.account-data]
 verify_jwt = false
+
+# Plaid has no Supabase session to send. The handler verifies Plaid's signed
+# Plaid-Verification JWT against the exact body before trusting anything in it.
+[functions.plaid-webhook]
+verify_jwt = false

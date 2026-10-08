@@ -21,6 +21,8 @@ struct MoneyScreen: View {
     var onConnect: () -> Void = {}
     var onConnectCard: () -> Void = {}
     var onSync: () -> Void = {}
+    /// Pull to refresh: a sync right now, whatever the last one was.
+    var onRefresh: () async -> Void = {}
     var onEditBudgets: () -> Void = {}
     /// Add a card by hand, or restyle one (nil is a new card).
     var onEditCard: (MoneyCardSummary?) -> Void = { _ in }
@@ -72,6 +74,7 @@ struct MoneyScreen: View {
             .padding(.bottom, layout.contentBottomInset)
         }
         .scrollIndicators(.hidden)
+        .refreshable { await onRefresh() }
     }
 
     /// The month in one figure. Net is what every section below explains, so

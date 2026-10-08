@@ -350,9 +350,17 @@ struct RootView: View {
             // Life loads when its tab comes up, not on every save elsewhere
             // (see `reloadAll`).
             if selected == .life { life.load() }
+            if selected == .money { syncMoneySoon() }
         }
         .task {
             attachAll()
+            // A silent push from plaid-webhook lands here: sync, then redraw.
+            MoneyLiveSync.shared.install {
+                await plaid.sync()
+                money.load(connection: plaid)
+                reloadMoneyDetail()
+                return true
+            }
             reloadAll()
             syncCalendar()
             await PushService.shared.refreshInbox()
@@ -380,6 +388,7 @@ struct RootView: View {
             if phase == .active { Task { await projectSync?.sync(); projects.load() } }
             if phase == .active {
                 reloadAll()
+                if tab == .money { syncMoneySoon() }
                 syncCalendar()
                 // Re-pushed on every foreground, not only after sign in. The
                 // row carries the timezone the send hour is read in, so
@@ -601,6 +610,10 @@ struct RootView: View {
                         onConnect: { plaid.connect() },
                         onConnectCard: { plaid.connect(.creditCard) },
                         onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
+                        onRefresh: {
+                            await plaid.sync()
+                            money.load(connection: plaid)
+                        },
                         onEditBudgets: { showBudgets = true },
                         onEditCard: { editingCard = CardEditorTarget(card: $0) },
                         onImportStatement: { showImportStatement = true },
@@ -927,6 +940,17 @@ struct RootView: View {
 
     /// Only while its page is up. Off screen it is six months of rows nobody
     /// is looking at, run on every save in the app.
+    /// Looking at Money is asking what was just spent, so the bar for a fresh
+    /// sync drops from an hour to two minutes. The silent push usually got
+    /// there first; this covers the times iOS held it back.
+    private func syncMoneySoon() {
+        Task {
+            await plaid.syncIfDue(staleAfter: 120)
+            money.load(connection: plaid)
+            reloadMoneyDetail()
+        }
+    }
+
     private func reloadMoneyDetail() {
         guard let openMoney else { return }
         moneyDetail.load(openMoney)
