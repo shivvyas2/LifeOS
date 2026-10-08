@@ -529,6 +529,7 @@ struct RootView: View {
                         snapshot: money.snapshot,
                         onAdd: { showAddMoney = true },
                         onConnect: { plaid.connect() },
+                        onConnectCard: { plaid.connect(.creditCard) },
                         onSync: { Task { await plaid.sync(); money.load(connection: plaid) } },
                         onEditBudgets: { showBudgets = true },
                         onOpen: { openMoney = $0 }

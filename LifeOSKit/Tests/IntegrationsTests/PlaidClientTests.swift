@@ -65,6 +65,24 @@ final class PlaidStubURLProtocol: URLProtocol {
         #expect(try await client.createLinkToken() == "link-sandbox-abc")
     }
 
+    @Test func aCardSessionAsksTheFunctionForCards() async throws {
+        let client = makeClient([.ok(#"{"link_token":"link-sandbox-abc"}"#)])
+        _ = try await client.createLinkToken(for: .creditCard)
+
+        let body = try #require(PlaidStubURLProtocol.lastBody)
+        let decoded = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+        #expect(decoded?["kind"] as? String == "credit_card")
+    }
+
+    @Test func aBankSessionIsTheDefault() async throws {
+        let client = makeClient([.ok(#"{"link_token":"link-sandbox-abc"}"#)])
+        _ = try await client.createLinkToken()
+
+        let body = try #require(PlaidStubURLProtocol.lastBody)
+        let decoded = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+        #expect(decoded?["kind"] as? String == "bank")
+    }
+
     @Test func anExpiredBankLoginIsItsOwnErrorNotAGenericFailure() async throws {
         // The app has to tell "sign in again" apart from "try again later".
         // Collapsed into one error, the reconnect banner can never appear.

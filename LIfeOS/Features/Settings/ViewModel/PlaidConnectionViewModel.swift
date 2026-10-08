@@ -92,20 +92,26 @@ final class PlaidConnectionViewModel {
 
     // MARK: - Connect
 
-    func connect() {
+    /// What the Link session in flight was opened for, so a refusal can be
+    /// worded for a card rather than a bank.
+    private(set) var connectingKind: PlaidLinkKind = .bank
+
+    func connect(_ kind: PlaidLinkKind = .bank) {
         guard active, let api else { state = .unconfigured; return }
         state = .connecting
+        connectingKind = kind
 
         Task {
             do {
-                let linkToken = try await api.createLinkToken()
+                let linkToken = try await api.createLinkToken(for: kind)
                 guard active, sessions.load() != nil else { return }
                 PlaidLinkPresenter.present(linkToken: linkToken) { result in
                     Task { await self.finishConnect(result) }
                 }
             } catch {
                 plaidLog.error("link token failed: \(String(describing: error))")
-                state = .failed("Could not start the bank connection")
+                state = .failed(kind == .creditCard ? "Could not start the card connection"
+                                                    : "Could not start the bank connection")
             }
         }
     }
@@ -131,7 +137,12 @@ final class PlaidConnectionViewModel {
                 refreshState()
                 await sync()
             } catch PlaidClientError.institutionAlreadyConnected {
-                state = .failed("That bank is already connected")
+                // One login per bank: a second one would bring the same
+                // transactions in twice. A card at a bank already connected
+                // is reached through that bank's login instead.
+                state = .failed(connectingKind == .creditCard
+                    ? "\(institutionName ?? "That bank") is already connected. Its cards come in with it; to add one you left out, disconnect the bank and connect it again with the card ticked."
+                    : "That bank is already connected")
             } catch {
                 plaidLog.error("exchange failed: \(String(describing: error))")
                 state = .failed("Could not finish connecting")

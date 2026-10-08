@@ -52,6 +52,17 @@ struct ConnectionsSettingsScreen: View {
                     ) {
                         if case .connected = plaid.state {} else { plaid.connect() }
                     }
+                    // Its own way in, not a second look at the bank card: a
+                    // card session lists only issuers and only cards, and it
+                    // stays open after a bank is connected, so a card from
+                    // somewhere else can always be added.
+                    connectionCard(
+                        icon: "creditcard.fill", hue: .money,
+                        title: "Credit cards",
+                        status: "Any card, from any issuer. Purchases count toward spending; paying the card off does not.",
+                        chip: cardChip
+                    ) { plaid.connect(.creditCard) }
+                    .disabled(plaid.state == .unconfigured || plaid.state == .connecting)
                     if let github {
                         Label("Work", systemImage: "chevron.left.forwardslash.chevron.right")
                             .font(LifeOSType.sectionTitle).padding(.top, 12)
@@ -229,9 +240,17 @@ struct ConnectionsSettingsScreen: View {
         switch plaid.state {
         // The tap only connects, so the connected row shows a state, not a verb.
         case .connected: Chip(text: "Connected", standing: true)
-        case .connecting: Chip(text: "…")
+        case .connecting: plaid.connectingKind == .bank ? Chip(text: "…") : Chip(text: "Connect")
         case .unconfigured: Chip(text: "Setup")
         default: Chip(text: "Connect")
+        }
+    }
+
+    private var cardChip: Chip {
+        switch plaid.state {
+        case .connecting where plaid.connectingKind == .creditCard: Chip(text: "…")
+        case .unconfigured: Chip(text: "Setup")
+        default: Chip(text: "Add a card")
         }
     }
 }

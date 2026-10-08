@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { classifyPlaidFailure } from "./plaid.ts";
+import { accountFilters, classifyPlaidFailure, linkKind } from "./plaid.ts";
 
 // An expired bank login is not a server fault and not a retry. It is the most
 // common real-world Plaid failure, since banks invalidate stored logins every
@@ -29,4 +29,20 @@ Deno.test("anything else is an opaque upstream failure", () => {
 // Plaid is not obliged to send us JSON when it is having a bad day.
 Deno.test("a non-JSON body does not throw", () => {
   assertEquals(classifyPlaidFailure(502, "<html>gateway timeout</html>"), "upstream_failure");
+});
+
+Deno.test("a card session narrows Link to credit cards", () => {
+  assertEquals(accountFilters("credit_card"), {
+    account_filters: { credit: { account_subtypes: ["credit card"] } },
+  });
+});
+
+Deno.test("a bank session adds no filter, so cards still come with a bank", () => {
+  assertEquals(accountFilters("bank"), {});
+});
+
+Deno.test("anything but credit_card is a bank session, including no body", () => {
+  assertEquals(linkKind("credit_card"), "credit_card");
+  assertEquals(linkKind(undefined), "bank");
+  assertEquals(linkKind("CREDIT"), "bank");
 });

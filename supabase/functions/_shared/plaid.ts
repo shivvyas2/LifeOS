@@ -95,3 +95,21 @@ export async function callPlaid(
   }
   return JSON.parse(text);
 }
+
+// Which accounts a Link session offers. A bank session leaves Link to show
+// everything the transactions product supports, cards included; a card
+// session narrows it to credit cards, so the institution list and the account
+// picker only show places and accounts that are actually cards. Anything the
+// device sends that is not "credit_card" is a bank session, so an old build
+// that sends no body keeps the behavior it always had.
+export type LinkKind = "bank" | "credit_card";
+
+export function linkKind(value: unknown): LinkKind {
+  return value === "credit_card" ? "credit_card" : "bank";
+}
+
+export function accountFilters(kind: LinkKind): Record<string, unknown> {
+  return kind === "credit_card"
+    ? { account_filters: { credit: { account_subtypes: ["credit card"] } } }
+    : {};
+}

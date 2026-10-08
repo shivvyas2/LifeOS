@@ -22,7 +22,7 @@ private final class StubMoney: MoneyIngesting {
 
 private struct StubAPI: PlaidAPI {
     let response: PlaidSyncResponse
-    func createLinkToken() async throws -> String { "link" }
+    func createLinkToken(for kind: PlaidLinkKind) async throws -> String { "link" }
     func exchange(publicToken: String, institutionID: String?,
                   institutionName: String?) async throws -> PlaidExchangeResult {
         PlaidExchangeResult(item_id: "item_sandbox_1", institution_name: "First Platypus Bank")
