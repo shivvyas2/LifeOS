@@ -27,7 +27,8 @@ Decisions, in the order they were made:
 - **Three slices, one PR each**: features and Plan; GitHub; Draft with LIFO.
 
 Cost: one small table, the existing sync pattern, GitHub's API (free), and
-about ten plan drafts per person per day through `lifo-agent`. Well under
+about one plan draft per person per day through `lifo-agent` (owner accepted
+up to ~$1.44 per user per month on top of chat). Well under
 the ~$2 per person per month ceiling.
 
 ## 1. The feature
@@ -186,9 +187,10 @@ A new request kind, `plan`, in `lifo-agent`:
   with auth").
 - Output, by schema: 3 to 12 features, each `title`, `note`, `branch`
   (suggested), `milestone` (one of the given titles or null), in order.
-- Bounds: input sizes above enforced server side; ten `plan` requests per
-  person per day, enforced as a daily token allowance of 10 × the task's
-  `maxTokens` in `lifo_usage` under kind `plan`, separate from chat's.
+- Bounds: input sizes above enforced server side; about one draft per
+  person per day, enforced as a daily allowance of 12,000 billed tokens in
+  `lifo_usage` under kind `plan`, separate from chat's. Chosen by the owner
+  knowing it can add ~$1.44 per user per month at the worst.
 - The phone shows the draft as an editable preview. **Keep** saves the
   features; **Redraft** asks again with the nudge; leaving discards it.
 - A refusal, a failure, or the daily limit shows one plain sentence and

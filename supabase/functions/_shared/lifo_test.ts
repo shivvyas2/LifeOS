@@ -691,7 +691,7 @@ Deno.test("plans are billed to their own allowance", () => {
   assertEquals(usageKind({ kind: "prompt", task: "plan", prompt: "p" }), "plan");
   assertEquals(usageKind({ kind: "prompt", task: "answer", prompt: "p" }), "chat");
   assertEquals(usageCap("plan"), PLAN_TOKEN_CAP);
-  assertEquals(PLAN_TOKEN_CAP, 60_000);
+  assertEquals(PLAN_TOKEN_CAP, 12_000);
 });
 
 Deno.test("a plan is trimmed to the server's limits and to twelve", () => {

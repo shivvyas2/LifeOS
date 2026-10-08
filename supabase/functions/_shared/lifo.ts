@@ -158,9 +158,12 @@ are given; if a figure is not there, do not mention it.`,
 /// chat evening must not be able to eat the next morning's nudge.
 export const NUDGE_TOKEN_CAP = 4_000;
 
-/// Ten drafts a day at the task's ceiling, kept apart from chat so planning
-/// a project never eats the evening's coaching.
-export const PLAN_TOKEN_CAP = 60_000;
+/// About one draft a day, in the same billed units as DAILY_TOKEN_CAP (a
+/// typical draft bills ~11,000). Kept apart from chat so planning a project
+/// never eats the evening's coaching. Chosen by the owner on 2026-10-08
+/// knowing it can add ~$1.44 per user per month at the worst, on top of
+/// chat's ~$1.92.
+export const PLAN_TOKEN_CAP = 12_000;
 export const MAX_PLAN_PROMPT = 12_000;
 
 type Parsed = NonNullable<ReturnType<typeof parseRequest>>;

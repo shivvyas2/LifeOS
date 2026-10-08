@@ -65,7 +65,7 @@ struct PlanDraftSheet: View {
         defer { drafting = false }
         switch await model.draftPlan(projectID: projectID, nudge: nudge.isEmpty ? nil : nudge, github: github) {
         case .success(let drafted): items = drafted
-        case .failure(.exhausted): message = "That is today's drafts used up. Add features by hand, or draft again tomorrow."
+        case .failure(.exhausted): message = "That is today's draft used. Add features by hand, or draft again tomorrow."
         case .failure(.refused(let reason)): message = reason
         case .failure(.notSignedIn): message = "Sign in to draft with LIFO."
         case .failure(.unavailable): message = "LIFO could not be reached. Try again, or add features by hand."
