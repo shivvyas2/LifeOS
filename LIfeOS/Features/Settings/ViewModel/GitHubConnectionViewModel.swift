@@ -65,6 +65,7 @@ final class GitHubConnectionViewModel: NSObject {
 
     func deactivate() {
         active = false
+        GitHubStatusCache.shared.clear()
         webSession?.cancel()
         webSession = nil
         tokens.clearPending()
@@ -216,6 +217,7 @@ final class GitHubConnectionViewModel: NSObject {
         }
         tokens.clear()
         GitHubDayCache(defaults: defaults).clear()
+        GitHubStatusCache.shared.clear()
         defaults.removeObject(forKey: Self.contributionsKey)
         pinnedRepo = nil
         defaults.removeObject(forKey: GitHubDaySource.needsReconnectKey)

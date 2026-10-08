@@ -125,7 +125,7 @@ struct ProjectsHomeScreen: View {
             if let progress = try? model.store?.featureProgress(projectID: project.id), progress.total > 0 {
                 Text("\(progress.done) of \(progress.total) features done").font(LifeOSType.caption)
             }
-            if let repo = project.repo, let last = ProjectGitHubModel.cached(repo)?.lastCommitAt {
+            if let repo = project.repo, let last = ProjectGitHubModel.cached(repo, login: github?.connection?.login)?.lastCommitAt {
                 Text("Last commit \(GitHubRelative.short(last, now: .now))").font(LifeOSType.caption)
                     .foregroundStyle(Editorial.quietInk(scheme))
             }

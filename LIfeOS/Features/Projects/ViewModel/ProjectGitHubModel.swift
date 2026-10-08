@@ -6,7 +6,7 @@ import Integrations
 private let projectGitHubLog = Logger(subsystem: "com.shivvyas.lifeos", category: "github")
 
 /// One project's repo as last read: status for stages and branches, and the
-/// default branch's history page by page. Reads are cached per repo for five
+/// default branch's history page by page. Reads are cached per repo and GitHub account for five
 /// minutes so moving between views does not read again.
 @MainActor @Observable
 final class ProjectGitHubModel {
@@ -24,8 +24,10 @@ final class ProjectGitHubModel {
     private let isFixture: Bool
     private var historyPage = 0
 
-    private static var cache: [String: (status: GitHubProjectStatus, at: Date)] = [:]
-    static func cached(_ repo: String) -> GitHubProjectStatus? { cache[repo.lowercased()]?.status }
+    /// The last read of `repo` by this GitHub account, whatever its age.
+    static func cached(_ repo: String, login: String?) -> GitHubProjectStatus? {
+        login.flatMap { GitHubStatusCache.shared.latest(login: $0, repo: repo) }
+    }
 
     init(repo: String, github: GitHubConnectionViewModel?, transport: any GitHubTransport = URLSessionGitHubTransport()) {
         self.repo = repo; self.github = github; self.transport = transport; self.isFixture = false
@@ -44,15 +46,16 @@ final class ProjectGitHubModel {
 
     func refresh(force: Bool = false) async {
         guard !isFixture else { return }
-        let key = repo.lowercased()
-        if !force, let hit = Self.cache[key], Date.now.timeIntervalSince(hit.at) < 300 {
+        // The account is checked before the cache: a read made with one
+        // GitHub account is never shown to another, or to nobody.
+        guard let login = github?.connection?.login, let source else { problem = .notConnected; return }
+        if !force, let hit = GitHubStatusCache.shared.fresh(login: login, repo: repo, now: .now) {
             status = hit.status; fetchedAt = hit.at; problem = nil
             return
         }
-        guard let source else { problem = .notConnected; return }
         do {
             let read = try await source.status()
-            Self.cache[key] = (read, .now)
+            GitHubStatusCache.shared.store(read, login: login, repo: repo, at: .now)
             status = read; fetchedAt = .now; problem = nil
         } catch GitHubProjectError.unauthorized {
             github?.markNeedsReconnect(); problem = .reconnect
