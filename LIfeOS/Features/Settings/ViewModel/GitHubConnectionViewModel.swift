@@ -216,6 +216,7 @@ final class GitHubConnectionViewModel: NSObject {
         }
         tokens.clear()
         GitHubDayCache(defaults: defaults).clear()
+        defaults.removeObject(forKey: Self.contributionsKey)
         pinnedRepo = nil
         defaults.removeObject(forKey: GitHubDaySource.needsReconnectKey)
         needsReconnect = false
@@ -226,12 +227,17 @@ final class GitHubConnectionViewModel: NSObject {
 
     // MARK: Contributions
 
+    static let contributionsKey = "github.contributions"
+
     /// A year of daily contribution counts, oldest first, from GitHub's
     /// GraphQL `contributionsCollection`; cached for a day per account.
     func contributions() async -> (days: [Int], total: Int)? {
         guard case .connected = state, let connection = tokens.load() else { return nil }
-        let key = "github.contributions"
+        let key = Self.contributionsKey
+        // Keyed to the login inside the entry, so a different GitHub account
+        // connected within the day never shows the last one's year.
         if let cached = defaults.dictionary(forKey: key),
+           cached["login"] as? String == connection.login,
            let fetched = cached["at"] as? Date, Date.now.timeIntervalSince(fetched) < 86_400,
            let days = cached["days"] as? [Int], let total = cached["total"] as? Int {
             return (days, total)
@@ -242,16 +248,28 @@ final class GitHubConnectionViewModel: NSObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let query = "query { viewer { contributionsCollection { contributionCalendar { totalContributions weeks { contributionDays { contributionCount } } } } } }"
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["query": query])
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            githubLog.error("github contributions did not reach GitHub")
+            return nil
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status == 401 {
+            defaults.set(true, forKey: GitHubDaySource.needsReconnectKey)
+            needsReconnect = true
+        }
+        guard status == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let calendar = (((json["data"] as? [String: Any])?["viewer"] as? [String: Any])?["contributionsCollection"]
                                 as? [String: Any])?["contributionCalendar"] as? [String: Any],
               let weeks = calendar["weeks"] as? [[String: Any]]
-        else { return nil }
+        else {
+            // Otherwise a misconfiguration looks exactly like "not connected".
+            githubLog.error("github contributions failed: status \(status)")
+            return nil
+        }
         let days = weeks.flatMap { ($0["contributionDays"] as? [[String: Any]] ?? []).map { $0["contributionCount"] as? Int ?? 0 } }
         let total = calendar["totalContributions"] as? Int ?? days.reduce(0, +)
-        defaults.set(["at": Date.now, "days": days, "total": total], forKey: key)
+        defaults.set(["at": Date.now, "login": connection.login, "days": days, "total": total], forKey: key)
         return (days, total)
     }
 

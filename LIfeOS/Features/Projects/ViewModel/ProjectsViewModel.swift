@@ -44,11 +44,17 @@ final class ProjectsViewModel {
     }
 
     /// GitHub's year when connected; otherwise tasks completed per day.
+    /// Called again whenever the connection changes, so connecting shows the
+    /// GitHub year at once and disconnecting goes back to tasks rather than
+    /// leaving the last account's year on screen.
     func loadContributions(from github: GitHubConnectionViewModel?) async {
         if let year = await github?.contributions() {
             contributions = year.days
             contributionTotal = year.total
             contributionsFromGitHub = true
+        } else if contributionsFromGitHub {
+            contributionsFromGitHub = false
+            load()
         }
     }
 
