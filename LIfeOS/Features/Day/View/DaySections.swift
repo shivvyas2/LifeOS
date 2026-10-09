@@ -214,14 +214,15 @@ struct NudgeRows: View {
     }
 }
 
-/// The day's work on GitHub: the count, the first three commit subjects with
-/// the rest a tap away, then the milestone or the open issues.
+/// The day's work on GitHub, as progress: the linked project's tasks done as
+/// a percent and a bar, the milestone's issues closed as a second bar, and
+/// the day's commits as one quiet line under them rather than a list.
 struct ProjectRows: View {
     let state: ProjectCardState
     var onOpen: (URL) -> Void
     var onReconnect: () -> Void
     @Environment(\.colorScheme) private var scheme
-    @State private var showsAll = false
+    @Environment(\.modelContext) private var context
 
     private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var quiet: Color { Editorial.quietInk(scheme) }
@@ -232,22 +233,27 @@ struct ProjectRows: View {
             Button("GitHub needs reconnecting", action: onReconnect)
                 .buttonStyle(.plain).font(LifeOSType.body).foregroundStyle(ink)
         case .card(let card, let asOf):
-            VStack(alignment: .leading, spacing: Space.x1) {
-                Text(ProjectHeadline.commits(card.commitCount, isTodayWithoutCommits: card.isTodayWithoutCommits))
-                    .font(LifeOSType.body).foregroundStyle(ink)
-                ForEach(Array((showsAll ? card.commits : Array(card.commits.prefix(3))).enumerated()), id: \.offset) { _, commit in
-                    Button(commit.subject) { onOpen(commit.url) }
-                        .buttonStyle(.plain).font(LifeOSType.secondary).foregroundStyle(quiet)
-                        .lineLimit(1).truncationMode(.tail)
+            VStack(alignment: .leading, spacing: Space.x2) {
+                if let project = linkedProject(card.repo), project.total > 0 {
+                    progressBlock(title: project.name,
+                                  percent: ProjectHeadline.percent(done: project.done, total: project.total),
+                                  detail: ProjectHeadline.tasksDone(project.done, of: project.total)
+                                      + (project.nextMilestone.map { " · next \($0)" } ?? ""),
+                                  colour: ProjectColour(named: project.colour), barHeight: 8)
                 }
-                if !showsAll, card.commits.count > 3 {
-                    Button(ProjectHeadline.more(card.commits.count - 3)) { showsAll = true }
-                        .buttonStyle(.editorial(.quiet, size: .compact))
+                if let followUp = card.followUp { followUpRows(followUp) }
+                Button { onOpen(card.commits.first?.url ?? card.repoURL) } label: {
+                    HStack(spacing: Space.x1) {
+                        Image(systemName: "arrow.triangle.branch").font(LifeOSType.caption)
+                        Text(ProjectHeadline.today(commits: card.commitCount))
+                            .font(LifeOSType.caption)
+                        if let latest = card.commits.first?.subject {
+                            Text(latest).font(LifeOSType.caption).lineLimit(1).truncationMode(.tail)
+                        }
+                    }
+                    .foregroundStyle(quiet)
                 }
-                if let followUp = card.followUp {
-                    Hairline().padding(.vertical, Space.half)
-                    followUpRows(followUp)
-                }
+                .buttonStyle(.plain)
                 if let asOf {
                     Text(ProjectHeadline.asOf(asOf, calendar: .current)).font(LifeOSType.caption).foregroundStyle(quiet)
                 }
@@ -255,11 +261,37 @@ struct ProjectRows: View {
         }
     }
 
+    /// The Projects tab's project that names this repo, if any.
+    private func linkedProject(_ repo: String) -> ProjectSnapshot? {
+        let projects = (try? ProjectsStore(context: context).projects()) ?? []
+        return projects.first { $0.repo?.caseInsensitiveCompare(repo) == .orderedSame }
+    }
+
+    private func progressBlock(title: String, percent: Int, detail: String,
+                               colour: ProjectColour?, barHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: Space.x1) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(LifeOSType.rowTitle).foregroundStyle(ink).lineLimit(1)
+                Spacer(minLength: Space.x1)
+                Text("\(percent)%").font(LifeOSType.numeral.monospacedDigit()).foregroundStyle(ink).fixedSize()
+            }
+            EditorialProgressBar(fraction: Double(percent) / 100, colour: colour, height: barHeight)
+            Text(detail).font(LifeOSType.caption).foregroundStyle(quiet).lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder private func followUpRows(_ followUp: ProjectFollowUp) -> some View {
         switch followUp {
         case .milestone(let title, let open, let total, let due, let url):
-            Button(ProjectHeadline.milestone(title: title, open: open, total: total, due: due, calendar: .current)) { onOpen(url) }
-                .buttonStyle(.plain).font(LifeOSType.secondary).foregroundStyle(ink)
+            Button { onOpen(url) } label: {
+                progressBlock(title: "Milestone \(title)",
+                              percent: ProjectHeadline.percent(done: total - open, total: total),
+                              detail: ProjectHeadline.closed(open: open, total: total)
+                                  + (due.map { " · due \($0.formatted(.dateTime.month(.abbreviated).day()))" } ?? ""),
+                              colour: nil, barHeight: 4)
+            }
+            .buttonStyle(.plain)
         case .issues(let count, let newest):
             Text(ProjectHeadline.issues(count)).font(LifeOSType.secondary).foregroundStyle(ink)
             ForEach(Array(newest.enumerated()), id: \.offset) { _, issue in

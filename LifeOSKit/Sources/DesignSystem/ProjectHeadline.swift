@@ -24,6 +24,30 @@ public enum ProjectHeadline {
 
     public static func more(_ count: Int) -> String { "\(count) more" }
 
+    /// Done over total as a whole percent, rounded, never truncated.
+    public static func percent(done: Int, total: Int) -> Int {
+        total == 0 ? 0 : Int((Double(done) / Double(total) * 100).rounded())
+    }
+
+    public static func tasksDone(_ done: Int, of total: Int) -> String {
+        if total == 0 { return "No tasks yet" }
+        if done >= total { return "All \(total) tasks done" }
+        return "\(done) of \(total) tasks done"
+    }
+
+    public static func closed(open: Int, total: Int) -> String {
+        "\(total - open) of \(total) closed"
+    }
+
+    /// The day's momentum, one quiet line under the progress.
+    public static func today(commits count: Int) -> String {
+        switch count {
+        case 0: "No commits yet today"
+        case 1: "1 commit today"
+        default: "\(count) commits today"
+        }
+    }
+
     public static func asOf(_ date: Date, calendar: Calendar) -> String {
         // The locale's own short time: 9:40 AM in the US, 9:40 in Britain.
         var style = Date.FormatStyle(date: .omitted, time: .shortened)

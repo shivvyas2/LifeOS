@@ -17,6 +17,18 @@ import Foundation
         #expect(ProjectHeadline.commits(0, isTodayWithoutCommits: false) == "No commits")
     }
 
+    @Test func progress() {
+        #expect(ProjectHeadline.percent(done: 2, total: 3) == 67)
+        #expect(ProjectHeadline.percent(done: 0, total: 0) == 0)
+        #expect(ProjectHeadline.tasksDone(7, of: 12) == "7 of 12 tasks done")
+        #expect(ProjectHeadline.tasksDone(12, of: 12) == "All 12 tasks done")
+        #expect(ProjectHeadline.tasksDone(0, of: 0) == "No tasks yet")
+        #expect(ProjectHeadline.closed(open: 3, total: 7) == "4 of 7 closed")
+        #expect(ProjectHeadline.today(commits: 0) == "No commits yet today")
+        #expect(ProjectHeadline.today(commits: 1) == "1 commit today")
+        #expect(ProjectHeadline.today(commits: 4) == "4 commits today")
+    }
+
     @Test func milestones() {
         let due = calendar.date(from: DateComponents(year: 2026, month: 10, day: 20, hour: 12))!
         #expect(ProjectHeadline.milestone(title: "1.1", open: 4, total: 9, due: due, calendar: calendar)

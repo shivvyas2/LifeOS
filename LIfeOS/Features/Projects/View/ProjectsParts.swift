@@ -48,6 +48,7 @@ struct StatusChip: View {
 struct EditorialProgressBar: View {
     let fraction: Double
     var colour: ProjectColour? = nil
+    var height: CGFloat = 4
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -58,7 +59,7 @@ struct EditorialProgressBar: View {
                     .frame(width: proxy.size.width * min(max(fraction, 0), 1))
             }
         }
-        .frame(height: 4)
+        .frame(height: height)
         .accessibilityElement()
         .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
     }
