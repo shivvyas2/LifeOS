@@ -28,21 +28,19 @@ struct ProjectBoardView: View {
 
     private func column(_ status: ProjectStatus) -> some View {
         let cards = tasks.filter { $0.status == status }.sorted { $0.position < $1.position }
-        let ink = LifeOSTokens.primaryText.resolve(scheme)
         return VStack(alignment: .leading, spacing: Space.x1) {
             HStack {
-                Text(status.label).brutalLabel()
+                Text(status.label).editorialEyebrow()
                 Spacer()
-                Text("\(cards.count)").font(LifeOSType.caption.weight(.heavy))
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(colour.fill.resolve(scheme))
-                    .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
+                Text("\(cards.count)").font(LifeOSType.caption.monospacedDigit())
+                    .foregroundStyle(Editorial.quietInk(scheme))
             }
+            Hairline()
             ForEach(Array(cards.enumerated()), id: \.element.id) { index, task in
                 Button { onOpen(task.id) } label: { card(task) }
                     .buttonStyle(.plain)
                     .draggable(task.id.uuidString) {
-                        Text(task.title).font(LifeOSType.rowTitle).padding(Space.x1).brutalCard(padding: Space.x1)
+                        Text(task.title).font(LifeOSType.rowTitle).editorialCard(padding: Space.x1 + 4)
                     }
                     .dropDestination(for: String.self) { ids, _ in
                         guard let id = ids.first.flatMap(UUID.init(uuidString:)) else { return false }
@@ -53,9 +51,11 @@ struct ProjectBoardView: View {
                     .accessibilityAction(named: "Move to \(next(status).label)") { onMove(task.id, next(status), 0) }
             }
             // Below the last card: drop here for the end of the column.
-            Rectangle().fill(targeted == status ? colour.ramp(level: 1).resolve(scheme) : .clear)
+            RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                .fill(targeted == status ? colour.ramp(level: 1).resolve(scheme) : .clear)
                 .frame(maxWidth: .infinity, minHeight: 56)
-                .overlay(Rectangle().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Editorial.quietInk(scheme)))
+                .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(Editorial.rule(scheme)))
                 .dropDestination(for: String.self) { ids, _ in
                     guard let id = ids.first.flatMap(UUID.init(uuidString:)) else { return false }
                     onMove(id, status, cards.count)
@@ -63,8 +63,6 @@ struct ProjectBoardView: View {
                 } isTargeted: { over in targeted = over ? status : (targeted == status ? nil : targeted) }
                 .accessibilityIdentifier("board.drop.\(status.rawValue)")
         }
-        .padding(Space.x1)
-        .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
     }
 
     private func next(_ status: ProjectStatus) -> ProjectStatus {
@@ -76,14 +74,14 @@ struct ProjectBoardView: View {
             Text(task.title).font(LifeOSType.rowTitle).strikethrough(task.status == .done).lineLimit(3)
             HStack {
                 if let start = task.startsAt {
-                    Text(start.formatted(.dateTime.weekday(.abbreviated).hour().minute())).font(LifeOSType.caption.weight(.heavy))
+                    Text(start.formatted(.dateTime.weekday(.abbreviated).hour().minute())).font(LifeOSType.caption.monospacedDigit())
                 } else if let due = task.dueOn {
-                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.weight(.heavy))
+                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.monospacedDigit())
                 }
                 Spacer()
                 if task.ownerID != nil { MemberAvatars(names: [name(task.ownerID)], limit: 1) }
             }
         }
-        .brutalCard(padding: Space.x1)
+        .editorialCard(padding: Space.x1 + 4)
     }
 }

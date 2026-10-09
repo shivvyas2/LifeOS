@@ -19,7 +19,7 @@ final class ProjectsUITests: XCTestCase {
         name.tap()
         name.typeText("Garden")
         app.buttons["Create"].tap()
-        XCTAssertTrue(app.staticTexts["GARDEN"].waitForExistence(timeout: 4), "the new project did not open")
+        XCTAssertTrue(app.staticTexts["Garden"].waitForExistence(timeout: 4), "the new project did not open")
         app.buttons["New task"].tap()
         let title = app.textFields["Title"]
         XCTAssertTrue(title.waitForExistence(timeout: 4))

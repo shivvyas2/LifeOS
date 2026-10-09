@@ -14,7 +14,7 @@ final class ProjectPlanUITests: XCTestCase {
     func testThePlanShowsProgressAndStages() {
         let app = launch("project-plan")
         XCTAssertTrue(app.staticTexts["1 OF 3 FEATURES DONE"].waitForExistence(timeout: 6))
-        XCTAssertTrue(app.staticTexts["IN REVIEW"].exists)
+        XCTAssertTrue(app.staticTexts["In review"].exists)
         XCTAssertTrue(app.staticTexts["PR #42 open"].exists)
     }
 

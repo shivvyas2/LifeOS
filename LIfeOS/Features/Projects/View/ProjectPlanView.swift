@@ -31,7 +31,7 @@ struct ProjectPlanView<Header: View, Footer: View>: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("\(progress.counts[stage] ?? 0)")
                                     .font(Editorial.figure(28)).monospacedDigit()
-                                Text(stage.title).font(LifeOSType.caption)
+                                Text(stage.label).font(LifeOSType.caption)
                                     .foregroundStyle(Editorial.quietInk(scheme))
                             }
                         }
@@ -113,36 +113,5 @@ struct StageTag: View {
     var body: some View {
         EditorialTag(stage == .done ? "✓ \(stage.label)" : stage.label)
             .accessibilityLabel(stage.label)
-    }
-}
-
-/// A thin ink bar on a hairline track: the editorial counterpart of the
-/// tab's block progress.
-struct EditorialProgressBar: View {
-    let fraction: Double
-    @Environment(\.colorScheme) private var scheme
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Editorial.rule(scheme))
-                Capsule().fill(LifeOSTokens.primaryText.resolve(scheme))
-                    .frame(width: proxy.size.width * min(max(fraction, 0), 1))
-            }
-        }
-        .frame(height: 4)
-        .accessibilityElement()
-        .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
-    }
-}
-
-extension FeatureStage {
-    /// Sentence case, for the counts under the bar.
-    var title: String {
-        switch self {
-        case .planned: "Planned"
-        case .building: "Building"
-        case .review: "In review"
-        case .done: "Done"
-        }
     }
 }

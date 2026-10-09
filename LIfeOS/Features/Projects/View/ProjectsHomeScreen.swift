@@ -3,8 +3,8 @@ import DesignSystem
 import Persistence
 import Integrations
 
-/// The Projects tab: contributions, your projects, and today's tasks across
-/// them. Hard edges and colour, unlike the rest of the app.
+/// Projects, opened from Life: contributions, your projects, and today's
+/// tasks across them, on the same paper and hairlines as every other screen.
 struct ProjectsHomeScreen: View {
     @Bindable var model: ProjectsViewModel
     @Environment(\.colorScheme) private var scheme
@@ -14,34 +14,27 @@ struct ProjectsHomeScreen: View {
     @State private var showArchived = false
     @State private var open: UUID?
 
-    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("PROJECTS").font(LifeOSType.screenTitle.weight(.black)).tracking(1)
-                    Spacer()
-                    Button("+ NEW") { creating = true }
-                        .font(LifeOSType.label.weight(.heavy))
-                        .padding(.horizontal, Space.x2).padding(.vertical, Space.x1)
-                        .foregroundStyle(LifeOSTokens.canvas.resolve(scheme))
-                        .background(ink)
-                        .buttonStyle(.plain)
+                HStack(alignment: .bottom) {
+                    EditorialMasthead(eyebrow: "Life", title: "Projects", detail: summary)
+                    Button("New") { creating = true }
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                         .accessibilityLabel("New project")
                 }
                 if let error = model.syncError {
-                    Text(error).font(LifeOSType.caption.weight(.heavy))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .brutalCard(padding: Space.x1)
+                    Text(error).font(LifeOSType.caption)
+                        .editorialCard(padding: Space.x2)
                 }
                 contributions
+                EditorialSectionHeader(index: 2, title: "Your projects")
                 if model.projects.isEmpty {
                     VStack(alignment: .leading, spacing: Space.x1) {
-                        Text("NO PROJECTS YET").brutalLabel()
-                        Text("Start one with + NEW. Add friends to share it.").font(LifeOSType.secondary)
+                        Text("No projects yet").editorialEyebrow()
+                        Text("Start one with New. Add friends to share it.").font(LifeOSType.secondary)
                     }
-                    .brutalCard()
+                    .editorialCard()
                 }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Space.x2),
                                          count: layout.isRegular ? 2 : 1), spacing: Space.x2) {
@@ -52,11 +45,12 @@ struct ProjectsHomeScreen: View {
                     }
                 }
                 if !model.archived.isEmpty {
-                    Button("ARCHIVED (\(model.archived.count))") { showArchived.toggle() }.brutalLabel().buttonStyle(.plain)
+                    Button("Archived (\(model.archived.count))") { showArchived.toggle() }
+                        .buttonStyle(.editorial(.quiet, size: .compact))
                     if showArchived { ForEach(model.archived) { project in card(project).opacity(0.6) } }
                 }
                 VStack(alignment: .leading, spacing: Space.x2) {
-                    Text("TODAY'S TASKS").brutalLabel()
+                    EditorialSectionHeader(index: 3, title: "Today's tasks")
                     if model.todayTasks.isEmpty {
                         Text("Nothing of yours due today.").font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
                     }
@@ -65,7 +59,6 @@ struct ProjectsHomeScreen: View {
                             .buttonStyle(.plain)
                     }
                 }
-                .brutalCard()
             }
             .padding(.horizontal, layout.gutter)
             .padding(.leading, layout.railInset)
@@ -99,28 +92,29 @@ struct ProjectsHomeScreen: View {
 
     private var contributions: some View {
         VStack(alignment: .leading, spacing: Space.x1) {
-            HStack {
-                Text("CONTRIBUTIONS").brutalLabel()
-                Spacer()
-                Text("\(model.contributionTotal) THIS YEAR").font(LifeOSType.label.weight(.heavy))
+            EditorialSectionHeader(index: 1, title: "Contributions") {
+                Text("\(model.contributionTotal) this year").font(LifeOSType.caption.monospacedDigit())
+                    .foregroundStyle(Editorial.quietInk(scheme))
             }
             ContributionGrid(counts: model.contributions, colour: .moss, weeks: layout.isRegular ? nil : 26)
             Text(model.contributionsFromGitHub ? "From GitHub" : "Tasks you finished")
                 .font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
         }
-        .brutalCard()
     }
 
     private func card(_ project: ProjectSnapshot) -> some View {
         let colour = ProjectColour(named: project.colour)
         return VStack(alignment: .leading, spacing: Space.x1) {
-            Text(project.name.uppercased()).font(LifeOSType.sectionTitle.weight(.black))
+            HStack(spacing: Space.x1) {
+                ProjectDot(colour: colour)
+                Text(project.name).font(LifeOSType.sectionTitle)
+            }
             if !project.scope.isEmpty {
                 Text(project.scope).font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme)).lineLimit(2)
             }
             HStack(spacing: Space.x2) {
-                BrutalProgress(fraction: project.fraction, colour: colour)
-                Text("\(Int((project.fraction * 100).rounded()))%").font(LifeOSType.label.weight(.heavy)).monospacedDigit()
+                EditorialProgressBar(fraction: project.fraction, colour: colour)
+                Text("\(Int((project.fraction * 100).rounded()))%").font(LifeOSType.label).monospacedDigit()
             }
             if let progress = try? model.store?.featureProgress(projectID: project.id), progress.total > 0 {
                 Text("\(progress.done) of \(progress.total) features done").font(LifeOSType.caption)
@@ -131,14 +125,21 @@ struct ProjectsHomeScreen: View {
             }
             HStack {
                 if let next = project.nextMilestone {
-                    Text("NEXT · \(next)").font(LifeOSType.caption.weight(.heavy)).lineLimit(1)
+                    Text("Next · \(next)").font(LifeOSType.caption).lineLimit(1)
                 }
                 Spacer()
                 MemberAvatars(names: memberNames(project.id))
             }
         }
-        .foregroundStyle(ink)
-        .brutalCard(header: colour.fill.resolve(scheme))
+        .editorialCard()
+    }
+
+    /// "2 projects · 4 tasks today", under the title.
+    private var summary: String? {
+        guard !model.projects.isEmpty else { return nil }
+        let projects = model.projects.count == 1 ? "1 project" : "\(model.projects.count) projects"
+        let tasks = model.todayTasks.count == 1 ? "1 task today" : "\(model.todayTasks.count) tasks today"
+        return "\(projects) · \(tasks)"
     }
 
     private func memberNames(_ project: UUID) -> [String] {

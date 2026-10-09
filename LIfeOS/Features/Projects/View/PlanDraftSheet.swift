@@ -28,7 +28,7 @@ struct PlanDraftSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             TextField("Feature \(index + 1)", text: $item.title)
-                                .font(LifeOSType.rowTitle.weight(.heavy))
+                                .font(LifeOSType.rowTitle.weight(.semibold))
                                 .accessibilityLabel("Feature \(index + 1)")
                             Button { items.removeAll { $0.id == item.id } } label: { Image(systemName: "minus.circle") }
                                 .buttonStyle(.plain)

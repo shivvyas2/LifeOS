@@ -5,9 +5,9 @@ public enum ProjectStatus: String, CaseIterable, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .todo: "TO DO"
-        case .doing: "DOING"
-        case .done: "DONE"
+        case .todo: "To do"
+        case .doing: "Doing"
+        case .done: "Done"
         }
     }
 }
@@ -127,10 +127,10 @@ public enum FeatureStage: String, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .planned: "PLANNED"
-        case .building: "BUILDING"
-        case .review: "IN REVIEW"
-        case .done: "DONE"
+        case .planned: "Planned"
+        case .building: "Building"
+        case .review: "In review"
+        case .done: "Done"
         }
     }
 }

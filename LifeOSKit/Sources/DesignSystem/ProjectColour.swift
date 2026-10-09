@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A project's colour: the one place colour appears on the Projects tab
-/// (card header band, contribution squares, progress, column badges).
+/// A project's colour, kept small: the dot beside its name, its progress
+/// fill and the contribution squares.
 public enum ProjectColour: String, CaseIterable, Codable, Sendable {
     case tomato, marigold, moss, lagoon, iris, rose
 
@@ -39,45 +39,5 @@ public enum ProjectColour: String, CaseIterable, Codable, Sendable {
             light: Color(red: mix(r, toward: 0.97), green: mix(g, toward: 0.97), blue: mix(b, toward: 0.97)),
             dark: Color(red: mix(r, toward: 0.16), green: mix(g, toward: 0.16), blue: mix(b, toward: 0.16))
         )
-    }
-}
-
-/// The Projects tab's card: square corners, a 2pt ink border and an ink
-/// shadow offset down and right; an optional colour band across the top.
-public struct BrutalCard: ViewModifier {
-    let header: Color?
-    let padding: CGFloat
-    @Environment(\.colorScheme) private var scheme
-
-    public init(header: Color?, padding: CGFloat) {
-        self.header = header
-        self.padding = padding
-    }
-
-    public func body(content: Content) -> some View {
-        let ink = LifeOSTokens.primaryText.resolve(scheme)
-        VStack(spacing: 0) {
-            if let header {
-                Rectangle().fill(header).frame(height: 10)
-                Rectangle().fill(ink).frame(height: 2)
-            }
-            content.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(LifeOSTokens.cardSurface.resolve(scheme))
-        .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
-        .background(Rectangle().fill(ink).offset(x: 4, y: 4))
-        .padding(.trailing, 4).padding(.bottom, 4)
-    }
-}
-
-public extension View {
-    /// `.brutalCard()`, or `.brutalCard(header: colour)` for a project's card.
-    func brutalCard(header: Color? = nil, padding: CGFloat = Space.x2) -> some View {
-        modifier(BrutalCard(header: header, padding: padding))
-    }
-
-    /// The tab's uppercase label: the label step, heavy, tracked.
-    func brutalLabel() -> some View {
-        self.font(LifeOSType.label.weight(.heavy)).tracking(1.2).textCase(.uppercase)
     }
 }

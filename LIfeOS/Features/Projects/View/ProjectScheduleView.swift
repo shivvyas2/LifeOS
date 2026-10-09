@@ -32,18 +32,23 @@ struct ProjectScheduleView: View {
                 let selected = calendar.isDate(date, inSameDayAs: day)
                 Button { day = date } label: {
                     VStack(spacing: 2) {
-                        Text(date.formatted(.dateTime.weekday(.abbreviated)).uppercased()).font(LifeOSType.caption.weight(.heavy))
-                        Text(date.formatted(.dateTime.day())).font(LifeOSType.rowTitle.weight(.black))
+                        Text(date.formatted(.dateTime.weekday(.abbreviated))).font(LifeOSType.caption)
+                        Text(date.formatted(.dateTime.day())).font(LifeOSType.rowTitle.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, Space.x1)
                     .foregroundStyle(selected ? LifeOSTokens.canvas.resolve(scheme) : ink)
-                    .background(selected ? ink : calendar.isDateInToday(date) ? colour.ramp(level: 1).resolve(scheme) : .clear)
+                    .background {
+                        if selected {
+                            Capsule().fill(ink)
+                        } else if calendar.isDateInToday(date) {
+                            Capsule().strokeBorder(Editorial.rule(scheme))
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
     }
 
     private var timeline: some View {
@@ -52,7 +57,6 @@ struct ProjectScheduleView: View {
             return (task, TimeBlock(id: task.id, start: start, end: task.endsAt ?? start.addingTimeInterval(3_600)))
         }
         let lanes = ScheduleLayout.lanes(blocks.map(\.1))
-        let ink = LifeOSTokens.primaryText.resolve(scheme)
         return GeometryReader { proxy in
             let gutter: CGFloat = 52
             let width = proxy.size.width - gutter
@@ -60,8 +64,9 @@ struct ProjectScheduleView: View {
                 ForEach(firstHour...lastHour, id: \.self) { hour in
                     let y = CGFloat(hour - firstHour) * hourHeight
                     HStack(spacing: 0) {
-                        Text(hourLabel(hour)).font(LifeOSType.caption.weight(.heavy)).frame(width: gutter, alignment: .leading)
-                        Rectangle().fill(ink.opacity(0.15)).frame(height: 1)
+                        Text(hourLabel(hour)).font(LifeOSType.caption.monospacedDigit())
+                            .foregroundStyle(Editorial.quietInk(scheme)).frame(width: gutter, alignment: .leading)
+                        Hairline()
                     }
                     .offset(y: y)
                     Button {
@@ -81,7 +86,7 @@ struct ProjectScheduleView: View {
                     let height = max(offset(block.end) - top, 28)
                     Button { onOpen(task.id) } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(task.title).font(LifeOSType.caption.weight(.heavy)).lineLimit(2)
+                            Text(task.title).font(LifeOSType.caption.weight(.semibold)).lineLimit(2)
                             StatusChip(status: task.status, colour: colour)
                             if !task.notes.isEmpty {
                                 Text(task.notes).font(LifeOSType.caption).lineLimit(1)
@@ -90,9 +95,10 @@ struct ProjectScheduleView: View {
                         }
                         .padding(6)
                         .frame(width: laneWidth - 4, height: height, alignment: .topLeading)
-                        .background(colour.ramp(level: 1).resolve(scheme))
-                        .overlay(alignment: .leading) { Rectangle().fill(colour.fill.resolve(scheme)).frame(width: 5) }
-                        .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
+                        .background(LifeOSTokens.cardSurface.resolve(scheme),
+                                    in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+                        .overlay(alignment: .leading) { Capsule().fill(colour.fill.resolve(scheme)).frame(width: 3).padding(.vertical, 4) }
+                        .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous).strokeBorder(Editorial.rule(scheme)))
                     }
                     .buttonStyle(.plain)
                     .offset(x: gutter + CGFloat(place.lane) * laneWidth, y: top)

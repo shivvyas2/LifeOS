@@ -153,17 +153,16 @@ extension TodayScreen {
     }
 
     /// The last twelve weeks of finished project work and the three active
-    /// projects' progress; a tap opens the Projects tab.
+    /// projects' progress; a tap opens Projects.
     @ViewBuilder
     private var projectsModule: some View {
         let store = ProjectsStore(context: context)
         let projects = Array(((try? store.projects()) ?? []).prefix(3))
         Button { if !self.store.isArranging { onOpenProjects() } } label: {
             VStack(alignment: .leading, spacing: Space.x2) {
-                HStack {
-                    Text("PROJECTS").brutalLabel()
-                    Spacer()
-                    Image(systemName: "arrow.right").font(LifeOSType.label.weight(.heavy))
+                EditorialSectionHeader(title: "Projects") {
+                    Image(systemName: "arrow.right").font(LifeOSType.label)
+                        .foregroundStyle(Editorial.quietInk(scheme))
                 }
                 ContributionGrid(counts: (try? store.completedPerDay(endingOn: .now, days: 84)) ?? [],
                                  colour: .moss, weeks: 12)
@@ -172,13 +171,12 @@ extension TodayScreen {
                 }
                 ForEach(projects) { project in
                     VStack(alignment: .leading, spacing: Space.half) {
-                        Text(project.name.uppercased()).font(LifeOSType.label.weight(.heavy))
-                        BrutalProgress(fraction: project.fraction, colour: ProjectColour(named: project.colour))
+                        Text(project.name).font(LifeOSType.label)
+                        EditorialProgressBar(fraction: project.fraction, colour: ProjectColour(named: project.colour))
                     }
                 }
             }
-            .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
-            .brutalCard()
+            .editorialCard()
         }
         .buttonStyle(.plain)
     }

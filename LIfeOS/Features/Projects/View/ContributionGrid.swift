@@ -26,24 +26,28 @@ struct ContributionGrid: View {
         return cols
     }
 
+    /// Measured rather than read through a GeometryReader: a reader takes
+    /// whatever height it is given, and a fixed one either clipped the squares
+    /// or let them run under whatever came next.
+    @State private var width: CGFloat = 0
+
     var body: some View {
-        GeometryReader { proxy in
-            let cols = columns
-            let gap: CGFloat = 2
-            let side = max(2, min(14, (proxy.size.width - gap * CGFloat(max(cols.count - 1, 0))) / CGFloat(max(cols.count, 1))))
-            HStack(alignment: .top, spacing: gap) {
-                ForEach(Array(cols.enumerated()), id: \.offset) { _, week in
-                    VStack(spacing: gap) {
-                        ForEach(Array(week.enumerated()), id: \.offset) { _, level in
-                            Rectangle().fill(level.map { colour.ramp(level: $0).resolve(scheme) } ?? .clear)
-                                .frame(width: side, height: side)
-                        }
+        let cols = columns
+        let gap: CGFloat = 2
+        let side = max(2, min(14, (width - gap * CGFloat(max(cols.count - 1, 0))) / CGFloat(max(cols.count, 1))))
+        HStack(alignment: .top, spacing: gap) {
+            ForEach(Array(cols.enumerated()), id: \.offset) { _, week in
+                VStack(spacing: gap) {
+                    ForEach(Array(week.enumerated()), id: \.offset) { _, level in
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(level.map { colour.ramp(level: $0).resolve(scheme) } ?? .clear)
+                            .frame(width: side, height: side)
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(height: 7 * 9 + 6 * 2)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .accessibilityElement()
         .accessibilityLabel("Contributions, \(counts.reduce(0, +)) this year")
     }

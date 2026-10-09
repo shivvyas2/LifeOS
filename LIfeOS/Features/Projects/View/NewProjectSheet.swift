@@ -21,16 +21,17 @@ struct NewProjectSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x3) {
-                    field("NAME", text: $name, prompt: "LifeOS 1.1")
-                    field("SCOPE", text: $scope, prompt: "What's in, in one line")
+                    field("Name", text: $name, prompt: "LifeOS 1.1")
+                    field("Scope", text: $scope, prompt: "What's in, in one line")
                     VStack(alignment: .leading, spacing: Space.x1) {
-                        Text("COLOUR").brutalLabel()
+                        Text("Colour").editorialEyebrow()
                         HStack(spacing: Space.x1) {
                             ForEach(ProjectColour.allCases, id: \.self) { option in
                                 Button { colour = option } label: {
-                                    Rectangle().fill(option.fill.resolve(scheme)).frame(width: 40, height: 40)
-                                        .overlay(Rectangle().strokeBorder(LifeOSTokens.primaryText.resolve(scheme),
-                                                                          lineWidth: colour == option ? 3 : 1))
+                                    Circle().fill(option.fill.resolve(scheme)).frame(width: 32, height: 32)
+                                        .padding(4)
+                                        .overlay(Circle().strokeBorder(colour == option ? LifeOSTokens.primaryText.resolve(scheme) : .clear,
+                                                                       lineWidth: 1.5))
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(option.rawValue.capitalized)
@@ -38,14 +39,14 @@ struct NewProjectSheet: View {
                             }
                         }
                     }
-                    Toggle(isOn: $hasDates) { Text("DATES").brutalLabel() }.tint(LifeOSTokens.primaryText.resolve(scheme))
+                    Toggle(isOn: $hasDates) { Text("Dates").editorialEyebrow() }.tint(LifeOSTokens.primaryText.resolve(scheme))
                     if hasDates {
                         DatePicker("Starts", selection: $starts, displayedComponents: .date)
                         DatePicker("Ends", selection: $ends, in: starts..., displayedComponents: .date)
                     }
                     if case .connected = github?.state {
                         VStack(alignment: .leading, spacing: Space.x1) {
-                            Text("LINK A REPO").brutalLabel()
+                            Text("Link a repo").editorialEyebrow()
                             TextField("Search repos", text: $repoQuery)
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                             Picker("Repo", selection: $repo) {
@@ -80,11 +81,11 @@ struct NewProjectSheet: View {
 
     private func field(_ label: String, text: Binding<String>, prompt: String) -> some View {
         VStack(alignment: .leading, spacing: Space.x1) {
-            Text(label).brutalLabel()
+            Text(label).editorialEyebrow()
             TextField(prompt, text: text)
                 .font(LifeOSType.body)
                 .padding(Space.x2)
-                .overlay(Rectangle().strokeBorder(LifeOSTokens.primaryText.resolve(scheme), lineWidth: 2))
+                .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous).strokeBorder(Editorial.rule(scheme)))
         }
     }
 }

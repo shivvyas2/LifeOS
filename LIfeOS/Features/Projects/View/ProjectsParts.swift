@@ -2,7 +2,7 @@ import SwiftUI
 import DesignSystem
 import Persistence
 
-/// Initials in square ink-bordered tiles, overlapping a little.
+/// Initials in small paper circles with a hairline edge, overlapping a little.
 struct MemberAvatars: View {
     let names: [String]
     var limit = 3
@@ -12,13 +12,14 @@ struct MemberAvatars: View {
         HStack(spacing: -6) {
             ForEach(Array(names.prefix(limit).enumerated()), id: \.offset) { _, name in
                 Text(initials(name))
-                    .font(LifeOSType.caption.weight(.heavy))
+                    .font(LifeOSType.caption.weight(.medium))
                     .frame(width: 26, height: 26)
-                    .background(LifeOSTokens.cardSurface.resolve(scheme))
-                    .overlay(Rectangle().strokeBorder(LifeOSTokens.primaryText.resolve(scheme), lineWidth: 2))
+                    .background(Circle().fill(LifeOSTokens.cardSurface.resolve(scheme)))
+                    .overlay(Circle().strokeBorder(Editorial.rule(scheme)))
             }
             if names.count > limit {
-                Text("+\(names.count - limit)").font(LifeOSType.caption.weight(.heavy)).padding(.leading, 10)
+                Text("+\(names.count - limit)").font(LifeOSType.caption)
+                    .foregroundStyle(Editorial.quietInk(scheme)).padding(.leading, 10)
             }
         }
         .accessibilityElement()
@@ -31,44 +32,51 @@ struct MemberAvatars: View {
     }
 }
 
-/// `TO DO`, `DOING`, `DONE` in a hard box; Doing filled with the project colour.
+/// To do, Doing, Done as the app's outlined tag. Done is quiet; nothing here
+/// takes the accent, which stays reserved for what is live.
 struct StatusChip: View {
     let status: ProjectStatus
     var colour: ProjectColour = .tomato
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let ink = LifeOSTokens.primaryText.resolve(scheme)
-        Text(status.label)
-            .font(LifeOSType.caption.weight(.heavy)).tracking(0.8)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .foregroundStyle(status == .done ? LifeOSTokens.canvas.resolve(scheme) : ink)
-            .background(status == .doing ? colour.fill.resolve(scheme) : status == .done ? ink : .clear)
-            .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
+        EditorialTag(status.label).opacity(status == .done ? 0.6 : 1)
     }
 }
 
-/// A flat bar in the project's colour with an ink frame.
-struct BrutalProgress: View {
+/// A thin rounded bar on a hairline track: ink, or the project's colour when
+/// it stands for one project.
+struct EditorialProgressBar: View {
     let fraction: Double
-    let colour: ProjectColour
+    var colour: ProjectColour? = nil
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Rectangle().fill(LifeOSTokens.cardSurface.resolve(scheme))
-                Rectangle().fill(colour.fill.resolve(scheme)).frame(width: proxy.size.width * min(max(fraction, 0), 1))
+                Capsule().fill(Editorial.rule(scheme))
+                Capsule().fill(colour?.fill.resolve(scheme) ?? LifeOSTokens.primaryText.resolve(scheme))
+                    .frame(width: proxy.size.width * min(max(fraction, 0), 1))
             }
-            .overlay(Rectangle().strokeBorder(LifeOSTokens.primaryText.resolve(scheme), lineWidth: 2))
         }
-        .frame(height: 14)
+        .frame(height: 4)
         .accessibilityElement()
-        .accessibilityLabel("\(Int((fraction * 100).rounded())) percent done")
+        .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
     }
 }
 
-/// One task as a row: the project's colour tick, title, status, time.
+/// A project's colour as a small dot beside its name: the one place the
+/// colour shows outside progress and the contribution wall.
+struct ProjectDot: View {
+    let colour: ProjectColour
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        Circle().fill(colour.fill.resolve(scheme)).frame(width: 8, height: 8)
+            .accessibilityHidden(true)
+    }
+}
+
+/// One task as a row: the project's dot, title, status, time.
 struct ProjectTaskRow: View {
     let task: ProjectTaskSnapshot
     var owner: String? = nil
@@ -76,8 +84,8 @@ struct ProjectTaskRow: View {
 
     var body: some View {
         let colour = ProjectColour(named: task.colour)
-        HStack(alignment: .top, spacing: Space.x2) {
-            Rectangle().fill(colour.fill.resolve(scheme)).frame(width: 6)
+        HStack(alignment: .firstTextBaseline, spacing: Space.x2) {
+            ProjectDot(colour: colour)
             VStack(alignment: .leading, spacing: Space.half) {
                 Text(task.title).font(LifeOSType.rowTitle).strikethrough(task.status == .done)
                 HStack(spacing: Space.x1) {
@@ -85,9 +93,9 @@ struct ProjectTaskRow: View {
                     Text(task.projectName).font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme))
                     Spacer(minLength: 0)
                     if let start = task.startsAt {
-                        Text(start.formatted(date: .omitted, time: .shortened)).font(LifeOSType.caption.weight(.heavy))
+                        Text(start.formatted(date: .omitted, time: .shortened)).font(LifeOSType.caption.monospacedDigit())
                     } else if let due = task.dueOn {
-                        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.weight(.heavy))
+                        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.monospacedDigit())
                     }
                     if let owner { MemberAvatars(names: [owner], limit: 1) }
                 }

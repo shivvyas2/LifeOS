@@ -28,7 +28,7 @@ struct ProjectMembersSheet: View {
                             Text(model.name(member.userID)).font(LifeOSType.rowTitle)
                             Spacer()
                             if member.role == "owner" {
-                                Text("OWNER").brutalLabel()
+                                Text("Owner").editorialEyebrow()
                             } else if isOwner {
                                 Button("Remove", role: .destructive) {
                                     model.removeMember(member.userID, from: projectID); revision += 1

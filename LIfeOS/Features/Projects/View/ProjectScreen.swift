@@ -10,8 +10,8 @@ struct ProjectScreen: View {
     let projectID: UUID
 
     enum Pane: String, CaseIterable {
-        case plan = "PLAN", board = "BOARD", schedule = "SCHEDULE", milestones = "MILESTONES", list = "LIST"
-        case github = "GITHUB"
+        case plan = "Plan", board = "Board", schedule = "Schedule", milestones = "Milestones", list = "List"
+        case github = "GitHub"
     }
 
     @Environment(\.colorScheme) private var scheme
@@ -45,7 +45,6 @@ struct ProjectScreen: View {
     /// Previews open the draft sheet on a fixed draft instead of asking LIFO.
     private let presetDraft: [PlanDraft.Item]?
 
-    private var ink: Color { LifeOSTokens.primaryText.resolve(scheme) }
     private var project: ProjectSnapshot? { _ = revision; _ = model.projects; return try? model.store?.project(id: projectID) }
     private var tasks: [ProjectTaskSnapshot] { _ = revision; _ = model.projects; return (try? model.store?.tasks(projectID: projectID)) ?? [] }
     private var milestones: [MilestoneSnapshot] { _ = revision; _ = model.projects; return (try? model.store?.milestones(projectID: projectID)) ?? [] }
@@ -131,12 +130,21 @@ struct ProjectScreen: View {
 
     private func header(_ project: ProjectSnapshot, colour: ProjectColour) -> some View {
         VStack(alignment: .leading, spacing: Space.x1) {
-            Text(project.name.uppercased()).font(LifeOSType.screenTitle.weight(.black))
-            if !project.scope.isEmpty { Text(project.scope).font(LifeOSType.body) }
+            HStack(spacing: Space.x1) {
+                ProjectDot(colour: colour)
+                Text("Project").editorialEyebrow()
+            }
+            Text(project.name)
+                .font(Editorial.headline(34)).tracking(-1)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            if !project.scope.isEmpty {
+                Text(project.scope).font(LifeOSType.secondary).foregroundStyle(Editorial.quietInk(scheme))
+            }
             HStack(spacing: Space.x2) {
                 if let start = project.startsOn, let end = project.endsOn {
                     Text("\(start.formatted(.dateTime.month(.abbreviated).day())) – \(end.formatted(.dateTime.month(.abbreviated).day()))")
-                        .font(LifeOSType.caption.weight(.heavy))
+                        .font(LifeOSType.caption.monospacedDigit())
                 }
                 if let repo = project.repo { Text(repo).font(LifeOSType.caption).foregroundStyle(Editorial.quietInk(scheme)) }
                 Spacer()
@@ -145,18 +153,15 @@ struct ProjectScreen: View {
                     .accessibilityLabel("Members")
             }
             HStack(spacing: Space.x2) {
-                BrutalProgress(fraction: project.fraction, colour: colour)
-                Text("\(project.done)/\(project.total)").font(LifeOSType.label.weight(.heavy)).monospacedDigit()
-                Button("+ TASK") { editing = .new(start: nil) }
-                    .font(LifeOSType.label.weight(.heavy))
-                    .padding(.horizontal, Space.x2).padding(.vertical, Space.x1)
-                    .foregroundStyle(LifeOSTokens.canvas.resolve(scheme))
-                    .background(ink)
-                    .buttonStyle(.plain)
+                EditorialProgressBar(fraction: project.fraction, colour: colour)
+                Text("\(project.done)/\(project.total)").font(LifeOSType.label).monospacedDigit()
+                Button("Task") { editing = .new(start: nil) }
+                    .buttonStyle(.editorial(.secondary, size: .compact))
                     .accessibilityLabel("New task")
             }
+            Hairline()
         }
-        .brutalCard(header: colour.fill.resolve(scheme))
+        .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
     }
 
     /// On an iPad the plan and the open feature sit side by side.
@@ -229,31 +234,10 @@ struct ProjectScreen: View {
             })
     }
 
-    /// Five panes do not fit a phone's width evenly, so there the row scrolls.
-    @ViewBuilder private var panePicker: some View {
-        if layout.isRegular {
-            paneRow(minWidth: nil)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) { paneRow(minWidth: 76) }
-        }
-    }
-
-    private func paneRow(minWidth: CGFloat?) -> some View {
-        HStack(spacing: 0) {
-            ForEach(Pane.allCases.filter { $0 != .github || project?.repo != nil }, id: \.self) { option in
-                Button { pane = option } label: {
-                    Text(option.rawValue)
-                        .font(LifeOSType.caption.weight(.heavy)).tracking(0.8)
-                        .frame(minWidth: minWidth, maxWidth: minWidth == nil ? .infinity : nil)
-                        .padding(.vertical, Space.x1).padding(.horizontal, Space.x1)
-                        .foregroundStyle(pane == option ? LifeOSTokens.canvas.resolve(scheme) : ink)
-                        .background(pane == option ? ink : .clear)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(pane == option ? .isSelected : [])
-            }
-        }
-        .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
+    /// Five or six panes: the numbered strip scrolls sideways when they do not fit.
+    private var panePicker: some View {
+        IndexedTabStrip(selection: $pane,
+                        options: Pane.allCases.filter { $0 != .github || project?.repo != nil }.map { ($0, $0.rawValue) })
     }
 
     private func milestonesPane(colour: ProjectColour) -> some View {
@@ -261,16 +245,17 @@ struct ProjectScreen: View {
             ForEach(milestones) { milestone in
                 VStack(alignment: .leading, spacing: Space.x1) {
                     HStack {
-                        Text(milestone.title.uppercased()).font(LifeOSType.rowTitle.weight(.heavy))
+                        Text(milestone.title).font(LifeOSType.rowTitle)
                         Spacer()
                         if let due = milestone.dueOn {
-                            Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.weight(.heavy))
+                            Text(due.formatted(.dateTime.month(.abbreviated).day())).font(LifeOSType.caption.monospacedDigit())
+                                .foregroundStyle(Editorial.quietInk(scheme))
                         }
                     }
                     HStack(spacing: Space.x2) {
-                        BrutalProgress(fraction: milestone.total == 0 ? 0 : Double(milestone.done) / Double(milestone.total),
-                                       colour: colour)
-                        Text("\(milestone.done)/\(milestone.total)").font(LifeOSType.label.weight(.heavy)).monospacedDigit()
+                        EditorialProgressBar(fraction: milestone.total == 0 ? 0 : Double(milestone.done) / Double(milestone.total),
+                                             colour: colour)
+                        Text("\(milestone.done)/\(milestone.total)").font(LifeOSType.label).monospacedDigit()
                     }
                     ForEach(tasks.filter { $0.milestoneID == milestone.id }) { task in
                         Button { editing = .task(task.id) } label: {
@@ -279,7 +264,7 @@ struct ProjectScreen: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .brutalCard()
+                .editorialCard()
                 .accessibilityAction(named: "Move up") {
                     model.moveMilestone(milestone.id, to: max(milestone.position - 1, 0)); revision += 1
                 }
@@ -291,16 +276,16 @@ struct ProjectScreen: View {
                 TextField("New milestone", text: $newMilestone)
                     .font(LifeOSType.body)
                     .padding(Space.x1)
-                    .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
-                Button("+ MILESTONE") {
+                    .overlay(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous).strokeBorder(Editorial.rule(scheme)))
+                Button("Add") {
                     let title = newMilestone.trimmingCharacters(in: .whitespaces)
                     guard !title.isEmpty else { return }
                     model.createMilestone(in: projectID, title: title, dueOn: nil)
                     newMilestone = ""
                     revision += 1
                 }
-                .font(LifeOSType.label.weight(.heavy))
-                .buttonStyle(.plain)
+                .buttonStyle(.editorial(.secondary, size: .compact))
+                .accessibilityLabel("Add milestone")
             }
         }
     }

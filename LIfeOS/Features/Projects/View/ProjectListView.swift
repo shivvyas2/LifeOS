@@ -14,6 +14,7 @@ struct ProjectListView: View {
     @State private var status: ProjectStatus?
     @State private var owner: UUID?
     @State private var milestone: UUID?
+    @Environment(\.colorScheme) private var scheme
 
     private var shown: [ProjectTaskSnapshot] {
         tasks.filter { task in
@@ -27,27 +28,28 @@ struct ProjectListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x2) {
             HStack(spacing: Space.x1) {
-                Menu(status?.label ?? "ALL STATUSES") {
+                Menu(status?.label ?? "All statuses") {
                     Button("All statuses") { status = nil }
                     ForEach(ProjectStatus.allCases, id: \.self) { option in Button(option.label) { status = option } }
                 }
-                Menu(owner.map(name) ?? "ANYONE") {
+                Menu(owner.map(name) ?? "Anyone") {
                     Button("Anyone") { owner = nil }
                     ForEach(members) { member in Button(name(member.userID)) { owner = member.userID } }
                 }
-                Menu(milestones.first { $0.id == milestone }?.title ?? "ANY MILESTONE") {
+                Menu(milestones.first { $0.id == milestone }?.title ?? "Any milestone") {
                     Button("Any milestone") { milestone = nil }
                     ForEach(milestones) { item in Button(item.title) { milestone = item.id } }
                 }
             }
-            .font(LifeOSType.caption.weight(.heavy))
+            .font(LifeOSType.caption.weight(.medium))
+            .tint(LifeOSTokens.primaryText.resolve(scheme))
             if shown.isEmpty { Text("No tasks match.").font(LifeOSType.secondary) }
             ForEach(shown) { task in
                 Button { onOpen(task.id) } label: { ProjectTaskRow(task: task, owner: task.ownerID.map(name)) }
                     .buttonStyle(.plain)
-                Rectangle().fill(.primary.opacity(0.15)).frame(height: 1)
+                Hairline()
             }
         }
-        .brutalCard()
+        .editorialCard()
     }
 }
