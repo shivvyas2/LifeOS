@@ -210,7 +210,7 @@ struct MoneyCardsStrip: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
 
-    private var faceWidth: CGFloat { layout.isRegular ? 196 : 156 }
+    private var faceWidth: CGFloat { layout.isRegular ? 360 : 300 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.x1) {
@@ -219,16 +219,7 @@ struct MoneyCardsStrip: View {
                 HStack(alignment: .top, spacing: Space.x2) {
                     ForEach(cards) { card in
                         Button { onOpen(card) } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                CardFace(card: card, width: faceWidth)
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    MoneyFigure(amount: card.monthSpend, size: 15).fixedSize()
-                                    Text(card.monthCount == 1 ? "1 charge" : "\(card.monthCount) charges")
-                                        .font(LifeOSType.caption)
-                                        .foregroundStyle(MoneyPalette.quietInk(scheme))
-                                        .lineLimit(1)
-                                }
-                            }
+                            WalletCard(card: card, width: faceWidth)
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -238,8 +229,11 @@ struct MoneyCardsStrip: View {
                     }
                     addTile
                 }
-                .padding(.vertical, Space.half)
+                .scrollTargetLayout()
+                .padding(.vertical, Space.x1)
             }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollClipDisabled()
             .scrollIndicators(.hidden)
         }
     }
@@ -253,8 +247,8 @@ struct MoneyCardsStrip: View {
                     .font(LifeOSType.caption.weight(.semibold))
             }
             .foregroundStyle(MoneyPalette.quietInk(scheme))
-            .frame(width: faceWidth * 0.62, height: faceWidth / 1.586)
-            .overlay(RoundedRectangle(cornerRadius: faceWidth * 0.07, style: .continuous)
+            .frame(width: faceWidth * 0.4, height: WalletCard.totalHeight(width: faceWidth))
+            .overlay(RoundedRectangle(cornerRadius: faceWidth * 0.085, style: .continuous)
                 .strokeBorder(MoneyPalette.quietInk(scheme), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
             .contentShape(Rectangle())
         }

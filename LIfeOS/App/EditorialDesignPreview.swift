@@ -1,5 +1,7 @@
 #if DEBUG
 import SwiftUI
+import SwiftData
+import Integrations
 import DesignSystem
 import Persistence
 
@@ -52,6 +54,8 @@ struct EditorialDesignPreview: View {
             }
         case "card-editor":
             CardEditorSheet(existing: nil, onSave: { _ in })
+        case "money-project":
+            ProjectProgressFixture()
         case "card-picker":
             CardPickerSheet(row: Self.money.recent[0], cards: Self.cards, hasRule: false, onPick: { _, _ in })
         default:
@@ -59,22 +63,59 @@ struct EditorialDesignPreview: View {
         }
     }
 
-    /// Your five cards, drawn from the catalog.
+    /// Your four cards, drawn from the catalog.
     static var cards: [MoneyCardSummary] {
-        let specs: [(String, String, String, Double, Int)] = [
-            ("chase-sapphire-preferred", "CHASE SAPPHIRE PREFERRED", "4821", 642.18, 14),
-            ("apple-card", "Apple Card", "0917", 318.40, 9),
-            ("discover-it", "Discover it", "3305", 205.77, 6),
-            ("banana-republic", "Banana Republic Visa", "7712", 89.00, 1),
-            ("zolve", "Zolve", "5520", 42.10, 3),
+        let specs: [(String, String, String, String, Double, Double, Int)] = [
+            ("chase-freedom", "CHASE FREEDOM UNLIMITED", "credit", "4821", 1284.56, 642.18, 14),
+            ("discover-it", "Discover it", "credit", "3305", 410.27, 205.77, 6),
+            ("chase-debit", "TOTAL CHECKING", "depository", "9014", 3820.45, 318.40, 9),
+            ("zolve", "Zolve", "credit", "5520", 96.10, 42.10, 3),
         ]
-        return specs.map { id, name, mask, spend, count in
-            var card = MoneyCardSummary(MoneyAccount(name: name, type: "credit", mask: mask, currentBalance: 0,
-                                                     externalID: "fixture:\(id)", cardProductID: id,
-                                                     isManual: id == "zolve"))
+        return specs.map { id, name, type, mask, balance, spend, count in
+            var card = MoneyCardSummary(MoneyAccount(name: name, type: type, mask: mask, currentBalance: balance,
+                                                     externalID: "fixture:\(id)", cardProductID: id))
             card.monthSpend = spend
             card.monthCount = count
             return card
+        }
+    }
+
+    /// The Today project module as progress: a linked project with seven of
+    /// twelve tasks done and a milestone four of seven closed.
+    private struct ProjectProgressFixture: View {
+        let container: ModelContainer = {
+            let container = try! LifeOSContainer.make(inMemory: true)
+            let store = ProjectsStore(context: container.mainContext)
+            let id = try! store.createProject(name: "LifeOS", scope: "", colour: "moss", ownerID: UUID(),
+                                              repo: "shivvyas2/LifeOS")
+            for index in 0..<12 {
+                _ = try! store.createTask(projectID: id, title: "Task \(index)", status: index < 7 ? .done : .todo)
+            }
+            return container
+        }()
+
+        var body: some View {
+            let url = URL(string: "https://github.com/shivvyas2/LifeOS")!
+            let card = ProjectCard(repo: "shivvyas2/LifeOS", repoURL: url, commitCount: 4,
+                                   commits: [ProjectCommit(subject: "feat(money): wallet cards", url: url)],
+                                   isTodayWithoutCommits: false,
+                                   followUp: .milestone(title: "1.1", open: 3, total: 7,
+                                                        due: Date.now.addingTimeInterval(86_400 * 9), url: url))
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.x3) {
+                    if ProcessInfo.processInfo.arguments.contains("--all-cards") {
+                        ForEach(EditorialDesignPreview.cards.dropFirst()) { WalletCard(card: $0) }
+                    }
+                    VStack(alignment: .leading, spacing: Space.x2) {
+                        EditorialSectionHeader(title: "Project")
+                        ProjectRows(state: .card(card, asOf: nil), onOpen: { _ in }, onReconnect: {})
+                    }
+                    MoneyCardsStrip(cards: EditorialDesignPreview.cards)
+                }
+                .padding(Space.x3)
+            }
+            .background(LifeOSTokens.canvas.resolve(.light).ignoresSafeArea())
+            .modelContainer(container)
         }
     }
 

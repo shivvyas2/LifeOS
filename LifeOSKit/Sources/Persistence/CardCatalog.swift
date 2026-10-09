@@ -29,6 +29,8 @@ public struct CardFaceStyle: Sendable, Equatable {
         case metal
         /// `base` only, with a thin `accent` rule near the bottom.
         case plain
+        /// A dark `base` crossed by one glowing `accent` blade.
+        case saber
     }
 
     /// `#RRGGBB`.
@@ -84,19 +86,23 @@ public enum CardCatalog {
                     face: CardFaceStyle(base: "#0E1726", accent: "#2C3D5C", pattern: .metal),
                     keywords: ["sapphire reserve"]),
         CardProduct(id: "chase-sapphire-preferred", name: "Sapphire Preferred", issuer: "Chase", network: .visa,
-                    face: CardFaceStyle(base: "#0B2A5B", accent: "#2A5DA8", pattern: .gradient),
+                    face: CardFaceStyle(base: "#0A2A6B", accent: "#3D8BFF", pattern: .gradient),
                     keywords: ["sapphire"]),
         CardProduct(id: "chase-freedom", name: "Freedom", issuer: "Chase", network: .visa,
-                    face: CardFaceStyle(base: "#2F6DB5", accent: "#6FA3E0", pattern: .gradient),
+                    face: CardFaceStyle(base: "#123F9C", accent: "#58A6FF", pattern: .gradient),
                     keywords: ["freedom"]),
+        CardProduct(id: "chase-debit", name: "Chase Debit", issuer: "Chase", network: .visa,
+                    face: CardFaceStyle(base: "#0A0A0C", accent: "#FF2A2A", pattern: .saber),
+                    keywords: ["total checking", "chase checking", "college checking", "chase college",
+                               "secure banking", "premier plus"]),
         CardProduct(id: "discover-it", name: "Discover it", issuer: "Discover", network: .discover,
-                    face: CardFaceStyle(base: "#F3EFE7", accent: "#F28C28", pattern: .stripe, darkInk: true),
+                    face: CardFaceStyle(base: "#B8862B", accent: "#F6DC8C", pattern: .gradient, darkInk: true),
                     keywords: ["discover"]),
         CardProduct(id: "apple-card", name: "Apple Card", issuer: "Goldman Sachs", network: .mastercard,
                     face: CardFaceStyle(base: "#F7F7F9", accent: "#DADBE0", pattern: .metal, darkInk: true),
                     keywords: ["apple card", "apple"]),
         CardProduct(id: "zolve", name: "Zolve", issuer: "Zolve", network: .mastercard,
-                    face: CardFaceStyle(base: "#14161B", accent: "#4CE0B3", pattern: .stripe),
+                    face: CardFaceStyle(base: "#D62A1E", accent: "#FF8A3D", pattern: .gradient),
                     keywords: ["zolve"]),
         CardProduct(id: "banana-republic", name: "Banana Republic", issuer: "Barclays", network: .visa,
                     face: CardFaceStyle(base: "#EFE8DC", accent: "#2A2622", pattern: .plain, darkInk: true, serif: true),

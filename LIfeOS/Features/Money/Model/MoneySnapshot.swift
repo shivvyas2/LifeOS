@@ -80,6 +80,11 @@ struct MoneyCardSummary: Equatable, Identifiable, Hashable {
     let accountName: String
     var monthSpend: Double = 0
     var monthCount: Int = 0
+    /// What the bank last reported: owed on a card, available in checking.
+    /// Nil for a hand-added card, which has no balance to report.
+    let balance: Double?
+    /// "Credit" or "Debit", for the wallet card's second line.
+    let kind: String
 
     var initials: String {
         String(title.split(separator: " ").prefix(2).compactMap(\.first)).uppercased()
@@ -102,6 +107,10 @@ struct MoneyCardSummary: Equatable, Identifiable, Hashable {
         productID = account.cardProductID
         isManual = account.isManual
         accountName = account.name
+        let isDebit = account.type == "depository"
+        balance = account.isManual ? nil : (isDebit ? account.availableBalance ?? account.currentBalance
+                                                    : account.currentBalance)
+        kind = isDebit ? "Debit" : "Credit"
     }
 }
 

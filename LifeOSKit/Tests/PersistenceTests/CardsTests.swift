@@ -38,10 +38,11 @@ import SwiftData
         #expect(CardCatalog.guess(accountName: "Discover it Card")?.id == "discover-it")
         #expect(CardCatalog.guess(accountName: "Apple Card")?.id == "apple-card")
         #expect(CardCatalog.guess(accountName: "Banana Republic Visa")?.id == "banana-republic")
+        #expect(CardCatalog.guess(accountName: "TOTAL CHECKING")?.id == "chase-debit")
     }
 
     @Test func anAccountTheCatalogDoesNotKnowGuessesNothing() {
-        #expect(CardCatalog.guess(accountName: "Total Checking") == nil)
+        #expect(CardCatalog.guess(accountName: "Everyday Savings") == nil)
     }
 
     @Test func aChosenCardBeatsTheGuessAndAHandAddedCardIsNeverGuessed() {

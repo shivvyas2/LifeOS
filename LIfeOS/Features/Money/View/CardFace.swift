@@ -98,6 +98,8 @@ struct CardFace: View {
                 base
                 accent.frame(height: 1.5).padding(.horizontal, width * 0.07).offset(y: -height * 0.27)
             }
+        case .saber:
+            SaberField(base: base, blade: accent, length: width * 1.5, thickness: max(2, height * 0.025))
         }
     }
 }
@@ -121,10 +123,10 @@ struct CardChip: View {
                     // as a different card.
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(LinearGradient(colors: [Color(hex: style.base),
-                                                      Color(hex: style.pattern == .stripe || style.pattern == .plain
-                                                            ? style.base : style.accent)],
+                                                      Color(hex: style.pattern == .gradient || style.pattern == .metal
+                                                            ? style.accent : style.base)],
                                              startPoint: .topLeading, endPoint: .bottomTrailing))
-                    if style.pattern == .stripe {
+                    if style.pattern == .stripe || style.pattern == .saber {
                         Color(hex: style.accent).frame(height: 4)
                             .frame(maxHeight: .infinity, alignment: .bottom)
                             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
@@ -151,6 +153,33 @@ struct CardChip: View {
         }
         .frame(width: 34, height: 22)
         .accessibilityLabel(card.map { "Paid with \($0.accessibilityName)" } ?? "Card unknown")
+    }
+}
+
+/// A dark field crossed by one glowing blade: a white core in a halo of
+/// the blade's colour. The Chase debit face.
+struct SaberField: View {
+    let base: Color
+    let blade: Color
+    let length: CGFloat
+    let thickness: CGFloat
+    /// How far below centre the blade crosses, so it can clear the text.
+    var drop: CGFloat = 0
+    var angle: Double = -24
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [base, Color(red: 0.12, green: 0.02, blue: 0.03), base],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Capsule()
+                .fill(blade)
+                .frame(width: length, height: thickness)
+                .overlay(Capsule().fill(Color.white.opacity(0.9)).frame(height: thickness * 0.35))
+                .shadow(color: blade, radius: thickness * 1.5)
+                .shadow(color: blade.opacity(0.6), radius: thickness * 5)
+                .rotationEffect(.degrees(angle))
+                .offset(y: drop)
+        }
     }
 }
 
