@@ -54,7 +54,8 @@ struct ProjectsDesignPreview: View {
                                   members: (try? fixture.model.store?.members(projectID: fixture.launch)) ?? [],
                                   milestones: (try? fixture.model.store?.milestones(projectID: fixture.launch)) ?? [])
                     }
-            default: ProjectsHomeScreen(model: fixture.model)
+            default: ProjectsHomeScreen(model: fixture.model).shellToolbar()
+                .environment(\.shellBack, ShellBack(label: "Life") {})
             }
         }
         .modelContainer(fixture.container)

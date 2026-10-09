@@ -13,6 +13,19 @@ public extension EnvironmentValues {
     @Entry var quickActions: [QuickAction] = []
     /// Who is signed in. Nil draws no avatar, for the same reason.
     @Entry var shellProfile: ShellProfile? = nil
+    /// The way back to the tab a screen was opened from, for the screens that
+    /// live behind a tab rather than on the bar. Nil draws nothing.
+    @Entry var shellBack: ShellBack? = nil
+}
+
+/// A leading "‹ Life" in the bar: where the screen was opened from.
+public struct ShellBack {
+    public let label: String
+    public let action: () -> Void
+
+    public init(label: String, action: @escaping () -> Void) {
+        self.label = label; self.action = action
+    }
 }
 
 /// The signed-in person for the bar: their photo, and what the avatar opens.
@@ -34,6 +47,7 @@ public struct ShellProfile {
 public struct ShellToolbar: ViewModifier {
     @Environment(\.quickActions) private var actions
     @Environment(\.shellProfile) private var profile
+    @Environment(\.shellBack) private var back
     @Environment(\.colorScheme) private var scheme
 
     public init() {}
@@ -41,6 +55,25 @@ public struct ShellToolbar: ViewModifier {
     public func body(content: Content) -> some View {
         paper(content)
             .toolbar {
+                #if os(iOS)
+                if let back {
+                    ToolbarItem(placement: .topBarLeading) {
+                        // Spelled out rather than a Label: the bar draws a
+                        // Label as its icon alone, and a bare chevron does not
+                        // say where it goes.
+                        Button(action: back.action) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left").font(LifeOSType.label.weight(.semibold))
+                                Text(back.label).font(LifeOSType.label.weight(.medium))
+                            }
+                            .fixedSize()
+                        }
+                        .tint(LifeOSTokens.primaryText.resolve(scheme))
+                        .accessibilityLabel("Back to \(back.label)")
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
+                #endif
                 // No shared glass capsule behind the items: the bar is paper
                 // and the items sit on it bare, the way the row is designed.
                 if !actions.isEmpty {

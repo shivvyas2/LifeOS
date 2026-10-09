@@ -21,6 +21,9 @@ struct LifeBoardScreen: View {
     let onOpenTab: (LifeSector) -> Void
     /// A card to mount open, for the design previews. Nil in the app.
     var initiallyOpen: LifeSector? = nil
+    /// Notes and Projects: whole screens that live behind this tab rather
+    /// than on the bar, listed above the board.
+    var places: [LifePlace] = []
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.layout) private var layout
@@ -36,6 +39,8 @@ struct LifeBoardScreen: View {
                     EditorialMasthead(eyebrow: model.headline.eyebrow,
                                       title: model.headline.title,
                                       detail: model.headline.detail)
+
+                    if !places.isEmpty { placeRows }
 
                     UnderlinePicker(
                         selection: Binding(get: { model.mode }, set: { model.mode = $0 }),
@@ -87,6 +92,40 @@ struct LifeBoardScreen: View {
         }
     }
 
+    private var placeRows: some View {
+        VStack(spacing: 0) {
+            ForEach(places) { place in
+                Button(action: place.open) {
+                    VStack(spacing: 0) {
+                        HStack(spacing: Space.x2) {
+                            Image(systemName: place.systemImage)
+                                .font(LifeOSType.label)
+                                .frame(width: 24)
+                                .foregroundStyle(Editorial.quietInk(scheme))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(place.title).font(LifeOSType.rowTitle)
+                                    .foregroundStyle(LifeOSTokens.primaryText.resolve(scheme))
+                                if let detail = place.detail {
+                                    Text(detail).font(LifeOSType.caption)
+                                        .foregroundStyle(Editorial.quietInk(scheme))
+                                }
+                            }
+                            Spacer(minLength: Space.x1)
+                            Image(systemName: "chevron.right")
+                                .font(LifeOSType.caption)
+                                .foregroundStyle(Editorial.quietInk(scheme))
+                        }
+                        .padding(.vertical, Space.x2)
+                        .contentShape(.rect)
+                        Hairline()
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("life.place.\(place.title)")
+            }
+        }
+    }
+
     /// `LifeSector.ownsTab` is the one decision about which sectors own a
     /// full tab; every other sector gets no row on its detail screen.
     private func openTabClosure(for sector: LifeSector) -> (() -> Void)? {
@@ -111,4 +150,14 @@ struct LifeBoardScreen: View {
             }
         }
     }
+}
+
+/// A screen reached from Life rather than from the bar: its name, a line of
+/// where it stands, and what opens it.
+struct LifePlace: Identifiable {
+    let title: String
+    let detail: String?
+    let systemImage: String
+    let open: () -> Void
+    var id: String { title }
 }

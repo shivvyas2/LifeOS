@@ -156,6 +156,10 @@ struct RootView: View {
     /// Deliberately not persisted: the requirement is that a cold launch lands
     /// on Today, and non-persisted `@State` delivers exactly that. Selection
     /// still survives backgrounding, because the scene stays alive.
+    ///
+    /// Notes and Projects are screens without a place on the bar: four is the
+    /// most a phone's bar holds comfortably, so they open from Life, which the
+    /// bar lights while either is up.
     private enum AppTab: Hashable { case today, health, money, notes, projects, life }
 
     @State private var tab: AppTab = .today
@@ -411,7 +415,7 @@ struct RootView: View {
         ZStack(alignment: .bottomTrailing) {
             content
 
-            PillNavBar(selection: $tab, items: navItems)
+            PillNavBar(selection: barSelection, items: navItems)
                 .frame(maxWidth: .infinity)          // centers the pill
                 .padding(.bottom, 12)
                 // Out of the way while typing. Left in place, the bar rides up
@@ -440,7 +444,7 @@ struct RootView: View {
             content
                 .overlay(alignment: .leading) {
                     VStack(spacing: 12) {
-                        PillNavBar(selection: $tab, items: navItems, axis: .vertical)
+                        PillNavBar(selection: barSelection, items: navItems, axis: .vertical)
                         railToggle(showing: false)
                     }
                     .padding(.leading, metrics.gutter)
@@ -494,9 +498,30 @@ struct RootView: View {
             PillNavItem(value: AppTab.today, systemImage: "sun.max.fill", label: "Today"),
             PillNavItem(value: AppTab.health, systemImage: "heart.fill", label: "Health"),
             PillNavItem(value: AppTab.money, systemImage: "dollarsign", label: "Money"),
-            PillNavItem(value: AppTab.notes, systemImage: "text.book.closed.fill", label: "Notes"),
-            PillNavItem(value: AppTab.projects, systemImage: "square.stack.3d.up.fill", label: "Projects"),
             PillNavItem(value: AppTab.life, systemImage: "square.grid.2x2.fill", label: "Life"),
+        ]
+    }
+
+    /// What the bar lights: Life stands in for the screens it opens.
+    private var barSelection: Binding<AppTab> {
+        Binding(get: { tab == .notes || tab == .projects ? .life : tab }, set: { tab = $0 })
+    }
+
+    private var backToLife: ShellBack { ShellBack(label: "Life") { tab = .life } }
+
+    /// Notes and Projects, listed on Life with a line of where each stands.
+    private var lifePlaces: [LifePlace] {
+        let notesCount = notes.snapshot.totalCount
+        let inbox = notes.snapshot.inboxCount
+        let projectCount = projects.projects.count
+        let tasks = projects.todayTasks.count
+        return [
+            LifePlace(title: "Notes",
+                      detail: notesCount == 0 ? nil : "\(notesCount) \(notesCount == 1 ? "note" : "notes")" + (inbox > 0 ? " · \(inbox) in inbox" : ""),
+                      systemImage: "text.book.closed") { tab = .notes },
+            LifePlace(title: "Projects",
+                      detail: projectCount == 0 ? nil : "\(projectCount) \(projectCount == 1 ? "project" : "projects") · \(tasks) \(tasks == 1 ? "task" : "tasks") today",
+                      systemImage: "square.stack.3d.up") { tab = .projects },
         ]
     }
 
@@ -637,11 +662,13 @@ struct RootView: View {
                         showAddPlan = true
                     }
                 )
+                .environment(\.shellBack, backToLife)
             case .projects:
                 NavigationStack {
                     ProjectsHomeScreen(model: projects)
                         .shellToolbar()
                 }
+                .environment(\.shellBack, backToLife)
             case .life:
                 // `LifeSector.ownsTab` in the Sectors package is the one
                 // decision about which three sectors get this row at all;
@@ -649,7 +676,7 @@ struct RootView: View {
                 // three. `default` below is reachable only if this switch
                 // has drifted out of sync with that decision, which should
                 // fail loudly rather than swallow the tap.
-                LifeBoardScreen(model: life) { sector in
+                LifeBoardScreen(model: life, onOpenTab: { sector in
                     switch sector {
                     case .body: tab = .health
                     case .money: tab = .money
@@ -657,7 +684,7 @@ struct RootView: View {
                     default:
                         assertionFailure("RootView has no tab mapped for \(sector)")
                     }
-                }
+                }, places: lifePlaces)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

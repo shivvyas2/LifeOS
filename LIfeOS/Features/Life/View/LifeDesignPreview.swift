@@ -33,7 +33,9 @@ struct LifeDesignPreview: View {
             case "shell":
                 shell
             default:
-                LifeBoardScreen(model: fixture.board, onOpenTab: { _ in }, initiallyOpen: Self.openSector)
+                LifeBoardScreen(model: fixture.board, onOpenTab: { _ in }, initiallyOpen: Self.openSector,
+                                places: [LifePlace(title: "Notes", detail: "42 notes · 3 in inbox", systemImage: "text.book.closed") {},
+                                         LifePlace(title: "Projects", detail: "2 projects · 4 tasks today", systemImage: "square.stack.3d.up") {}])
                     .modelContainer(fixture.container)
             }
         }
