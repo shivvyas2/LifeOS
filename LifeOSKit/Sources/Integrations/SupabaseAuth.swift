@@ -64,6 +64,11 @@ public struct SupabaseAuth: Sendable {
         return try decode(data)
     }
 
+    /// Exchanges another app's access token for a session of this app's own.
+    public func handoff(accessToken: String) async throws -> AuthSession {
+        throw AuthError.server(status: 501, message: "handoff_unavailable")
+    }
+
     public func refresh(refreshToken: String) async throws -> AuthSession {
         let data = try await post("token?grant_type=refresh_token",
                                   body: ["refresh_token": refreshToken])
