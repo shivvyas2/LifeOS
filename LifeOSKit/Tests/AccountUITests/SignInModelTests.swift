@@ -19,7 +19,14 @@ final class FakeBackend: SignInBackend, @unchecked Sendable {
         try verifyResult.get()
     }
     func handoff(accessToken: String) async throws -> AuthSession { try handoffResult.get() }
-    func restore(store: any AuthSessionStoring) async -> SessionRefresher.Outcome { .signedOut }
+    var restoreOutcome: SessionRefresher.Outcome = .signedOut
+    var restoreCalls = 0
+    var restoreDelay: Duration = .zero
+    func restore(store: any AuthSessionStoring) async -> SessionRefresher.Outcome {
+        restoreCalls += 1
+        if restoreDelay > .zero { try? await Task.sleep(for: restoreDelay) }
+        return restoreOutcome
+    }
 }
 
 extension AuthSession {

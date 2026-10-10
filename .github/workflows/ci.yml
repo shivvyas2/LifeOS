@@ -48,6 +48,13 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             -skipPackagePluginValidation -quiet build 2>&1 | tee xcodebuild.log
+      - name: Build LifeOS Focus for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project LIfeOS.xcodeproj -scheme LifeOSFocus \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            -skipPackagePluginValidation -quiet build 2>&1 | tee -a xcodebuild.log
       - name: Keep the build log
         if: failure()
         uses: actions/upload-artifact@v4

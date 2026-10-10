@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The app's own group first (the default for its own items), then the
+	     group shared with LifeOS for the sign-in beacon. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.shivvyas.lifeos.focus</string>
+		<string>$(AppIdentifierPrefix)com.shivvyas.lifeos.shared</string>
+	</array>
+</dict>
+</plist>
