@@ -63,6 +63,7 @@
 		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F0A9B7668344B51E1834C39E /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = 93CAD580BA64BAFE0800D826 /* FocusSync */; };
 		F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = F0C05002F0C05002F0C05002 /* FocusSync */; };
+		F0CE0001F0CE0001F0CE0001 /* FocusExperience in Frameworks */ = {isa = PBXBuildFile; productRef = F0CE0002F0CE0002F0CE0002 /* FocusExperience */; };
 		F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
@@ -191,8 +192,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A985C674302A34E0002272C5 /* LIfeOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = LIfeOS;
 			sourceTree = "<group>";
 		};
@@ -251,6 +250,7 @@
 				31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */,
 				A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */,
 				F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */,
+				F0CE0001F0CE0001F0CE0001 /* FocusExperience in Frameworks */,
 				A985C6B1302A34E0002272C5 /* Insights in Frameworks */,
 				A985C6C1302A34E0002272C5 /* Sectors in Frameworks */,
 				A985C6E0302A34E0002272C5 /* Assistant in Frameworks */,
@@ -498,6 +498,7 @@
 				09700010460E46BB90667E51 /* Soundscape */,
 				A11C0002A11C0002A11C0002 /* AccountUI */,
 				F0C05002F0C05002F0C05002 /* FocusSync */,
+				F0CE0002F0CE0002F0CE0002 /* FocusExperience */,
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
 				A985C6D3302A34E0002272C5 /* LinkKit */,
@@ -1402,6 +1403,10 @@
 		F0C05002F0C05002F0C05002 /* FocusSync */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FocusSync;
+		};
+		F0CE0002F0CE0002F0CE0002 /* FocusExperience */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FocusExperience;
 		};
 		F5C6D9F9A578760FC7F5C260 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;

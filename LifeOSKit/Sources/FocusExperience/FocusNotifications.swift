@@ -1,3 +1,4 @@
+#if os(iOS)
 import UserNotifications
 import Soundscape
 
@@ -38,3 +39,4 @@ struct FocusNotifications {
         center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 }
+#endif

@@ -1,4 +1,5 @@
 import AppIntents
+import FocusExperience
 import Soundscape
 
 enum FocusMoodOption: String, AppEnum {

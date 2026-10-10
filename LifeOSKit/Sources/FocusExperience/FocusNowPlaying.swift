@@ -1,3 +1,4 @@
+#if os(iOS)
 import MediaPlayer
 
 /// The lock screen's title and play, pause and skip-phase buttons for a
@@ -42,3 +43,4 @@ final class FocusNowPlaying {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }
+#endif

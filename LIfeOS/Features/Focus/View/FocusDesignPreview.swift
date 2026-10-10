@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import FocusExperience
 import Persistence
 import SwiftData
 import Soundscape

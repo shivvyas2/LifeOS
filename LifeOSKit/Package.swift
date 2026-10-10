@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "Soundscape", targets: ["Soundscape"]),
         .library(name: "AccountUI", targets: ["AccountUI"]),
         .library(name: "FocusSync", targets: ["FocusSync"]),
+        .library(name: "FocusExperience", targets: ["FocusExperience"]),
     ],
     targets: [
         .target(name: "AppSurfaces"),
@@ -41,5 +42,7 @@ let package = Package(
         .testTarget(name: "AccountUITests", dependencies: ["AccountUI"]),
         .target(name: "FocusSync", dependencies: ["Persistence", "Integrations"]),
         .testTarget(name: "FocusSyncTests", dependencies: ["FocusSync", "Persistence", "Integrations"]),
+        .target(name: "FocusExperience", dependencies: ["DesignSystem", "Persistence", "Soundscape", "AppSurfaces"]),
+        .testTarget(name: "FocusExperienceTests", dependencies: ["FocusExperience", "Persistence", "Soundscape"]),
     ]
 )

@@ -1,4 +1,5 @@
 import SwiftUI
+import FocusExperience
 import Soundscape
 
 /// Soft rings that breathe at the music's pace and brighten with it.

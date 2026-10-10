@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import SwiftData
 import AVFoundation
@@ -7,33 +8,35 @@ import Soundscape
 
 /// One focus session: the clock, the sound, and what the sound listens to.
 @MainActor @Observable
-final class FocusSessionModel {
-    struct Summary: Equatable {
-        var mood: Mood
-        var focusedSeconds: TimeInterval
-        var blocks: Int
-        var taskID: UUID?
-        var taskTitle: String?
+public final class FocusSessionModel {
+    public struct Summary: Equatable {
+        public var mood: Mood
+        public var focusedSeconds: TimeInterval
+        public var blocks: Int
+        public var taskID: UUID?
+        public var taskTitle: String?
     }
 
-    enum Stage: Equatable { case idle, running, summary(Summary) }
+    public enum Stage: Equatable { case idle, running, summary(Summary) }
 
-    private(set) var stage: Stage = .idle
-    private(set) var setup = FocusSetup.standard(for: .focus)
-    private(set) var reading: TimerReading?
-    private(set) var parameters: SoundParameters?
-    private(set) var heartRate: Int?
-    private(set) var notice: String?
-    private(set) var activeSource: SoundSource = .soundscape
-    private(set) var taskTitle: String?
-    private(set) var preferences: FocusPreferences
-    var isPresented: Bool { stage != .idle }
+    public private(set) var stage: Stage = .idle
+    public private(set) var setup = FocusSetup.standard(for: .focus)
+    public private(set) var reading: TimerReading?
+    public private(set) var parameters: SoundParameters?
+    public private(set) var heartRate: Int?
+    public private(set) var notice: String?
+    public private(set) var activeSource: SoundSource = .soundscape
+    public private(set) var taskTitle: String?
+    public private(set) var preferences: FocusPreferences
+    public var isPresented: Bool { stage != .idle }
 
     static let preferencesKey = "focus.preferences"
 
     private var engine = SoundscapeEngine()
     private let music = MusicSource()
-    private let watch = FocusHeartRate()
+    private var hooks: FocusHooks
+    /// The app's heart-rate source, if it has one (LifeOS: the watch).
+    private var watch: (any FocusHeartRateSource)? { hooks.heartRate }
     private let nowPlaying = FocusNowPlaying()
     private let notifications = FocusNotifications()
     private let defaults: UserDefaults
@@ -57,18 +60,23 @@ final class FocusSessionModel {
     private var musicMoodPending = false
 
     /// Whether sound is coming out: a soundscape stopped by a route change is not.
-    var soundPlaying: Bool { _ = soundEpoch; return activeSource != .soundscape || engine.isRunning }
+    public var soundPlaying: Bool { _ = soundEpoch; return activeSource != .soundscape || engine.isRunning }
 
-    init(defaults: UserDefaults = .standard, notifies: Bool = true) {
+    /// Replaces the app's hooks. LifeOS sets them where its providers are
+    /// known (the weather needs the location it builds on first use).
+    public func use(_ hooks: FocusHooks) { self.hooks = hooks }
+
+    public init(defaults: UserDefaults = .standard, notifies: Bool = true, hooks: FocusHooks = .none) {
+        self.hooks = hooks
         self.defaults = defaults
         self.notifies = notifies
         self.preferences = FocusPreferences.load(from: defaults, key: Self.preferencesKey)
         wireEngine()
     }
 
-    func resumeSound() { try? engine.resume(); soundEpoch += 1 }
+    public func resumeSound() { try? engine.resume(); soundEpoch += 1 }
 
-    func start(_ setup: FocusSetup, inputs: FocusInputs, context: ModelContext, taskID: UUID? = nil, taskTitle: String? = nil) async {
+    public func start(_ setup: FocusSetup, inputs: FocusInputs, context: ModelContext, taskID: UUID? = nil, taskTitle: String? = nil) async {
         guard stage != .running else { return }
         preferences.remember(setup)
         preferences.save(to: defaults, key: Self.preferencesKey)
@@ -88,7 +96,7 @@ final class FocusSessionModel {
 
     /// A session saved before the app was closed or killed: carry on with
     /// it, or, if its time ran out meanwhile, record it and show the summary.
-    func restore(context: ModelContext, providers: DayProviders?) async {
+    public func restore(context: ModelContext) async {
         guard stage == .idle, let saved = ActiveFocusSession.load(from: defaults) else { return }
         let reading = saved.timer.reading(at: .now)
         if reading.phase == .finished {
@@ -98,7 +106,7 @@ final class FocusSessionModel {
                                                      startedAt: saved.startedAt, endedAt: .now,
                                                      focusedSeconds: reading.focusedSeconds,
                                                      blocksCompleted: reading.completedBlocks, projectTaskID: saved.taskID)
-            FocusSyncDriver.shared.request()
+            hooks.sessionSaved()
             self.context = context
             stage = .summary(Summary(mood: saved.setup.mood, focusedSeconds: reading.focusedSeconds,
                                      blocks: reading.completedBlocks, taskID: saved.taskID, taskTitle: saved.taskTitle))
@@ -108,7 +116,7 @@ final class FocusSessionModel {
               context: context, taskID: saved.taskID, taskTitle: saved.taskTitle)
         let gen = generation
         activeSource = saved.source
-        let inputs = await FocusInputs.gather(context: context, providers: providers)
+        let inputs = await hooks.gatherInputs(context)
         guard isCurrent(gen) else { return }
         self.inputs = inputs
         await run(gen)
@@ -140,9 +148,9 @@ final class FocusSessionModel {
         await startSound(gen)
         guard isCurrent(gen) else { return }
         if reading?.isPaused == true { haltSound() }
-        watch.onHeartRate = { [weak self] rate in self?.heartRate = rate; self?.push(force: false) }
-        await watch.start()
-        guard isCurrent(gen) else { watch.stop(); return }
+        watch?.onHeartRate = { [weak self] rate in self?.heartRate = rate; self?.push(force: false) }
+        await watch?.start()
+        guard isCurrent(gen) else { watch?.stop(); return }
         observe()
         await reschedule()
         guard isCurrent(gen) else { return }
@@ -227,7 +235,7 @@ final class FocusSessionModel {
         else { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
 
-    func phaseTitle(_ phase: TimerPhase) -> String {
+    public func phaseTitle(_ phase: TimerPhase) -> String {
         switch phase {
         case .work(let block):
             // The running timer's plan, not one rebuilt from the setup: a mood
@@ -250,7 +258,7 @@ final class FocusSessionModel {
         }
     }
 
-    func pause() {
+    public func pause() {
         guard stage == .running, var timer, !timer.reading(at: .now).isPaused else { return }
         timer.pause(at: .now); self.timer = timer
         reading = timer.reading(at: .now)
@@ -259,7 +267,7 @@ final class FocusSessionModel {
         Task { await notifications.cancel() }
     }
 
-    func resume() {
+    public func resume() {
         guard stage == .running, var timer, timer.reading(at: .now).isPaused else { return }
         timer.resume(at: .now); self.timer = timer
         reading = timer.reading(at: .now)
@@ -275,7 +283,7 @@ final class FocusSessionModel {
         Task { await reschedule() }
     }
 
-    func skip() {
+    public func skip() {
         guard stage == .running, var timer else { return }
         timer.skip(at: .now); self.timer = timer
         persist()
@@ -284,7 +292,7 @@ final class FocusSessionModel {
     }
 
     /// A new mood crossfades; the clock is untouched.
-    func changeMood(_ mood: Mood) {
+    public func changeMood(_ mood: Mood) {
         guard stage == .running, mood != setup.mood else { return }
         let remembered = preferences.setup(for: mood)
         setup.mood = mood
@@ -301,12 +309,12 @@ final class FocusSessionModel {
         }
     }
 
-    func end() {
+    public func end() {
         guard stage == .running, let timer else { return }
         generation += 1
         let reading = timer.reading(at: .now)
         ticker?.cancel(); ticker = nil
-        engine.stop(); music.stop(); watch.stop(); nowPlaying.clear()
+        engine.stop(); music.stop(); watch?.stop(); nowPlaying.clear()
         soundEpoch += 1
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
@@ -317,19 +325,19 @@ final class FocusSessionModel {
                                                      startedAt: startedAt, endedAt: .now,
                                                      focusedSeconds: reading.focusedSeconds,
                                                      blocksCompleted: reading.completedBlocks, projectTaskID: taskID)
-            FocusSyncDriver.shared.request()
+            hooks.sessionSaved()
         }
         self.timer = nil
         stage = .summary(Summary(mood: setup.mood, focusedSeconds: reading.focusedSeconds,
                                  blocks: reading.completedBlocks, taskID: taskID, taskTitle: taskTitle))
     }
 
-    func markTaskDone() {
+    public func markTaskDone() {
         guard case .summary(let summary) = stage, let id = summary.taskID, let context else { return }
         try? ProjectsStore(context: context).moveTask(id: id, to: .done, at: 0)
     }
 
-    func dismissSummary() { stage = .idle; taskID = nil; taskTitle = nil }
+    public func dismissSummary() { stage = .idle; taskID = nil; taskTitle = nil }
 
     private func persist() {
         guard stage == .running, let timer else { return }
@@ -395,3 +403,4 @@ final class FocusSessionModel {
         })
     }
 }
+#endif
