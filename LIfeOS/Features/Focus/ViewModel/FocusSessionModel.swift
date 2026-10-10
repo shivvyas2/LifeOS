@@ -98,6 +98,7 @@ final class FocusSessionModel {
                                                      startedAt: saved.startedAt, endedAt: .now,
                                                      focusedSeconds: reading.focusedSeconds,
                                                      blocksCompleted: reading.completedBlocks, projectTaskID: saved.taskID)
+            FocusSyncDriver.shared.request()
             self.context = context
             stage = .summary(Summary(mood: saved.setup.mood, focusedSeconds: reading.focusedSeconds,
                                      blocks: reading.completedBlocks, taskID: saved.taskID, taskTitle: saved.taskTitle))
@@ -316,6 +317,7 @@ final class FocusSessionModel {
                                                      startedAt: startedAt, endedAt: .now,
                                                      focusedSeconds: reading.focusedSeconds,
                                                      blocksCompleted: reading.completedBlocks, projectTaskID: taskID)
+            FocusSyncDriver.shared.request()
         }
         self.timer = nil
         stage = .summary(Summary(mood: setup.mood, focusedSeconds: reading.focusedSeconds,

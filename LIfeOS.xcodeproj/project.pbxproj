@@ -16,6 +16,7 @@
 		2B95A1DB9F7DD2FC14C1B7BC /* ProjectGitHubUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */; };
 		31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */ = {isa = PBXBuildFile; productRef = 09700010460E46BB90667E51 /* Soundscape */; };
 		A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */ = {isa = PBXBuildFile; productRef = A11C0002A11C0002A11C0002 /* AccountUI */; };
+		F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = F0C05002F0C05002F0C05002 /* FocusSync */; };
 		31C2AEFD099AF24FC8F91F2E /* PlanDraftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -211,6 +212,7 @@
 				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
 				31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */,
 				A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */,
+				F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */,
 				A985C6B1302A34E0002272C5 /* Insights in Frameworks */,
 				A985C6C1302A34E0002272C5 /* Sectors in Frameworks */,
 				A985C6E0302A34E0002272C5 /* Assistant in Frameworks */,
@@ -428,6 +430,7 @@
 				A985C6A2302A34E0002272C5 /* Integrations */,
 				09700010460E46BB90667E51 /* Soundscape */,
 				A11C0002A11C0002A11C0002 /* AccountUI */,
+				F0C05002F0C05002F0C05002 /* FocusSync */,
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
 				A985C6D3302A34E0002272C5 /* LinkKit */,
@@ -1165,6 +1168,10 @@
 		A11C0002A11C0002A11C0002 /* AccountUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AccountUI;
+		};
+		F0C05002F0C05002F0C05002 /* FocusSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FocusSync;
 		};
 		0BEF691ED9A34E748BA71A9C /* Motion */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -358,6 +358,9 @@ struct RootView: View {
         }
         .task {
             attachAll()
+            // Focus sessions up and the week's down, for this account.
+            FocusSyncDriver.shared.attach(context)
+            FocusSyncDriver.shared.request()
             // A silent push from plaid-webhook lands here: sync, then redraw.
             MoneyLiveSync.shared.install {
                 await plaid.sync()
@@ -391,6 +394,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await projectSync?.sync(); projects.load() } }
             if phase == .active {
+                FocusSyncDriver.shared.request()
                 reloadAll()
                 if tab == .money { syncMoneySoon() }
                 syncCalendar()
