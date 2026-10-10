@@ -6,6 +6,7 @@ const TABLES: Record<ServerCategory, string[]> = {
   // Older server copies of health data; the privacy plan may already have
   // dropped some, so a missing table is not a failure.
   health: ["daily_metrics", "sleep_records", "workout_records", "whoop_raw"],
+  focus: ["focus_sessions"],
   messages: [],
 };
 const UNDEFINED_TABLE = "42P01";
