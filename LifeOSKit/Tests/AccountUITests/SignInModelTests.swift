@@ -19,7 +19,8 @@ final class FakeBackend: SignInBackend, @unchecked Sendable {
         try verifyResult.get()
     }
     func handoff(accessToken: String) async throws -> AuthSession { try handoffResult.get() }
-    func restore(store: any AuthSessionStoring) async -> SessionRefresher.Outcome { .signedOut }
+    var restoreOutcome: SessionRefresher.Outcome = .signedOut
+    func restore(store: any AuthSessionStoring) async -> SessionRefresher.Outcome { restoreOutcome }
 }
 
 extension AuthSession {
