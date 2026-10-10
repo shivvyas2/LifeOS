@@ -5,11 +5,32 @@ require "xcodeproj"
 
 PROJECT = File.expand_path("../LIfeOS.xcodeproj", __dir__)
 NAME = "LifeOSFocus"
-PRODUCTS = %w[AccountUI DesignSystem Integrations Persistence FocusSync]
+PRODUCTS = %w[AccountUI DesignSystem Integrations Persistence FocusSync FocusExperience Soundscape]
 
 project = Xcodeproj::Project.open(PROJECT)
-if project.targets.any? { |t| t.name == NAME }
-  puts "#{NAME} already exists"
+package = project.root_object.package_references.find { |r| r.respond_to?(:relative_path) && r.relative_path.to_s.include?("LifeOSKit") } \
+  or abort("no local LifeOSKit package reference")
+
+def link(project, target, package, product)
+  dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  dependency.package = package
+  dependency.product_name = product
+  target.package_product_dependencies << dependency
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = dependency
+  target.frameworks_build_phase.files << build_file
+end
+
+# An existing target only gains the products it is missing.
+if (existing = project.targets.find { |t| t.name == NAME })
+  missing = PRODUCTS - existing.package_product_dependencies.map(&:product_name)
+  if missing.empty?
+    puts "#{NAME} already exists"
+  else
+    missing.each { |product| link(project, existing, package, product) }
+    project.save
+    puts "updated #{NAME}: #{missing.join(", ")}"
+  end
   exit 0
 end
 
@@ -28,17 +49,7 @@ project.main_group.children << group
 target.file_system_synchronized_groups << group
 
 # Package products from the local LifeOSKit package.
-package = project.root_object.package_references.find { |r| r.respond_to?(:relative_path) && r.relative_path.to_s.include?("LifeOSKit") } \
-  or abort("no local LifeOSKit package reference")
-PRODUCTS.each do |product|
-  dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
-  dependency.package = package
-  dependency.product_name = product
-  target.package_product_dependencies << dependency
-  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
-  build_file.product_ref = dependency
-  target.frameworks_build_phase.files << build_file
-end
+PRODUCTS.each { |product| link(project, target, package, product) }
 
 secrets = project.files.find { |f| f.path == "Config/Secrets.xcconfig" } or abort("no Secrets.xcconfig reference")
 target.build_configurations.each do |config|
