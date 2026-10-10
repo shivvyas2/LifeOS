@@ -1,15 +1,17 @@
+#if os(iOS)
 import SwiftUI
-import FocusExperience
 import DesignSystem
 import Soundscape
 
 /// The full-screen session: the clock, the phase, the visual, and the few
 /// controls a person needs without leaving their work.
-struct FocusSessionScreen: View {
+public struct FocusSessionScreen: View {
     @Bindable var model: FocusSessionModel
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public init(model: FocusSessionModel) { self.model = model }
+
+    public var body: some View {
         ZStack {
             background.ignoresSafeArea()
             switch model.stage {
@@ -125,3 +127,4 @@ private struct MoodMenu: View {
             .accessibilityLabel("Change mood").accessibilityIdentifier("focus.changeMood")
     }
 }
+#endif

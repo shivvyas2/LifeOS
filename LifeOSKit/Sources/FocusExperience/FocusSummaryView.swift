@@ -1,5 +1,5 @@
+#if os(iOS)
 import SwiftUI
-import FocusExperience
 import DesignSystem
 import Soundscape
 
@@ -40,3 +40,4 @@ struct FocusSummaryView: View {
         return m >= 60 ? "\(m / 60)h \(m % 60)m \(label)" : "\(m) min \(label)"
     }
 }
+#endif
