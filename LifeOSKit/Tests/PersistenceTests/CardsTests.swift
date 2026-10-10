@@ -63,6 +63,46 @@ import SwiftData
         #expect(CardColor.components("nonsense") == nil)
     }
 
+    // MARK: Fade
+
+    @Test func aDarkFaceFadesFromNearBlackDownToItsAccent() {
+        let sapphire = CardFaceStyle(base: "#0A2A6B", accent: "#3D8BFF", pattern: .gradient)
+        let fade = sapphire.fade
+        #expect(fade.count == 3)
+        #expect(CardColor.luminance(fade[0]) < CardColor.luminance("#0A2A6B"))
+        #expect(fade[1] == "#0A2A6B")
+        #expect(fade[2] == "#3D8BFF")
+    }
+
+    @Test func aLightFaceFadesLighterToDarker() {
+        let discover = CardFaceStyle(base: "#B8862B", accent: "#F6DC8C", pattern: .gradient, darkInk: true)
+        #expect(discover.fade == ["#F6DC8C", "#B8862B"])
+    }
+
+    @Test func aLightFaceSoftensADarkEndSoDarkInkStaysReadable() {
+        let banana = CardFaceStyle(base: "#EFE8DC", accent: "#2A2622", pattern: .plain, darkInk: true)
+        let fade = banana.fade
+        #expect(fade.first == "#EFE8DC")
+        #expect(fade.last != "#2A2622")
+        #expect(CardColor.luminance(fade.last!) >= 0.35)
+    }
+
+    @Test func aPlainColourStillFades() {
+        let cream = CardFaceStyle.plain("#F3EFE7").fade
+        #expect(cream.first == "#F3EFE7")
+        #expect(CardColor.luminance(cream.last!) < CardColor.luminance("#F3EFE7"))
+
+        let navy = CardFaceStyle.plain("#0B2A5B").fade
+        #expect(CardColor.luminance(navy.first!) < CardColor.luminance("#0B2A5B"))
+        #expect(navy.last == "#0B2A5B")
+    }
+
+    @Test func mixingMovesAColourTowardAnother() {
+        #expect(CardColor.mix("#000000", toward: "#FFFFFF", by: 0.5) == "#808080")
+        #expect(CardColor.mix("#FF0000", toward: "#000000", by: 0) == "#FF0000")
+        #expect(CardColor.mix("nonsense", toward: "#000000", by: 0.5) == "nonsense")
+    }
+
     // MARK: Store
 
     @Test func aHandAddedCardKeepsOnlyTheLastFourDigits() throws {

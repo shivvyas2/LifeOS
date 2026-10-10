@@ -4,103 +4,111 @@ import Persistence
 
 /// A card, drawn.
 ///
-/// An original face in the spirit of the real one: the colour family, the
-/// pattern and the wordmark weight, never the issuer's artwork. At the width
-/// of the cards strip that is plenty to tell a Sapphire from a Discover
-/// without reading a word.
+/// One vertical fade in the card's own colour family and nothing else on the
+/// face: the name top left with the kind and last four under it, the
+/// contactless mark top right, the issuer bottom left and the network
+/// bottom right. An original face in the spirit of the real one, never the
+/// issuer's artwork. There is no chip. The fade and the name are what make
+/// it a card, the way a matte metal card carries nothing but a wordmark.
+///
+/// The top band, the name and its eyebrow, is all a card shows when it is
+/// covered in the deck, so everything that tells two cards apart sits there,
+/// over the darkest part of the fade.
 struct CardFace: View {
     let card: MoneyCardSummary
     var width: CGFloat = 156
 
-    private var height: CGFloat { width / 1.586 }
+    /// ID-1, the proportion of a real card.
+    static func height(width: CGFloat) -> CGFloat { width / 1.586 }
+
+    private var height: CGFloat { Self.height(width: width) }
     private var style: CardFaceStyle { card.style }
-    private var ink: Color { style.darkInk ? Color.black.opacity(0.82) : Color.white.opacity(0.94) }
-    private var quietInk: Color { ink.opacity(0.62) }
+    private var ink: Color { style.darkInk ? Color.black.opacity(0.84) : Color.white.opacity(0.95) }
+    private var quietInk: Color { style.darkInk ? Color.black.opacity(0.55) : Color.white.opacity(0.64) }
+    private var radius: CGFloat { width * 0.075 }
+    private var pad: CGFloat { width * 0.065 }
+    /// A thumbnail carries the name and the network; nothing smaller than
+    /// that survives at 64 points.
+    private var isThumbnail: Bool { width < 140 }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            background
+            LinearGradient(colors: style.fade.map { Color(hex: $0) }, startPoint: .top, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(card.issuer.uppercased())
-                        .font(.system(size: width * 0.058, weight: .semibold))
-                        .tracking(1)
-                        .foregroundStyle(quietInk)
-                        .lineLimit(1)
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: .leading, spacing: width * 0.008) {
+                        Text(card.title)
+                            .font(titleFont)
+                            .tracking(-width * 0.0015)
+                            .foregroundStyle(ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                        if !isThumbnail {
+                            Text(eyebrow)
+                                .font(.system(size: max(9, width * 0.031), weight: .semibold).monospacedDigit())
+                                .tracking(width * 0.0035)
+                                .foregroundStyle(quietInk)
+                                .lineLimit(1)
+                        }
+                    }
                     Spacer(minLength: 4)
+                    if !isThumbnail {
+                        Image(systemName: "wave.3.right")
+                            .font(.system(size: width * 0.05, weight: .medium))
+                            .foregroundStyle(quietInk)
+                            .accessibilityHidden(true)
+                    }
                 }
-                Text(card.title)
-                    .font(style.serif
-                          ? .system(size: width * 0.1, weight: .regular, design: .serif)
-                          : .system(size: width * 0.095, weight: .semibold))
-                    .foregroundStyle(ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .padding(.top, 2)
                 Spacer(minLength: 0)
-                chip
-                Spacer(minLength: 0)
-                HStack(alignment: .lastTextBaseline) {
-                    Text(card.mask.map { "•••• \($0)" } ?? " ")
-                        .font(.system(size: width * 0.07, weight: .medium).monospacedDigit())
-                        .foregroundStyle(ink)
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    if !isThumbnail, let issuer = issuerMark {
+                        Text(issuer)
+                            .font(.system(size: width * 0.045, weight: .medium))
+                            .foregroundStyle(ink.opacity(0.9))
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 4)
                     Text(card.network.displayName)
-                        .font(.system(size: width * (card.network == .mastercard ? 0.065 : 0.075),
+                        .font(.system(size: width * (card.network == .mastercard ? 0.05 : 0.058),
                                       weight: .heavy).italic())
-                        .foregroundStyle(quietInk)
+                        .foregroundStyle(ink.opacity(0.85))
                         .lineLimit(1)
                 }
             }
-            .padding(width * 0.07)
+            .padding(pad)
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: width * 0.07, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: width * 0.07, style: .continuous)
-            .strokeBorder(Color.black.opacity(style.darkInk ? 0.10 : 0), lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .strokeBorder(style.darkInk ? Color.black.opacity(0.10) : Color.white.opacity(0.10), lineWidth: 1))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityName)
     }
 
-    /// The contact chip, a quiet gold square. It is what makes a coloured
-    /// rectangle read as a card at all.
-    private var chip: some View {
-        RoundedRectangle(cornerRadius: width * 0.018, style: .continuous)
-            .fill(LinearGradient(colors: [Color(hex: "#E7CF8F"), Color(hex: "#B89551")],
-                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: width * 0.15, height: width * 0.11)
-            .opacity(0.9)
+    /// The name is set the way the site sets a headline: medium and tight.
+    /// A card whose real face is a serif wordmark keeps that.
+    private var titleFont: Font {
+        let size = width * (isThumbnail ? 0.1 : 0.068)
+        return style.serif
+            ? .system(size: size, weight: .regular, design: .serif)
+            : .system(size: size, weight: .medium)
     }
 
-    @ViewBuilder
-    private var background: some View {
-        let base = Color(hex: style.base)
-        let accent = Color(hex: style.accent)
-        switch style.pattern {
-        case .gradient:
-            LinearGradient(colors: [base, accent], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case .metal:
-            ZStack {
-                LinearGradient(colors: [base, accent, base], startPoint: .topLeading, endPoint: .bottomTrailing)
-                LinearGradient(colors: [.white.opacity(0), .white.opacity(0.22), .white.opacity(0)],
-                               startPoint: .leading, endPoint: .trailing)
-                    .rotationEffect(.degrees(25))
-                    .scaleEffect(1.6)
-            }
-        case .stripe:
-            ZStack(alignment: .bottom) {
-                base
-                accent.frame(height: height * 0.16).offset(y: -height * 0.30)
-            }
-        case .plain:
-            ZStack(alignment: .bottom) {
-                base
-                accent.frame(height: 1.5).padding(.horizontal, width * 0.07).offset(y: -height * 0.27)
-            }
-        case .saber:
-            SaberField(base: base, blade: accent, length: width * 1.5, thickness: max(2, height * 0.025))
-        }
+    /// The issuer, bottom left, unless the name already says it: a Zolve is
+    /// issued by Zolve and a Discover it by Discover, and a card that says
+    /// so twice looks like a mistake.
+    private var issuerMark: String? {
+        let issuer = card.issuer
+        guard !issuer.isEmpty,
+              !card.title.localizedCaseInsensitiveContains(issuer),
+              issuer.caseInsensitiveCompare(card.network.displayName) != .orderedSame else { return nil }
+        return issuer
+    }
+
+    /// "CREDIT · •• 4821", the one line that separates two cards of the same
+    /// product.
+    private var eyebrow: String {
+        [card.kind.uppercased(), card.mask.map { "•• \($0)" }].compactMap { $0 }.joined(separator: "  ·  ")
     }
 }
 
@@ -117,20 +125,12 @@ struct CardChip: View {
         Group {
             if let card {
                 let style = card.style
+                let fade = style.fade
                 ZStack {
-                    // A striped or plain face is its base colour; its accent
-                    // is a thin band, and washed across a thumbnail it reads
-                    // as a different card.
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(LinearGradient(colors: [Color(hex: style.base),
-                                                      Color(hex: style.pattern == .gradient || style.pattern == .metal
-                                                            ? style.accent : style.base)],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                    if style.pattern == .stripe || style.pattern == .saber {
-                        Color(hex: style.accent).frame(height: 4)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    }
+                        .fill(LinearGradient(colors: [Color(hex: fade.first ?? style.base),
+                                                      Color(hex: fade.last ?? style.accent)],
+                                             startPoint: .top, endPoint: .bottom))
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .strokeBorder(Color.black.opacity(style.darkInk ? 0.15 : 0), lineWidth: 0.5)
                     Text(card.mask ?? card.initials)
@@ -153,33 +153,6 @@ struct CardChip: View {
         }
         .frame(width: 34, height: 22)
         .accessibilityLabel(card.map { "Paid with \($0.accessibilityName)" } ?? "Card unknown")
-    }
-}
-
-/// A dark field crossed by one glowing blade: a white core in a halo of
-/// the blade's colour. The Chase debit face.
-struct SaberField: View {
-    let base: Color
-    let blade: Color
-    let length: CGFloat
-    let thickness: CGFloat
-    /// How far below centre the blade crosses, so it can clear the text.
-    var drop: CGFloat = 0
-    var angle: Double = -24
-
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [base, Color(red: 0.12, green: 0.02, blue: 0.03), base],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            Capsule()
-                .fill(blade)
-                .frame(width: length, height: thickness)
-                .overlay(Capsule().fill(Color.white.opacity(0.9)).frame(height: thickness * 0.35))
-                .shadow(color: blade, radius: thickness * 1.5)
-                .shadow(color: blade.opacity(0.6), radius: thickness * 5)
-                .rotationEffect(.degrees(angle))
-                .offset(y: drop)
-        }
     }
 }
 

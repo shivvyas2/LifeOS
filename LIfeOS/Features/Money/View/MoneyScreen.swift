@@ -56,9 +56,9 @@ struct MoneyScreen: View {
             VStack(alignment: .leading, spacing: Space.x3) {
                 masthead
                 if snapshot.reconnectPrompt != nil { reconnectBanner }
-                MoneyCardsStrip(cards: snapshot.cards,
-                                onOpen: { onOpen(.card($0.id, $0.title)) },
-                                onEdit: onEditCard)
+                MoneyCardDeck(cards: snapshot.cards,
+                              onOpen: { onOpen(.card($0.id, $0.title)) },
+                              onEdit: onEditCard)
                 IndexedTabStrip(selection: $section,
                                 options: MoneySection.allCases.map { ($0, $0.title) })
                 sections
@@ -197,63 +197,6 @@ struct MoneyScreen: View {
     static func signed(_ value: Double) -> String {
         let formatted = abs(value).formatted(.currency(code: "USD").precision(.fractionLength(2)))
         return value >= 0 ? "+\(formatted)" : "-\(formatted)"
-    }
-}
-
-/// Every card side by side, each with what went on it this month, and a tile
-/// to add one Plaid cannot see. Tap a card for its charges; hold it to change
-/// how it looks.
-struct MoneyCardsStrip: View {
-    let cards: [MoneyCardSummary]
-    var onOpen: (MoneyCardSummary) -> Void = { _ in }
-    var onEdit: (MoneyCardSummary?) -> Void = { _ in }
-    @Environment(\.colorScheme) private var scheme
-    @Environment(\.layout) private var layout
-
-    private var faceWidth: CGFloat { layout.isRegular ? 360 : 300 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.x1) {
-            Text("Cards").moneyEyebrow(scheme)
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: Space.x2) {
-                    ForEach(cards) { card in
-                        Button { onOpen(card) } label: {
-                            WalletCard(card: card, width: faceWidth)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Change how it looks", systemImage: "paintpalette") { onEdit(card) }
-                        }
-                        .accessibilityHint("Opens this month's charges on this card")
-                    }
-                    addTile
-                }
-                .scrollTargetLayout()
-                .padding(.vertical, Space.x1)
-            }
-            .scrollTargetBehavior(.viewAligned)
-            .scrollClipDisabled()
-            .scrollIndicators(.hidden)
-        }
-    }
-
-    private var addTile: some View {
-        Button { onEdit(nil) } label: {
-            VStack(spacing: 6) {
-                Image(systemName: "plus")
-                    .font(LifeOSType.body.weight(.semibold))
-                Text("Add a card")
-                    .font(LifeOSType.caption.weight(.semibold))
-            }
-            .foregroundStyle(MoneyPalette.quietInk(scheme))
-            .frame(width: faceWidth * 0.4, height: WalletCard.totalHeight(width: faceWidth))
-            .overlay(RoundedRectangle(cornerRadius: faceWidth * 0.085, style: .continuous)
-                .strokeBorder(MoneyPalette.quietInk(scheme), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Add a card")
     }
 }
 

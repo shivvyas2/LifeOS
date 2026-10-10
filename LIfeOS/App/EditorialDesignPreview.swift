@@ -104,13 +104,13 @@ struct EditorialDesignPreview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x3) {
                     if ProcessInfo.processInfo.arguments.contains("--all-cards") {
-                        ForEach(EditorialDesignPreview.cards.dropFirst()) { WalletCard(card: $0) }
+                        ForEach(EditorialDesignPreview.cards.dropFirst()) { CardFace(card: $0, width: 300) }
                     }
                     VStack(alignment: .leading, spacing: Space.x2) {
                         EditorialSectionHeader(title: "Project")
                         ProjectRows(state: .card(card, asOf: nil), onOpen: { _ in }, onReconnect: {})
                     }
-                    MoneyCardsStrip(cards: EditorialDesignPreview.cards)
+                    MoneyCardDeck(cards: EditorialDesignPreview.cards)
                 }
                 .padding(Space.x3)
             }

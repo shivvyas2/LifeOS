@@ -44,6 +44,7 @@
 		B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */; };
 		B7710CA5AC0DA4F764F5277A /* AlmanacWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */; };
 		B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */; };
+		4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */; };
 		BAAF9FF43B6B8674032C7B8C /* NotesWalkthroughUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C67EF6A283A8C832853650 /* NotesWalkthroughUITests.swift */; };
 		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
@@ -146,6 +147,7 @@
 		624701EF004FBF42221FA616 /* AlmanacWatchWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWatchWidgets.swift; sourceTree = "<group>"; };
 		65C0CC243BDD2E3A83313257 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayLayoutUITests.swift; sourceTree = "<group>"; };
+		5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MoneyDeckUITests.swift; sourceTree = "<group>"; };
 		6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		79E991DB8B28033641AC617E /* RailUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RailUITests.swift; sourceTree = "<group>"; };
 		841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivity.swift; sourceTree = "<group>"; };
@@ -265,6 +267,7 @@
 				2A446557345552872D28C633 /* ProjectPlanUITests.swift */,
 				0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */,
 				5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */,
+				5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */,
 			);
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
@@ -562,6 +565,7 @@
 				BAAF9FF43B6B8674032C7B8C /* NotesWalkthroughUITests.swift in Sources */,
 				9BC9AE0A6CF148649C6FBBD6 /* DayProjectUITests.swift in Sources */,
 				B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */,
+				4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */,
 				B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */,
 				E5A5A0FF98AD8929CEA43E79 /* ProjectsUITests.swift in Sources */,
 				C1B1EC24242F40508F446B3C /* FocusUITests.swift in Sources */,

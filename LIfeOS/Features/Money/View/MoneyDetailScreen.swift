@@ -40,7 +40,7 @@ struct MoneyDetailScreen: View {
     private var headline: some View {
         MoneyBand {
             if let card = snapshot.card {
-                WalletCard(card: card, width: layout.isRegular ? 360 : 300)
+                CardFace(card: card, width: layout.isRegular ? 360 : 300)
                     .padding(.bottom, Space.x1)
             } else {
                 merchantHeader

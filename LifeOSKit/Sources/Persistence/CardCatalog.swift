@@ -151,12 +151,45 @@ public enum CardCatalog {
                                   "#9E1B1B", "#E07A1F", "#B88F45", "#F3EFE7", "#0D0D0D"]
 }
 
+extension CardFaceStyle {
+    /// The face as one vertical fade, top to bottom, in `#RRGGBB` stops.
+    ///
+    /// A dark face runs from near-black through its base to its accent, the
+    /// way a matte metal card darkens towards the top edge, which also puts
+    /// the name on the darkest part. A light face runs lighter to darker,
+    /// and a dark end is softened until dark ink still reads on it.
+    public var fade: [String] {
+        if darkInk {
+            let (light, dark) = CardColor.luminance(base) >= CardColor.luminance(accent)
+                ? (base, accent) : (accent, base)
+            if light == dark { return [light, CardColor.mix(light, toward: "#000000", by: 0.12)] }
+            let bottom = CardColor.luminance(dark) >= 0.35 ? dark : CardColor.mix(light, toward: dark, by: 0.35)
+            return [light, bottom]
+        }
+        return [CardColor.mix(base, toward: "#000000", by: 0.6), base, accent]
+    }
+}
+
 public enum CardColor {
     /// Whether text on this colour should be dark. Relative luminance, so a
     /// cream face gets dark ink and a navy one gets light ink.
     public static func isLight(_ hex: String) -> Bool {
-        guard let (r, g, b) = components(hex) else { return false }
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6
+        luminance(hex) > 0.6
+    }
+
+    /// Relative luminance, 0 for black and 1 for white; 0 for a bad hex.
+    public static func luminance(_ hex: String) -> Double {
+        guard let (r, g, b) = components(hex) else { return 0 }
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+
+    /// `hex` moved `amount` (0...1) of the way to `other`. A bad hex comes
+    /// back unchanged, so a bad stored colour still draws as itself.
+    public static func mix(_ hex: String, toward other: String, by amount: Double) -> String {
+        guard let (r1, g1, b1) = components(hex), let (r2, g2, b2) = components(other) else { return hex }
+        let t = min(max(amount, 0), 1)
+        func channel(_ a: Double, _ b: Double) -> Int { Int(((a + (b - a) * t) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", channel(r1, r2), channel(g1, g2), channel(b1, b2))
     }
 
     /// 0...1 channels, or nil for anything that is not `#RRGGBB`.
