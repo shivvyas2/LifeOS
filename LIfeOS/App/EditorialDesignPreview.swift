@@ -59,7 +59,7 @@ struct EditorialDesignPreview: View {
         case "card-picker":
             CardPickerSheet(row: Self.money.recent[0], cards: Self.cards, hasRule: false, onPick: { _, _ in })
         default:
-            NavigationStack { MoneyScreen(snapshot: Self.money) }
+            MoneyScreenFixture()
         }
     }
 
@@ -191,6 +191,26 @@ struct EditorialDesignPreview: View {
                           opacity: CategorySlice.steps[index], isOther: false)
         }
         return snapshot
+    }
+}
+/// Money with somewhere for a tap to go: what was opened is written on the
+/// page, so a UI test can read it instead of following a push. Each launch
+/// starts the same way: the first card open and the deck's how-to line showing.
+private struct MoneyScreenFixture: View {
+    @State private var opened = ""
+
+    init() {
+        UserDefaults.currentAccount.removeObject(forKey: "money.deckHintSeen")
+        UserDefaults.currentAccount.removeObject(forKey: "money.openCard")
+    }
+
+    var body: some View {
+        NavigationStack {
+            MoneyScreen(snapshot: EditorialDesignPreview.money, onOpen: { opened = $0.id })
+                .overlay(alignment: .bottom) {
+                    Text(opened).font(.caption2).accessibilityIdentifier("preview.opened")
+                }
+        }
     }
 }
 #endif

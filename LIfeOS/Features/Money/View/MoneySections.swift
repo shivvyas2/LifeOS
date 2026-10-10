@@ -68,11 +68,21 @@ struct MoneyBandStack<Content: View>: View {
                 alignment: .leading,
                 spacing: Space.x1
             ) {
-                content
+                dealt
             }
         } else {
             VStack(spacing: 0) {
-                content
+                dealt
+            }
+        }
+    }
+
+    /// Every band arrives a beat after the one above it. The section's
+    /// identity changes with the tab, so each switch deals its answer in.
+    private var dealt: some View {
+        Group(subviews: content) { subviews in
+            ForEach(Array(subviews.enumerated()), id: \.element.id) { index, subview in
+                subview.staggeredEntrance(index: index)
             }
         }
     }
@@ -323,7 +333,7 @@ struct MoneyCategoriesSection: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.editorialRow)
                     .accessibilityHint("Opens every charge in \(row.name)")
                 }
             }
@@ -400,7 +410,7 @@ struct MoneyRecurringSection: View {
                                 .padding(.vertical, Space.x1 + 2)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.editorialRow)
                             .accessibilityHint("Opens every charge from \(row.merchant)")
                         }
                     }
@@ -483,12 +493,7 @@ struct MoneyGoalSection: View {
                         .foregroundStyle(MoneyPalette.quietInk(scheme))
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Set a goal", action: onEdit)
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, Space.x2)
-                        .overlay(Capsule().strokeBorder(
-                            MoneyPalette.ink.resolve(scheme).opacity(0.4), lineWidth: 1))
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                         .padding(.top, Space.half)
                 }
             }
@@ -546,12 +551,7 @@ struct MoneyPressureSection: View {
 
                 MoneyBand {
                     Button("Edit budgets", action: onEditBudgets)
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, Space.x2)
-                        .overlay(Capsule().strokeBorder(
-                            MoneyPalette.ink.resolve(scheme).opacity(0.4), lineWidth: 1))
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                 }
             }
         }
@@ -578,8 +578,7 @@ struct MoneyLedgerSection: View {
                     }
                     Spacer()
                     Button("Add", action: onAdd)
-                        .font(LifeOSType.label.weight(.semibold))
-                        .foregroundStyle(MoneyPalette.ink.resolve(scheme))
+                        .buttonStyle(.editorial(.secondary, size: .compact))
                 }
             }
 
