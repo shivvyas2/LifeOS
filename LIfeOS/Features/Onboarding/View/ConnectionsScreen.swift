@@ -1,4 +1,5 @@
 import SwiftUI
+import AccountUI
 import DesignSystem
 import Integrations
 
@@ -119,20 +120,26 @@ struct OnboardingFlow: View {
 
     var body: some View {
         Group {
-            switch model.step {
+            switch model.visibleStep {
             case .intro:
                 IntroScreen(
                     onStart: { model.beginSignup() },
                     onSignIn: { model.beginSignIn() }
                 )
-            case .identity:    IdentityScreen(model: model)
-            case .code:        CodeScreen(model: model)
+            case .identity:
+                IdentityScreen(model: model.signIn,
+                               totalSteps: model.signIn.mode == .signIn ? 2 : 3,
+                               onBack: { model.back() })
+            case .code:
+                CodeScreen(model: model.signIn,
+                           totalSteps: model.signIn.mode == .signIn ? 2 : 3,
+                           onBack: { model.back() })
             case .profile:     ProfileStepScreen(model: model)
             case .connections: ConnectionsScreen(model: model, whoop: whoop, fitbit: fitbit, health: health, plaid: plaid, onFinish: onFinish)
             case .signedIn:    ProgressView().controlSize(.large)
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: model.step)
+        .animation(.easeInOut(duration: 0.28), value: model.visibleStep)
         .transition(.opacity)
         // Called from onChange rather than the `.signedIn` view body: a body can
         // run more than once for a single state, and onFinish flips persisted

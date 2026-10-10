@@ -67,9 +67,15 @@ public struct KeychainAuthSessionStore: AuthSessionStoring {
         } else if status != errSecSuccess {
             throw AuthStoreError.keychain(status)
         }
+        // Every save is a sign-in or a refresh: the moment a sibling app's
+        // "Continue as" should see the newest token.
+        SharedSignIn.publish(session)
     }
 
-    public func clear() { SecItemDelete(query as CFDictionary) }
+    public func clear() {
+        if let current = load() { SharedSignIn.withdraw(userID: current.userID) }
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 public final class InMemoryAuthSessionStore: AuthSessionStoring, @unchecked Sendable {

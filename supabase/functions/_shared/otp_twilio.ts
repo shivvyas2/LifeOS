@@ -147,6 +147,19 @@ export async function mintSession(args: {
     }
   }
 
+  return sessionForEmail({ ...args, email });
+}
+
+/// Mints a session for an existing user by email: a magic link generated with
+/// the service key, verified at once. Shared by phone sign-in and by
+/// `session-handoff`, which gives a sibling app a session of its own.
+export async function sessionForEmail(args: {
+  supabaseURL: string;
+  serviceKey: string;
+  anonKey: string;
+  email: string;
+}): Promise<Response> {
+  const { email } = args;
   const linkResponse = await fetch(`${args.supabaseURL}/auth/v1/admin/generate_link`, {
     method: "POST",
     headers: restHeaders(args.serviceKey),

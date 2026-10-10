@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Integrations
 import SwiftData
 import OSLog
 import Persistence
@@ -26,6 +27,12 @@ struct LIfeOSApp: App {
     /// UIKit delegate callback and nowhere else. This is the whole reason the
     /// app has a delegate at all.
     @UIApplicationDelegateAdaptor(PushDelegate.self) private var pushDelegate
+
+    init() {
+        // The group LifeOS and its companion apps share for "Continue as".
+        // Only an access token is ever left there; see `SharedSignIn`.
+        SharedSignIn.accessGroup = "Z42YU5W6WY.com.shivvyas.lifeos.shared"
+    }
 
     var body: some Scene {
         WindowGroup {
