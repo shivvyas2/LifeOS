@@ -18,13 +18,15 @@ import Persistence
 ///
 /// The figures are not on the faces. They sit on one ruled line under the
 /// deck and follow the open card, which keeps every face as plain as a real
-/// one and still says the balance and the month without a tap.
+/// one and still says the balance and the month without a tap. The line is
+/// also the open card's way in, for anyone who never taps a card face.
 struct MoneyCardDeck: View {
     let cards: [MoneyCardSummary]
     var onOpen: (MoneyCardSummary) -> Void = { _ in }
     var onEdit: (MoneyCardSummary?) -> Void = { _ in }
 
     @AppStorage("money.openCard", store: .currentAccount) private var rememberedID = ""
+    @AppStorage("money.deckHintSeen", store: .currentAccount) private var hintSeen = false
     @State private var measuredWidth: CGFloat = 0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,17 +47,41 @@ struct MoneyCardDeck: View {
         VStack(alignment: .leading, spacing: Space.x1) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Cards").moneyEyebrow(scheme)
+                Text("\(cards.count)")
+                    .font(LifeOSType.eyebrow.weight(.regular))
+                    .foregroundStyle(MoneyPalette.quietInk(scheme))
                 Spacer(minLength: Space.x1)
-                Button("Add a card") { onEdit(nil) }
-                    .buttonStyle(.editorial(.secondary, size: .compact))
+                // The masthead's Add menu covers a new card once there is a
+                // deck. With none, this is the only door, so it stays.
+                if cards.isEmpty {
+                    Button("Add a card") { onEdit(nil) }
+                        .buttonStyle(.editorial(.secondary, size: .compact))
+                }
             }
+            .padding(.top, Space.x1)
+            .overlay(alignment: .top) { Hairline() }
             Color.clear.frame(height: 0)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
             if !cards.isEmpty {
                 deck
+                if showsHint { hint }
                 if let open = cards.first(where: { $0.id == openID }) { figures(for: open) }
             }
         }
+    }
+
+    /// Until a card has been brought forward once, the deck says how it
+    /// works. Nothing on a stacked deck says a covered card can be tapped,
+    /// and a long press is invisible by nature.
+    private var showsHint: Bool { cards.count > 1 && !hintSeen }
+
+    private var hint: some View {
+        Text("Tap a card to bring it forward · hold one to restyle it")
+            .font(LifeOSType.caption)
+            .foregroundStyle(MoneyPalette.quietInk(scheme))
+            .fixedSize(horizontal: false, vertical: true)
+            .transition(.opacity)
+            .accessibilityIdentifier("money.deck.hint")
     }
 
     private var deck: some View {
@@ -69,6 +95,7 @@ struct MoneyCardDeck: View {
                                 radius: isOpen ? 16 : 5, y: isOpen ? 10 : 2)
                 }
                 .buttonStyle(.plain)
+                .staggeredEntrance(index: index)
                 .contextMenu {
                     Button("Change how it looks", systemImage: "paintpalette") { onEdit(card) }
                 }
@@ -90,25 +117,45 @@ struct MoneyCardDeck: View {
     }
 
     private func tap(_ card: MoneyCardSummary) {
-        if card.id == openID { onOpen(card) } else { rememberedID = card.id }
+        if card.id == openID {
+            onOpen(card)
+        } else {
+            rememberedID = card.id
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { hintSeen = true }
+        }
     }
 
-    /// The balance and the month on one ruled line. A hand-added card has
-    /// no balance to report, so it shows the month alone.
+    /// The balance and the month on one ruled line, under the open card's
+    /// name. A hand-added card has no balance to report, so it shows the
+    /// month alone. The line is a button too: it is the open card's charges
+    /// in two numbers, and the chevron says the rest is one tap away.
     private func figures(for card: MoneyCardSummary) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
-            if let balance = card.balance {
-                figure(card.kind == "Debit" ? "Available" : "Balance", balance)
+        Button { onOpen(card) } label: {
+            VStack(alignment: .leading, spacing: Space.x1) {
+                EditorialTag(card.title)
+                HStack(alignment: .firstTextBaseline, spacing: Space.x3) {
+                    if let balance = card.balance {
+                        figure(card.kind == "Debit" ? "Available" : "Balance", balance)
+                    }
+                    figure("This month", card.monthSpend,
+                           detail: card.monthCount == 1 ? "1 charge" : "\(card.monthCount) charges")
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(LifeOSType.caption.weight(.semibold))
+                        .foregroundStyle(MoneyPalette.quietInk(scheme))
+                }
             }
-            figure("This month", card.monthSpend,
-                   detail: card.monthCount == 1 ? "1 charge" : "\(card.monthCount) charges")
-            Spacer(minLength: 0)
+            .padding(.vertical, Space.x1)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, Space.x1)
+        .buttonStyle(.editorialRow)
         .overlay(alignment: .bottom) { Hairline() }
+        .staggeredEntrance(index: cards.count)
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("money.deck.figures")
         .accessibilityLabel(figuresLabel(card))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens this month's charges on \(card.title)")
     }
 
     private func figure(_ label: String, _ amount: Double, detail: String? = nil) -> some View {
@@ -129,7 +176,7 @@ struct MoneyCardDeck: View {
     private func figuresLabel(_ card: MoneyCardSummary) -> String {
         let spend = MoneyScreen.money(card.monthSpend) ?? ""
         let month = "\(spend) this month over \(card.monthCount) charge\(card.monthCount == 1 ? "" : "s")"
-        guard let balance = card.balance, let figure = MoneyScreen.money(balance) else { return month }
-        return "\(card.kind == "Debit" ? "Available" : "Balance") \(figure), \(month)"
+        guard let balance = card.balance, let figure = MoneyScreen.money(balance) else { return "\(card.title), \(month)" }
+        return "\(card.title), \(card.kind == "Debit" ? "Available" : "Balance") \(figure), \(month)"
     }
 }

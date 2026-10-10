@@ -80,7 +80,7 @@ struct MoneyTransactionRow: View {
     var body: some View {
         if let onOpen {
             Button { onOpen(.merchant(row.merchant)) } label: { content }
-                .buttonStyle(.plain)
+                .buttonStyle(.editorialRow)
                 .accessibilityHint("Opens every charge from \(row.merchant)")
         } else {
             content

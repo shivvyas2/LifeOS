@@ -50,4 +50,30 @@ final class MoneyDeckUITests: XCTestCase {
         tap(app.buttons["Zolve ending 5520"], atBottom: true)
         XCTAssertTrue(figures.label.contains("96.10"), "balance is not Zolve's: \(figures.label)")
     }
+
+    func testTheHowToLineLeavesOnceACardIsBroughtForward() {
+        let app = launch()
+        let hint = app.staticTexts["money.deck.hint"]
+        XCTAssertTrue(hint.waitForExistence(timeout: 8), "the deck does not say how it works")
+        // The figures line is dealt in last, so once it is here every card is.
+        let figures = app.descendants(matching: .any).matching(identifier: "money.deck.figures").firstMatch
+        XCTAssertTrue(figures.waitForExistence(timeout: 8))
+
+        tap(app.buttons["Discover it ending 3305"], atBottom: true)
+        XCTAssertTrue(app.buttons["Discover it ending 3305"].isSelected, "Discover did not come forward")
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: hint)
+        wait(for: [gone], timeout: 3)
+    }
+
+    func testTheFiguresLineOpensTheOpenCardsCharges() {
+        let app = launch()
+        let figures = app.descendants(matching: .any).matching(identifier: "money.deck.figures").firstMatch
+        XCTAssertTrue(figures.waitForExistence(timeout: 8), "no figures line under the deck")
+
+        tap(app.buttons["Discover it ending 3305"], atBottom: true)
+        figures.tap()
+        let opened = app.staticTexts["preview.opened"]
+        XCTAssertTrue(opened.waitForExistence(timeout: 3))
+        XCTAssertTrue(opened.label.hasPrefix("card:"), "the figures line opened something else: \(opened.label)")
+    }
 }
