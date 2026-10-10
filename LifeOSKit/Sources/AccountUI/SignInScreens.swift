@@ -156,6 +156,16 @@ public struct IdentityScreen: View {
             onBack: onBack
         ) {
             VStack(alignment: .leading, spacing: Space.x2) {
+                // Signed in to a sibling LifeOS app on this phone: one tap
+                // instead of a code. The code flow below stays for anyone else.
+                if let shared = model.sharedAccount {
+                    OnboardingActionButton("Continue as \(shared.label)", isLoading: model.isBusy) {
+                        Task { await model.continueAsShared() }
+                    }
+                    Text("or use a code")
+                        .font(LifeOSType.caption)
+                        .foregroundStyle(Editorial.quietInk(scheme))
+                }
                 HStack(spacing: Space.x3) {
                     ForEach([SupabaseAuth.Channel.email, .phone], id: \.self) { channel in
                         Button { model.switchChannel(to: channel) } label: {
@@ -253,6 +263,7 @@ public struct IdentityScreen: View {
             }
         }
         .task {
+            model.refreshSharedAccount()
             await model.loadChannels()
             // The key name is a fact for whoever reads the log, not for whoever
             // is trying to sign in.

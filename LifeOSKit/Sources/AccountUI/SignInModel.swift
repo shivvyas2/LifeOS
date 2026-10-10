@@ -156,6 +156,31 @@ public final class SignInModel {
         }
     }
 
+    /// The account a sibling app on this phone is signed in to, if its token
+    /// is fresh enough to trade. Read when the identity screen appears.
+    public var sharedAccount: SignInBeacon?
+
+    public func refreshSharedAccount() { sharedAccount = SharedSignIn.current() }
+
+    /// One tap instead of a code. A refusal just hides the offer: the code
+    /// flow underneath still works, and an error for a shortcut nobody asked
+    /// to fail would only confuse.
+    public func continueAsShared() async {
+        guard let backend, let beacon = sharedAccount else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            // Not saved here: the host persists every session in
+            // `onSignedIn`, into the slot for that account. Saving through
+            // `store` could overwrite whichever account is current.
+            let session = try await backend.handoff(accessToken: beacon.accessToken)
+            finish(with: session)
+        } catch {
+            log.info("handoff refused; offering the code flow")
+            sharedAccount = nil
+        }
+    }
+
     func finish(with session: AuthSession) {
         step = .done
         onSignedIn(session)

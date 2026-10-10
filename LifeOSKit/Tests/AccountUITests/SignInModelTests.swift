@@ -99,4 +99,28 @@ struct SignInModelTests {
         model.switchChannel(to: .phone)
         #expect(model.errorMessage == nil)
     }
+
+    @Test func continueAsSignsInWithTheHandedOverSession() async {
+        let backend = FakeBackend()
+        backend.handoffResult = .success(.sample(id: "u1"))
+        var handed: AuthSession?
+        let model = SignInModel(backend: backend, store: InMemoryAuthSessionStore(), onSignedIn: { handed = $0 })
+        model.sharedAccount = SignInBeacon(userID: "u1", label: "s@example.com", accessToken: "t",
+                                           expiresAt: .now.addingTimeInterval(3600))
+        await model.continueAsShared()
+        #expect(handed?.userID == "u1")
+        #expect(model.step == .done)
+    }
+
+    @Test func handoffRefusedFallsBackQuietly() async {
+        let backend = FakeBackend()
+        backend.handoffResult = .failure(AuthError.server(status: 401, message: "unauthorized"))
+        let model = SignInModel(backend: backend, store: InMemoryAuthSessionStore(), onSignedIn: { _ in })
+        model.sharedAccount = SignInBeacon(userID: "u1", label: "s@example.com", accessToken: "t",
+                                           expiresAt: .now.addingTimeInterval(3600))
+        await model.continueAsShared()
+        #expect(model.sharedAccount == nil)
+        #expect(model.errorMessage == nil)
+        #expect(model.step == .identity)
+    }
 }

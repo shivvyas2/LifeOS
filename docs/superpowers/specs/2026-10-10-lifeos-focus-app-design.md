@@ -70,12 +70,15 @@ These stay where they are: `Soundscape` (timer, composer, DSP),
 
 ### Shared sign-in on one device
 
-Both apps store the auth session in a shared Keychain access group
-(`$(AppIdentifierPrefix)com.shivvyas.lifeos.shared`). When the Focus app finds
-a valid session from LifeOS, the first-run screen offers **"Continue as
-<first name>"** instead of asking for a code. Signing out in one app does not
-sign out the other. Each app drops its own copy, and the shared item is only
-cleared when the user deletes their account.
+Both apps leave a **sign-in beacon** in the shared Keychain access group
+(`$(AppIdentifierPrefix)com.shivvyas.lifeos.shared`). The beacon holds the
+user id, a label and the current **access token only**. A sibling app that
+finds a beacon with more than two minutes left offers **"Continue as
+<label>"**. On a tap, it trades the token at the `session-handoff` Edge
+Function for a new session of its own, with its own refresh token. Refresh
+tokens are never shared: Supabase rotates them, and a reused one revokes the
+whole family, which would sign both apps out. Signing out of one app
+withdraws its beacon but leaves the other app signed in.
 
 ### LifeOS after the move
 
