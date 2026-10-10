@@ -1,9 +1,10 @@
+#if os(iOS)
 import SwiftUI
 import DesignSystem
 import Soundscape
 
 /// Mood, sound, timer and texture. Everything starts at what was used last.
-struct FocusSetupSheet: View {
+public struct FocusSetupSheet: View {
     @State private var setup: FocusSetup
     private let preferences: FocusPreferences
     private let taskTitle: String?
@@ -12,14 +13,14 @@ struct FocusSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
-    init(initial: FocusSetup, preferences: FocusPreferences, taskTitle: String?, onStart: @escaping (FocusSetup) -> Void) {
+    public init(initial: FocusSetup, preferences: FocusPreferences, taskTitle: String?, onStart: @escaping (FocusSetup) -> Void) {
         _setup = State(initialValue: initial)
         self.preferences = preferences
         self.taskTitle = taskTitle
         self.onStart = onStart
     }
 
-    var body: some View {
+    public var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.x3) {
@@ -92,3 +93,4 @@ struct FocusSetupSheet: View {
         }
     }
 }
+#endif

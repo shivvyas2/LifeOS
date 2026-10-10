@@ -73,4 +73,33 @@ import SwiftData
         // The merged row arrives synced; only this device's own record waits.
         #expect(try store.pending().count == 1)
     }
+
+    @MainActor @Test func recentIsEmptyForANewStore() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        #expect(try FocusStore(context: container.mainContext).recent().isEmpty)
+    }
+
+    @MainActor @Test func recentIsNewestFirstAndFinishedOnly() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = FocusStore(context: container.mainContext)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: Self.day.addingTimeInterval(600),
+                         focusedSeconds: 600, blocksCompleted: 1, projectTaskID: nil)
+        try store.record(mood: "relax", source: "silence", startedAt: Self.day.addingTimeInterval(3600),
+                         endedAt: Self.day.addingTimeInterval(4200), focusedSeconds: 600, blocksCompleted: 1, projectTaskID: nil)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day.addingTimeInterval(7200), endedAt: nil,
+                         focusedSeconds: 0, blocksCompleted: 0, projectTaskID: nil)
+        #expect(try store.recent().map(\.mood) == ["relax", "focus"])
+    }
+
+    @MainActor @Test func weekTotalSkipsSleepAndOtherWeeks() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = FocusStore(context: container.mainContext)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: Self.day,
+                         focusedSeconds: 1200, blocksCompleted: 1, projectTaskID: nil)
+        try store.record(mood: "sleep", source: "soundscape", startedAt: Self.day, endedAt: Self.day,
+                         focusedSeconds: 3000, blocksCompleted: 0, projectTaskID: nil)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day.addingTimeInterval(-14 * 86_400),
+                         endedAt: Self.day.addingTimeInterval(-14 * 86_400), focusedSeconds: 900, blocksCompleted: 1, projectTaskID: nil)
+        #expect(try store.focusedSeconds(inWeekOf: Self.day, calendar: Self.utc) == 1200)
+    }
 }

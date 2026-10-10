@@ -1,3 +1,4 @@
+#if os(iOS)
 import AVFoundation
 import Soundscape
 
@@ -112,3 +113,4 @@ final class SoundscapeEngine {
         }
     }
 }
+#endif

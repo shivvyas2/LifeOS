@@ -1,3 +1,4 @@
+#if os(iOS)
 import Foundation
 import MusicKit
 import Soundscape
@@ -51,3 +52,4 @@ final class MusicSource {
         return any
     }
 }
+#endif

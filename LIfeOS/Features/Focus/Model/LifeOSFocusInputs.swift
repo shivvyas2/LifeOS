@@ -4,13 +4,12 @@ import CoreLocation
 import Persistence
 import AppSurfaces
 import Soundscape
+import FocusExperience
 
 /// What the soundscape reads from the day, gathered once at the start.
-struct FocusInputs {
-    var weather: WeatherInput?
-    var recovery: RecoveryLevel?
-    var restingHeartRate: Double?
-
+/// How LifeOS fills a session's inputs: recovery and resting heart rate
+/// from today's metrics, and the weather when location is already allowed.
+enum LifeOSFocusInputs {
     static func gather(context: ModelContext, providers: DayProviders?) async -> FocusInputs {
         var inputs = FocusInputs()
         let today = Calendar.current.startOfDay(for: .now)

@@ -1,4 +1,5 @@
 import SwiftUI
+import FocusExperience
 import AppSurfaces
 import SwiftData
 import Combine
@@ -109,6 +110,7 @@ struct RootView: View {
     @State private var projectSync: ProjectSync?
     @State private var projects = ProjectsViewModel()
     @State private var focus = FocusSessionModel()
+    @State private var focusHeartRate = FocusHeartRate()
     @State private var focusLauncher = FocusLauncher.shared
 
     @State private var healthSection = HealthSection.health
@@ -138,6 +140,14 @@ struct RootView: View {
     @State private var locationOnce: LocationOnce?
     private var dayProviders: DayProviders? {
         locationOnce.map { DayProviders(weather: WeatherKitProvider(), location: $0, github: integrations.github.dayProvider) }
+    }
+    /// What the shared focus model needs from LifeOS: inputs from today's
+    /// metrics and weather, sync after a save, and the watch's heart rate.
+    private var focusHooks: FocusHooks {
+        let providers = dayProviders
+        return FocusHooks(gatherInputs: { context in await LifeOSFocusInputs.gather(context: context, providers: providers) },
+                          sessionSaved: { FocusSyncDriver.shared.request() },
+                          heartRate: focusHeartRate)
     }
     @State private var eventSheet: EventSheetPresentation?
 
@@ -333,7 +343,8 @@ struct RootView: View {
             FocusSetupSheet(initial: focus.preferences.setup(for: mood), preferences: focus.preferences,
                             taskTitle: request.taskTitle) { setup in
                 Task {
-                    let inputs = await FocusInputs.gather(context: context, providers: dayProviders)
+                    focus.use(focusHooks)
+                    let inputs = await LifeOSFocusInputs.gather(context: context, providers: dayProviders)
                     await focus.start(setup, inputs: inputs, context: context,
                                       taskID: request.taskID, taskTitle: request.taskTitle)
                 }
@@ -344,7 +355,7 @@ struct RootView: View {
         }
         // A session the app was closed or killed during carries on, or is
         // recorded and summarised if its time ran out.
-        .task { await focus.restore(context: context, providers: dayProviders) }
+        .task { focus.use(focusHooks); await focus.restore(context: context) }
         // Injected rather than passed: Notes and Life own their own
         // navigation stacks several levels down, and a toolbar has to be
         // attached inside the stack it belongs to.

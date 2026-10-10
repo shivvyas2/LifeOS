@@ -1,11 +1,12 @@
 import Foundation
 import HealthKit
 import AppSurfaces
+import FocusExperience
 
 /// Live heart rate for a focus session: the Watch runs a mind-and-body
 /// session (streaming every few seconds), which is discarded at the end.
 @MainActor
-final class FocusHeartRate {
+final class FocusHeartRate: FocusHeartRateSource {
     var onHeartRate: ((Int) -> Void)?
     private var running = false
 

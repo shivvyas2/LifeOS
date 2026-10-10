@@ -1,3 +1,4 @@
+#if os(iOS)
 import SwiftUI
 import Soundscape
 
@@ -30,3 +31,4 @@ struct FocusVisual: View {
         .accessibilityHidden(true)
     }
 }
+#endif
