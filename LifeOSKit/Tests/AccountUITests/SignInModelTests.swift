@@ -91,4 +91,12 @@ struct SignInModelTests {
         let model = SignInModel(backend: nil, store: InMemoryAuthSessionStore(), onSignedIn: { _ in })
         #expect(!model.isConfigured)
     }
+
+    @Test func aReportedMessageShowsUntilTheNextAction() {
+        let model = SignInModel(backend: FakeBackend(), store: InMemoryAuthSessionStore(), onSignedIn: { _ in })
+        model.report("Your session expired. Sign in again")
+        #expect(model.errorMessage == "Your session expired. Sign in again")
+        model.switchChannel(to: .phone)
+        #expect(model.errorMessage == nil)
+    }
 }

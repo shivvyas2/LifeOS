@@ -1,4 +1,5 @@
 import SwiftUI
+import AccountUI
 import DesignSystem
 
 /// A single orientation after account setup. AppShell remembers completion
