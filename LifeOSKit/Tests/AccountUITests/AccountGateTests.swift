@@ -64,4 +64,29 @@ struct AccountGateTests {
         #expect(gate.signIn.step == .identity)
         #expect(gate.signIn.draft.code.isEmpty)
     }
+
+    /// Launch and the first `.active` both restore. Two refreshes with one
+    /// refresh token would make the loser report the store changed under it;
+    /// one restore must serve both callers.
+    @Test func concurrentRestoresShareOneRefresh() async {
+        let backend = FakeBackend()
+        backend.restoreOutcome = .active(.sample())
+        backend.restoreDelay = .milliseconds(50)
+        let gate = AccountGate(backend: backend, store: InMemoryAuthSessionStore(session: .sample()))
+        async let first: Void = gate.restore()
+        async let second: Void = gate.restore()
+        _ = await (first, second)
+        #expect(backend.restoreCalls == 1)
+        #expect(gate.isSignedIn)
+    }
+
+    /// `.signedOut` from the refresher can mean "the store changed under me"
+    /// (another refresh won). The gate follows the store, not the verdict.
+    @Test func signedOutFollowsWhatTheStoreHolds() async {
+        let backend = FakeBackend()
+        backend.restoreOutcome = .signedOut
+        let gate = AccountGate(backend: backend, store: InMemoryAuthSessionStore(session: .sample()))
+        await gate.restore()
+        #expect(gate.isSignedIn)
+    }
 }

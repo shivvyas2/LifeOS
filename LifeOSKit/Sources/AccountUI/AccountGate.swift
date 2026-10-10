@@ -15,6 +15,10 @@ public final class AccountGate {
 
     private let backend: (any SignInBackend)?
     private let store: any AuthSessionStoring
+    /// The restore in flight. Launch and the first `.active` both ask for
+    /// one; two refreshes with one refresh token would make the loser see
+    /// the store change under it.
+    private var restoring: Task<Void, Never>?
 
     public init(backend: (any SignInBackend)?, store: any AuthSessionStoring) {
         self.backend = backend
@@ -31,16 +35,24 @@ public final class AccountGate {
     /// Only a refusal from the server ends the session; being offline keeps
     /// it (see `SessionRefresher`).
     public func restore() async {
+        if let restoring { return await restoring.value }
         guard let backend else { return }
-        switch await backend.restore(store: store) {
-        case .active(let refreshed):
-            session = refreshed
-        case .signedOut:
-            session = nil
-        case .rejected:
-            signOut()
-            signIn.report("Your session expired. Sign in again")
+        let task = Task {
+            switch await backend.restore(store: store) {
+            case .active(let refreshed):
+                session = refreshed
+            case .signedOut:
+                // Also what the refresher says when another refresh changed
+                // the store under it, so follow the store, not the verdict.
+                session = store.load()
+            case .rejected:
+                signOut()
+                signIn.report("Your session expired. Sign in again")
+            }
         }
+        restoring = task
+        await task.value
+        restoring = nil
     }
 
     public func signOut() {
