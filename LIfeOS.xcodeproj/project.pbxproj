@@ -13,15 +13,19 @@
 		1F895236E1EC46DD9CDD9D34 /* WatchFocusScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCC2855E0F14AE6BCA99FE4 /* WatchFocusScreen.swift */; };
 		204B4D240D0347F252780D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
 		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
+		2AEC3B8BCB8B24DDF1B8C1CF /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = CA3EEFB3FC9B1EC05B77900A /* DesignSystem */; };
 		2B95A1DB9F7DD2FC14C1B7BC /* ProjectGitHubUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */; };
 		31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */ = {isa = PBXBuildFile; productRef = 09700010460E46BB90667E51 /* Soundscape */; };
-		A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */ = {isa = PBXBuildFile; productRef = A11C0002A11C0002A11C0002 /* AccountUI */; };
-		F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = F0C05002F0C05002F0C05002 /* FocusSync */; };
 		31C2AEFD099AF24FC8F91F2E /* PlanDraftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
+		33D8758894EF43C0BD43AF5C /* Integrations in Frameworks */ = {isa = PBXBuildFile; productRef = 098F68A2E653B0E46D9B54A5 /* Integrations */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4B32A459A013B7636FAD5D5D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
+		4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */; };
 		4F9451D72816087ECF416011 /* ProjectPlanUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A446557345552872D28C633 /* ProjectPlanUITests.swift */; };
+		52A5BE95482AFCC740EF74A6 /* AccountUI in Frameworks */ = {isa = PBXBuildFile; productRef = CEB5C7F89D6652FE74AD9352 /* AccountUI */; };
 		57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = D04A72741F9CF213015F7725 /* AppSurfaces */; };
+		5A1A0001C0DE5A1A0001C0DE /* SignInUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */; };
 		65562F2ADB6E2321FAE9A9FB /* WorkoutLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */; };
 		68A03CA62FF558CFA54A53F7 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = BAF3BF780E0D4A5AF48176D9 /* AppSurfaces */; };
 		6E623354DC6DDB5C8B9B6C2C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FA002014128A5DDE0A65AF5E /* Foundation.framework */; };
@@ -32,6 +36,7 @@
 		90509C80553530AC3C4FFB25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 9136293255DF75D09FEAE189 /* PrivacyInfo.xcprivacy */; };
 		907FB39D01D3B252E2F9725A /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = F5C6D9F9A578760FC7F5C260 /* AppSurfaces */; };
 		9BC9AE0A6CF148649C6FBBD6 /* DayProjectUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CEA5E0BAC492E027423BA37 /* DayProjectUITests.swift */; };
+		A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */ = {isa = PBXBuildFile; productRef = A11C0002A11C0002A11C0002 /* AccountUI */; };
 		A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D4E5F60718293A4B5D /* DesignSystem */; };
 		A6E1D4C2F0B34A7E9C1D2E3F /* AgendaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7F2E5D3A1C45B8FAD2E3F40 /* AgendaWidget.swift */; };
 		A96E559F303F84DB00789BA0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = A985C6D3302A34E0002272C5 /* LinkKit */; };
@@ -46,8 +51,6 @@
 		B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45434BFB1A9DBA916117794 /* AccountControlsUITests.swift */; };
 		B7710CA5AC0DA4F764F5277A /* AlmanacWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */; };
 		B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */; };
-		4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */; };
-		5A1A0001C0DE5A1A0001C0DE /* SignInUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */; };
 		BAAF9FF43B6B8674032C7B8C /* NotesWalkthroughUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C67EF6A283A8C832853650 /* NotesWalkthroughUITests.swift */; };
 		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
@@ -55,8 +58,11 @@
 		C1B1EC24242F40508F446B3C /* FocusUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D534F91C4824E3686A2198C /* FocusUITests.swift */; };
 		CA27C4365C4AD46424035E01 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 		DE5380CEF71189FC734B69BC /* AlmanacWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172E63EED9B7241C245D23D7 /* AlmanacWatchApp.swift */; };
+		E21FEE0B5984D52BDB5F2225 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = 6152021C6CBF3B76720D7AF6 /* Persistence */; };
 		E5A5A0FF98AD8929CEA43E79 /* ProjectsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D2B6E5FBCF00137F09A65C4 /* ProjectsUITests.swift */; };
 		EBD63502C4368507F74D9130 /* AlmanacWatchWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F0A9B7668344B51E1834C39E /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = 93CAD580BA64BAFE0800D826 /* FocusSync */; };
+		F0C05001F0C05001F0C05001 /* FocusSync in Frameworks */ = {isa = PBXBuildFile; productRef = F0C05002F0C05002F0C05002 /* FocusSync */; };
 		F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1F17F22DE820F38559377622 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
@@ -143,15 +149,16 @@
 		40C5B08BD745A6AF603D8705 /* InboxUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxUITests.swift; sourceTree = "<group>"; };
 		4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchWorkoutScreen.swift; sourceTree = "<group>"; };
 		53B837A02BD3CD136DF62D37 /* HealthWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HealthWidget.swift; sourceTree = "<group>"; };
+		5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignInUITests.swift; sourceTree = "<group>"; };
 		5A224D947F9F20AEE96E695F /* AlmanacWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AlmanacWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5A24A20B31209601FBC9A414 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWidgets.swift; sourceTree = "<group>"; };
 		5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlanDraftUITests.swift; sourceTree = "<group>"; };
+		5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MoneyDeckUITests.swift; sourceTree = "<group>"; };
 		624701EF004FBF42221FA616 /* AlmanacWatchWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlmanacWatchWidgets.swift; sourceTree = "<group>"; };
 		65C0CC243BDD2E3A83313257 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayLayoutUITests.swift; sourceTree = "<group>"; };
-		5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MoneyDeckUITests.swift; sourceTree = "<group>"; };
-		5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignInUITests.swift; sourceTree = "<group>"; };
+		6A0D522437D0F5A1F17646A6 /* LifeOSFocus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LifeOSFocus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		79E991DB8B28033641AC617E /* RailUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RailUITests.swift; sourceTree = "<group>"; };
 		841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivity.swift; sourceTree = "<group>"; };
@@ -171,12 +178,30 @@
 		FA002014128A5DDE0A65AF5E /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0ADE087780DD5D253CAA77D9 /* Exceptions for "LifeOSFocus" folder in "LifeOSFocus" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2C2365EE08435AAE0C261B42 /* LifeOSFocus */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A985C674302A34E0002272C5 /* LIfeOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 			);
 			path = LIfeOS;
+			sourceTree = "<group>";
+		};
+		CAB4A50B94CB8B6927B070EA /* LifeOSFocus */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0ADE087780DD5D253CAA77D9 /* Exceptions for "LifeOSFocus" folder in "LifeOSFocus" target */,
+			);
+			path = LifeOSFocus;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -199,6 +224,19 @@
 				F3C768C1E2864EA50AAB52A6 /* Foundation.framework in Frameworks */,
 				57DCE402662FEC521A28FB42 /* AppSurfaces in Frameworks */,
 				A1B2C3D4E5F60718293A4B5C /* DesignSystem in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5911F18FDB5E6AA54BB724E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4B32A459A013B7636FAD5D5D /* Foundation.framework in Frameworks */,
+				52A5BE95482AFCC740EF74A6 /* AccountUI in Frameworks */,
+				2AEC3B8BCB8B24DDF1B8C1CF /* DesignSystem in Frameworks */,
+				33D8758894EF43C0BD43AF5C /* Integrations in Frameworks */,
+				E21FEE0B5984D52BDB5F2225 /* Persistence in Frameworks */,
+				F0A9B7668344B51E1834C39E /* FocusSync in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -290,6 +328,7 @@
 				AE340166A64F22122923FC7C /* AlmanacWatch */,
 				3E01D9C0C018A75FA2D8E740 /* AlmanacWatchWidgets */,
 				A231084DC0EA2BE150A2EFA5 /* LIfeOSUITests */,
+				CAB4A50B94CB8B6927B070EA /* LifeOSFocus */,
 			);
 			sourceTree = "<group>";
 		};
@@ -301,6 +340,7 @@
 				5A224D947F9F20AEE96E695F /* AlmanacWatch.app */,
 				ECBF04727B9FC044FFB334AE /* AlmanacWatchWidgets.appex */,
 				E5E0AE3E83E036957984695A /* LIfeOSUITests.xctest */,
+				6A0D522437D0F5A1F17646A6 /* LifeOSFocus.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -383,6 +423,33 @@
 			productName = AlmanacWidgets;
 			productReference = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		2C2365EE08435AAE0C261B42 /* LifeOSFocus */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F6D710EF6CF395E46975226F /* Build configuration list for PBXNativeTarget "LifeOSFocus" */;
+			buildPhases = (
+				59F536524E34CC82C59CF65E /* Sources */,
+				A5911F18FDB5E6AA54BB724E /* Frameworks */,
+				DFB666FDEA1EDA79004351EF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				CAB4A50B94CB8B6927B070EA /* LifeOSFocus */,
+			);
+			name = LifeOSFocus;
+			packageProductDependencies = (
+				CEB5C7F89D6652FE74AD9352 /* AccountUI */,
+				CA3EEFB3FC9B1EC05B77900A /* DesignSystem */,
+				098F68A2E653B0E46D9B54A5 /* Integrations */,
+				6152021C6CBF3B76720D7AF6 /* Persistence */,
+				93CAD580BA64BAFE0800D826 /* FocusSync */,
+			);
+			productName = LifeOSFocus;
+			productReference = 6A0D522437D0F5A1F17646A6 /* LifeOSFocus.app */;
+			productType = "com.apple.product-type.application";
 		};
 		4935CE2B622E2224850660EA /* AlmanacWatchWidgets */ = {
 			isa = PBXNativeTarget;
@@ -520,6 +587,7 @@
 				E4EB944CA1B663800B89D15C /* AlmanacWatch */,
 				4935CE2B622E2224850660EA /* AlmanacWatchWidgets */,
 				E0168CA7746EC5DD58C56352 /* LIfeOSUITests */,
+				2C2365EE08435AAE0C261B42 /* LifeOSFocus */,
 			);
 		};
 /* End PBXProject section */
@@ -564,6 +632,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DFB666FDEA1EDA79004351EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -595,6 +670,13 @@
 				77396051629F8B90D1C1875B /* HealthWidget.swift in Sources */,
 				A6E1D4C2F0B34A7E9C1D2E3F /* AgendaWidget.swift in Sources */,
 				65562F2ADB6E2321FAE9A9FB /* WorkoutLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		59F536524E34CC82C59CF65E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1083,6 +1165,71 @@
 			};
 			name = Debug;
 		};
+		BF173B136D37647FFCB870A4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A985C6A0302A34E0002272C5 /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = LifeOSFocus/LifeOSFocus.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Z42YU5W6WY;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeOSFocus/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "LifeOS Focus";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shivvyas.lifeos.focus;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		FD941EA32BA40685347FF314 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A985C6A0302A34E0002272C5 /* Secrets.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = LifeOSFocus/LifeOSFocus.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Z42YU5W6WY;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LifeOSFocus/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "LifeOS Focus";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shivvyas.lifeos.focus;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1140,6 +1287,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		F6D710EF6CF395E46975226F /* Build configuration list for PBXNativeTarget "LifeOSFocus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD941EA32BA40685347FF314 /* Release */,
+				BF173B136D37647FFCB870A4 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -1165,21 +1321,32 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = Soundscape;
 		};
-		A11C0002A11C0002A11C0002 /* AccountUI */ = {
+		098F68A2E653B0E46D9B54A5 /* Integrations */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = AccountUI;
-		};
-		F0C05002F0C05002F0C05002 /* FocusSync */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = FocusSync;
+			package = A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */;
+			productName = Integrations;
 		};
 		0BEF691ED9A34E748BA71A9C /* Motion */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Motion;
 		};
+		6152021C6CBF3B76720D7AF6 /* Persistence */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */;
+			productName = Persistence;
+		};
 		647335D29DECDB19368713D7 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
+		};
+		93CAD580BA64BAFE0800D826 /* FocusSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */;
+			productName = FocusSync;
+		};
+		A11C0002A11C0002A11C0002 /* AccountUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AccountUI;
 		};
 		A1B2C3D4E5F60718293A4B5D /* DesignSystem */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1218,9 +1385,23 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
 		};
+		CA3EEFB3FC9B1EC05B77900A /* DesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */;
+			productName = DesignSystem;
+		};
+		CEB5C7F89D6652FE74AD9352 /* AccountUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A985C694302A34E0002272C5 /* XCLocalSwiftPackageReference "LifeOSKit" */;
+			productName = AccountUI;
+		};
 		D04A72741F9CF213015F7725 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AppSurfaces;
+		};
+		F0C05002F0C05002F0C05002 /* FocusSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FocusSync;
 		};
 		F5C6D9F9A578760FC7F5C260 /* AppSurfaces */ = {
 			isa = XCSwiftPackageProductDependency;
