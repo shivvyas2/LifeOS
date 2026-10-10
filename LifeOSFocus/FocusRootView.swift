@@ -27,8 +27,12 @@ struct FocusRootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await gate.restore() } }
         }
+        // A different account, or none: the old one's session is ended and
+        // its sound and bells stopped before anything else is shown.
         .onChange(of: gate.session?.userID, initial: true) { _, owner in
-            if let owner { if focus?.owner != owner { focus = FocusSession(owner: owner) } } else { focus = nil }
+            guard focus?.owner != owner else { return }
+            focus?.close()
+            focus = owner.map { FocusSession(owner: $0) }
         }
     }
 }

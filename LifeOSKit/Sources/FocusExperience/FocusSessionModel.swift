@@ -264,7 +264,7 @@ public final class FocusSessionModel {
         reading = timer.reading(at: .now)
         haltSound()
         persist()
-        Task { await notifications.cancel() }
+        if notifies { Task { await notifications.cancel() } }
     }
 
     public func resume() {
@@ -319,7 +319,7 @@ public final class FocusSessionModel {
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
         ActiveFocusSession.clear(from: defaults)
-        Task { await notifications.cancel() }
+        if notifies { Task { await notifications.cancel() } }
         if let context {
             try? FocusStore(context: context).record(mood: setup.mood.rawValue, source: activeSource.rawValue,
                                                      startedAt: startedAt, endedAt: .now,

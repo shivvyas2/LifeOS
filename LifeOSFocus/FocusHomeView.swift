@@ -6,11 +6,12 @@ import FocusExperience
 import Persistence
 import Soundscape
 
-/// Home: the week's focus as the masthead figure, a mood to start in one tap,
-/// Resume last, and the sessions so far.
+/// Home: the week's focus as the masthead figure, a mood that starts a session
+/// in one tap with its last settings, Resume last, a way into the full setup,
+/// and the sessions so far.
 struct FocusHomeView: View {
     let gate: AccountGate
-    @Bindable var session: FocusSession
+    let session: FocusSession
     @Environment(\.colorScheme) private var scheme
     @State private var weekSeconds: TimeInterval = 0
     @State private var recent: [FocusSessionSnapshot] = []
@@ -19,15 +20,20 @@ struct FocusHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.x3) {
                 EditorialMasthead(eyebrow: "LifeOS Focus · This week", title: Self.duration(weekSeconds),
-                                  detail: "Signed in as \(account).")
+                                  detail: "Signed in as \(accountLabel).")
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Space.x1) {
                     ForEach(Mood.allCases, id: \.self) { mood in
-                        Button(mood.title) { session.open(mood: mood) }
+                        Button(mood.title) { Task { await account.quickStart(mood) } }
                             .buttonStyle(.editorial(.primary, fullWidth: true))
                     }
                 }
-                Button("Resume last") { session.open(mood: nil) }
-                    .buttonStyle(.editorial(.secondary, size: .compact))
+                HStack(spacing: Space.x1) {
+                    Button("Resume last") { Task { await account.quickStart(nil) } }
+                        .buttonStyle(.editorial(.secondary, size: .compact))
+                    Button("Set up a session") { account.openSetup() }
+                        .buttonStyle(.editorial(.secondary, size: .compact))
+                        .accessibilityIdentifier("focus.setup")
+                }
                 if !recent.isEmpty {
                     EditorialSectionHeader(title: "Recent")
                     VStack(spacing: 0) {
@@ -44,30 +50,43 @@ struct FocusHomeView: View {
             .padding(Space.x3)
         }
         .background(LifeOSTokens.canvas.resolve(scheme).ignoresSafeArea())
-        .sheet(item: $session.request) { request in
-            let mood = request.mood ?? session.model.preferences.lastMood
-            FocusSetupSheet(initial: session.model.preferences.setup(for: mood),
-                            preferences: session.model.preferences, taskTitle: nil) { setup in
+        .sheet(item: Bindable(account).request) { request in
+            let mood = request.mood ?? account.model.preferences.lastMood
+            FocusSetupSheet(initial: account.model.preferences.setup(for: mood),
+                            preferences: account.model.preferences, taskTitle: nil) { setup in
                 Task {
-                    await session.model.start(setup, inputs: FocusInputs(), context: session.container.mainContext)
+                    await account.model.start(setup, inputs: FocusInputs(), context: account.container.mainContext)
                 }
             }
         }
-        .fullScreenCover(isPresented: Binding(get: { session.model.isPresented }, set: { _ in })) {
-            FocusSessionScreen(model: session.model)
+        .fullScreenCover(isPresented: Binding(get: { account.model.isPresented }, set: { _ in })) {
+            FocusSessionScreen(model: account.model)
         }
-        .task { await session.model.restore(context: session.container.mainContext); reload() }
-        .onChange(of: session.model.isPresented) { _, presented in if !presented { reload() } }
+        // Per session object, so a new account's Home restores and loads its own.
+        .task(id: ObjectIdentifier(session)) {
+            await account.model.restore(context: account.container.mainContext)
+            await reload()
+        }
+        .onChange(of: account.model.isPresented) { _, presented in if !presented { Task { await reload() } } }
     }
 
-    private func reload() {
-        let store = FocusStore(context: session.container.mainContext)
+    /// What is here now, then again after a sync has brought in sessions
+    /// recorded in LifeOS or on another device.
+    private func reload() async {
+        read()
+        await session.syncNow()
+        read()
+    }
+
+    private func read() {
+        let store = FocusStore(context: account.container.mainContext)
         weekSeconds = (try? store.focusedSeconds(inWeekOf: .now)) ?? 0
         recent = (try? store.recent()) ?? []
-        session.syncNow()
     }
 
-    private var account: String { gate.session?.email ?? gate.session?.phone ?? "your account" }
+    private var account: FocusAccountSession { session.account }
+
+    private var accountLabel: String { gate.session?.email ?? gate.session?.phone ?? "your account" }
 
     static func duration(_ seconds: TimeInterval) -> String {
         let minutes = Int(seconds / 60)

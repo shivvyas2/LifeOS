@@ -1,42 +1,33 @@
 import Foundation
-import SwiftData
 import FocusExperience
 import FocusSync
 import Integrations
-import Persistence
-import Soundscape
 
-/// Everything a signed-in Focus app runs: its store, the session model, and
-/// the sync that sends sessions to the account LifeOS also reads.
+/// The signed-in Focus app for one account: the shared per-account focus
+/// session, plus the sync that sends its sessions to the account LifeOS
+/// also reads.
 @MainActor @Observable
 final class FocusSession {
-    let owner: String
-    let container: ModelContainer
-    let model: FocusSessionModel
-    var request: FocusLauncher.Request?
-    private let sync: FocusSync?
+    let account: FocusAccountSession
+    private var sync: FocusSync?
+
+    var owner: String { account.owner }
 
     init(owner: String, inMemory: Bool = false) {
-        self.owner = owner
-        // The Focus app's own store, in its own sandbox. Same schema as
-        // LifeOS, so FocusStore and FocusSync work unchanged.
-        container = (try? LifeOSContainer.make(inMemory: inMemory)) ?? (try! LifeOSContainer.make(inMemory: true))
+        var syncRef: FocusSync?
+        account = FocusAccountSession(owner: owner, inMemory: inMemory, sessionSaved: {
+            if let syncRef { Task { await syncRef.run() } }
+        })
         if !inMemory, let url = FocusConfig.supabaseURL, let key = FocusConfig.supabaseAnonKey {
-            sync = FocusSync(context: container.mainContext, remote: SupabaseREST(baseURL: url, anonKey: key),
+            sync = FocusSync(context: account.container.mainContext, remote: SupabaseREST(baseURL: url, anonKey: key),
                              owner: owner, session: { KeychainAuthSessionStore().load() })
-        } else {
-            sync = nil
         }
-        let sync = self.sync
-        // Weather and recovery arrive in slice 3c; until then the composer
-        // works without them, as it does whenever an input is missing.
-        model = FocusSessionModel(hooks: FocusHooks(
-            gatherInputs: { _ in FocusInputs() },
-            sessionSaved: { if let sync { Task { await sync.run() } } },
-            heartRate: nil))
+        syncRef = sync
     }
 
-    func open(mood: Mood?) { request = FocusLauncher.Request(mood: mood) }
+    /// Up and down, then the caller re-reads the store.
+    func syncNow() async { await sync?.run() }
 
-    func syncNow() { if let sync { Task { await sync.run() } } }
+    /// The account is going away: end anything running, leave nothing behind.
+    func close() { account.close() }
 }
