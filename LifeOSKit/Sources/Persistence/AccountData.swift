@@ -3,13 +3,14 @@ import SwiftData
 
 /// What a person can clear, and where each kind lives.
 public enum DataCategory: String, CaseIterable, Codable, Sendable {
-    case notes, habits, health, money, chats, messages
+    case notes, habits, health, focus, money, chats, messages
 
     public var title: String {
         switch self {
         case .notes: "Notes and journal"
         case .habits: "Habits and goals"
         case .health: "Health history"
+        case .focus: "Focus sessions"
         case .money: "Money history"
         case .chats: "AI chats"
         case .messages: "Messages"
@@ -17,7 +18,7 @@ public enum DataCategory: String, CaseIterable, Codable, Sendable {
     }
 
     /// Whether the server holds rows for it, which must go first.
-    public var hasServerRows: Bool { [.notes, .health, .messages].contains(self) }
+    public var hasServerRows: Bool { [.notes, .health, .focus, .messages].contains(self) }
 }
 
 /// Deletes this phone's copy of the chosen categories.
@@ -50,6 +51,8 @@ public struct LocalDataEraser {
                 try context.delete(model: WorkoutRecord.self)
                 try context.delete(model: SleepRecord.self)
                 try context.delete(model: WhoopRawRecord.self)
+            case .focus:
+                try context.delete(model: FocusSessionRecord.self)
             case .money:
                 try context.delete(model: MoneyEntry.self)
                 try context.delete(model: SpendBucket.self)

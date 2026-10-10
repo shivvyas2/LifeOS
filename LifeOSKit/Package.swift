@@ -14,6 +14,8 @@ let package = Package(
         .library(name: "Assistant", targets: ["Assistant"]),
         .library(name: "Motion", targets: ["Motion"]),
         .library(name: "Soundscape", targets: ["Soundscape"]),
+        .library(name: "AccountUI", targets: ["AccountUI"]),
+        .library(name: "FocusSync", targets: ["FocusSync"]),
     ],
     targets: [
         .target(name: "AppSurfaces"),
@@ -35,5 +37,9 @@ let package = Package(
         .target(name: "Soundscape"),
         .testTarget(name: "SoundscapeTests", dependencies: ["Soundscape"]),
         .executableTarget(name: "soundscape-render", dependencies: ["Soundscape"]),
+        .target(name: "AccountUI", dependencies: ["DesignSystem", "Integrations"]),
+        .testTarget(name: "AccountUITests", dependencies: ["AccountUI"]),
+        .target(name: "FocusSync", dependencies: ["Persistence", "Integrations"]),
+        .testTarget(name: "FocusSyncTests", dependencies: ["FocusSync", "Persistence", "Integrations"]),
     ]
 )

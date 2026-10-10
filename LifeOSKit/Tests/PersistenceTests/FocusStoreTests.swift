@@ -25,4 +25,52 @@ import SwiftData
                          blocksCompleted: 0, projectTaskID: nil)
         #expect(try store.focusedSeconds(on: .now) == 0)
     }
+
+    // MARK: - Sync bookkeeping
+
+    private static let day: Date = {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal.date(from: DateComponents(year: 2026, month: 10, day: 8, hour: 9))!
+    }()
+    private static let utc: Calendar = {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
+    @MainActor @Test func pendingExcludesUnfinished() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = FocusStore(context: container.mainContext)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: Self.day.addingTimeInterval(600),
+                         focusedSeconds: 600, blocksCompleted: 1, projectTaskID: nil)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: nil,
+                         focusedSeconds: 0, blocksCompleted: 0, projectTaskID: nil)
+        #expect(try store.pending().count == 1)
+    }
+
+    @MainActor @Test func markSyncedRemovesFromPending() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = FocusStore(context: container.mainContext)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: Self.day.addingTimeInterval(600),
+                         focusedSeconds: 600, blocksCompleted: 1, projectTaskID: nil)
+        try store.markSynced(ids: try store.pending().map(\.id))
+        #expect(try store.pending().isEmpty)
+    }
+
+    @MainActor @Test func mergeSkipsKnownIDs() throws {
+        let container = try LifeOSContainer.make(inMemory: true)
+        let store = FocusStore(context: container.mainContext)
+        try store.record(mood: "focus", source: "soundscape", startedAt: Self.day, endedAt: Self.day.addingTimeInterval(600),
+                         focusedSeconds: 600, blocksCompleted: 1, projectTaskID: nil)
+        let local = try #require(try store.pending().first)
+        let known = FocusSessionSnapshot(id: local.id, mood: "relax", source: "silence", startedAt: local.startedAt,
+                                         endedAt: local.endedAt, focusedSeconds: 1, blocksCompleted: 0, projectTaskID: nil)
+        let fresh = FocusSessionSnapshot(id: UUID(), mood: "focus", source: "appleMusic",
+                                         startedAt: Self.day.addingTimeInterval(3600), endedAt: Self.day.addingTimeInterval(3900),
+                                         focusedSeconds: 300, blocksCompleted: 1, projectTaskID: nil)
+        #expect(try store.merge(remote: [known, fresh]) == 1)
+        #expect(local.mood == "focus")
+        #expect(try store.focusedSeconds(on: Self.day, calendar: Self.utc) == 900)
+        // The merged row arrives synced; only this device's own record waits.
+        #expect(try store.pending().count == 1)
+    }
 }

@@ -43,8 +43,16 @@ import SwiftData
     }
 
     @Test func categoriesKnowWhereTheyLive() {
-        #expect(DataCategory.allCases.filter(\.hasServerRows) == [.notes, .health, .messages])
+        #expect(DataCategory.allCases.filter(\.hasServerRows) == [.notes, .health, .focus, .messages])
         #expect(DataCategory.chats.title == "AI chats")
+    }
+
+    @Test func erasingFocusRemovesSessions() throws {
+        let context = try context()
+        try FocusStore(context: context).record(mood: "focus", source: "soundscape", startedAt: .now,
+            endedAt: .now, focusedSeconds: 60, blocksCompleted: 1, projectTaskID: nil)
+        try LocalDataEraser(context: context, defaults: defaults()).erase([.focus])
+        #expect(try context.fetchCount(FetchDescriptor<FocusSessionRecord>()) == 0)
     }
 
     @Test func onlyConfirmedDeletionsAreWiped() throws {

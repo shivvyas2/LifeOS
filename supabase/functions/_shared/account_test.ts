@@ -134,3 +134,9 @@ Deno.test("an account kept after the run began is left alone", async () => {
   assertEquals(steps.some((s) => s.endsWith(" a") || s.includes("g-shared")), false);
 });
 
+Deno.test("focus sessions are a server category", async () => {
+  const { store, calls } = fakeStore();
+  const res = await handleAccountData(req("POST", { clear: ["focus"] }), { resolveUser: signedIn, store, now });
+  assertEquals(res.status, 200);
+  assertEquals(calls, ["clear u1 focus"]);
+});

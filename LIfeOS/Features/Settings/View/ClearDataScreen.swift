@@ -26,6 +26,7 @@ struct ClearDataScreen: View {
         case .notes: "On this phone and in your synced notes."
         case .habits: "On this phone only."
         case .health: "On this phone, and older copies on our server."
+        case .focus: "On this phone and on our server, for LifeOS and LifeOS Focus."
         case .money: "On this phone only. Your bank stays connected."
         case .chats: "On this phone only."
         case .messages: "On our server. Clearing a conversation clears it for the other person too: it is one message, not two copies."

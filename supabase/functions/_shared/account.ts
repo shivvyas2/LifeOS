@@ -5,8 +5,8 @@
 
 import { json } from "./supabase.ts";
 
-export type ServerCategory = "notes" | "health" | "messages";
-const SERVER: readonly string[] = ["notes", "health", "messages"];
+export type ServerCategory = "notes" | "health" | "focus" | "messages";
+const SERVER: readonly string[] = ["notes", "health", "focus", "messages"];
 const LOCAL_ONLY: readonly string[] = ["habits", "money", "chats"];
 const GRACE_DAYS = 30;
 

@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- The app's own group comes first, so the default access group, where
+	     every existing session item lives, does not change. The second is
+	     shared with the companion apps for the sign-in beacon. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.shivvyas.lifeos</string>
+		<string>$(AppIdentifierPrefix)com.shivvyas.lifeos.shared</string>
+	</array>
 	<key>com.apple.security.application-groups</key>
 	<array><string>group.com.shivvyas.lifeos</string></array>
 	<!-- Read access to Apple Health. This is the whole requirement for steps,

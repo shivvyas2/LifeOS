@@ -64,6 +64,19 @@ public struct SupabaseAuth: Sendable {
         return try decode(data)
     }
 
+    /// Exchanges another app's access token for a session of this app's own.
+    /// See `SharedSignIn` for why the refresh token is never shared instead.
+    public func handoff(accessToken: String) async throws -> AuthSession {
+        var request = URLRequest(url: baseURL.appendingPathComponent("functions/v1/session-handoff"))
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let data: Data, response: URLResponse
+        do { (data, response) = try await session.data(for: request) } catch { throw AuthError.transport }
+        try check(response, data)
+        return try decode(data)
+    }
+
     public func refresh(refreshToken: String) async throws -> AuthSession {
         let data = try await post("token?grant_type=refresh_token",
                                   body: ["refresh_token": refreshToken])
