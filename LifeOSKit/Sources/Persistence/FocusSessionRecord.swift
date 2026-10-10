@@ -74,6 +74,26 @@ public struct FocusStore {
         return inserted
     }
 
+    /// Finished sessions, newest first, for a list of recent sessions.
+    public func recent(limit: Int = 10) throws -> [FocusSessionSnapshot] {
+        var descriptor = FetchDescriptor<FocusSessionRecord>(
+            predicate: #Predicate { $0.endedAt != nil },
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+        descriptor.fetchLimit = limit
+        return try context.fetch(descriptor).map(\.snapshot)
+    }
+
+    /// Focused time in the calendar week containing `day`. Sleep is rest,
+    /// not focus, as on the day total.
+    public func focusedSeconds(inWeekOf day: Date, calendar: Calendar = .current) throws -> TimeInterval {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: day) else { return 0 }
+        let start = week.start, end = week.end
+        let descriptor = FetchDescriptor<FocusSessionRecord>(predicate: #Predicate {
+            $0.startedAt >= start && $0.startedAt < end && $0.mood != "sleep"
+        })
+        return try context.fetch(descriptor).reduce(0) { $0 + $1.focusedSeconds }
+    }
+
     public func focusedSeconds(on day: Date, calendar: Calendar = .current) throws -> TimeInterval {
         let start = calendar.startOfDay(for: day)
         let end = calendar.date(byAdding: .day, value: 1, to: start)!
