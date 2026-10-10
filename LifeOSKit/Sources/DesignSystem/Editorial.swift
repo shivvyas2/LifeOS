@@ -283,6 +283,9 @@ public struct IndexedTabStrip<Value: Hashable>: View {
             }
             .scrollIndicators(.hidden)
             .background(alignment: .bottom) { Hairline() }
+            // A tick under the finger, so a switch registers even when the
+            // answer below looks much like the last one.
+            .sensoryFeedback(.selection, trigger: selection)
             .onChange(of: selection) { _, value in
                 guard let index = options.firstIndex(where: { $0.0 == value }) else { return }
                 withAnimation(.snappy) { proxy.scrollTo(index, anchor: .center) }
