@@ -9,6 +9,11 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1"}';
 insert into public.focus_sessions (id, mood, source, started_at, ended_at, focused_seconds)
 values ('11111111-1111-1111-1111-111111111111', 'focus', 'soundscape', now() - interval '30 min', now(), 1500);
+-- A task the server has not seen yet (created offline, or deleted before it
+-- synced) must not block the session, or every upload after it fails.
+insert into public.focus_sessions (id, mood, source, started_at, ended_at, focused_seconds, project_task_id)
+values ('22222222-2222-2222-2222-222222222222', 'focus', 'soundscape', now() - interval '20 min', now(), 600,
+        '33333333-3333-3333-3333-333333333333');
 
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2"}';
 do $$ begin

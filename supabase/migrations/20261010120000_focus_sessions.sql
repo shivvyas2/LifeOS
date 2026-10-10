@@ -10,7 +10,12 @@ create table public.focus_sessions (
   ended_at timestamptz,
   focused_seconds integer not null check (focused_seconds >= 0),
   blocks_completed integer not null default 0 check (blocks_completed >= 0),
-  project_task_id uuid references public.project_tasks (id) on delete set null,
+  -- Deliberately not a foreign key. Tasks get their ids on the device and
+  -- sync on their own schedule, so a session can arrive before its task, or
+  -- for a task deleted before it ever synced; a constraint would fail that
+  -- row and, since it stays oldest, every upload after it. Readers join and
+  -- treat a missing task as none.
+  project_task_id uuid,
   created_at timestamptz not null default now()
 );
 

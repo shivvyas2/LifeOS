@@ -80,6 +80,15 @@ tokens are never shared: Supabase rotates them, and a reused one revokes the
 whole family, which would sign both apps out. Signing out of one app
 withdraws its beacon but leaves the other app signed in.
 
+**Accepted risk, open decision.** `session-handoff` trades *any* valid access
+token for a new session with its own refresh token. A leaked access token
+(about an hour of life) can therefore become a lasting session that signing
+out of the original does not revoke. Mitigations, cheapest first: a per-user
+rate limit; refusing tokens whose `iat` is older than a few minutes; or
+replacing the shared token with a single-use handoff code LifeOS mints and the
+server stores, optionally with App Attest. To be decided before the Focus app
+ships publicly.
+
 ### LifeOS after the move
 
 - The Focus screens, the Focus intent and the Focus entries in Today and the

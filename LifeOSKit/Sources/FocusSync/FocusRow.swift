@@ -19,6 +19,22 @@ struct FocusRow: Codable {
         project_task_id = s.projectTaskID
     }
 
+    /// Written by hand so a nil end or task goes as `null`, not as a missing
+    /// key: PostgREST refuses a bulk insert whose objects have different keys
+    /// (PGRST102), and one session with a task among ones without would fail
+    /// every upload after it.
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(mood, forKey: .mood)
+        try c.encode(source, forKey: .source)
+        try c.encode(started_at, forKey: .started_at)
+        try c.encode(ended_at, forKey: .ended_at)
+        try c.encode(focused_seconds, forKey: .focused_seconds)
+        try c.encode(blocks_completed, forKey: .blocks_completed)
+        try c.encode(project_task_id, forKey: .project_task_id)
+    }
+
     var snapshot: FocusSessionSnapshot {
         FocusSessionSnapshot(id: id, mood: mood, source: source, startedAt: started_at, endedAt: ended_at,
                              focusedSeconds: Double(focused_seconds), blocksCompleted: blocks_completed,

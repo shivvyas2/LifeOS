@@ -15,13 +15,17 @@ private let log = Logger(subsystem: "com.shivvyas.lifeos", category: "focus-sync
 public final class FocusSync {
     private let store: FocusStore
     private let remote: any FocusRemote
+    /// The account this store belongs to. A session for anyone else is
+    /// refused, so an account switch mid-run can never mix two accounts.
+    private let owner: String
     private let session: @MainActor () -> AuthSession?
     private var running: Task<Void, Never>?
 
-    public init(context: ModelContext, remote: any FocusRemote,
+    public init(context: ModelContext, remote: any FocusRemote, owner: String,
                 session: @escaping @MainActor () -> AuthSession?) {
         self.store = FocusStore(context: context)
         self.remote = remote
+        self.owner = owner
         self.session = session
     }
 
@@ -64,10 +68,10 @@ public final class FocusSync {
         }
     }
 
-    /// A token only while signed in and unexpired. Refreshing is the auth
+    /// A token only while signed in as the owner and unexpired. Refreshing is the auth
     /// layer's job, done on foreground; this never refreshes on its own.
     private func usableToken() -> String? {
-        guard let current = session(), !current.isExpired() else { return nil }
+        guard let current = session(), current.userID == owner, !current.isExpired() else { return nil }
         return current.accessToken
     }
 }
