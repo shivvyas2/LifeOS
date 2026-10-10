@@ -13,16 +13,6 @@ enum OnboardingStep: Equatable {
     case signedIn            // returning user; nothing left to ask
 }
 
-/// Which door the user came through. With OTP there is no password, so signing
-/// in and signing up are the same three steps; this changes copy and nothing
-/// else. Picking the wrong door is harmless by design: the branch after verify
-/// is what actually routes, so a "Sign in" tap with no account creates one and
-/// a "Get started" tap with an account skips the profile step.
-enum AuthMode: Equatable {
-    case signUp
-    case signIn
-}
-
 /// One page of the intro. Kept as data so the pager is a loop, not five
 /// hand-written screens that drift apart.
 struct IntroPage: Identifiable, Equatable {
@@ -74,19 +64,15 @@ extension IntroPage {
     ]
 }
 
-/// What the user types during signup, before any of it is trusted.
-struct SignupDraft: Equatable {
-    /// Email first: it is free through Resend to 3,000 a month, needs no A2P
-    /// registration, and carries none of the SMS failure modes. An SMS costs
-    /// about $0.05 and can fail four different ways.
-    var channel: SupabaseAuthChannel = .email
-    var phone = ""
-    var dialCode = "+1"
-    var email = ""
-    var code = ""
+/// The profile LifeOS asks for after sign-in. Sign-in itself (channel,
+/// address, code) lives in AccountUI's `SignInDraft`, shared with the
+/// companion apps.
+struct ProfileDraft: Equatable {
     var firstName = ""
     var lastName = ""
     var country = Locale.current.region?.identifier ?? "US"
+    /// Set alongside `country` by the country picker; not sent anywhere.
+    var dialCode = "+1"
 
     /// A picked avatar, already downsized. Held as data rather than an image
     /// so the draft stays a value type and can be compared for equality.
@@ -97,19 +83,6 @@ struct SignupDraft: Equatable {
     /// ends up silently wrong after a locale change.
     var heightCM: Double?
     var gender: Gender = .unspecified
-
-    /// E.164, which is what Supabase expects for SMS.
-    var e164: String { dialCode + phone.filter(\.isNumber) }
-
-    var destination: String { channel == .phone ? e164 : email.trimmingCharacters(in: .whitespaces) }
-
-    var canSendCode: Bool {
-        channel == .phone
-            ? PhoneOTP.isAcceptable(e164)
-            : email.contains("@") && email.contains(".")
-    }
-
-    var canVerify: Bool { code.filter(\.isNumber).count >= 6 }
 
     /// Name is the only requirement. Everything else on the profile step
     /// sharpens what the app can say and none of it is worth blocking someone

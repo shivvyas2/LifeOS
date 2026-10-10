@@ -4,6 +4,7 @@ import SwiftData
 import Integrations
 import DesignSystem
 import Persistence
+import AccountUI
 
 /// Fixture pages for the editorial theme, mounted by `--design-preview` with
 /// `--page=money` or `--page=nav`. Nothing here touches a store or a network:
@@ -52,6 +53,8 @@ struct EditorialDesignPreview: View {
                 .background(LifeOSTokens.canvas.resolve(.light).ignoresSafeArea())
                 .environment(\.moneyPickCard) { _ in }
             }
+        case "sign-in":
+            SignInFixture()
         case "card-editor":
             CardEditorSheet(existing: nil, onSave: { _ in })
         case "money-project":
@@ -212,5 +215,37 @@ private struct MoneyScreenFixture: View {
                 }
         }
     }
+}
+
+/// The shared sign-in screens over a stub backend: any address gets a code,
+/// 123456 is accepted. Leaving the first step writes a marker a UI test reads.
+private struct SignInFixture: View {
+    @State private var model = SignInModel(backend: StubSignInBackend(), store: InMemoryAuthSessionStore(),
+                                           onSignedIn: { _ in })
+    @State private var left = false
+
+    var body: some View {
+        if left {
+            Text("left").accessibilityIdentifier("preview.signin.left")
+        } else if model.step == .code {
+            CodeScreen(model: model, totalSteps: 3, onBack: back)
+        } else {
+            IdentityScreen(model: model, totalSteps: 3, onBack: back)
+        }
+    }
+
+    private func back() { if !model.back() { left = true } }
+}
+
+private struct StubSignInBackend: SignInBackend {
+    func availableChannels() async -> Set<SupabaseAuth.Channel> { [.email, .phone] }
+    func sendCode(to destination: String, channel: SupabaseAuth.Channel) async throws {}
+    func verify(code: String, destination: String, channel: SupabaseAuth.Channel) async throws -> AuthSession {
+        guard code == "123456" else { throw AuthError.server(status: 403, message: "otp_expired") }
+        return AuthSession(accessToken: "a", refreshToken: "r", expiresAt: .now.addingTimeInterval(3600),
+                           userID: "preview", phone: nil, email: destination, hasProfile: true)
+    }
+    func handoff(accessToken: String) async throws -> AuthSession { throw AuthError.transport }
+    func restore(store: any AuthSessionStoring) async -> SessionRefresher.Outcome { .signedOut }
 }
 #endif

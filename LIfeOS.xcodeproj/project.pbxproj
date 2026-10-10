@@ -15,6 +15,7 @@
 		24A596CBAF934FF7A026572F /* WatchAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE2A91AF7F1544F7B7817F51 /* WatchAppDelegate.swift */; };
 		2B95A1DB9F7DD2FC14C1B7BC /* ProjectGitHubUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */; };
 		31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */ = {isa = PBXBuildFile; productRef = 09700010460E46BB90667E51 /* Soundscape */; };
+		A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */ = {isa = PBXBuildFile; productRef = A11C0002A11C0002A11C0002 /* AccountUI */; };
 		31C2AEFD099AF24FC8F91F2E /* PlanDraftUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */; };
 		33A73EC15B5DB894CF42DAAC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F25E55A67BB0CBC490026299 /* PrivacyInfo.xcprivacy */; };
 		349B8879349E35A53E3D52D7 /* AlmanacWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 055DEF6A3588CA952BFB542C /* AlmanacWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -45,6 +46,7 @@
 		B7710CA5AC0DA4F764F5277A /* AlmanacWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4FB8BB20045382F2E7C52F /* AlmanacWidgets.swift */; };
 		B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */; };
 		4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */; };
+		5A1A0001C0DE5A1A0001C0DE /* SignInUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */; };
 		BAAF9FF43B6B8674032C7B8C /* NotesWalkthroughUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C67EF6A283A8C832853650 /* NotesWalkthroughUITests.swift */; };
 		BEB9AAB3C20645EBAF58D5F0 /* WatchWorkoutScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EB214A36BEC4606BC170332 /* WatchWorkoutScreen.swift */; };
 		BF7E66088CA2861349BA3B83 /* AppSurfaces in Frameworks */ = {isa = PBXBuildFile; productRef = 647335D29DECDB19368713D7 /* AppSurfaces */; };
@@ -148,6 +150,7 @@
 		65C0CC243BDD2E3A83313257 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		65CA28D5542E63398169DF2B /* TodayLayoutUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayLayoutUITests.swift; sourceTree = "<group>"; };
 		5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MoneyDeckUITests.swift; sourceTree = "<group>"; };
+		5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SignInUITests.swift; sourceTree = "<group>"; };
 		6BCD3BA3508B3302A151ECAC /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		79E991DB8B28033641AC617E /* RailUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RailUITests.swift; sourceTree = "<group>"; };
 		841B986EF410642F7AAFA5E9 /* WorkoutLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivity.swift; sourceTree = "<group>"; };
@@ -207,6 +210,7 @@
 				A985C691302A34E0002272C5 /* Persistence in Frameworks */,
 				A985C6A1302A34E0002272C5 /* Integrations in Frameworks */,
 				31954BA2B22C473DA946F5E1 /* Soundscape in Frameworks */,
+				A11C0001A11C0001A11C0001 /* AccountUI in Frameworks */,
 				A985C6B1302A34E0002272C5 /* Insights in Frameworks */,
 				A985C6C1302A34E0002272C5 /* Sectors in Frameworks */,
 				A985C6E0302A34E0002272C5 /* Assistant in Frameworks */,
@@ -268,6 +272,7 @@
 				0BA705326A3DEDAAA2C0B178 /* ProjectGitHubUITests.swift */,
 				5B3E98C4B5694777720E05A7 /* PlanDraftUITests.swift */,
 				5E4F3B2C0D9F8E7162B3C4D5 /* MoneyDeckUITests.swift */,
+				5A1A0002C0DE5A1A0002C0DE /* SignInUITests.swift */,
 			);
 			path = LIfeOSUITests;
 			sourceTree = "<group>";
@@ -422,6 +427,7 @@
 				A985C693302A34E0002272C5 /* Persistence */,
 				A985C6A2302A34E0002272C5 /* Integrations */,
 				09700010460E46BB90667E51 /* Soundscape */,
+				A11C0002A11C0002A11C0002 /* AccountUI */,
 				A985C6B2302A34E0002272C5 /* Insights */,
 				A985C6C2302A34E0002272C5 /* Sectors */,
 				A985C6D3302A34E0002272C5 /* LinkKit */,
@@ -566,6 +572,7 @@
 				9BC9AE0A6CF148649C6FBBD6 /* DayProjectUITests.swift in Sources */,
 				B7BC95FA7F60CD6B688D794C /* TodayLayoutUITests.swift in Sources */,
 				4D3F2A1B9C8E7F6051A2B3C4 /* MoneyDeckUITests.swift in Sources */,
+				5A1A0001C0DE5A1A0001C0DE /* SignInUITests.swift in Sources */,
 				B39309B972C4CC26CDFA3B0F /* AccountControlsUITests.swift in Sources */,
 				E5A5A0FF98AD8929CEA43E79 /* ProjectsUITests.swift in Sources */,
 				C1B1EC24242F40508F446B3C /* FocusUITests.swift in Sources */,
@@ -1154,6 +1161,10 @@
 		09700010460E46BB90667E51 /* Soundscape */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Soundscape;
+		};
+		A11C0002A11C0002A11C0002 /* AccountUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AccountUI;
 		};
 		0BEF691ED9A34E748BA71A9C /* Motion */ = {
 			isa = XCSwiftPackageProductDependency;

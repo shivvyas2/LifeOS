@@ -80,6 +80,10 @@ public final class SignInModel {
         if !channels.contains(.email), channels.contains(.phone) { draft.channel = .phone }
     }
 
+    /// A message from the host, such as a stored session the server refused,
+    /// shown on the identity screen until the next action clears it.
+    public func report(_ message: String) { errorMessage = message }
+
     public func switchChannel(to channel: SupabaseAuth.Channel) {
         draft.channel = channel
         errorMessage = nil
