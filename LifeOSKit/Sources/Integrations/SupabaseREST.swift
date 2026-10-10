@@ -83,6 +83,18 @@ public struct SupabaseREST: Sendable {
         return try await perform(request)
     }
 
+    /// A select with caller-supplied PostgREST query items.
+    public func select(table: String, query: [URLQueryItem], accessToken: String) async throws -> Data {
+        var components = URLComponents(url: baseURL.appendingPathComponent("rest/v1/\(table)"),
+                                       resolvingAgainstBaseURL: false)
+        components?.queryItems = query
+        guard let url = components?.url else { throw RESTError.encoding }
+        var request = URLRequest(url: url)
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        return try await perform(request)
+    }
+
     public static func encode(_ rows: [[String: Any]]) throws -> Data {
         guard !rows.isEmpty else { return Data() }
         guard JSONSerialization.isValidJSONObject(rows) else { throw RESTError.encoding }
